@@ -1,0 +1,6 @@
+{
+  "name": "Cave-in",
+  "type": "hazard",
+  "icon": "🪨",
+  "text": "Rocks shift overhead."
+}

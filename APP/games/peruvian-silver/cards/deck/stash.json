@@ -1,0 +1,7 @@
+{
+  "name": "Stash",
+  "type": "relic",
+  "icon": "📦",
+  "gives": "stash",
+  "text": "Gives a Stash card: bank your backpack and keep exploring."
+}

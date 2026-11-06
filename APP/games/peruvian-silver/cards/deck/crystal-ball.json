@@ -1,0 +1,7 @@
+{
+  "name": "Crystal Ball",
+  "type": "relic",
+  "icon": "🔮",
+  "gives": "crystal-ball",
+  "text": "Gives a Crystal Ball card: any time, privately see the next 3 cards."
+}

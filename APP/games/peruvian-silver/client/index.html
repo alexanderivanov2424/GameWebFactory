@@ -1,0 +1,600 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Peruvian Silver</title>
+
+  <script src="/shared/theme.js"></script>
+  <script src="/shared/home.js" defer></script>
+  <script src="/shared/settings.js" defer></script>
+  <script src="/shared/chat.js" defer></script>
+  <script src="/gamekit/dom.js" defer></script>
+  <script src="/gamekit/room.js" defer></script>
+  <script src="/gamekit/lobby.js" defer></script>
+  <script src="/gamekit/lobby-ui.js" defer></script>
+  <script src="game.js" defer></script>
+
+  <style>
+    :root {
+      --sand: #efe8da;
+      --paper: #fffcf6;
+      --line: #e2d8c6;
+      --ink: #2a2420;
+      --muted: #7a6e62;
+      --silver: #8f9aa6;
+      --silver-dark: #5d6873;
+      --red: #b5322f;
+      --red-dark: #8f2321;
+      --green: #2f7d4f;
+      --amber: #c98a1b;
+      --wood: #2c2420;
+
+      --gwf-bg: var(--sand);
+      --gwf-surface: var(--paper);
+      --gwf-line: var(--line);
+      --gwf-text: var(--ink);
+      --gwf-muted: var(--muted);
+      --gwf-accent: var(--silver-dark);
+      --gwf-accent-hover: var(--silver-dark); /* hover is the brightness filter below */
+      --gwf-green: var(--green);
+      --gwf-green-hover: var(--green);
+      --gwf-red: var(--red);
+      --gwf-red-hover: var(--red);
+      --gwf-input-line: #c9bda9;
+      --gwf-radius: 12px;
+      --gwf-main-width: 1400px;
+    }
+    /* Base styles (body, main, h1-h3, .panel, .row, buttons, inputs) come from /shared/theme.js,
+       driven by the --gwf-* variables above. */
+    main { padding-bottom: 40px; }
+    main.with-hand { padding-bottom: 210px; }
+    #lobby { max-width: 760px; }
+    h1 { letter-spacing: 0.02em; }
+    h1 .accent { color: var(--silver-dark); }
+    .rules h3 { font-size: 0.95rem; margin: 12px 0 4px; }
+    .row { gap: 10px; }
+    button:hover:not(:disabled) { filter: brightness(0.9); }
+    .rules ol, .rules ul { margin: 0; padding-left: 20px; line-height: 1.55; }
+
+    /* --- Game layout: players on the left, the mine in the middle ---------------- */
+    #status {
+      display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 18px;
+      margin-bottom: 14px;
+    }
+    #message { font-size: 1.2rem; font-weight: 600; }
+    .chip {
+      display: inline-flex; align-items: center; gap: 6px; padding: 4px 12px;
+      border-radius: 999px; background: var(--paper); border: 1px solid var(--line); font-size: 0.9rem;
+    }
+    #result { font-size: 1.25rem; font-weight: 700; margin-bottom: 14px; }
+    #result .standings { font-size: 0.95rem; font-weight: 400; margin-top: 6px; }
+
+    .table { display: grid; grid-template-columns: 420px 1fr; gap: 16px; align-items: start; }
+
+    /* Player rows: [name + chest] [backpack] [played card] */
+    #seats { display: flex; flex-direction: column; gap: 8px; }
+    .seat {
+      display: grid; grid-template-columns: 1fr 96px 64px; gap: 10px; align-items: center;
+      background: var(--paper); border: 1px solid var(--line); border-radius: 12px; padding: 8px 10px;
+      transition: opacity 0.3s, background 0.3s;
+    }
+    .seat.me { border-color: var(--silver-dark); box-shadow: 0 0 0 1px var(--silver-dark); }
+    .seat.camp { background: #eef5ee; }
+    .seat.busted { background: #f9e9e6; }
+    .seat.gone { opacity: 0.45; }
+    .seat-main { min-width: 0; }
+    .seat-name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .seat-status { font-size: 0.78rem; color: var(--muted); margin-top: 1px; }
+    .seat.camp .seat-status { color: var(--green); }
+    .seat.busted .seat-status { color: var(--red); }
+    .seat-chest { margin-top: 4px; font-weight: 700; font-size: 1.05rem; }
+    .seat-pack {
+      align-self: stretch; display: flex; flex-direction: column; justify-content: center; align-items: center;
+      border-left: 1px dashed var(--line); padding-left: 10px;
+    }
+    .seat-pack .label { font-size: 0.72rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; }
+    .seat-pack .amount { font-weight: 700; font-size: 1.15rem; }
+    .seat-pack.empty .amount { color: #b8ad9e; }
+    .bump { animation: bump 0.5s ease; }
+    @keyframes bump { 40% { transform: scale(1.3); color: var(--green); } }
+
+    /* Small played card next to a player: flips from face-down to face-up. */
+    .slot { width: 56px; height: 78px; perspective: 600px; justify-self: center; }
+    .slot.empty { border: 2px dashed var(--line); border-radius: 8px; }
+    .flip { position: relative; width: 100%; height: 100%; transform-style: preserve-3d; transition: transform 0.6s ease; }
+    .flip.up { transform: rotateY(180deg); }
+    .flip .face {
+      position: absolute; inset: 0; border-radius: 8px; backface-visibility: hidden;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      font-size: 0.72rem; font-weight: 700; box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+    }
+    .flip .back {
+      background: repeating-linear-gradient(45deg, #6b4f3a 0 6px, #5a4130 6px 12px);
+      border: 3px solid #d9cbb5; color: #d9cbb5; font-size: 1.1rem;
+    }
+    .flip .front { transform: rotateY(180deg); border: 3px solid #fff; color: #fff; }
+    .flip .front .icon { font-size: 1.4rem; line-height: 1.2; }
+    .drop-in { animation: drop-in 0.35s ease; }
+    @keyframes drop-in { from { transform: translateY(-14px) scale(1.1); opacity: 0; } }
+
+    .hand-card.stay, .flip .front.stay { background: linear-gradient(160deg, #3c7bb0, #285a86); }
+    .hand-card.leave, .flip .front.leave { background: linear-gradient(160deg, #d39a2c, #a8721a); }
+
+    /* The mine: revealed cards, left to right and top to bottom. */
+    .mine { min-height: 320px; }
+    .mine-head { display: flex; align-items: baseline; gap: 12px; margin-bottom: 12px; }
+    .mine-head h2 { margin: 0; }
+    /* The deck on the left, then one row per path (main path, then left/right after a Fork). */
+    #path { display: flex; gap: 18px; align-items: flex-start; min-height: 170px; }
+    .paths { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 12px; }
+    .path-row { border-radius: 12px; padding: 4px 0 18px; }
+    .path-row .path-head { font-size: 0.82rem; color: var(--muted); margin: 0 0 10px; }
+    .path-row.mine { background: #f6eedd; outline: 2px solid #d8c7a6; padding: 10px 10px 18px; }
+    .path-row.closed { opacity: 0.6; padding-bottom: 8px; }
+    .path-row.closed .card { transform: scale(0.85); transform-origin: top left; margin: 0 -14px -20px 0; }
+    .path-row.pickable { cursor: pointer; outline: 2px dashed #5b8fb0; padding: 10px 10px 18px; }
+    .path-row.pickable:hover, .path-row.picked { background: #e2eef6; outline-style: solid; }
+    .path-cards { display: flex; flex-wrap: wrap; gap: 12px; }
+    .card {
+      margin: 0; /* theme.js also styles .card like .panel: this is a game card */
+      position: relative; width: 104px; height: 146px; border-radius: 10px; padding: 8px 6px;
+      display: flex; flex-direction: column; align-items: center; text-align: center;
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.18); border: 3px solid #fff; cursor: default;
+    }
+    .card .icon { font-size: 2.2rem; line-height: 1.1; margin-top: 6px; }
+    .card .name { font-size: 0.78rem; font-weight: 700; margin-top: 6px; line-height: 1.15; }
+    .card .value { margin-top: auto; font-size: 1.5rem; font-weight: 800; }
+    .card.treasure { background: linear-gradient(160deg, #f4f6f8, #c4ccd4); color: #2b3640; }
+    .card.hazard { background: linear-gradient(160deg, #4a3a33, #2c2220); color: #f0e2d0; }
+    .card.hazard .value { font-size: 0.75rem; font-weight: 600; opacity: 0.8; }
+    .card.charm { background: linear-gradient(160deg, #3f8f8a, #1f5d63); color: #eafaf7; }
+    .card.charm .value { font-size: 0.72rem; font-weight: 600; line-height: 1.2; }
+    .card.charm .value .hz { font-size: 1.1rem; display: block; }
+    .card.idol { background: linear-gradient(160deg, #e6c35c, #a87b1c); color: #3a2a06; }
+    .card.relic { background: linear-gradient(160deg, #5b8fb0, #2f5d7c); color: #eef6fb; }
+    .card.mirror { background: linear-gradient(160deg, #e9e4f7, #a99cd4); color: #2c2350; }
+    .card.gremlin { background: linear-gradient(160deg, #7fae58, #40692a); color: #f2f9ea; }
+    .card.fountain { background: linear-gradient(160deg, #8fd0ef, #3c86b5); color: #08263a; }
+    .card.pot { background: linear-gradient(160deg, #d9895b, #9a4e27); color: #fff3ea; }
+    .card.altar { background: linear-gradient(160deg, #c9b79c, #7d6a4f); color: #fffaf0; }
+    .card.blessing { background: linear-gradient(160deg, #fff4c2, #e8c552); color: #4a3a06; }
+    .card.death { background: linear-gradient(160deg, #2a2a2a, #050505); color: #f2f2f2; }
+    .card.robbery { background: linear-gradient(160deg, #6f6a8a, #3c3852); color: #f1effa; }
+    .card.altar .value, .card.blessing .value, .card.death .value, .card.robbery .value {
+      font-size: 0.72rem; font-weight: 600; line-height: 1.2;
+    }
+    .card.fork { background: linear-gradient(160deg, #b9a27a, #7a6440); color: #fffaf0; }
+    .card.fork .value { font-size: 0.72rem; font-weight: 600; line-height: 1.2; }
+    .card.relic .value, .card.mirror .value, .card.gremlin .value, .card.fountain .value, .card.pot .value {
+      font-size: 0.72rem; font-weight: 600; line-height: 1.2;
+    }
+    .card .mirror-tag {
+      position: absolute; top: -9px; left: -9px; padding: 2px 6px; border-radius: 999px;
+      background: #a99cd4; color: #fff; font-size: 0.7rem; font-weight: 700; border: 2px solid #fff;
+    }
+    /* The deck: the back of the top card, at the start of the path. */
+    .deck-pile { position: relative; width: 104px; height: 146px; flex: none; }
+    .deck-pile .card-back {
+      position: absolute; inset: 0; border-radius: 10px; border: 3px solid #d9cbb5;
+      display: flex; align-items: center; justify-content: center; font-size: 2rem; color: #d9cbb5;
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
+    }
+    .deck-pile .card-back.under { transform: translate(4px, 4px); opacity: 0.8; }
+    .deck-pile .card-back.under2 { transform: translate(8px, 8px); opacity: 0.6; }
+    .back-default { background: repeating-linear-gradient(45deg, #6b4f3a 0 8px, #5a4130 8px 16px); }
+    .deck-pile .top-marks {
+      position: absolute; bottom: 10px; left: 0; right: 0; text-align: center; font-size: 1.3rem;
+      text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6); letter-spacing: 2px;
+    }
+    .deck-pile .black-square {
+      position: absolute; top: 8px; left: 50%; transform: translateX(-50%); width: 20px; height: 20px;
+      background: #000; border: 2px solid #d9cbb5; border-radius: 2px;
+    }
+    .deck-pile .count {
+      position: absolute; bottom: -22px; left: 0; right: 0; text-align: center; font-size: 0.78rem; color: var(--muted);
+    }
+    .deck-pile.empty .card-back { background: none; border: 2px dashed var(--line); box-shadow: none; color: var(--muted); font-size: 0.8rem; }
+    .relic-chip {
+      font-size: 0.75rem; padding: 1px 7px; border-radius: 999px; background: #e2eef6; color: #2f5d7c;
+      border: 1px solid #bcd5e6; white-space: nowrap;
+    }
+    .fountain-chip {
+      font-size: 0.75rem; padding: 1px 7px; border-radius: 999px; background: #dff1fa; color: #1d5f86;
+      border: 1px solid #a9d6ee; white-space: nowrap;
+    }
+    /* Special cards share the color of what they do: keep exploring (like STAY) or leave (like LEAVE). */
+    .hand-card.stash, .flip .front.stash,
+    .hand-card.guard, .flip .front.guard,
+    .hand-card.return, .flip .front.return { background: linear-gradient(160deg, #3c7bb0, #285a86); }
+    .hand-card.flee, .flip .front.flee,
+    .hand-card.backstab, .flip .front.backstab { background: linear-gradient(160deg, #d39a2c, #a8721a); }
+    .card.taken { opacity: 0.45; filter: grayscale(0.6); }
+    .card .flavor { font-size: 0.72rem; font-style: italic; line-height: 1.25; margin-top: 6px; opacity: 0.85; }
+    .idol-chip {
+      font-size: 0.75rem; padding: 1px 7px; border-radius: 999px; background: #f7ecc9; color: #6b4e0e;
+      border: 1px solid #e3cf8f; white-space: nowrap;
+    }
+    .hand-card.idol-card { background: linear-gradient(160deg, #e6c35c, #a87b1c); color: #3a2a06; }
+    .card .taken-by {
+      position: absolute; left: 50%; top: 46%; transform: translate(-50%, -50%) rotate(-12deg);
+      background: rgba(0, 0, 0, 0.7); color: #fff; font-size: 0.68rem; font-weight: 700;
+      padding: 3px 7px; border-radius: 4px; white-space: nowrap; max-width: 120%; overflow: hidden; text-overflow: ellipsis;
+    }
+    .card.saved { border-color: #4fb3a9; box-shadow: 0 0 0 3px #4fb3a9, 0 0 18px rgba(79, 179, 169, 0.7); }
+    .seat-charms { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+    .charm-chip {
+      font-size: 0.75rem; padding: 1px 7px; border-radius: 999px; background: #dff1ee; color: #1f5d63;
+      border: 1px solid #b5ddd7; white-space: nowrap;
+    }
+    .flip .front.charm-used { background: linear-gradient(160deg, #3f8f8a, #1f5d63); }
+    .flip .front.charm-kept { background: linear-gradient(160deg, #6b6460, #4a4440); }
+    .hand-sep { width: 1px; align-self: stretch; background: #4a3f38; margin: 0 4px; }
+    .hand-card.charm-card {
+      width: 84px; height: 118px; cursor: default; background: linear-gradient(160deg, #3f8f8a, #1f5d63);
+    }
+    .hand-card.charm-card .icon { font-size: 1.7rem; }
+    .hand-card.charm-card .name { font-size: 0.72rem; letter-spacing: 0; text-transform: none; }
+    .hand-card.charm-card:hover { transform: none; }
+    /* Border by category: treasure, hazard, idol (anything you can pick up), event (everything else). */
+    .card.cat-treasure { border-color: #b8c2cc; }
+    .card.cat-hazard { border: 4px solid #8f2321; }
+    .card.cat-idol { border: 4px double #c99a1e; }
+    .card.cat-event { border: 3px dashed #6b4fa0; }
+    .card .marks {
+      position: absolute; bottom: -10px; left: -6px; font-size: 0.95rem; background: #fff; border-radius: 999px;
+      padding: 0 5px; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3); letter-spacing: 1px;
+    }
+    .card.fatal { border-color: var(--red); box-shadow: 0 0 0 3px var(--red), 0 0 18px rgba(181, 50, 47, 0.7); }
+    .card.warn { border-color: #e7b6a8; }
+    .card .left {
+      position: absolute; top: -9px; right: -9px; min-width: 30px; height: 30px; padding: 0 6px;
+      border-radius: 999px; background: var(--amber); color: #fff; font-weight: 800; font-size: 0.85rem;
+      display: flex; align-items: center; justify-content: center; border: 2px solid #fff;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+    }
+    .deal { animation: deal 0.5s cubic-bezier(0.2, 0.8, 0.3, 1.2); }
+    @keyframes deal {
+      from { transform: translate(-40px, -30px) rotateY(90deg) scale(0.8); opacity: 0; }
+      60% { opacity: 1; }
+    }
+    .shake { animation: deal 0.5s ease, shake 0.5s 0.5s ease 2; }
+    @keyframes shake { 25% { transform: translateX(-4px) rotate(-2deg); } 75% { transform: translateX(4px) rotate(2deg); } }
+
+    #banner {
+      margin-top: 16px; padding: 12px 16px; border-radius: 10px; font-weight: 600;
+      background: #f3ead8; border: 1px solid var(--line);
+    }
+    #banner.bad { background: #f9e1dc; border-color: #e7b6a8; color: var(--red-dark); }
+    #banner.good { background: #e3f1e6; border-color: #b9d9c1; color: #1f5a37; }
+
+    #log { list-style: none; margin: 0; padding: 0; max-height: 220px; overflow-y: auto; font-size: 0.88rem; }
+    #log li { padding: 5px 0; border-bottom: 1px solid #efe7d9; }
+    #log li.heading { font-weight: 700; color: var(--silver-dark); }
+    #log li.bad { color: var(--red-dark); }
+    #log li.good { color: #1f5a37; }
+
+    /* --- Your hand, fixed at the bottom --------------------------------------------- */
+    #hand-bar {
+      position: fixed; left: 0; right: 0; bottom: 0; z-index: 25; /* above the charm info popup, so the charm card and PASS stay usable */
+      background: var(--wood); color: #eadfcf; box-shadow: 0 -4px 14px rgba(0, 0, 0, 0.25);
+      /* Right padding keeps PLAY clear of the chat tab docked at the bottom right. */
+      padding: 14px 104px 18px 24px;
+    }
+    .hand-inner { max-width: 1400px; margin: 0 auto; display: flex; align-items: center; gap: 24px; }
+    .hand-label { width: 120px; flex: none; }
+    .hand-label strong { display: block; font-size: 1.05rem; color: #fff; }
+    .hand-label span { font-size: 0.8rem; color: #b9ab97; }
+    #hand { display: flex; gap: 14px; flex: 1; min-height: 146px; align-items: flex-end; }
+    .hand-card {
+      position: relative; width: 104px; height: 146px; border-radius: 10px; padding: 10px 6px;
+      display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center;
+      color: #fff; border: 3px solid #fff; box-shadow: 0 3px 8px rgba(0, 0, 0, 0.35);
+      transition: transform 0.15s ease, box-shadow 0.15s ease, opacity 0.2s;
+    }
+    .hand-card .icon { font-size: 2.3rem; }
+    .hand-card .name { font-weight: 800; font-size: 1.05rem; margin-top: 8px; letter-spacing: 0.04em; text-transform: uppercase; }
+    .hand-card .key {
+      position: absolute; bottom: 6px; right: 8px; font-size: 0.7rem; opacity: 0.75;
+    }
+    .hand-card:not(.disabled) { cursor: pointer; }
+    .hand-card:not(.disabled):hover { transform: translateY(-8px); }
+    .hand-card.selected { transform: translateY(-16px); box-shadow: 0 0 0 3px #ffd56b, 0 10px 18px rgba(0, 0, 0, 0.45); }
+    .hand-card.disabled { opacity: 0.4; }
+    #hand .none { color: #b9ab97; align-self: center; }
+    .play-box { display: flex; flex-direction: column; align-items: center; gap: 6px; flex: none; width: 170px; }
+    #play {
+      width: 100%; padding: 16px 0; font-size: 1.3rem; font-weight: 800; letter-spacing: 0.1em;
+      background: var(--red); border-radius: 10px; box-shadow: 0 3px 0 var(--red-dark);
+    }
+    #play:active:not(:disabled) { transform: translateY(2px); box-shadow: 0 1px 0 var(--red-dark); }
+    #play-note { font-size: 0.8rem; color: #b9ab97; text-align: center; min-height: 1.2em; }
+
+    /* --- Drafting: centered card picker between expeditions ----------------------- */
+    .overlay {
+      position: fixed; inset: 0; z-index: 20;
+      display: flex; align-items: center; justify-content: center; padding: 72px 16px;
+      background: rgba(32, 25, 20, 0.55); backdrop-filter: blur(2px);
+      animation: fade-in 0.25s ease;
+    }
+    @keyframes fade-in { from { opacity: 0; } }
+    .draft-box {
+      background: var(--paper); border-radius: 16px; padding: 24px 32px 20px; text-align: center;
+      box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4); max-width: 100%;
+    }
+    .draft-box h2 { font-size: 1.4rem; margin: 0 0 4px; }
+    .draft-box > p { margin: 0 0 18px; }
+    #offers { display: flex; justify-content: center; gap: 22px; padding: 14px 0 22px; }
+    #offers .card {
+      width: 160px; height: auto; min-height: 230px; padding-bottom: 12px;
+      transition: transform 0.15s ease, box-shadow 0.15s ease, opacity 0.2s;
+    }
+    #offers .card .value { margin-top: 8px; }
+    #offers .card .flavor { flex: 1; }
+    #offers .card .icon { font-size: 3rem; margin-top: 12px; }
+    #offers .card .name { font-size: 0.95rem; }
+    #offers .card .value { font-size: 2rem; }
+    #offers .card.hazard .value { font-size: 0.8rem; }
+    #offers .card .key { position: absolute; bottom: 6px; right: 9px; font-size: 0.72rem; opacity: 0.6; }
+    #offers.open .card { cursor: pointer; }
+    #offers.open .card:hover { transform: translateY(-6px); }
+    #offers .card.selected { transform: translateY(-10px); box-shadow: 0 0 0 4px #ffd56b, 0 12px 22px rgba(0, 0, 0, 0.35); }
+    #offers .card.faded { opacity: 0.3; }
+    #offers .card.offer-in { animation: offer-in 0.4s ease backwards; }
+    @keyframes offer-in { from { transform: translateY(24px) scale(0.9); opacity: 0; } }
+    #draft-btn {
+      padding: 12px 36px; font-size: 1.1rem; font-weight: 800; letter-spacing: 0.08em;
+      background: var(--red); border-radius: 10px; box-shadow: 0 3px 0 var(--red-dark);
+    }
+    #draft-note { margin: 10px 0 0; min-height: 1.2em; }
+    #mark-emojis { display: flex; justify-content: center; gap: 12px; margin-bottom: 4px; }
+    #mark-emojis button {
+      font-size: 1.8rem; width: 60px; height: 60px; padding: 0; border-radius: 14px;
+      background: var(--sand); color: inherit; border: 3px solid transparent;
+    }
+    #mark-emojis button.selected { border-color: #ffd56b; background: #fff3cc; }
+    #mark-emojis button:disabled { opacity: 0.4; }
+    #offers .card .mark-preview {
+      position: absolute; top: -14px; left: 50%; transform: translateX(-50%); font-size: 1.4rem;
+      background: #fff; border-radius: 999px; padding: 0 6px; box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
+    }
+    #auction { padding-bottom: 220px; }
+    .auction-row { display: flex; align-items: flex-start; justify-content: center; gap: 24px; margin: 6px 0 14px; }
+    #auction-bids { list-style: none; margin: 0; padding: 0; min-width: 190px; text-align: left; }
+    #auction-bids li { padding: 5px 10px; border-radius: 8px; margin-bottom: 4px; background: var(--sand); }
+    #auction-bids li.turn { outline: 2px solid #3c86b5; background: #e2eef6; font-weight: 600; }
+    #auction-bids li.lead { background: #fff3cc; font-weight: 700; }
+    .auction-controls { display: flex; justify-content: center; gap: 10px; align-items: center; }
+    .auction-controls input { width: 90px; font-size: 1.1rem; }
+    .auction-controls button { padding: 10px 22px; font-weight: 800; letter-spacing: 0.06em; border-radius: 10px; }
+    #bid-btn { background: #3c86b5; box-shadow: 0 3px 0 #2a6489; }
+    .auction-controls .pass { background: #6b6460; box-shadow: 0 3px 0 #4a4440; }
+    #gem-marks { display: flex; justify-content: center; gap: 12px; margin-bottom: 8px; }
+    #gem-marks button {
+      font-size: 1.8rem; width: 60px; height: 60px; padding: 0; border-radius: 14px;
+      background: var(--sand); color: inherit; border: 3px solid transparent;
+    }
+    #gem-marks button.selected { border-color: #ffd56b; background: #fff3cc; }
+    #gem-cards { display: flex; justify-content: center; flex-wrap: wrap; gap: 14px; padding: 10px 0 18px; }
+    #gem-cards .card { height: auto; min-height: 150px; }
+    #gem-cards.open .card { cursor: pointer; }
+    #gem-cards .card.selected { transform: translateY(-8px); box-shadow: 0 0 0 4px #ffd56b, 0 10px 18px rgba(0, 0, 0, 0.35); }
+    #gem-btn { padding: 12px 36px; font-size: 1.05rem; font-weight: 800; letter-spacing: 0.06em; border-radius: 10px; background: var(--red); box-shadow: 0 3px 0 var(--red-dark); }
+    .card.gem { background: radial-gradient(circle at 30% 25%, #ffffff, #cfd8e3 60%, #9aa8b8); color: #1f2a36; }
+    .card.cat-gem { border: 4px solid #2fb3c9; box-shadow: 0 0 0 2px #fff, 0 0 12px rgba(47, 179, 201, 0.6); }
+    .gem-chip {
+      font-size: 0.75rem; padding: 1px 7px; border-radius: 999px; background: #e0f6fa; color: #17707f;
+      border: 1px solid #a6dfe9; white-space: nowrap;
+    }
+    #vision { margin-top: 14px; padding: 10px 12px; border-radius: 10px; background: #efe6fa; border: 1px solid #d6c4ee; font-size: 0.9rem; }
+    .hand-card.peek { background: linear-gradient(160deg, #8a6bc0, #5e4593); }
+    #rob-cards { display: flex; justify-content: center; flex-wrap: wrap; gap: 16px; padding: 10px 0 18px; }
+    #rob-cards .card { cursor: pointer; height: auto; min-height: 146px; }
+    #rob-cards .card:hover { transform: translateY(-6px); }
+    #rob-cards.closed .card { cursor: default; transform: none; }
+    #rob-cards .card.selected { box-shadow: 0 0 0 4px #b5322f; }
+    #charm-cards { display: flex; justify-content: center; align-items: center; gap: 18px; padding: 10px 0 22px; }
+    #charm-cards .card { width: 130px; height: 182px; }
+    #charm-cards .card .icon { font-size: 2.8rem; margin-top: 12px; }
+    #charm-cards .vs { font-size: 1.6rem; font-weight: 800; color: var(--muted); }
+    /* Info only: clicks pass through to the hand bar, where you pick the charm or PASS. */
+    #charm-prompt { pointer-events: none; background: rgba(32, 25, 20, 0.35); padding-bottom: 220px; }
+    .hand-card.charm-card.usable {
+      cursor: pointer; animation: glow 1.2s ease-in-out infinite alternate;
+      box-shadow: 0 0 0 3px #7fe0d6, 0 0 18px rgba(127, 224, 214, 0.9);
+    }
+    .hand-card.charm-card.usable:hover { transform: translateY(-10px); }
+    @keyframes glow { to { box-shadow: 0 0 0 3px #b9f3ec, 0 0 28px rgba(127, 224, 214, 1); } }
+    #play.pass { background: #6b6460; box-shadow: 0 3px 0 #4a4440; }
+    #charm-note { margin: 12px 0 0; min-height: 1.2em; }
+    #fountain-prompt { padding-bottom: 220px; }
+    .fountain-row { display: flex; align-items: center; justify-content: center; gap: 22px; margin: 6px 0 10px; }
+    .fountain-pot { width: 130px; padding: 12px; border-radius: 12px; background: var(--sand); }
+    .fountain-pot .label { font-size: 0.8rem; color: var(--muted); }
+    .fountain-pot .big { font-size: 2rem; font-weight: 800; }
+    #fountain-range { width: 240px; accent-color: #3c86b5; }
+    #fountain-amount { font-weight: 600; min-height: 1.3em; margin-bottom: 14px; }
+    .fountain-quick { display: flex; justify-content: center; gap: 8px; margin-bottom: 14px; }
+    .fountain-quick button { background: #e2eef6; color: #1d5f86; padding: 5px 12px; font-size: 0.85rem; }
+    #fountain-btn { padding: 12px 36px; font-size: 1.05rem; font-weight: 800; letter-spacing: 0.06em; border-radius: 10px; background: #3c86b5; box-shadow: 0 3px 0 #2a6489; }
+  </style>
+</head>
+<body>
+  <main id="main">
+    <h1>Peruvian <span class="accent">Silver</span></h1>
+    <p id="connection" class="muted">Connecting…</p>
+    <div id="error" hidden></div>
+
+    <!-- Before the game -->
+    <section id="lobby" hidden>
+      <div class="panel">
+        <div class="row" style="margin-bottom: 8px">
+          <h2 style="margin: 0">Players</h2>
+          <span class="spacer"></span>
+          <button id="join" class="green" hidden>Join game</button>
+          <button id="ready" class="green" hidden>Ready</button>
+          <button id="leave" class="red" hidden>Leave game</button>
+        </div>
+        <ul id="players"></ul>
+        <div id="start"></div>
+        <p id="spectators" class="muted"></p>
+      </div>
+
+      <div class="panel">
+        <h2>Game settings</h2>
+        <div id="settings"></div>
+      </div>
+
+      <div class="panel rules">
+        <h2>How to play</h2>
+        <h3>Basics</h3>
+        <ol>
+          <li>Each turn a card is revealed from the deck. <b>Treasure</b> is split evenly between everyone still in the mine, straight into their <b>backpacks</b>. The remainder stays on the card.</li>
+          <li>Everyone still in the mine secretly plays a card: <b>Stay</b> or <b>Leave</b>. The cards flip over together.</li>
+          <li>Players who <b>leave</b> split the silver left on the cards, then move their backpack into their <b>chest</b>, where hazards can't reach it.</li>
+          <li>When a <b>second copy of the same hazard</b> appears (on any path), it strikes: everyone still in the mine loses their backpack and is out for this expedition, unless a charm or Guide Dog saves them. One copy of that hazard leaves the deck for good.</li>
+          <li><b>Relics</b> (charms, idols and gear) stay on their card. Only a player who leaves <b>alone</b> takes them, along with every other relic on that path. <b>Idols</b> are worth their value at the end. A <b>charm</b> lets you survive its hazard once: when it strikes, spend the charm to keep your backpack and keep exploring.</li>
+          <li>After the last expedition, the highest score wins: chest + idol values + 5 for each unused charm or gear card. Silver left in a fountain pool doesn't count.</li>
+        </ol>
+        <h3>Special cards</h3>
+        <ol>
+          <li><b>Gear</b> gives you new cards to play: <b>Stash</b> (bank your backpack and stay), <b>Flee</b> (leave ahead of everyone who plays Leave), <b>Guide Dog</b> (escape the next hazard strike with your backpack), <b>Seconds</b> (go back in after you've left), <b>Backstab</b> (leave and rob everyone on your path who plays Leave) and <b>Crystal Ball</b> (any time: privately see the next 3 cards).</li>
+          <li>Watch out for <b>Mirrors</b> (copy the next card on their path, hazards too: a Mirror followed by a hazard strikes at once), <b>Gremlins</b> (take a share of every treasure), <b>Greedy Urns</b> (grow every turn) and <b>Fountains</b> (double your fountain pool, and let you move silver between it and your backpack).</li>
+          <li>A <b>Fork</b> splits the mine: after the next decision, every card on that path except the Fork and hazards is discarded, along with any silver on it, and two new paths open. Play Go Left or Go Right. You only share treasure with players on your path, but hazards still count across every path.</li>
+          <li><b>Altar</b> takes the backpack of everyone on its path (leavers can collect it), <b>Blessing</b> doubles backpacks, <b>Death</b> ends the expedition for everyone inside (no saving it), and <b>Robbery</b> makes whoever has the most silver in their chest give up a relic. Death and Blessing have a black square on their back.</li>
+          <li><b>Gems</b> are auctioned when revealed: everyone gets one bid from their chest, in turn, and only the winner pays. After the expedition a <b>Red Gem</b> lets you secretly add 3 of 5 offered cards to the deck, and a <b>Blue Gem</b> puts a mark of your choice on 3 random deck cards (you see which). Gems won in the last expedition do nothing.</li>
+          <li>Between expeditions, everyone secretly marks the back of one of three deck cards shown only to them, with one of three emoji. Marks stay for the whole game and show on the top card of the deck. Only you know what your marks mean. The deck is reshuffled every expedition.</li>
+        </ol>
+      </div>
+    </section>
+
+    <!-- During and after the game -->
+    <section id="game" hidden>
+      <div id="result" class="panel" hidden></div>
+      <div id="status">
+        <span id="message"></span>
+        <span class="spacer"></span>
+        <span id="expedition-chip" class="chip"></span>
+        <span id="deck-chip" class="chip"></span>
+        <button id="back" hidden>Back to lobby</button>
+      </div>
+
+      <div class="table">
+        <div id="seats"></div>
+        <div>
+          <div class="panel mine">
+            <div class="mine-head">
+              <h2>The mine</h2>
+              <span id="mine-note" class="muted small"></span>
+              <span class="spacer"></span>
+              <span id="my-marks" class="muted small" title="Only you can see this"></span>
+            </div>
+            <div id="path"></div>
+            <div id="banner" hidden></div>
+            <div id="vision" hidden title="Only you can see this"></div>
+          </div>
+          <div class="panel">
+            <h2>Game log</h2>
+            <ul id="log"></ul>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- Between expeditions: pick a card to add to the deck (centered on screen). -->
+  <div id="draft" class="overlay" hidden>
+    <div class="draft-box">
+      <h2 id="draft-title">Mark a card</h2>
+      <p id="draft-hint" class="muted"></p>
+      <div id="mark-emojis"></div>
+      <div id="offers"></div>
+      <button id="draft-btn" disabled>MARK</button>
+      <p id="draft-note" class="muted small"></p>
+    </div>
+  </div>
+
+  <!-- A hazard struck and you hold its charm: use it? (centered on screen) -->
+  <div id="charm-prompt" class="overlay" hidden>
+    <div class="draft-box">
+      <h2 id="charm-title"></h2>
+      <p id="charm-hint" class="muted"></p>
+      <div id="charm-cards"></div>
+      <p id="charm-note" class="muted small"></p>
+    </div>
+  </div>
+
+  <!-- Gem auction: everyone bids from their chest, one at a time. -->
+  <div id="auction" class="overlay" hidden>
+    <div class="draft-box">
+      <h2 id="auction-title">💎 Auction!</h2>
+      <p id="auction-hint" class="muted"></p>
+      <div class="auction-row">
+        <div id="auction-card"></div>
+        <ol id="auction-bids"></ol>
+      </div>
+      <div id="auction-controls" class="auction-controls">
+        <input id="bid-amount" type="number" min="1" step="1" aria-label="Your bid">
+        <button id="bid-btn">BID</button>
+        <button id="pass-btn" class="pass">PASS</button>
+      </div>
+      <p id="auction-note" class="muted small"></p>
+    </div>
+  </div>
+
+  <!-- After an expedition: a gem holder uses their gem. -->
+  <div id="gem-prompt" class="overlay" hidden>
+    <div class="draft-box">
+      <h2 id="gem-title"></h2>
+      <p id="gem-hint" class="muted"></p>
+      <div id="gem-marks"></div>
+      <div id="gem-cards"></div>
+      <button id="gem-btn" disabled>CONFIRM</button>
+      <p id="gem-note" class="muted small"></p>
+    </div>
+  </div>
+
+  <!-- Robbery: the richest player(s) pick a relic to lose. -->
+  <div id="rob-prompt" class="overlay" hidden>
+    <div class="draft-box">
+      <h2 id="rob-title">🦹 Robbery!</h2>
+      <p id="rob-hint" class="muted"></p>
+      <div id="rob-cards"></div>
+      <p id="rob-note" class="muted small"></p>
+    </div>
+  </div>
+
+  <!-- A fountain on your path: move silver between your backpack and your fountain pool. -->
+  <div id="fountain-prompt" class="overlay" hidden>
+    <div class="draft-box">
+      <h2>⛲ A fountain!</h2>
+      <p id="fountain-hint" class="muted"></p>
+      <div class="fountain-row">
+        <div class="fountain-pot"><div class="label">🎒 Backpack</div><div id="fountain-pack" class="big"></div></div>
+        <input id="fountain-range" type="range" step="1" aria-label="Silver to move: right puts it in your fountain pool, left takes it out">
+        <div class="fountain-pot"><div class="label">⛲ Fountain pool</div><div id="fountain-stash" class="big"></div></div>
+      </div>
+      <div id="fountain-amount"></div>
+      <div class="fountain-quick">
+        <button id="fountain-all-out" type="button">Take all out</button>
+        <button id="fountain-none" type="button">No change</button>
+        <button id="fountain-all-in" type="button">Put all in</button>
+      </div>
+      <button id="fountain-btn">CONFIRM</button>
+      <p id="fountain-note" class="muted small"></p>
+    </div>
+  </div>
+
+  <!-- Your hand: only shown to players during the game. -->
+  <div id="hand-bar" hidden>
+    <div class="hand-inner">
+      <div class="hand-label"><strong>Your hand</strong><span id="hand-hint"></span></div>
+      <div id="hand"></div>
+      <div class="play-box">
+        <button id="play" disabled>PLAY</button>
+        <div id="play-note"></div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

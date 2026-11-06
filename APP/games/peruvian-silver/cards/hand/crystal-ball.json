@@ -1,0 +1,8 @@
+{
+  "name": "Crystal Ball",
+  "type": "peek",
+  "icon": "🔮",
+  "order": 7,
+  "starting": 0,
+  "text": "Use any time: see the next 3 cards."
+}

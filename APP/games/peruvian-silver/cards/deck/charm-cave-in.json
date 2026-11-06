@@ -1,0 +1,7 @@
+{
+  "name": "Cave-in Charm",
+  "type": "charm",
+  "icon": "🧿",
+  "protects": "cave-in",
+  "text": "When a Cave-in strikes, spend this to keep your backpack and keep exploring."
+}

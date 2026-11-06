@@ -1,0 +1,8 @@
+{
+  "name": "Flee",
+  "type": "flee",
+  "icon": "🏃",
+  "order": 4,
+  "starting": 0,
+  "text": "Leave ahead of Leave players: split the leftovers and take any relics first. Safe from Backstab."
+}

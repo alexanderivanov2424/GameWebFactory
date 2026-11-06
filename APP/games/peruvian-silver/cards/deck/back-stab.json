@@ -1,0 +1,7 @@
+{
+  "name": "Backstab",
+  "type": "relic",
+  "icon": "🗡️",
+  "gives": "backstab",
+  "text": "Gives a Backstab card: leave and rob the Leave players on your path."
+}

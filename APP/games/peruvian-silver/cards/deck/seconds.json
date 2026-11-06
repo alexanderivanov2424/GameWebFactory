@@ -1,0 +1,7 @@
+{
+  "name": "Seconds",
+  "type": "relic",
+  "icon": "🔁",
+  "gives": "seconds",
+  "text": "Gives a Seconds card: go back in from camp."
+}

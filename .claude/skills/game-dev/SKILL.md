@@ -1,0 +1,81 @@
+---
+name: game-dev
+description: Change, debug, balance or test an existing game on the GWF games site (APP/games/<id>/) or its shared code (APP/gamekit/, APP/web/gamekit/, APP/web/shared/, APP/server/). Use for any request like "update the tank game", "add an action/card", "fix this bug", "rename X", "change costs", or to test a game. Maps where everything is (so you don't need to read whole files) and how to test without a browser or Node.
+---
+
+# Working on existing games
+
+For a brand-new game use the `new-game` skill instead. It holds the full shared-API
+rules and pitfalls; skim its sections 3–4 before larger changes.
+
+## 1. Get oriented without reading whole files
+The code is documented at the top of each file. Read those headers first; open function
+bodies only for what you change.
+
+| Question | Where to look |
+|---|---|
+| Rules of a game, its settings, every message the client sends | Docstring at the top of `APP/games/<id>/server.py` (`python3 -c "import ast;print(ast.get_docstring(ast.parse(open('APP/games/<id>/server.py').read())))"`) |
+| How a game is built, where things are, its pitfalls | `APP/games/<id>/NOTES.md` |
+| What the client receives | `game_state()` and `private_state()` in that `server.py` |
+| Host settings | `SETTINGS` in that `server.py` (the client draws them; no client code per setting) |
+| Client layout | `grep -n "^  // ---" APP/games/<id>/client/game.js` lists its sections; element ids are in `client/index.html` |
+| Rules text players read | The lobby rules paragraph in `client/index.html`, banners/targeting text and the log in `client/game.js` |
+| Lobby, phases, hooks, SETTINGS, ACTIONS, timers | Header of `APP/gamekit/lobby.py` (and `settings.py`) |
+| Turn order / secret simultaneous picks | Headers of `APP/gamekit/turns.py` / `APP/gamekit/choices.py` |
+| Validating input / loading content files | Headers of `APP/gamekit/validate.py` / `APP/gamekit/data.py` |
+| Client lobby API and the state shape | Header of `APP/web/gamekit/lobby.js` |
+| Shared UI (player list, start, lobby buttons, settings form, error banner, turn alert) | Header of `APP/web/gamekit/lobby-ui.js` |
+| Base page styles and the CSS variables a game can set | Header of `APP/web/shared/theme.js` |
+| Connections, reconnects, the WebSocket server | Headers of `APP/server/rooms.py`, `main.py`, `websocket.py` (platform; games don't use it directly) |
+
+Games at a glance (details in each `NOTES.md`):
+- **tictactoe**: the smallest full game; read it to see the whole shape of a game.
+- **tanks**: hidden locations and mines, turn counters with per-action costs, click-to-target
+  modes on a board with walls, private notes on public log entries.
+- **peruvian-silver**: the biggest; stages inside `playing`, simultaneous secret plays,
+  timed reveals, cards as JSON files (loaded in `cards.py`), forks/branches.
+
+## 2. Make the change
+- Server and client both: the server validates everything; the client only renders state.
+- Constants the user specified go in `server.py` and reach the client through
+  `game_state()` (e.g. `costs`, `rules`), never duplicated in JS.
+- A new setting is one line in `SETTINGS`; a new message is one entry in `ACTIONS` plus its
+  method. Renaming a setting is the `SETTINGS` key plus any `self.settings[...]` reads. Rooms
+  live in memory and reset on deploy, so no migration is needed.
+- Keep the docs true in the same change: the `server.py` docstring (rules + message list),
+  the game's `NOTES.md`, the lobby rules paragraph in `index.html`, and anything in
+  `CLAUDE.md` / skills it affects.
+- Shared code: changing `APP/gamekit/` or `APP/web/gamekit/` affects every game. Run the full
+  test suite, and update every game that uses what you changed. Promote anything reusable
+  into gamekit (see `new-game` section 5).
+- Unclear rule details: pick a sensible default and list each assumption in your final
+  message instead of asking, unless the choice changes the game a lot.
+
+## 3. Test (there's no browser and no Node in the pod)
+1. `python3 -I tools/run_tests.py` (or `... run_tests.py <game-id>` while iterating): compiles
+   everything, imports every game like the server does, runs the unit tests, syntax-checks all JS.
+2. Add or update tests in `APP/games/<id>/tests/test_*.py` (stdlib `unittest`) for what you
+   changed, using `gamekit.sim.Sim` (see its header). It drives the real lobby (join, ready,
+   start, game messages, leaving, spectators), returns the error text a player would see,
+   records each player's state (incl. `private`) and runs `schedule()` timers instantly
+   (`auto_timers=False` + `sim.step()` to stop between a reveal and what follows).
+   Cover the new rules, rejections, hidden-info leaks (check other players' and spectators'
+   `state(i)`), game end (win, draw, last player destroyed by their own action) and a
+   player leaving mid-game. Make them deterministic (set internals or seed `random`).
+   Shared code gets tests in `APP/gamekit/tests/` (a tiny Game class passed to `Sim(MyGame)`).
+3. Client: the JS check only catches broken brackets/strings/templates. Re-read the code
+   paths you changed: element ids used in JS must exist in `index.html`, and every helper you
+   call must still be defined (or come from `AppDom` / `AppLobbyUI`). Nothing else will catch
+   a client bug before the user does.
+4. Hand off: the user deploys on the host (`cd /home/sasha/Desktop/Dev && ./deploy.sh`; it
+   runs the same checks first) and tests in two browser tabs. Give a short numbered test
+   script for exactly what changed, and say plainly that the browser side is untested.
+
+## Pitfalls seen here (game-specific ones are in each NOTES.md)
+- A player's own action can remove them (e.g. walking onto a mine): check they're still in
+  the `TurnQueue` before `advance`, and pick the winner from who is left (maybe nobody).
+- Public log entries must not leak secrets; put the actor's private details in a per-player
+  notes map keyed by log index (see tanks).
+- Hover previews: toggle classes on existing cells; never rebuild the board on hover.
+- JSON turns int dict keys into strings: look them up with `String(index)` in JS.
+- Rule tables (which cards are playable when) belong in the game state, not copied into JS.

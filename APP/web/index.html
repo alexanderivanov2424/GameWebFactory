@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Games</title>
+
+  <script src="/shared/theme.js"></script>
+  <script src="/shared/home.js" defer></script>
+  <script src="/shared/settings.js" defer></script>
+  <script src="/shared/chat.js" defer></script>
+
+  <style>
+    /* Base page styles (body, main, colors) come from /shared/theme.js. */
+    h1 { font-size: 2.2rem; margin: 8px 0 24px; }
+    .games {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+      gap: 16px;
+    }
+    .game {
+      display: block;
+      height: 100%;
+      padding: 18px;
+      background: var(--gwf-surface);
+      border: 1px solid var(--gwf-line);
+      border-radius: 10px;
+      color: inherit;
+      text-decoration: none;
+      transition: border-color 0.15s, box-shadow 0.15s;
+    }
+    .game:hover { border-color: var(--gwf-accent); box-shadow: 0 4px 16px rgba(74, 92, 255, 0.15); }
+    .game h2 { margin: 0 0 6px; font-size: 1.15rem; color: var(--gwf-accent); }
+    .game p { margin: 0; color: #555; }
+    .message { color: #666; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Games</h1>
+    <p id="message" class="message">Loading games…</p>
+    <ul id="games" class="games"></ul>
+  </main>
+
+  <script>
+    async function loadGames() {
+      const message = document.getElementById("message");
+      try {
+        const response = await fetch("/games.json", { cache: "no-cache" });
+        if (!response.ok) throw new Error(response.status);
+        const games = await response.json();
+
+        message.hidden = games.length > 0;
+        message.textContent = "No games yet.";
+
+        const list = document.getElementById("games");
+        for (const game of games) {
+          const link = document.createElement("a");
+          link.className = "game";
+          link.href = `/games/${encodeURIComponent(game.id)}/`;
+
+          const title = document.createElement("h2");
+          title.textContent = game.name;
+          const description = document.createElement("p");
+          description.textContent = game.description;
+          link.append(title, description);
+
+          const item = document.createElement("li");
+          item.append(link);
+          list.append(item);
+        }
+      } catch {
+        message.textContent = "Couldn't load the game list.";
+      }
+    }
+
+    loadGames();
+  </script>
+</body>
+</html>

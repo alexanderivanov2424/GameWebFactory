@@ -1,0 +1,8 @@
+{
+  "name": "Backstab",
+  "type": "backstab",
+  "icon": "🗡️",
+  "order": 5,
+  "starting": 0,
+  "text": "Leave, and steal the backpacks and leftover shares of everyone on your path who plays Leave."
+}

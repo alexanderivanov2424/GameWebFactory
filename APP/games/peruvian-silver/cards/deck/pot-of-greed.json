@@ -1,0 +1,7 @@
+{
+  "name": "Greedy Urn",
+  "type": "pot",
+  "icon": "🏺",
+  "growth": 5,
+  "text": "Gains 5 silver every turn. Leavers split it."
+}

@@ -1,0 +1,9 @@
+{
+  "name": "Leave",
+  "type": "leave",
+  "icon": "🏕️",
+  "order": 3,
+  "starting": 1,
+  "reusable": true,
+  "text": "Go to camp: split the silver left on your path, then bank your backpack. Alone? Take the relics too."
+}

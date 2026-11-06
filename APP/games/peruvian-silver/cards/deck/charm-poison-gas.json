@@ -1,0 +1,7 @@
+{
+  "name": "Poison Gas Charm",
+  "type": "charm",
+  "icon": "🧿",
+  "protects": "poison-gas",
+  "text": "When Poison Gas strikes, spend this to keep your backpack and keep exploring."
+}

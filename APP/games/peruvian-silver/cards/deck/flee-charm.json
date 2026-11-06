@@ -1,0 +1,7 @@
+{
+  "name": "Flee",
+  "type": "relic",
+  "icon": "🏃",
+  "gives": "flee",
+  "text": "Gives a Flee card: leave ahead of Leave players."
+}

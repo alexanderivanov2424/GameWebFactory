@@ -1,0 +1,8 @@
+{
+  "name": "Stash",
+  "type": "stash",
+  "icon": "📦",
+  "order": 2,
+  "starting": 0,
+  "text": "Bank your backpack and keep exploring."
+}

@@ -1,0 +1,8 @@
+{
+  "name": "Guide Dog",
+  "type": "guard",
+  "icon": "🦮",
+  "order": 2,
+  "starting": 0,
+  "text": "Keep exploring. If a hazard strikes before your next turn, return to camp with your backpack."
+}

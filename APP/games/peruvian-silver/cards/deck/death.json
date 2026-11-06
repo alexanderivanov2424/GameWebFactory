@@ -1,0 +1,7 @@
+{
+  "name": "Death",
+  "type": "death",
+  "icon": "☠️",
+  "blackSquare": true,
+  "text": "Everyone in the mine loses their backpack and the expedition ends. No charm or Guide Dog helps."
+}

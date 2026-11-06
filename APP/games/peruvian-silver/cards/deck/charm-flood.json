@@ -1,0 +1,7 @@
+{
+  "name": "Flood Charm",
+  "type": "charm",
+  "icon": "🧿",
+  "protects": "flood",
+  "text": "When a Flood strikes, spend this to keep your backpack and keep exploring."
+}

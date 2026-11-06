@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tanks: Fog of War</title>
+
+  <script src="/shared/theme.js"></script>
+  <script src="/shared/home.js" defer></script>
+  <script src="/shared/settings.js" defer></script>
+  <script src="/shared/chat.js" defer></script>
+  <script src="/gamekit/dom.js" defer></script>
+  <script src="/gamekit/room.js" defer></script>
+  <script src="/gamekit/lobby.js" defer></script>
+  <script src="/gamekit/lobby-ui.js" defer></script>
+  <script src="game.js" defer></script>
+
+  <style>
+    /* Base styles (body, main, .card, buttons, inputs) come from /shared/theme.js. */
+    :root { --gwf-main-width: 1320px; }
+    #lobby { max-width: 760px; }
+
+    /* Game layout: actions + tanks | board | log */
+    #banner { font-size: 1.2rem; font-weight: 600; margin: 0 0 12px; }
+    .layout {
+      display: grid;
+      grid-template-columns: 290px minmax(0, 1fr) 290px;
+      grid-template-areas: "left center right";
+      gap: 16px;
+      align-items: start;
+    }
+    .left { grid-area: left; }
+    .center { grid-area: center; }
+    .right { grid-area: right; }
+    @media (max-width: 1100px) {
+      .layout { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); grid-template-areas: "center center" "left right"; }
+    }
+    @media (max-width: 700px) {
+      .layout { grid-template-columns: minmax(0, 1fr); grid-template-areas: "left" "center" "right"; }
+    }
+
+    /* Board */
+    /* Padding leaves room for wall bars, which stick out 3px past the board edge (no scrollbar). */
+    .board-wrap { overflow-x: auto; padding: 6px; }
+    #board { display: grid; gap: 3px; grid-template-rows: 26px; width: min(100%, 640px); min-width: 280px; margin: 0 auto; }
+    .label { min-width: 0; display: flex; align-items: center; justify-content: center; font-size: 0.8rem; color: #666; font-weight: 600; }
+    .cell {
+      aspect-ratio: 1; padding: 0; min-width: 0;
+      background: #fff; color: #222;
+      border: 1px solid #d6d6e0; border-radius: 4px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: clamp(0.6rem, 2vw, 0.85rem); font-weight: 700;
+      position: relative;
+    }
+    /* Walls: dark bars drawn in the gap to the right of / below a square. */
+    .cell.wall-right::after, .cell.wall-bottom::before {
+      content: ""; position: absolute; background: #2b2d42; border-radius: 2px; z-index: 2; pointer-events: none;
+    }
+    .cell.wall-right::after { top: -3px; bottom: -3px; right: -5px; width: 5px; }
+    .cell.wall-bottom::before { left: -3px; right: -3px; bottom: -5px; height: 5px; }
+    .cell:hover:not(:disabled) { background: #f0f2ff; }
+    .cell.suspect { background: #ffe58a; border-color: #e6c440; }
+    .cell.suspect:hover:not(:disabled) { background: #ffdc5c; }
+    .cell.clear { background: #c9cbd3; border-color: #b3b6c0; }
+    .cell.clear:hover:not(:disabled) { background: #b9bcc6; }
+    .cell.preview { box-shadow: inset 0 0 0 3px #4a5cff; background: #eef0ff; }
+    .cell.allowed { box-shadow: inset 0 0 0 3px #f5a524; }
+    .cell.target { box-shadow: inset 0 0 0 4px #e5484d; }
+    .cell.pending { box-shadow: inset 0 0 0 4px #1a8a4a; }
+    .cell.mine-pick { box-shadow: inset 0 0 0 3px #8a4ae5; }
+    /* Wall build/remove preview, drawn in the gap like walls */
+    .cell .pv { position: absolute; display: none; border-radius: 2px; z-index: 3; pointer-events: none; background: #1a8a4a; }
+    .cell .pv.r { top: -3px; bottom: -3px; right: -6px; width: 7px; }
+    .cell .pv.b { left: -3px; right: -3px; bottom: -6px; height: 7px; }
+    .cell.pv-right .pv.r, .cell.pv-bottom .pv.b { display: block; }
+    .cell.pv-remove .pv { background: #e5484d; }
+    .cell.pv-bad .pv { background: repeating-linear-gradient(45deg, #999 0 3px, #ddd 3px 6px); }
+    .mine {
+      position: absolute; right: 2px; bottom: 1px; font-size: 0.75em; color: #8a4ae5; pointer-events: none;
+    }
+    .mine.enemy { color: #b4232a; }
+    .label.scan-pick { cursor: pointer; background: #eef0ff; border-radius: 4px; color: #4a5cff; user-select: none; }
+    .label.scan-pick:hover { background: #dfe3ff; }
+    .label.picked { background: #4a5cff; color: #fff; }
+    #board.scanning { user-select: none; }
+    #board.targeting .cell { cursor: crosshair; }
+    #board.targeting .cell.blocked { cursor: not-allowed; }
+    .tank {
+      width: 72%; height: 72%; border-radius: 6px;
+      background: #2f5d3a; color: #fff;
+      display: flex; align-items: center; justify-content: center;
+      pointer-events: none; overflow: hidden;
+    }
+    .tank.enemy { background: #8a2f33; }
+    .legend { display: flex; flex-wrap: wrap; gap: 14px; align-items: center; margin-top: 10px; font-size: 0.85rem; color: #555; }
+    .swatch { display: inline-block; width: 14px; height: 14px; border-radius: 3px; border: 1px solid #b3b6c0; vertical-align: -2px; margin-right: 4px; }
+
+    /* Actions */
+    .action-buttons { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+    .action-buttons button { display: flex; flex-direction: column; align-items: center; padding: 8px 4px; line-height: 1.2; }
+    .action-buttons small { font-size: 0.72rem; opacity: 0.85; }
+    #targeting p { margin: 0 0 10px; }
+    #place-panel .row { margin-bottom: 10px; }
+    button.toggle { background: #eef0ff; color: #4a5cff; }
+    button.toggle:hover:not(:disabled) { background: #dfe3ff; }
+    button.toggle.on { background: #4a5cff; color: #fff; }
+
+    /* Whose turn: banner and a pulsing board until you click something */
+    #banner.my-turn { background: #1a8a4a; color: #fff; padding: 10px 14px; border-radius: 10px; }
+
+    /* Tanks list */
+    #tanks { list-style: none; margin: 0; padding: 0; }
+    #tanks li { display: flex; align-items: center; gap: 8px; padding: 8px 0; border-bottom: 1px solid #eee; }
+    #tanks li:last-child { border-bottom: none; }
+    #tanks li.current { font-weight: 700; background: #e8f6ee; border-radius: 6px; }
+    .who { display: flex; flex-direction: column; min-width: 0; }
+    .shield { font-size: 0.75rem; font-weight: 400; color: #4a5cff; white-space: nowrap; }
+    #tanks li.destroyed .tname { text-decoration: line-through; color: #999; }
+    .turn { font-family: ui-monospace, monospace; font-size: 0.85rem; color: #4a5cff; min-width: 52px; }
+    .tname { overflow-wrap: anywhere; }
+    .hp { font-size: 0.8rem; color: #b4232a; white-space: nowrap; }
+    .hp-bar { width: 50px; height: 8px; border-radius: 4px; background: #eee; overflow: hidden; flex: none; }
+    .hp-bar > span { display: block; height: 100%; background: #e5484d; }
+
+    /* Log */
+    #log { list-style: none; margin: 0; padding: 0; max-height: 560px; overflow-y: auto; font-size: 0.9rem; }
+    #log li { padding: 6px 0; border-bottom: 1px solid #f0f0f4; }
+    #log li:last-child { border-bottom: none; }
+    .found { color: #b4232a; font-weight: 600; }
+    .not-found { color: #1a8a4a; font-weight: 600; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Tanks: Fog of War</h1>
+    <p id="connection" class="muted">Connecting…</p>
+    <div id="error"></div>
+
+    <!-- Before the game -->
+    <section id="lobby" hidden>
+      <div class="card">
+        <div class="row" style="margin-bottom: 8px">
+          <h2 style="margin: 0">Players</h2>
+          <span class="spacer"></span>
+          <button id="join" class="green" hidden>Join game</button>
+          <button id="ready" class="green" hidden>Ready</button>
+          <button id="leave" class="red" hidden>Leave game</button>
+        </div>
+        <ul id="players"></ul>
+        <div id="start"></div>
+        <p id="spectators" class="muted"></p>
+      </div>
+
+      <div class="card">
+        <h2>Game settings</h2>
+        <div id="settings"></div>
+        <p class="muted small">
+          Each tank hides on a secret square and lays 2 secret mines. Scan: more than half the
+          rows or columns 1 turn, a single one 3 turns, otherwise 2. Spray: 1 damage to a 2×2 area.
+          Artillery: 2 damage to any one square. Blast (5 turns): 4 damage to the first tank in a
+          straight line from you; a miss reveals nothing. Move 1, heal 1 HP 3, build a wall 1,
+          remove a wall 2, lay a mine within 3 steps 1. Mines deal 1 damage to everyone on the
+          square when someone moves onto it. A tank that takes damage is shielded until its next
+          turn. Walls block moving, blasts and mine range. The board always stays connected,
+          so 100% walls makes a maze.
+        </p>
+      </div>
+    </section>
+
+    <!-- During and after the game -->
+    <section id="game" hidden>
+      <p id="banner"></p>
+      <div class="layout">
+        <div class="left">
+          <div id="place-panel" class="card" hidden>
+            <h2>Hide your tank, lay your mines</h2>
+            <div class="row">
+              <button id="place-tank-mode" class="toggle"></button>
+              <button id="place-mine-mode" class="toggle"></button>
+            </div>
+            <p id="place-text" class="muted small"></p>
+            <button id="place-btn" class="green">Confirm</button>
+          </div>
+
+          <div id="actions" class="card" hidden>
+            <h2>Your move</h2>
+            <div id="action-menu">
+              <div class="action-buttons">
+                <button data-mode="scan">Scan<small data-cost="scan"></small></button>
+                <button data-mode="spray">Spray<small data-cost="spray"></small></button>
+                <button data-mode="artillery">Artillery<small data-cost="artillery"></small></button>
+                <button data-mode="blast">Blast<small data-cost="blast"></small></button>
+                <button data-mode="move">Move<small data-cost="move"></small></button>
+                <button data-mode="mine">Mine<small data-cost="mine"></small></button>
+                <button id="heal-btn" class="green">Heal +1<small data-cost="heal"></small></button>
+                <button data-mode="wall">Build wall<small data-cost="wall"></small></button>
+                <button data-mode="unwall">Remove wall<small data-cost="unwall"></small></button>
+              </div>
+            </div>
+            <div id="targeting" hidden>
+              <p id="targeting-text"></p>
+              <div class="row">
+                <button id="scan-btn" class="green" hidden>Scan</button>
+                <button id="cancel-target" class="plain">Cancel</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <h2>Tanks</h2>
+            <ul id="tanks"></ul>
+          </div>
+        </div>
+
+        <div class="center">
+          <div class="card" id="board-card">
+            <div class="board-wrap"><div id="board"></div></div>
+            <div class="legend">
+              <span>Click a square to mark it:</span>
+              <span><span class="swatch" style="background: #ffe58a"></span>Suspect</span>
+              <span><span class="swatch" style="background: #c9cbd3"></span>Clear</span>
+              <span><span class="swatch" style="background: #2b2d42; border-color: #2b2d42; width: 5px"></span>Wall</span>
+              <span><span style="color: #8a4ae5">✸</span> Your mine</span>
+              <span class="spacer"></span>
+              <button id="clear-marks" class="plain" style="padding: 4px 10px; font-size: 0.85rem">Reset marks</button>
+            </div>
+          </div>
+          <div class="card">
+            <button id="back" hidden>Back to lobby</button>
+            <p id="game-note" class="muted small" style="margin: 0"></p>
+          </div>
+        </div>
+
+        <div class="right">
+          <div class="card">
+            <h2>Battle log</h2>
+            <ul id="log"></ul>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+</body>
+</html>

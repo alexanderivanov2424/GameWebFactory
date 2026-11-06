@@ -1,0 +1,8 @@
+{
+  "name": "Seconds",
+  "type": "return",
+  "icon": "🔁",
+  "order": 6,
+  "starting": 0,
+  "text": "From camp: go back into the mine with an empty backpack."
+}

@@ -1,0 +1,7 @@
+{
+  "name": "Guide Dog",
+  "type": "relic",
+  "icon": "🦮",
+  "gives": "guide-dog",
+  "text": "Gives a Guide Dog card: escape the next hazard strike with your backpack."
+}

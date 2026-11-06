@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Color Tic-Tac-Toe</title>
+
+  <script src="/shared/theme.js"></script>
+  <script src="/shared/home.js" defer></script>
+  <script src="/shared/settings.js" defer></script>
+  <script src="/shared/chat.js" defer></script>
+  <script src="/gamekit/dom.js" defer></script>
+  <script src="/gamekit/room.js" defer></script>
+  <script src="/gamekit/lobby.js" defer></script>
+  <script src="/gamekit/lobby-ui.js" defer></script>
+  <script src="game.js" defer></script>
+
+  <style>
+    /* Base styles (body, main, .card, buttons, inputs) come from /shared/theme.js. */
+    :root { --gwf-main-width: 640px; }
+    #connection { margin: 0 0 12px; }
+
+    .piece {
+      display: inline-block;
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      border: 2px solid rgba(0, 0, 0, 0.15);
+      flex: none;
+    }
+
+    /* Lobby (player list styles come from /gamekit/lobby-ui.js) */
+    .row { gap: 12px; }
+    .rgb label { display: flex; align-items: center; gap: 6px; font-weight: 600; }
+    #color-preview { width: 32px; height: 32px; }
+
+    /* Game */
+    #turn { display: flex; align-items: center; gap: 8px; font-size: 1.15rem; font-weight: 600; margin-bottom: 12px; }
+    /* Fixed-size square cells: the board never scales with the window.
+       Columns and rows are both set in game.js (repeat(N, var(--cell))). */
+    #board {
+      --cell: 54px;
+      display: grid;
+      gap: 4px;
+      width: max-content;
+      margin: 0 auto 16px;
+      background: #c8c8d4;
+      border: 4px solid #c8c8d4;
+      border-radius: 8px;
+    }
+    .cell {
+      width: var(--cell);
+      height: var(--cell);
+      background: #fff;
+      border-radius: 3px;
+      padding: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .cell:hover:not(:disabled) { background: #eef0ff; }
+    .cell:disabled { opacity: 1; cursor: default; }
+    /* Explicit equal size (not %): percentage heights inside a button don't resolve
+       reliably, which made the pieces oval. */
+    .cell .piece {
+      width: calc(var(--cell) * 0.7);
+      height: calc(var(--cell) * 0.7);
+      aspect-ratio: 1;
+      border-width: 3px;
+    }
+    .cell.win { background: #fff6d6; }
+    .cell.last { box-shadow: inset 0 0 0 3px #4a5cff; }
+    #order { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 8px; }
+    #order li { display: flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px; background: #f4f4f8; }
+    #order li.current { outline: 2px solid #4a5cff; }
+    #result { font-size: 1.2rem; font-weight: 600; display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Color Tic-Tac-Toe</h1>
+    <p id="connection" class="muted">Connecting…</p>
+    <div id="error" hidden></div>
+
+    <!-- Before the game -->
+    <section id="lobby" hidden>
+      <div class="card">
+        <div class="row" style="margin-bottom: 12px">
+          <h2 style="margin: 0">Players</h2>
+          <span class="spacer"></span>
+          <button id="join" class="green" hidden>Join game</button>
+          <button id="leave" class="red" hidden>Leave game</button>
+        </div>
+        <ul id="players"></ul>
+        <div id="start"></div>
+        <p id="spectators" class="muted"></p>
+      </div>
+
+      <div id="my-controls" class="card" hidden>
+        <h2>Your piece</h2>
+        <div class="row rgb">
+          <label>R <input id="r" type="number" min="0" max="255" step="1"></label>
+          <label>G <input id="g" type="number" min="0" max="255" step="1"></label>
+          <label>B <input id="b" type="number" min="0" max="255" step="1"></label>
+          <span id="color-preview" class="piece" title="Preview"></span>
+          <span class="spacer"></span>
+          <button id="ready" class="green">Ready</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Game settings</h2>
+        <div id="settings"></div>
+      </div>
+    </section>
+
+    <!-- During and after the game -->
+    <section id="game" hidden>
+      <div id="result" hidden></div>
+      <div id="turn"></div>
+      <div id="board"></div>
+      <div class="card">
+        <h2>Turn order</h2>
+        <ul id="order"></ul>
+        <p id="game-note" class="muted"></p>
+        <button id="back" hidden>Back to lobby</button>
+      </div>
+    </section>
+  </main>
+</body>
+</html>

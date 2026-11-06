@@ -1,0 +1,9 @@
+{
+  "name": "Stay",
+  "type": "stay",
+  "icon": "🔦",
+  "order": 1,
+  "starting": 1,
+  "reusable": true,
+  "text": "Keep exploring."
+}
