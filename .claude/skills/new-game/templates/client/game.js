@@ -2,7 +2,7 @@
   const { $, el, debounce, setInput } = AppDom;
   let state = null;
 
-  const lobby = AppLobby.connect("TODO-game-id", {
+  const lobby = AppLobby.connect("{{GAME_ID}}", {
     onState(newState) {
       state = newState;
       render();
