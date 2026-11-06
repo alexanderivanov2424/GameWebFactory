@@ -11,7 +11,7 @@ a Python standard-library WebSocket server plus plain HTML/JS pages behind nginx
 - Every file starts with a header comment describing it; each game's `server.py` docstring
   is its rules spec and message list, and its `NOTES.md` holds developer notes (patterns,
   map, pitfalls). Read headers before bodies.
-- **Tests:** `python3 -I tools/run_tests.py [<game-id> | gamekit | server]` compiles everything,
+- **Tests:** `python3 -I tools/run_tests.py [<game-id> | gamekit | server | tools]` compiles everything,
   imports every game, runs the unit tests and syntax-checks the JS. `deploy.sh` runs it first
   and stops if it fails. Every change to a game or shared code keeps it passing and adds tests
   for new behavior.
@@ -34,6 +34,20 @@ a Python standard-library WebSocket server plus plain HTML/JS pages behind nginx
 - **Avoid downloading external tools or libraries** when the functionality can reasonably be implemented directly. Prefer the browser's built-in APIs and the Python standard library.
 - No external CDN scripts or stylesheets in the app.
 
+## Host scripts (deploy.sh, stop.sh, accounts.sh, tools/)
+- **Keep work inside the project folder** (`/home/sasha/Desktop/Dev`) as much as possible: data, state,
+  backups, generated files and helper scripts go in folders under it (git-ignored if they hold data, like
+  `Accounts/`), not in `/var`, `/opt`, `/etc`, `/usr/local` or elsewhere in the user's home.
+- Reach outside it only where the system requires it. Today that's nginx's site config, the systemd units,
+  the deployed copies (`/var/www/app`, `/opt/app`), `/usr/local/sbin/app-turtle` and `/var/lib/app-server`
+  (the TURTLE marker). Don't add a new outside path unless the project folder can't do the job; list every
+  outside path a script touches, and why, in its header.
+- When changing a script, mention in your final message any outside path it uses that could move into
+  the project; don't move it without asking.
+- Services that use project data run as the folder's owner, sandboxed to just the folders they need (see
+  the `app-server` unit in deploy.sh). New scripts: logic in Python under `tools/`, a thin bash wrapper at
+  the top level, and sudo only for the steps that need it.
+
 ## Project layout
 Three layers: the **site platform** (games never touch it), **gamekit** (the shared library
 games are built on, server and client side) and the **games** themselves.
@@ -45,7 +59,7 @@ APP/
     rooms.py            Rooms, connections, reconnect grace period, BaseGame
     chat.py             Site-wide chat
     sessions.py         Per-tab sessions (guest or logged in), saved game data, /ws/account, save-rate limits
-    accounts.py         Accounts on disk (<state>/accounts/*.json), password hashes, account/data-size limits
+    accounts.py         Accounts on disk (accounts_dir()/*.json), password hashes, account/data-size limits
     turtle.py           turtle(reason): emergency shutdown of the whole site; state_dir()
     utils.py            Platform helpers (clean_text, CLIENT_ID)
     tests/              Protocol, rooms/reconnects, accounts/sessions, turtle, game loading
@@ -89,9 +103,16 @@ APP/
 tools/
   run_tests.py          All checks (compile, import games, unit tests, JS syntax); deploy.sh runs it
   jscheck.py            Rough JS syntax check (no Node allowed)
+  accounts.py           Account manager behind accounts.sh (list/find, select, show, delete)
+  tests/                Tests for the tools (run_tests.py runs them too: `run_tests.py tools`)
 deploy.sh               Runs the checks, then deploys everything; safe to re-run (--skip-tests to force);
-                        installs the turtle units; refuses while turtled (--unturtle clears it)
+                        installs the turtle units; refuses while turtled (--unturtle clears it);
+                        creates Accounts/ and runs app-server as the folder's owner
+Accounts/               Account files (created by deploy.sh; git-ignored, never deployed or edited by hand
+                        while app-server runs)
 stop.sh                 Stops app-server, nginx and any hand-started game server; ./deploy.sh restarts
+accounts.sh             Host account manager: find, select, show and delete accounts; deleting
+                        restarts app-server (it keeps accounts in memory); no backup is kept
 .claude/skills/
   game-dev/             Working on existing games and shared code: where things are, testing, pitfalls
   new-game/             Adding a game: shared API rules, pitfalls, templates/
@@ -145,10 +166,18 @@ Summary:
   is without the page sending anything. Logging in or out is refused while the tab is playing a game.
 - Games save and load data **on the server only**: `self.load_data(member)`, `self.save_data(member, value)`
   (plain JSON, one value per game per player), `self.account_name(member)`. Same calls for guests (memory,
-  forgotten when the tab's session ends) and accounts (files in `/var/lib/app-server/accounts`, kept across
+  forgotten when the tab's session ends) and accounts (files in `Accounts/` in the Dev folder, kept across
   deploys). On login, each game's guest data moves to the account unless the account already has data for
   that game (then the account's wins). Save at milestones, never per tick.
 - Logins live in server memory: a deploy logs everyone out (accounts and their data stay).
+- Account files: `Accounts/<lowercase name>.json` next to `APP/` (git-ignored, mode 700). The server finds
+  the folder through `$ACCOUNTS_DIRECTORY` (`accounts_dir()` in `server/accounts.py`; without it,
+  `<state dir>/accounts`, e.g. `APP/.data/accounts` for a hand-started server). deploy.sh runs app-server
+  as the Dev folder's owner so the files are theirs, sandboxed (`ProtectHome=tmpfs` +
+  `BindPaths=` Accounts/ only, `ProtectSystem=strict`); the state dir (`/var/lib/app-server`) keeps only
+  the TURTLE marker.
+- The server loads every account at startup and rewrites an account's file on each save, so account
+  files are only changed with the server stopped. `./accounts.sh` (on the host) does that for deletes.
 
 ## Turtle (emergency shutdown)
 - `turtle(reason)` (`server/turtle.py`, re-exported as `gamekit.turtle`) is the shared response to anything

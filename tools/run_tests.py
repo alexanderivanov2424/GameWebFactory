@@ -3,16 +3,18 @@
     python3 -I tools/run_tests.py            # everything
     python3 -I tools/run_tests.py tanks      # one game's tests (plus compile + JS checks)
     python3 -I tools/run_tests.py gamekit    # the shared library's tests
+    python3 -I tools/run_tests.py tools      # the host tools' tests (accounts.sh)
 
 Steps (stops with exit code 1 if any fails):
 1. Compile every .py file under APP.
 2. Import every game exactly as the server does (games.<id>.server) and check it has Game.
-3. Run unit tests: every tests/test_*.py under APP/server, APP/gamekit and APP/games/<id>
+3. Run unit tests: every tests/test_*.py under APP/server, APP/gamekit, APP/games/<id> and tools
    (standard-library unittest; APP is on sys.path, so tests import gamekit, gamekit.sim, ...).
 4. Syntax-check every .js file under APP/web and APP/games/*/client (tools/jscheck.py).
 
 Safety: tests run with server/turtle.py in test mode (turtle() raises Turtled instead of shutting
-the site down) and with the state folder ($STATE_DIRECTORY) pointed at a temporary folder, so no
+the site down), with the state folder ($STATE_DIRECTORY) pointed at a temporary folder and
+$ACCOUNTS_DIRECTORY unset (so accounts go there too), so no
 test touches real accounts or writes a real TURTLE marker, even when deploy.sh runs this as root.
 """
 
@@ -63,6 +65,7 @@ def import_games():
 def test_dirs(only):
     dirs = [APP / "server" / "tests", APP / "gamekit" / "tests"]
     dirs += sorted(p / "tests" for p in (APP / "games").iterdir() if p.is_dir())
+    dirs.append(ROOT / "tools" / "tests")
     if only:
         dirs = [d for d in dirs if d.parent.name == only]
     return [d for d in dirs if d.is_dir()]
@@ -91,6 +94,7 @@ def js_files():
 def main(argv):
     state = tempfile.mkdtemp(prefix="gwf-tests-")
     os.environ["STATE_DIRECTORY"] = state
+    os.environ.pop("ACCOUNTS_DIRECTORY", None)  # never the real accounts
     from server import turtle
     turtle.install_test_handler()
     try:
@@ -116,7 +120,7 @@ def run(argv):
         ok = False
 
     dirs = test_dirs(only)
-    print("== Unit tests:", ", ".join(str(d.relative_to(APP)) for d in dirs) or "none found")
+    print("== Unit tests:", ", ".join(str(d.relative_to(ROOT)) for d in dirs) or "none found")
     if dirs:
         result = unittest.TextTestRunner(stream=sys.stdout, verbosity=1).run(load_tests(dirs))
         ok &= result.wasSuccessful()
