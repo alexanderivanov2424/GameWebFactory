@@ -7,12 +7,26 @@
  * Settings are kept in sessionStorage only: they stay in this browser tab and are
  * never sent anywhere.
  *
+ * Account tab: every tab is a guest until it logs in (or creates an account) here. This
+ * component keeps one /ws/account socket open on every page (server/sessions.py), which keeps
+ * the tab's server session alive; the session is tied to the tab's UUID, so game rooms know
+ * the account without the page doing anything. The account name and password are sent to the
+ * server only when you press Log in / Create account. Logging in or out is refused while you
+ * are playing a game. A server restart (deploy) logs everyone out.
+ *
  * API for other components:
  *   AppSettings.get(key)
  *   AppSettings.set(key, value)
  *   AppSettings.onChange((key, value) => { ... })   // returns an unsubscribe function
+ *   AppSettings.account()   // logged-in account name, or null for a guest
+ *                           // (changes fire onChange("account", name))
  *
- * To add a setting, add a field to TABS. To add a tab, add an entry to TABS.
+ * While logged in, the user name (display name) is saved to the account whenever it changes
+ * (debounced), and logging in switches to the name saved there (a new account takes the
+ * current one).
+ *
+ * To add a setting, add a field to TABS. To add a tab, add an entry to TABS: either `fields`
+ * (text inputs) or `render(panel)` (builds its own content).
  */
 (() => {
   const STORAGE_KEY = "app.settings";
@@ -26,7 +40,7 @@
           key: "username",
           label: "User name",
           maxLength: 32,
-          hint: "Shown next to your chat messages.",
+          hint: "Shown next to your chat messages. Saved to your account while you're logged in.",
         },
         {
           key: "uuid",
@@ -36,6 +50,11 @@
           hint: "Identifies you in game rooms. Unique to this browser tab.",
         },
       ],
+    },
+    {
+      id: "account",
+      label: "Account",
+      render: (panel) => renderAccount(panel),
     },
   ];
 
@@ -94,6 +113,10 @@
     }
   }
 
+  function emit(key, value) {
+    events.dispatchEvent(new CustomEvent("change", { detail: { key, value } }));
+  }
+
   window.AppSettings = {
     clientId,
     get: (key) => values[key],
@@ -101,14 +124,195 @@
       if (values[key] === value) return;
       values[key] = value;
       write();
-      events.dispatchEvent(new CustomEvent("change", { detail: { key, value } }));
+      emit(key, value);
     },
+    account: () => account.user,
     onChange(callback) {
       const listener = (e) => callback(e.detail.key, e.detail.value);
       events.addEventListener("change", listener);
       return () => events.removeEventListener("change", listener);
     },
   };
+
+  // --- Account -------------------------------------------------------------
+  // The server decides who this tab is (guest or account); this only mirrors it.
+
+  const account = {
+    user: null, // account name, or null for a guest
+    online: false,
+    error: "",
+    busy: false, // a request is waiting for its answer
+    socket: null,
+    retries: 0,
+    savedName: null, // display name the account has saved, as far as this tab knows
+    nameTimer: null,
+    listeners: new Set(), // redraw functions of open Account panels
+  };
+
+  // Display name: saved to the account while logged in (see sessions.py). Debounced, since the
+  // field sends a change per keystroke and the server limits how often anything is saved.
+  const NAME_SAVE_DELAY = 1500;
+
+  function saveNameSoon() {
+    clearTimeout(account.nameTimer);
+    account.nameTimer = setTimeout(() => {
+      const name = values.username;
+      if (!account.user || !name || name === account.savedName) return;
+      if (account.socket?.readyState !== WebSocket.OPEN) return;
+      account.socket.send(JSON.stringify({ type: "name", name }));
+      account.savedName = name;
+    }, NAME_SAVE_DELAY);
+  }
+
+  events.addEventListener("change", (e) => {
+    if (e.detail.key === "username") saveNameSoon();
+  });
+
+  function accountChanged() {
+    account.listeners.forEach((fn) => fn());
+  }
+
+  function connectAccount() {
+    const protocol = location.protocol === "https:" ? "wss:" : "ws:";
+    const url = `${protocol}//${location.host}/ws/account?client=${encodeURIComponent(clientId)}`;
+    let socket;
+    try {
+      socket = new WebSocket(url);
+    } catch {
+      return;
+    }
+    account.socket = socket;
+    socket.addEventListener("open", () => {
+      account.retries = 0;
+      account.online = true;
+      accountChanged();
+    });
+    socket.addEventListener("message", (event) => {
+      let data;
+      try {
+        data = JSON.parse(event.data);
+      } catch {
+        return;
+      }
+      if (data.type === "account") {
+        const user = typeof data.user === "string" ? data.user : null;
+        const changed = user !== account.user;
+        account.user = user;
+        account.savedName = user && typeof data.displayName === "string" ? data.displayName : null;
+        account.busy = false;
+        account.error = "";
+        if (changed && user) {
+          // Just logged in: use the account's saved name, or give a new account this tab's name.
+          if (account.savedName) AppSettings.set("username", account.savedName);
+          else saveNameSoon();
+        }
+        accountChanged();
+        if (changed) emit("account", user);
+      } else if (data.type === "error") {
+        account.busy = false;
+        account.error = String(data.message || "Request refused.");
+        accountChanged();
+      }
+    });
+    socket.addEventListener("close", (event) => {
+      account.online = false;
+      account.busy = false;
+      accountChanged();
+      if (event.code === 1008) return; // invalid client id: retrying won't help
+      const delay = Math.min(1000 * 2 ** account.retries, 15000);
+      account.retries++;
+      setTimeout(connectAccount, delay);
+    });
+  }
+
+  function sendAccount(data) {
+    if (!account.socket || account.socket.readyState !== WebSocket.OPEN) {
+      account.error = "Not connected to the server.";
+      accountChanged();
+      return;
+    }
+    account.busy = true;
+    account.error = "";
+    account.socket.send(JSON.stringify(data));
+    accountChanged();
+  }
+
+  connectAccount();
+
+  function renderAccount(panel) {
+    const make = (tag, props = {}, text) => {
+      const node = Object.assign(document.createElement(tag), props);
+      if (text !== undefined) node.textContent = text;
+      return node;
+    };
+
+    const status = make("p", { className: "status" });
+
+    const form = make("form", { className: "account-form" });
+    const nameInput = make("input", { id: "account-name", maxLength: 20, autocomplete: "username", spellcheck: false });
+    const passInput = make("input", {
+      id: "account-password",
+      type: "password",
+      maxLength: 128,
+      autocomplete: "current-password",
+    });
+    const loginBtn = make("button", { type: "submit", className: "primary" }, "Log in");
+    const registerBtn = make("button", { type: "button", className: "secondary" }, "Create account");
+    const nameField = make("div", { className: "field" });
+    nameField.append(make("label", { htmlFor: "account-name" }, "Account name"), nameInput);
+    const passField = make("div", { className: "field" });
+    passField.append(make("label", { htmlFor: "account-password" }, "Password"), passInput);
+    const buttons = make("div", { className: "buttons" });
+    buttons.append(loginBtn, registerBtn);
+    form.append(nameField, passField, buttons);
+
+    const logoutBtn = make("button", { type: "button", className: "secondary" }, "Log out");
+    const error = make("p", { className: "error", role: "alert" });
+    const hint = make("div", { className: "disclaimer" });
+    hint.append(
+      make("p", { className: "hint" }, "An account keeps your saved game data across sessions."),
+      make(
+        "p",
+        { className: "hint warning" },
+        "Passwords are saved as plain text. Don't use a real or secure password."
+      )
+    );
+
+    const credentials = () => ({ name: nameInput.value.trim(), password: passInput.value });
+    form.addEventListener("submit", (e) => {
+      e.preventDefault();
+      sendAccount({ type: "login", ...credentials() });
+    });
+    registerBtn.addEventListener("click", () => sendAccount({ type: "register", ...credentials() }));
+    logoutBtn.addEventListener("click", () => sendAccount({ type: "logout" }));
+
+    let shownUser;
+    function draw() {
+      const user = account.user;
+      if (user !== shownUser) {
+        passInput.value = ""; // never keep a password around after a change
+        shownUser = user;
+      }
+      status.replaceChildren();
+      if (!account.online) {
+        status.textContent = "Connecting to the server...";
+      } else if (user) {
+        status.append("Logged in as ", make("strong", {}, user), ".");
+      } else {
+        status.textContent = "You're playing as a guest.";
+      }
+      form.hidden = !!user;
+      logoutBtn.hidden = !user;
+      const disabled = !account.online || account.busy;
+      [loginBtn, registerBtn, logoutBtn].forEach((b) => (b.disabled = disabled));
+      error.textContent = account.error;
+      error.hidden = !account.error;
+    }
+
+    account.listeners.add(draw);
+    draw();
+    panel.append(status, form, logoutBtn, error, hint);
+  }
 
   // --- UI ------------------------------------------------------------------
 
@@ -163,6 +367,18 @@
     input.readonly { background: #f4f4f8; color: #555; font-family: ui-monospace, monospace; font-size: 0.85rem; }
     .hint { color: #666; font-size: 0.85rem; margin: 6px 0 0; }
 
+    .status { margin: 0 0 20px; }
+    .account-form { max-width: 360px; }
+    .buttons { display: flex; gap: 8px; margin-bottom: 16px; }
+    .primary { background: #4a5cff; color: #fff; padding: 8px 14px; }
+    .primary:hover:not(:disabled) { background: #3343d6; }
+    .secondary { background: #e8e9f3; color: #222; padding: 8px 14px; }
+    .secondary:hover:not(:disabled) { background: #d8daea; }
+    button:disabled { opacity: 0.55; cursor: default; }
+    .error { color: #b00020; margin: 0 0 16px; }
+    .disclaimer { max-width: 480px; }
+    .hint.warning { color: #c62828; font-weight: 600; }
+
     @media (max-width: 600px) {
       .body { flex-direction: column; }
       .tabs { width: auto; flex-direction: row; border-right: none; border-bottom: 1px solid #e4e4ec; }
@@ -205,6 +421,12 @@
       this.openBtn = root.querySelector(".open-btn");
       this.backdrop = root.querySelector(".backdrop");
       this.buildTabs(root.querySelector(".tabs"), root.querySelector(".panels"));
+      // Keep open inputs current when a value changes elsewhere (e.g. logging in restores the name).
+      AppSettings.onChange((key, value) => {
+        this.inputs.forEach(({ input, field }) => {
+          if (field.key === key && root.activeElement !== input) input.value = value ?? "";
+        });
+      });
 
       this.openBtn.addEventListener("click", () => this.open());
       root.querySelector(".close-btn").addEventListener("click", () => this.close());
@@ -228,7 +450,8 @@
         panel.className = "panel";
         panel.setAttribute("role", "tabpanel");
 
-        tab.fields.forEach((field) => panel.append(this.buildField(field)));
+        if (tab.render) tab.render(panel);
+        else tab.fields.forEach((field) => panel.append(this.buildField(field)));
 
         button.addEventListener("click", () => this.selectTab(button, panel));
         tabList.append(button);

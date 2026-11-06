@@ -1,4 +1,5 @@
-"""Site server: WebSocket protocol over a real local socket, game rooms (reconnects), game loading."""
+"""Site server: WebSocket protocol over a real local socket, game rooms (reconnects), the account
+socket, game loading."""
 
 import asyncio
 import base64
@@ -8,7 +9,7 @@ import os
 import struct
 import unittest
 
-from server import rooms, websocket
+from server import accounts, rooms, sessions, turtle, websocket
 from server.main import load_games
 from server.rooms import BaseGame, Rooms
 
@@ -158,6 +159,76 @@ class ServerTests(unittest.IsolatedAsyncioTestCase):
             self.assertNotIn(("rec", "r1"), self.rooms.rooms)
         finally:
             rooms.RECONNECT_GRACE = old
+
+
+class AccountSocketTests(unittest.IsolatedAsyncioTestCase):
+    async def asyncSetUp(self):
+        turtle.install_test_handler()
+        for module, name, value in [(accounts, "ITERATIONS", 1000), (sessions, "FAILED_LOGIN_DELAY", 0)]:
+            self.addCleanup(setattr, module, name, getattr(module, name))
+            setattr(module, name, value)
+        self.rooms = Rooms({"rec": Recorder})
+        self.sessions = self.rooms.sessions
+
+        def route(path):
+            if path == "/ws/account":
+                return self.sessions.handle
+            if path == "/ws/game/rec":
+                return lambda ws: self.rooms.handle(ws, game_id="rec")
+            return None
+
+        self.server = await websocket.serve(route, "127.0.0.1", 0)
+        self.port = self.server.sockets[0].getsockname()[1]
+
+    async def asyncTearDown(self):
+        self.server.close()
+        await self.server.wait_closed()
+
+    async def test_register_logout_login(self):
+        tab = await Client.connect(self.port, f"/ws/account?client={CLIENT_A}")
+        other = await Client.connect(self.port, f"/ws/account?client={CLIENT_A}")  # same tab, another page
+        self.assertEqual(await tab.recv_json(), {"type": "account", "user": None, "displayName": None})
+        self.assertEqual(await other.recv_json(), {"type": "account", "user": None, "displayName": None})
+
+        tab.send(json.dumps({"type": "register", "name": "Alice", "password": "password1"}))
+        self.assertEqual(await tab.recv_json(), {"type": "account", "user": "Alice", "displayName": None})
+        self.assertEqual(await other.recv_json(), {"type": "account", "user": "Alice", "displayName": None})
+
+        tab.send(json.dumps({"type": "logout"}))
+        self.assertEqual(await tab.recv_json(), {"type": "account", "user": None, "displayName": None})
+        tab.send(json.dumps({"type": "login", "name": "alice", "password": "nope-nope"}))
+        self.assertEqual(await tab.recv_json(), {"type": "error", "message": "Wrong name or password."})
+        tab.send(json.dumps({"type": "login", "name": "alice", "password": "password1"}))
+        self.assertEqual(await tab.recv_json(), {"type": "account", "user": "Alice", "displayName": None})
+        self.assertEqual(self.sessions.account_name(CLIENT_A), "Alice")
+
+        # The display name is saved to the account and comes back with the next login.
+        tab.send(json.dumps({"type": "name", "name": "  Captain Al  "}))
+        tab.send(json.dumps({"type": "logout"}))
+        self.assertEqual(await tab.recv_json(), {"type": "account", "user": None, "displayName": None})
+        tab.send(json.dumps({"type": "login", "name": "alice", "password": "password1"}))
+        self.assertEqual(await tab.recv_json(), {"type": "account", "user": "Alice", "displayName": "Captain Al"})
+
+    async def test_invalid_client_id_is_rejected(self):
+        client = await Client.connect(self.port, "/ws/account?client=nope")
+        opcode, payload = await client.recv()
+        self.assertEqual((opcode, struct.unpack("!H", payload)[0]), (websocket.OP_CLOSE, sessions.CLOSE_INVALID))
+
+    async def test_room_seat_keeps_the_session(self):
+        old = sessions.SESSION_GRACE
+        sessions.SESSION_GRACE = 0.02
+        try:
+            tab = await Client.connect(self.port, f"/ws/account?client={CLIENT_A}")
+            await tab.recv_json()
+            tab.send(json.dumps({"type": "register", "name": "Alice", "password": "password1"}))
+            await tab.recv_json()
+            seat = await Client.connect(self.port, f"/ws/game/rec?room=main&client={CLIENT_A}")
+            await seat.recv_json()
+            tab.writer.close()  # the account socket goes away (e.g. page change)...
+            await asyncio.sleep(0.1)
+            self.assertEqual(self.sessions.account_name(CLIENT_A), "Alice")  # ...the seat keeps it
+        finally:
+            sessions.SESSION_GRACE = old
 
 
 class LoadGamesTests(unittest.TestCase):

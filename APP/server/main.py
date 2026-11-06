@@ -1,4 +1,4 @@
-"""App server: site-wide chat at /ws/chat and game rooms at /ws/game/<game-id>.
+"""App server: site-wide chat at /ws/chat, accounts at /ws/account and game rooms at /ws/game/<game-id>.
 
 Run from the APP folder (the folder holding server/, gamekit/ and games/):
 
@@ -8,6 +8,10 @@ Each game is imported as the package `games.<game-id>` (so a game can split its 
 several modules and use relative imports, e.g. `from . import cards`); its server.py must
 define a class `Game` (usually a subclass of gamekit.LobbyGame). A game that fails to import
 is logged and skipped; run tools/run_tests.py to catch that before deploying.
+
+Startup refuses to run while the site is turtled (server/turtle.py). Accounts are read from
+<state dir>/accounts (server/accounts.py); sessions (server/sessions.py) are shared by the
+account socket and every game room.
 """
 
 import asyncio
@@ -18,8 +22,10 @@ import re
 from functools import partial
 from pathlib import Path
 
-from server import chat, websocket
+from server import chat, turtle, websocket
+from server.accounts import AccountStore
 from server.rooms import Rooms
+from server.sessions import Sessions
 
 HOST = "127.0.0.1"  # Only nginx connects directly; it forwards /ws/ here.
 PORT = int(os.environ.get("PORT", "8765"))
@@ -52,13 +58,20 @@ def load_games():
 
 async def main():
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
+    turtle.check_startup()
+    store = AccountStore(turtle.state_dir() / "accounts")
+    log.info("Accounts: %d in %s", store.count(), store.folder)
+    sessions = Sessions(store)
     games = load_games()
-    rooms = Rooms(games)
+    rooms = Rooms(games, sessions)
+    sessions.is_playing = rooms.is_playing
     log.info("Loaded games: %s", ", ".join(games) or "none")
 
     def route(path):
         if path == "/ws/chat":
             return chat.handle
+        if path == "/ws/account":
+            return sessions.handle
         match = GAME_PATH.match(path)
         if match and match.group(1) in games:
             return partial(rooms.handle, game_id=match.group(1))

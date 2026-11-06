@@ -62,6 +62,12 @@ Map the request onto the shared lobby model before writing code:
   `APP/gamekit/sync.py`) must: key changing collections by id (dicts, not lists, since a changed
   list is resent whole), never put None inside dicts (null deletes the key), and round floats
   with `quantize`.
+- **Data kept between games** (stats, unlocks, progress): `self.load_data(member)` and
+  `self.save_data(member, value)` (server only, one plain-JSON value per game per player). Works
+  the same for guests (memory, until the tab closes) and logged-in players (disk). Save at
+  milestones, never per tick: the save-rate and size limits turtle the whole site (see
+  `APP/server/sessions.py`). Players can't log in or out mid-game, so the account behind a
+  member is fixed while playing. In tests: `sim.login(i, "alice")`.
 - **Unspecified rules:** pick a sensible default, make it a host setting if it's a number,
   and list every assumption in the final message.
 

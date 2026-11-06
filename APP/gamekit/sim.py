@@ -36,6 +36,13 @@ State sync (gamekit/sync.py): with PatchState or Snapshots, sim.state(i) applies
 and snaps to the last full state, exactly as lobby.js does, and raises if one doesn't follow
 the previous message (a sync bug). sim.messages(i, "snap") lists the raw messages of a type.
 
+Saved player data (LobbyGame.load_data/save_data): each Sim has its own in-memory sessions
+(server/sessions.py), so nothing touches the disk. Players start as guests.
+    sim.login(0, "alice")           # player 0 logs in (account created if new; guest data moves over)
+    sim.logout(0)
+    sim.sessions                    # the Sessions object: sim.sessions.load(sim.clients[0].id, game_id)
+A limit that would turtle the site raises server.turtle.Turtled instead (test mode).
+
 Real-time games (gamekit/realtime.py) never tick on their own in tests:
     sim.input(0, {"keys": ["up"]})  # {"type": "input", "seq": n, ...}; returns error text or None
     sim.tick(5)                     # run 5 ticks, delivering each tick's snaps
@@ -49,8 +56,10 @@ import asyncio
 import json
 
 from gamekit.sync import merge_apply
+from server import turtle
 from server.main import load_game
 from server.rooms import Player, Room
+from server.sessions import Sessions
 
 
 class FakeSocket:
@@ -63,9 +72,12 @@ class FakeSocket:
 
 class Sim:
     def __init__(self, game_id, players=2, settings=None, names=None, start=True, auto_timers=True):
+        turtle.install_test_handler()  # a broken limit raises Turtled instead of exiting
         self.loop = asyncio.new_event_loop()
         game_class = load_game(game_id) if isinstance(game_id, str) else game_id
-        self.room = Room(game_id if isinstance(game_id, str) else game_class.__name__, "sim", game_class)
+        self.sessions = Sessions(is_playing=lambda client_id: self.game.busy(client_id))
+        self.room = Room(game_id if isinstance(game_id, str) else game_class.__name__, "sim", game_class,
+                         self.sessions)
         self.game = self.room.game
         self.auto_timers = auto_timers
         self._timers = []
@@ -88,6 +100,7 @@ class Sim:
         player = Player(f"00000000-0000-4000-8000-{len(self.clients):012d}")
         player.ws = FakeSocket()
         self.room.players[player.id] = player
+        self.sessions.attach(player.id)
         self.clients.append(player)
         self._run(self.game.on_connect(player))
         return len(self.clients) - 1
@@ -142,6 +155,15 @@ class Sim:
 
     def leave(self, index):
         return self.lobby(index, {"type": "leave"})
+
+    # --- Accounts -----------------------------------------------------------------------
+
+    def login(self, index, name):
+        """Log player `index` in as `name` (no password; the account is created if new)."""
+        self.sessions.bind(self.clients[index].id, name)
+
+    def logout(self, index):
+        self.sessions.logout(self.clients[index].id)
 
     def state(self, index):
         """The state as the client has it: the last full state with later patches/snaps applied."""
