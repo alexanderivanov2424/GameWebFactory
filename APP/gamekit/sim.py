@@ -19,7 +19,7 @@ Use it from a game's tests (APP/games/<id>/tests/test_*.py, run by tools/run_tes
     sim.send(0, {"action": "place", ...})          # game message; returns the error text or None
     sim.ok(0, {...})                               # same, but raises if it was rejected
     sim.fails(1, {...}, "not your turn")           # raises unless rejected with that text
-    sim.state(0)                   # last full state player 0 received (incl. "private")
+    sim.state(0)                   # player 0's current state (incl. "private"), as their browser has it
     sim.lobby(0, {"type": "back_to_lobby"})        # any lobby message
     sim.spectator()                # connect a spectator; returns its index
     sim.leave(2)                   # player 2 leaves (on_player_removed runs mid-game)
@@ -32,6 +32,15 @@ yourself to inspect the state between a reveal and what follows; sim.step() runs
 next one (run_timers also runs what each callback queues). sim.pending_timers() lists the
 queued callbacks.
 
+State sync (gamekit/sync.py): with PatchState or Snapshots, sim.state(i) applies the patches
+and snaps to the last full state, exactly as lobby.js does, and raises if one doesn't follow
+the previous message (a sync bug). sim.messages(i, "snap") lists the raw messages of a type.
+
+Real-time games (gamekit/realtime.py) never tick on their own in tests:
+    sim.input(0, {"keys": ["up"]})  # {"type": "input", "seq": n, ...}; returns error text or None
+    sim.tick(5)                     # run 5 ticks, delivering each tick's snaps
+    sim.ping(0, 42)                 # report a 42 ms round trip (member.ping)
+
 Games are imported as games.<id>.server, the same way server/main.py loads them, so the
 APP folder must be on sys.path (tools/run_tests.py does that).
 """
@@ -39,6 +48,7 @@ APP folder must be on sys.path (tools/run_tests.py does that).
 import asyncio
 import json
 
+from gamekit.sync import merge_apply
 from server.main import load_game
 from server.rooms import Player, Room
 
@@ -59,6 +69,7 @@ class Sim:
         self.game = self.room.game
         self.auto_timers = auto_timers
         self._timers = []
+        self._input_seq = 0
         self._patch_timers()
         self.clients = []  # rooms.Player per index
         for i in range(players):
@@ -101,7 +112,7 @@ class Sim:
         """Send any message; returns the error text the player got, or None."""
         socket = self.clients[index].ws
         before = len(socket.messages)
-        self._run(self.game.on_message(self.clients[index], data))
+        self._run(self._deliver(self.game.on_message(self.clients[index], data)))
         if self.auto_timers:
             self.run_timers()
         errors = [m["message"] for m in socket.messages[before:] if m.get("type") == "error"]
@@ -133,8 +144,46 @@ class Sim:
         return self.lobby(index, {"type": "leave"})
 
     def state(self, index):
-        states = [m for m in self.clients[index].ws.messages if m.get("type") == "state"]
-        return states[-1] if states else None
+        """The state as the client has it: the last full state with later patches/snaps applied."""
+        state = None
+        for message in self.clients[index].ws.messages:
+            kind = message.get("type")
+            if kind == "state":
+                state = dict(message)
+            elif kind in ("patch", "snap") and state is not None:
+                if message["base"] != state.get("seq"):
+                    raise AssertionError(f"{kind} base {message['base']} doesn't follow seq {state.get('seq')}")
+                if "g" in message:
+                    state["game"] = merge_apply(state["game"], message["g"])
+                if "p" in message:
+                    state["private"] = merge_apply(state["private"], message["p"])
+                state["seq"] = message["seq"]
+        return state
+
+    def messages(self, index, kind=None):
+        """Raw messages client `index` received (only those of type `kind` if given)."""
+        return [m for m in self.clients[index].ws.messages if kind is None or m.get("type") == kind]
+
+    # --- Real-time games ------------------------------------------------------------------
+
+    def input(self, index, data):
+        """Send an input message (seq added); returns the error text or None."""
+        self._input_seq += 1
+        return self.lobby(index, {"type": "input", "seq": self._input_seq, **data})
+
+    def ping(self, index, rtt):
+        return self.lobby(index, {"type": "ping", "t": 0, "rtt": rtt})
+
+    def tick(self, n=1):
+        """Run n ticks of a RealtimeGame, delivering each tick's messages before the next."""
+        for _ in range(n):
+            self._run(self._tick_once())
+            if self.auto_timers:
+                self.run_timers()
+
+    async def _tick_once(self):
+        self.game.step()
+        await self.game.sync.drain()
 
     # --- Timers -------------------------------------------------------------------------
 
@@ -149,6 +198,8 @@ class Sim:
 
         game.schedule = schedule
         game.cancel_timers = cancel_timers
+        if hasattr(game, "_ensure_ticker"):
+            game._ensure_ticker = lambda: None  # no real-time tick loop: tests call sim.tick()
 
     def pending_timers(self):
         return [(delay, getattr(cb, "__name__", repr(cb))) for delay, cb in self._timers]
@@ -181,6 +232,13 @@ class Sim:
         loop = getattr(self, "loop", None)
         if loop is not None and not loop.is_closed():
             loop.close()
+
+    async def _deliver(self, coroutine):
+        """Run a coroutine, then wait for any messages a sync strategy queued."""
+        await coroutine
+        drain = getattr(self.game.sync, "drain", None)
+        if drain:
+            await drain()
 
     def _run(self, coroutine):
         return self.loop.run_until_complete(coroutine)

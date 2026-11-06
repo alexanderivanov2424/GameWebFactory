@@ -21,6 +21,8 @@ the pitfalls hit while building it; read the one closest to your game):
   (`self.schedule`), a private hand with a fixed bottom bar, cards as JSON files loaded with
   `gamekit.data` in its own `cards.py` module, interrupt stages, a resolve queue for effects
   that wait on decisions, branching paths, per-copy card state, animations for new items only.
+- `APP/games/arena/`: real-time (`RealtimeGame`): keyboard input as state, per-tick delta
+  snapshots, canvas drawing with interpolation, showing ping. Start from it for continuous movement.
 
 ## 1. Pin down the design (ask only about what's genuinely unclear)
 Map the request onto the shared lobby model before writing code:
@@ -53,6 +55,13 @@ Map the request onto the shared lobby model before writing code:
   state so the client renders any item without code changes.
 - **Setup inside play:** for something like secret placement or drafting, use a `stage` field
   in the game state within the `playing` phase. Don't add lobby phases.
+- **Real-time vs turn-based:** continuous movement (things move without waiting for turns) →
+  subclass `RealtimeGame` (`APP/gamekit/realtime.py`) and start from `games/arena` rather than
+  the templates' turn logic. Turn-based game with a big state → `SYNC = PatchState`. Otherwise
+  keep the default `FullState`. Games that send deltas (`PatchState`, `Snapshots`; see
+  `APP/gamekit/sync.py`) must: key changing collections by id (dicts, not lists, since a changed
+  list is resent whole), never put None inside dicts (null deletes the key), and round floats
+  with `quantize`.
 - **Unspecified rules:** pick a sensible default, make it a host setting if it's a number,
   and list every assumption in the final message.
 
@@ -99,6 +108,11 @@ and `settings.py`.
 - `private_state(member)`: per-member secrets. It's called for spectators too (return None for
   them). It's sent as `state.private`.
 - `reset_game()`: clear the state when going back to the lobby. Also call it from `__init__`.
+- Real-time games (`RealtimeGame`, header of `APP/gamekit/realtime.py`): `tick(dt)` runs
+  `TICK_RATE` times a second while playing; `on_input(member, data)` stores the latest input
+  in `member.input` (inputs are held state such as keys, so don't send them as ACTIONS);
+  one-off events (buy, use item) stay in `ACTIONS`. Changes go out with the next tick, not at
+  once. `member.ping` is the player's round trip, for `game_state()`.
 
 Rules and pitfalls:
 - Never trust the client. Clean text with `gamekit.validate.clean_text`.
@@ -149,6 +163,11 @@ Rules and pitfalls:
   right padding so its controls stay clear of the chat tab (bottom right).
 - Don't overwrite an input the user is focused on (`setInput`); debounce inputs that send on
   every keystroke. Keep dropdown labels short: "1" or "A", not "Row 1".
+- Real-time pages also load `/gamekit/realtime.js` (after `lobby-ui.js`). Pass an `onSnapshot`
+  handler to `AppLobby.connect` and rebuild the DOM only in `onState` (ticks would otherwise
+  rebuild it 20 times a second). Draw on a canvas in `AppRealtime.loop(draw)` using
+  `rt.sample(pick)` for interpolated positions, and use `rt.controls(keyMap, {enabled})` for
+  keys. See `games/arena/client/`.
 - Desktop PC browsers only (mouse and keyboard); hover interactions are fine.
 
 ## 5. Promote shared code (do this every time)
@@ -174,6 +193,8 @@ Before finishing, look for anything the new game needed that another game would 
 ## 7. Test and hand off
 `python3 -I tools/run_tests.py <id>` until it passes, then the whole suite. See the `game-dev`
 skill, section 3, for what the tests should cover and how to check the client by reading.
+Real-time games are never ticked by `Sim` on its own: tests call `sim.tick(n)`,
+`sim.input(i, {...})` and `sim.ping(i, rtt)`.
 Then hand testing to the user:
 - `cd /home/sasha/Desktop/Dev && ./deploy.sh` (it runs the checks first; if the server fails
   to start, it prints its log).

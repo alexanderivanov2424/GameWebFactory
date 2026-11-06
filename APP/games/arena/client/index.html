@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Arena</title>
+
+  <script src="/shared/theme.js"></script>
+  <script src="/shared/home.js" defer></script>
+  <script src="/shared/settings.js" defer></script>
+  <script src="/shared/chat.js" defer></script>
+  <script src="/gamekit/dom.js" defer></script>
+  <script src="/gamekit/room.js" defer></script>
+  <script src="/gamekit/lobby.js" defer></script>
+  <script src="/gamekit/lobby-ui.js" defer></script>
+  <script src="/gamekit/realtime.js" defer></script>
+  <script src="game.js" defer></script>
+
+  <style>
+    :root { --gwf-main-width: 860px; }
+    #arena { display: block; max-width: 100%; height: auto; aspect-ratio: 800 / 500;
+             border: 2px solid #888; border-radius: 4px; background: #1d2330; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Arena</h1>
+    <p id="connection" class="muted">Connecting…</p>
+    <div id="error" hidden></div>
+
+    <section id="lobby" hidden>
+      <div class="card">
+        <div class="row" style="margin-bottom: 8px">
+          <h2 style="margin: 0">Players</h2>
+          <span class="spacer"></span>
+          <button id="join" class="green" hidden>Join game</button>
+          <button id="ready" class="green" hidden>Ready</button>
+          <button id="leave" class="red" hidden>Leave game</button>
+        </div>
+        <ul id="players"></ul>
+        <div id="start"></div>
+        <p id="spectators" class="muted"></p>
+      </div>
+      <div class="card">
+        <h2>Game settings</h2>
+        <div id="settings"></div>
+        <p>Move your circle with WASD or the arrow keys. Each circle shows its player's name and ping. The host ends the round.</p>
+      </div>
+    </section>
+
+    <section id="game" hidden>
+      <div id="result" hidden></div>
+      <p id="status" class="muted"></p>
+      <canvas id="arena" width="800" height="500"></canvas>
+      <div class="row" style="margin-top: 8px">
+        <button id="end" class="red" hidden>End round</button>
+        <button id="back" hidden>Back to lobby</button>
+      </div>
+    </section>
+  </main>
+</body>
+</html>
