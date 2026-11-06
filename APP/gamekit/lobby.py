@@ -23,6 +23,10 @@ Subclass LobbyGame (instead of BaseGame) to get:
 - Timers: self.schedule(seconds, callback) runs callback later (e.g. a pause to show a
   reveal) and then sends the state. Pending timers are cancelled when the game finishes,
   returns to the lobby, or starts again.
+- Sync (what goes over the wire): SYNC picks a class from sync.py. The default FullState
+  sends every member the whole state after every change (fine for turn-based games).
+  PatchState sends only what changed; RealtimeGame (realtime.py) uses Snapshots, one delta
+  per tick. The game code (game_state/private_state) is the same for all of them.
 
 Other clients see members by a short public id ("p1", "p2", ...), never by their
 client UUID, which acts as their key to the seat.
@@ -30,12 +34,12 @@ client UUID, which acts as their key to the seat.
 Games override the hooks in the "Game hooks" section. Client side: web/gamekit/lobby.js.
 """
 
-import asyncio
 import inspect
 import itertools
 import logging
 
 from gamekit import settings as settings_schema
+from gamekit.sync import FullState
 from gamekit.validate import LobbyError, clean_text
 from server.rooms import BaseGame
 
@@ -54,6 +58,10 @@ class Member:
         self.ready = False
         self.options = {}  # Per-player choices made in the lobby (e.g. a color).
         self.joined_at = 0
+        # Used by RealtimeGame (realtime.py): latest input, its sequence number, reported ping (ms).
+        self.input = {}
+        self.input_seq = 0
+        self.ping = None
 
 
 class LobbyGame(BaseGame):
@@ -61,6 +69,7 @@ class LobbyGame(BaseGame):
     MAX_PLAYERS = 16
     SETTINGS = {}  # key -> settings.Int(...): host settings, see settings.py
     ACTIONS = {}  # game message "action" -> name of the method handling it: method(member, data)
+    SYNC = FullState  # how state reaches clients: FullState, PatchState or Snapshots (sync.py)
 
     def __init__(self, room):
         super().__init__(room)
@@ -73,6 +82,7 @@ class LobbyGame(BaseGame):
         self._public_ids = itertools.count(1)
         self._join_order = itertools.count()
         self._timers = set()
+        self.sync = self.SYNC()
 
     # --- Game hooks ------------------------------------------------------------
 
@@ -183,15 +193,18 @@ class LobbyGame(BaseGame):
 
     async def on_connect(self, player):
         self.members[player.id] = Member(player.id, f"p{next(self._public_ids)}")
+        self.sync.reset(player.id)
         await self.update()
 
     async def on_reconnect(self, player):
+        self.sync.reset(player.id)
         await self.update()
 
     async def on_connection_lost(self, player):
         await self.update()
 
     async def on_disconnect(self, player):
+        self.sync.reset(player.id)
         member = self.members.pop(player.id, None)
         if member and member.playing:
             self._remove_player(member)
@@ -276,6 +289,9 @@ class LobbyGame(BaseGame):
         self.game_number += 1
         self.start_game()
 
+    async def _on_resync(self, member, data):
+        self.sync.reset(member.client_id)  # the client lost track of patches: next message is a full state
+
     async def _on_game(self, member, data):
         if self.phase != PLAYING or not member.playing:
             raise LobbyError("You're not playing right now.")
@@ -292,6 +308,7 @@ class LobbyGame(BaseGame):
         "start": _on_start,
         "back_to_lobby": _on_back_to_lobby,
         "game": _on_game,
+        "resync": _on_resync,
     }
 
     # --- Internals ----------------------------------------------------------------
@@ -339,7 +356,8 @@ class LobbyGame(BaseGame):
         """Send the state to everyone."""
         await self.send_state()
 
-    def state(self):
+    def lobby_state(self):
+        """The room part of the state (everything except game, private and you)."""
         def info(m):
             connection = self.room.players.get(m.client_id)
             return {"id": m.id, "name": m.name, "connected": bool(connection and connection.connected)}
@@ -356,16 +374,29 @@ class LobbyGame(BaseGame):
             "startBlocker": self._start_blocker() if self.phase == LOBBY else None,
             "players": [{**info(m), "ready": m.ready, "options": m.options} for m in self.players],
             "spectators": [info(m) for m in self.members.values() if not m.playing],
-            "game": self.game_state() if self.phase != LOBBY else None,
             "result": self.result,
         }
 
-    async def send_state(self):
-        state = self.state()
-        sends = []
+    def public_game(self):
+        """game_state() while playing or finished, None in the lobby."""
+        return self.game_state() if self.phase != LOBBY else None
+
+    def private_game(self, member):
+        """private_state(member) while playing or finished, None in the lobby."""
+        return self.private_state(member) if self.phase != LOBBY else None
+
+    def state(self):
+        """The full state message (without you/private): lobby_state() plus game."""
+        state = self.lobby_state()
+        result = state.pop("result")
+        return {**state, "game": self.public_game(), "result": result}
+
+    def recipients(self):
+        """(connection, member) for every connected member."""
         for client_id, connection in list(self.room.players.items()):
             member = self.members.get(client_id)
             if member and connection.connected:
-                private = self.private_state(member) if self.phase != LOBBY else None
-                sends.append(connection.send({**state, "you": member.id, "private": private}))
-        await asyncio.gather(*sends)
+                yield connection, member
+
+    async def send_state(self):
+        await self.sync.send(self)

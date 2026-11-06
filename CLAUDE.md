@@ -47,15 +47,18 @@ APP/
     utils.py            Platform helpers (clean_text)
     tests/              Protocol, rooms/reconnects, game loading
   gamekit/              Shared game library, server side (Python package `gamekit`). Games import only this.
-    __init__.py         Re-exports: LobbyGame, LobbyError, PLAYING/FINISHED/LOBBY, Int, TurnQueue, SecretChoices
+    __init__.py         Re-exports: LobbyGame, LobbyError, PLAYING/FINISHED/LOBBY, Int, TurnQueue, SecretChoices,
+                        RealtimeGame, FullState, PatchState, Snapshots
     lobby.py            LobbyGame: spectators/players, host, ready, phases, public + private state sync,
-                        SETTINGS, ACTIONS dispatch, game_number, schedule() timers
+                        SETTINGS, ACTIONS dispatch, game_number, schedule() timers, SYNC
+    realtime.py         RealtimeGame: LobbyGame on a fixed tick (tick(dt)), buffered inputs, ping
+    sync.py             FullState / PatchState / Snapshots: how state reaches clients (SYNC), merge patches
     settings.py         Int(...): host settings declared once (server validation + client inputs)
     validate.py         LobbyError and validators for player input (whole_number, one_of, cell, clean_text)
     turns.py            TurnQueue: turn counters (cost 1 per action = round-robin)
     choices.py          SecretChoices: hidden simultaneous picks (required + optional choosers), revealed all at once
     data.py             Loading JSON content files (cards, units...): bad files are logged and skipped
-    sim.py              Sim: drives a game through the real lobby for tests (no network)
+    sim.py              Sim: drives a game through the real lobby for tests (no network); also ticks and inputs
     tests/
   web/                  Static files, served at /
     index.html          Home page: lists games from /games.json
@@ -70,6 +73,7 @@ APP/
       lobby.js          AppLobby.connect(gameId, handlers): lobby client (use this for games)
       lobby-ui.js       AppLobbyUI: player list, start button/status, spectators, connection text, error banner,
                         "your turn" alert, lobbyButtons (join/leave/ready/back), settingsForm (from SETTINGS)
+      realtime.js       AppRealtime.attach(lobby): interpolated sampling, keyboard controls, ping (real-time games)
   games/<game-id>/      One folder per game: a Python package `games.<game-id>`
     game.json           {"name": ..., "description": ...} shown on the home page
     server.py           class Game(LobbyGame): one instance per room. Docstring = rules spec + message list
@@ -111,10 +115,12 @@ Summary:
    `/shared/chat.js`, `/gamekit/dom.js`, `/gamekit/room.js`, `/gamekit/lobby.js`, `/gamekit/lobby-ui.js`
    (deferred, in that order), then call `AppLobby.connect("<game-id>", {...})` and render from the
    `state` it delivers. theme.js's `main` leaves 72px free at the top for the fixed buttons.
+   Real-time games also load `/gamekit/realtime.js` after `lobby-ui.js`.
 5. Write tests in `tests/`, run `python3 -I tools/run_tests.py <game-id>`, then `./deploy.sh`.
    Examples: `games/tictactoe/` (smallest full game), `games/tanks/` (hidden information, turn
    counters, secret mines, building walls), `games/peruvian-silver/` (simultaneous secret plays,
    timed reveals, cards defined as JSON files, game split into modules). Each has a `NOTES.md`.
+   `games/arena/` is the real-time example (tick loop, inputs, delta snapshots, interpolation).
 
 ## Lobby model (shared by all games)
 - Every connected tab is a **member**: a **spectator** until it joins, then a **player**. Players join and leave explicitly, and only in the lobby phase.
@@ -124,6 +130,7 @@ Summary:
 - **Ready and start**: once all players are ready (and `MIN_PLAYERS` is met and `start_check()` passes), the host clicks **Start game** to begin. Nothing starts automatically.
 - **Sessions**: identity is the tab's UUID. A disconnected member keeps their place for 60 seconds (`RECONNECT_GRACE` in `rooms.py`) and shows as offline. The client remembers whether it joined, so a reload keeps the seat.
 - Other clients only see members' **public ids** (`p1`, `p2`, ...). Never send client UUIDs to other clients: they act as the key to a seat.
+- **State sync:** how state reaches clients is the game's `SYNC` choice: `FullState` (default: full state after each change), `PatchState` (keyframes plus patches, for big turn-based states) or `Snapshots` (per-tick deltas, used by `RealtimeGame`). Game code (`game_state()`, `private_state()`) is the same for all; see `APP/gamekit/sync.py`.
 
 ## Settings and privacy
 - Settings stay in the browser (sessionStorage) and are never sent to the server. Exceptions: the display name (sent with chat messages and when joining a game) and the player UUID (sent when connecting to a game room).

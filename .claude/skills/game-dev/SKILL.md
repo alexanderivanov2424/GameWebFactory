@@ -23,7 +23,10 @@ bodies only for what you change.
 | Lobby, phases, hooks, SETTINGS, ACTIONS, timers | Header of `APP/gamekit/lobby.py` (and `settings.py`) |
 | Turn order / secret simultaneous picks | Headers of `APP/gamekit/turns.py` / `APP/gamekit/choices.py` |
 | Validating input / loading content files | Headers of `APP/gamekit/validate.py` / `APP/gamekit/data.py` |
+| Real-time games: tick loop, inputs, ping | Header of `APP/gamekit/realtime.py` |
+| How state reaches clients (full state / patches / snapshots) | Header of `APP/gamekit/sync.py` |
 | Client lobby API and the state shape | Header of `APP/web/gamekit/lobby.js` |
+| Client real-time helpers (interpolation, keyboard input, ping) | Header of `APP/web/gamekit/realtime.js` |
 | Shared UI (player list, start, lobby buttons, settings form, error banner, turn alert) | Header of `APP/web/gamekit/lobby-ui.js` |
 | Base page styles and the CSS variables a game can set | Header of `APP/web/shared/theme.js` |
 | Connections, reconnects, the WebSocket server | Headers of `APP/server/rooms.py`, `main.py`, `websocket.py` (platform; games don't use it directly) |
@@ -34,6 +37,8 @@ Games at a glance (details in each `NOTES.md`):
   modes on a board with walls, private notes on public log entries.
 - **peruvian-silver**: the biggest; stages inside `playing`, simultaneous secret plays,
   timed reveals, cards as JSON files (loaded in `cards.py`), forks/branches.
+- **arena**: real-time demo (`RealtimeGame`): keyboard inputs as state, per-tick delta
+  snapshots, canvas drawing with interpolation, ping shown above each player.
 
 ## 2. Make the change
 - Server and client both: the server validates everything; the client only renders state.
@@ -62,6 +67,8 @@ Games at a glance (details in each `NOTES.md`):
    Cover the new rules, rejections, hidden-info leaks (check other players' and spectators'
    `state(i)`), game end (win, draw, last player destroyed by their own action) and a
    player leaving mid-game. Make them deterministic (set internals or seed `random`).
+   Real-time games: `Sim` never ticks on its own, so drive them with `sim.tick(n)`,
+   `sim.input(i, {...})` and `sim.ping(i, rtt)`.
    Shared code gets tests in `APP/gamekit/tests/` (a tiny Game class passed to `Sim(MyGame)`).
 3. Client: the JS check only catches broken brackets/strings/templates. Re-read the code
    paths you changed: element ids used in JS must exist in `index.html`, and every helper you
