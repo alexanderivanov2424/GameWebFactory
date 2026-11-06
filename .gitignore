@@ -2,3 +2,4 @@ deploy.sh
 stop.sh
 accounts.sh
 Accounts/
+__pycache__/
