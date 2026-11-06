@@ -2,6 +2,7 @@
 
 import asyncio
 import json
+import os
 import tempfile
 import unittest
 from pathlib import Path
@@ -65,6 +66,16 @@ class PasswordTests(unittest.TestCase):
     def test_bad_record(self):
         self.assertFalse(accounts.check_password("x", {}))
         self.assertFalse(accounts.check_password("x", {"salt": "zz", "hash": "00", "iterations": 1}))
+
+
+class FolderTests(unittest.TestCase):
+    def test_accounts_dir(self):
+        from unittest import mock
+        with mock.patch.dict("os.environ", {"STATE_DIRECTORY": "/state"}, clear=False):
+            os.environ.pop("ACCOUNTS_DIRECTORY", None)
+            self.assertEqual(accounts.accounts_dir(), Path("/state/accounts"))
+            os.environ["ACCOUNTS_DIRECTORY"] = "/home/x/Dev/Accounts"
+            self.assertEqual(accounts.accounts_dir(), Path("/home/x/Dev/Accounts"))
 
 
 class LoginTests(Base):

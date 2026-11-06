@@ -16,7 +16,8 @@ What happens:
 
 State folder (state_dir()): $STATE_DIRECTORY, which systemd sets from StateDirectory=
 (/var/lib/app-server on the host), else APP/.data/ when the server is started by hand.
-Accounts live there too (server/accounts.py).
+Accounts live there too unless $ACCOUNTS_DIRECTORY says otherwise (server/accounts.py
+accounts_dir(); on the host they are in the Dev folder's Accounts/).
 
 Tests: install_test_handler() (tools/run_tests.py and gamekit.sim.Sim call it) makes turtle()
 record the reason in `triggered` and raise Turtled instead of exiting. Turtled is a

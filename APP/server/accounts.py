@@ -15,7 +15,9 @@ One JSON file per account, <folder>/<lowercase name>.json, written atomically (t
 rename): {"name", "password": {"salt", "hash", "iterations"}, "created", "displayName",
 "games": {game_id: value}}. displayName is the display name (Settings -> User name, up to
 MAX_DISPLAY_NAME characters) last used while logged in; it is restored when logging in.
-The folder is <state dir>/accounts (see turtle.state_dir()), which survives deploys.
+The folder (accounts_dir()) is $ACCOUNTS_DIRECTORY, else <state dir>/accounts (turtle.state_dir()).
+On the host deploy.sh sets ACCOUNTS_DIRECTORY to the Accounts/ folder next to APP (the Dev folder,
+git-ignored), so accounts survive deploys and belong to the folder's owner, who runs the server.
 
 Passwords: PBKDF2-HMAC-SHA256 with a random salt (hash_password / check_password); slow on
 purpose, so callers run them in a thread (asyncio.to_thread).
@@ -36,7 +38,7 @@ import secrets
 import time
 from pathlib import Path
 
-from server.turtle import turtle
+from server.turtle import state_dir, turtle
 
 log = logging.getLogger("accounts")
 
@@ -46,6 +48,11 @@ NAME = re.compile(r"^[A-Za-z0-9_-]{3,20}$")
 MAX_DISPLAY_NAME = 32  # same as the lobby and chat name limit
 MAX_PASSWORD = 128  # no minimum: players are told not to use a real password
 ITERATIONS = 200_000
+
+
+def accounts_dir():
+    """Folder holding the account files: $ACCOUNTS_DIRECTORY, else <state dir>/accounts."""
+    return Path(os.environ.get("ACCOUNTS_DIRECTORY") or state_dir() / "accounts")
 
 
 class AccountError(Exception):

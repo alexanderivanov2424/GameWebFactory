@@ -10,7 +10,7 @@ define a class `Game` (usually a subclass of gamekit.LobbyGame). A game that fai
 is logged and skipped; run tools/run_tests.py to catch that before deploying.
 
 Startup refuses to run while the site is turtled (server/turtle.py). Accounts are read from
-<state dir>/accounts (server/accounts.py); sessions (server/sessions.py) are shared by the
+accounts_dir() (server/accounts.py); sessions (server/sessions.py) are shared by the
 account socket and every game room.
 """
 
@@ -23,7 +23,7 @@ from functools import partial
 from pathlib import Path
 
 from server import chat, turtle, websocket
-from server.accounts import AccountStore
+from server.accounts import AccountStore, accounts_dir
 from server.rooms import Rooms
 from server.sessions import Sessions
 
@@ -59,7 +59,7 @@ def load_games():
 async def main():
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
     turtle.check_startup()
-    store = AccountStore(turtle.state_dir() / "accounts")
+    store = AccountStore(accounts_dir())
     log.info("Accounts: %d in %s", store.count(), store.folder)
     sessions = Sessions(store)
     games = load_games()
