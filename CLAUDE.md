@@ -40,17 +40,21 @@ games are built on, server and client side) and the **games** themselves.
 ```
 APP/
   server/               Site platform (Python package `server`), run as `python3 -m server.main` from APP/
-    main.py             Entry point: /ws/chat and /ws/game/<game-id>?room=<room-id>; imports games as packages
+    main.py             Entry point: /ws/chat, /ws/account and /ws/game/<game-id>?room=<room-id>; imports games
     websocket.py        WebSocket protocol implementation
     rooms.py            Rooms, connections, reconnect grace period, BaseGame
     chat.py             Site-wide chat
-    utils.py            Platform helpers (clean_text)
-    tests/              Protocol, rooms/reconnects, game loading
+    sessions.py         Per-tab sessions (guest or logged in), saved game data, /ws/account, save-rate limits
+    accounts.py         Accounts on disk (<state>/accounts/*.json), password hashes, account/data-size limits
+    turtle.py           turtle(reason): emergency shutdown of the whole site; state_dir()
+    utils.py            Platform helpers (clean_text, CLIENT_ID)
+    tests/              Protocol, rooms/reconnects, accounts/sessions, turtle, game loading
   gamekit/              Shared game library, server side (Python package `gamekit`). Games import only this.
     __init__.py         Re-exports: LobbyGame, LobbyError, PLAYING/FINISHED/LOBBY, Int, TurnQueue, SecretChoices,
-                        RealtimeGame, FullState, PatchState, Snapshots
+                        RealtimeGame, FullState, PatchState, Snapshots, turtle
     lobby.py            LobbyGame: spectators/players, host, ready, phases, public + private state sync,
-                        SETTINGS, ACTIONS dispatch, game_number, schedule() timers, SYNC
+                        SETTINGS, ACTIONS dispatch, game_number, schedule() timers, SYNC,
+                        saved player data (load_data / save_data / account_name)
     realtime.py         RealtimeGame: LobbyGame on a fixed tick (tick(dt)), buffered inputs, ping
     sync.py             FullState / PatchState / Snapshots: how state reaches clients (SYNC), merge patches
     settings.py         Int(...): host settings declared once (server validation + client inputs)
@@ -65,7 +69,8 @@ APP/
     shared/             Site components on every page (served at /shared/)
       theme.js          Base page styles (CSS variables, zero specificity); load first, not deferred
       home.js           "GWF" home button (top left)
-      settings.js       Settings component + AppSettings API; owns the per-tab player UUID
+      settings.js       Settings component + AppSettings API; owns the per-tab player UUID and the
+                        Account tab (log in / create account / log out over /ws/account)
       chat.js           Site-wide chat component
     gamekit/            Shared game library, client side (served at /gamekit/)
       dom.js            AppDom: $, el, debounce, setInput, listNames
@@ -84,7 +89,8 @@ APP/
 tools/
   run_tests.py          All checks (compile, import games, unit tests, JS syntax); deploy.sh runs it
   jscheck.py            Rough JS syntax check (no Node allowed)
-deploy.sh               Runs the checks, then deploys everything; safe to re-run (--skip-tests to force)
+deploy.sh               Runs the checks, then deploys everything; safe to re-run (--skip-tests to force);
+                        installs the turtle units; refuses while turtled (--unturtle clears it)
 stop.sh                 Stops app-server, nginx and any hand-started game server; ./deploy.sh restarts
 .claude/skills/
   game-dev/             Working on existing games and shared code: where things are, testing, pitfalls
@@ -111,6 +117,7 @@ Summary:
    `default_options`, `clean_options`, `start_check`, `start_game`, `on_game_message`
    (to add checks before `self.dispatch`), `on_player_removed`, `game_state`, `private_state`, `reset_game`.
    Raise `LobbyError("...")` to reject a request; the message is shown to that player.
+   To keep data per player across games, use `self.load_data(member)` / `self.save_data(member, value)`.
 4. In the client, include `/shared/theme.js` (not deferred), then `/shared/home.js`, `/shared/settings.js`,
    `/shared/chat.js`, `/gamekit/dom.js`, `/gamekit/room.js`, `/gamekit/lobby.js`, `/gamekit/lobby-ui.js`
    (deferred, in that order), then call `AppLobby.connect("<game-id>", {...})` and render from the
@@ -132,5 +139,26 @@ Summary:
 - Other clients only see members' **public ids** (`p1`, `p2`, ...). Never send client UUIDs to other clients: they act as the key to a seat.
 - **State sync:** how state reaches clients is the game's `SYNC` choice: `FullState` (default: full state after each change), `PatchState` (keyframes plus patches, for big turn-based states) or `Snapshots` (per-tick deltas, used by `RealtimeGame`). Game code (`game_state()`, `private_state()`) is the same for all; see `APP/gamekit/sync.py`.
 
+## Accounts and saved data
+- Every tab is a **guest** until it logs in or creates an account in Settings → Account (self-registration).
+  The login is bound to the tab's UUID on the server (`server/sessions.py`), so game rooms know who a member
+  is without the page sending anything. Logging in or out is refused while the tab is playing a game.
+- Games save and load data **on the server only**: `self.load_data(member)`, `self.save_data(member, value)`
+  (plain JSON, one value per game per player), `self.account_name(member)`. Same calls for guests (memory,
+  forgotten when the tab's session ends) and accounts (files in `/var/lib/app-server/accounts`, kept across
+  deploys). On login, each game's guest data moves to the account unless the account already has data for
+  that game (then the account's wins). Save at milestones, never per tick.
+- Logins live in server memory: a deploy logs everyone out (accounts and their data stay).
+
+## Turtle (emergency shutdown)
+- `turtle(reason)` (`server/turtle.py`, re-exported as `gamekit.turtle`) is the shared response to anything
+  that looks like abuse: the server writes a `TURTLE` marker, exits with code 77, and systemd
+  (units from `deploy.sh`) stops and disables nginx and app-server, so ports 8080 and 8765 close and stay
+  closed across reboots. `./deploy.sh` refuses to run until `./deploy.sh --unturtle`.
+- Current triggers: more than `MAX_ACCOUNTS` accounts, saved data over `MAX_DATA_BYTES` per player
+  (`accounts.py`), too many saves per session or site-wide in `SAVE_WINDOW` (`sessions.py`). Add new safety
+  checks by calling `turtle(...)`; tests run in test mode (it raises `Turtled`, a BaseException), so
+  test them with `assertRaises(Turtled)`.
+
 ## Settings and privacy
-- Settings stay in the browser (sessionStorage) and are never sent to the server. Exceptions: the display name (sent with chat messages and when joining a game) and the player UUID (sent when connecting to a game room).
+- Settings stay in the browser (sessionStorage) and are never sent to the server. Exceptions: the display name (sent with chat messages and when joining a game, and saved to the account while logged in), the player UUID (sent when connecting to a game room or the account socket) and the account name and password (sent only when pressing Log in / Create account). The site has no HTTPS yet, so passwords travel unencrypted; the Account tab says so.

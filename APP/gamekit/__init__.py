@@ -8,6 +8,9 @@ Games import everything they need from here; they never import the site server (
     from gamekit.sync import quantize                   # round floats so deltas stay small
     from gamekit.validate import whole_number, one_of, cell, clean_text
     from gamekit.data import load_json_dir, load_json   # content files (cards, units, ...)
+    from gamekit import turtle                          # turtle("reason"): emergency site shutdown
+
+Saved player data: LobbyGame.load_data / save_data / account_name (see lobby.py).
 
 Modules (each header documents its API):
     lobby.py     LobbyGame: members, host, ready/start, phases, state sync, timers, ACTIONS
@@ -30,6 +33,7 @@ from gamekit.settings import Int
 from gamekit.sync import FullState, PatchState, Snapshots
 from gamekit.turns import TurnQueue
 from gamekit.validate import LobbyError
+from server.turtle import turtle  # emergency shutdown for safety checks (server/turtle.py)
 
 __all__ = ["FINISHED", "LOBBY", "PLAYING", "FullState", "Int", "LobbyError", "LobbyGame", "PatchState",
-           "RealtimeGame", "SecretChoices", "Snapshots", "TurnQueue"]
+           "RealtimeGame", "SecretChoices", "Snapshots", "TurnQueue", "turtle"]

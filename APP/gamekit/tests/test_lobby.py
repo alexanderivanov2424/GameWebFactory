@@ -132,5 +132,34 @@ class GameNumberTests(unittest.TestCase):
             self.assertNotIn(client.id, text)
 
 
+
+class RealTimerTests(unittest.IsolatedAsyncioTestCase):
+    """schedule() on a real event loop (Sim replaces it, so this is the only test of the real one)."""
+
+    async def test_schedule_runs_callback_and_sends_state(self):
+        import asyncio
+
+        from server.rooms import Player, Room
+
+        room = Room("counter", "t", Counter)
+        player = Player("00000000-0000-4000-8000-000000000001")
+
+        class Socket:
+            sent = []
+
+            async def send(self, text):
+                self.sent.append(text)
+
+        player.ws = Socket()
+        room.players[player.id] = player
+        await room.game.on_connect(player)
+        ran = []
+        room.game.schedule(0.01, lambda: ran.append(True))
+        before = len(Socket.sent)
+        await asyncio.sleep(0.05)
+        self.assertEqual(ran, [True])
+        self.assertGreater(len(Socket.sent), before)
+
+
 if __name__ == "__main__":
     unittest.main()

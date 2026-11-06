@@ -30,6 +30,8 @@ bodies only for what you change.
 | Shared UI (player list, start, lobby buttons, settings form, error banner, turn alert) | Header of `APP/web/gamekit/lobby-ui.js` |
 | Base page styles and the CSS variables a game can set | Header of `APP/web/shared/theme.js` |
 | Connections, reconnects, the WebSocket server | Headers of `APP/server/rooms.py`, `main.py`, `websocket.py` (platform; games don't use it directly) |
+| Saved player data, guests vs. accounts, login, limits | "Saved player data" in the header of `APP/gamekit/lobby.py`; headers of `APP/server/sessions.py`, `accounts.py` |
+| Turtle (emergency site shutdown) and its triggers | Header of `APP/server/turtle.py`; CLAUDE.md "Turtle" |
 
 Games at a glance (details in each `NOTES.md`):
 - **tictactoe**: the smallest full game; read it to see the whole shape of a game.
@@ -86,3 +88,6 @@ Games at a glance (details in each `NOTES.md`):
 - Hover previews: toggle classes on existing cells; never rebuild the board on hover.
 - JSON turns int dict keys into strings: look them up with `String(index)` in JS.
 - Rule tables (which cards are playable when) belong in the game state, not copied into JS.
+- Saved data (`self.save_data`): save at milestones (game end, an unlock), never per tick or per
+  move in a loop; over `MAX_SAVES_PER_SESSION` saves in 10 s, or data over `MAX_DATA_BYTES`,
+  turtles the whole site. Test saves with `sim.login(i, "name")` and `self.load_data(member)`.

@@ -27,6 +27,16 @@ Subclass LobbyGame (instead of BaseGame) to get:
   sends every member the whole state after every change (fine for turn-based games).
   PatchState sends only what changed; RealtimeGame (realtime.py) uses Snapshots, one delta
   per tick. The game code (game_state/private_state) is the same for all of them.
+- Saved player data (server only; clients never send or read it directly):
+  self.load_data(member) -> this game's saved value for that player, or None
+  self.save_data(member, value)   # any plain JSON value; replaces the previous one
+  Data is keyed by the game id (its folder name): renaming the folder orphans saved data.
+  self.account_name(member) -> account name, or None for a guest
+  The same calls work for guests (kept in server memory until their tab's session ends) and
+  logged-in players (written to their account). Save at milestones (game end, an unlock), never
+  every tick: too many saves, or data over the size limit, shut the whole site down
+  (server/sessions.py and server/accounts.py list the limits). Players can only log in or out
+  when they aren't playing, so the account behind a member doesn't change during a game.
 
 Other clients see members by a short public id ("p1", "p2", ...), never by their
 client UUID, which acts as their key to the seat.
@@ -34,6 +44,7 @@ client UUID, which acts as their key to the seat.
 Games override the hooks in the "Game hooks" section. Client side: web/gamekit/lobby.js.
 """
 
+import asyncio
 import inspect
 import itertools
 import logging
@@ -156,6 +167,18 @@ class LobbyGame(BaseGame):
     def member_by_id(self, public_id):
         return next((m for m in self.members.values() if m.id == public_id), None)
 
+    def load_data(self, member):
+        """This game's saved data for the member (guest or account), or None if nothing is saved."""
+        return self.room.sessions.load(member.client_id, self.room.game_id)
+
+    def save_data(self, member, value):
+        """Save this game's data for the member (any plain JSON value; replaces what was saved)."""
+        self.room.sessions.save(member.client_id, self.room.game_id, value)
+
+    def account_name(self, member):
+        """The member's account name, or None for a guest."""
+        return self.room.sessions.account_name(member.client_id)
+
     def finish(self, result=None):
         """End the game. `result` is sent to everyone as state.result. Cancels pending timers."""
         self.phase = FINISHED
@@ -202,6 +225,10 @@ class LobbyGame(BaseGame):
 
     async def on_connection_lost(self, player):
         await self.update()
+
+    def busy(self, client_id):
+        member = self.members.get(client_id)
+        return bool(member and member.playing and self.phase == PLAYING)
 
     async def on_disconnect(self, player):
         self.sync.reset(player.id)

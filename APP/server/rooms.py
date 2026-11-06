@@ -13,6 +13,11 @@ Players are identified by their client id, not their connection:
 
 Each room has one instance of the game's Game class, which decides what joining
 means and what to do with messages. Rooms are discarded once no players remain.
+
+Sessions (server/sessions.py, `room.sessions`): a seat keeps its tab's session (guest or
+logged-in account, plus guest data) alive from when it is created until it is removed, so
+on_disconnect can still save a player's data. Rooms.is_playing(client_id) tells sessions
+whether a tab is playing a game anywhere (BaseGame.busy), since logging in or out is refused then.
 """
 
 import asyncio
@@ -20,10 +25,12 @@ import json
 import logging
 import re
 
+from server.sessions import Sessions
+from server.utils import CLIENT_ID
+
 log = logging.getLogger("rooms")
 
 ROOM_ID = re.compile(r"^[A-Za-z0-9_-]{1,32}$")
-CLIENT_ID = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
 RECONNECT_GRACE = 60  # seconds
 
 CLOSE_INVALID = 1008
@@ -58,6 +65,10 @@ class BaseGame:
     async def on_disconnect(self, player):
         """A player left for good: disconnected and didn't come back within the grace period."""
 
+    def busy(self, client_id):
+        """True while this client is in the middle of a game here (logging in or out is refused)."""
+        return False
+
 
 class Player:
     def __init__(self, client_id):
@@ -75,10 +86,11 @@ class Player:
 
 
 class Room:
-    def __init__(self, game_id, room_id, game_class):
+    def __init__(self, game_id, room_id, game_class, sessions=None):
         self.game_id = game_id
         self.id = room_id
         self.players = {}  # player id -> Player (including recently disconnected ones)
+        self.sessions = sessions if sessions is not None else Sessions()  # guest/account data
         self.game = game_class(self)
 
     async def broadcast(self, data, exclude=None):
@@ -91,9 +103,20 @@ class Room:
 
 
 class Rooms:
-    def __init__(self, games):
+    def __init__(self, games, sessions=None):
         self.games = games  # game id -> Game class
         self.rooms = {}  # (game id, room id) -> Room
+        self.sessions = sessions if sessions is not None else Sessions(is_playing=self.is_playing)
+
+    def is_playing(self, client_id):
+        """True if this client is in the middle of a game in any room."""
+        for room in list(self.rooms.values()):
+            try:
+                if room.game.busy(client_id):
+                    return True
+            except Exception:
+                log.exception("Error in game %s, room %s", room.game_id, room.id)
+        return False
 
     async def handle(self, ws, game_id):
         room_id = ws.query.get("room", "main")
@@ -105,11 +128,12 @@ class Rooms:
         key = (game_id, room_id)
         room = self.rooms.get(key)
         if room is None:
-            room = self.rooms[key] = Room(game_id, room_id, self.games[game_id])
+            room = self.rooms[key] = Room(game_id, room_id, self.games[game_id], self.sessions)
 
         player = room.players.get(client_id)
         if player is None:
             player = room.players[client_id] = Player(client_id)
+            self.sessions.attach(client_id)
             player.ws = ws
             await self._call(room, room.game.on_connect, player)
         else:
@@ -141,7 +165,10 @@ class Rooms:
         if player.ws is not None or room.players.get(player.id) is not player:
             return
         del room.players[player.id]
-        await self._call(room, room.game.on_disconnect, player)
+        try:
+            await self._call(room, room.game.on_disconnect, player)
+        finally:
+            self.sessions.detach(player.id)
         if not room.players and self.rooms.get(key) is room:
             del self.rooms[key]
 

@@ -10,11 +10,18 @@ Steps (stops with exit code 1 if any fails):
 3. Run unit tests: every tests/test_*.py under APP/server, APP/gamekit and APP/games/<id>
    (standard-library unittest; APP is on sys.path, so tests import gamekit, gamekit.sim, ...).
 4. Syntax-check every .js file under APP/web and APP/games/*/client (tools/jscheck.py).
+
+Safety: tests run with server/turtle.py in test mode (turtle() raises Turtled instead of shutting
+the site down) and with the state folder ($STATE_DIRECTORY) pointed at a temporary folder, so no
+test touches real accounts or writes a real TURTLE marker, even when deploy.sh runs this as root.
 """
 
 import importlib.util
 import logging
+import os
+import shutil
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -82,6 +89,17 @@ def js_files():
 
 
 def main(argv):
+    state = tempfile.mkdtemp(prefix="gwf-tests-")
+    os.environ["STATE_DIRECTORY"] = state
+    from server import turtle
+    turtle.install_test_handler()
+    try:
+        return run(argv)
+    finally:
+        shutil.rmtree(state, ignore_errors=True)
+
+
+def run(argv):
     only = argv[0] if argv else None
     ok = True
     # Game modules log content problems (bad card files) at import; show only real errors.
