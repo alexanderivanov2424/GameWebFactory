@@ -1,0 +1,166 @@
+"""Block Blast: a turn-based tile-placing deck-builder for 2-4 players. Last one standing wins.
+
+Every player has a 9x9 board (empty at the start), health, gold, shield and card removals.
+Cards place tiles (up to 5x5) and symbols on them; tiles and symbols are separate ideas:
+- Tile types decide how a tile behaves: blue (plain), grey (can't be spoiled), goblin (the
+  purple tile: spoils the lines it's in). logic/tiles.py.
+- Symbols act when their cell is cleared: coin, attack, shield, chapel, siege (below). The goblin
+  face is a decorative symbol with no effect. Any symbol can sit on any tile type.
+  logic/symbols.py, effects in logic/effects.py.
+Card files: cards/README.md. Boards and card rotations reach clients as two layers,
+{"tiles": [rows of tile codes], "symbols": [rows of symbol codes]} ("." = none), with the code
+tables in game.tileTypes and game.symbolTypes.
+
+Setup: turn order is random. Everyone's deck is the starting deck (Square: a 2x2 with a shield
+in one corner, Hook: an L with an
+attack in its corner, Tee: a T with a coin on its left arm, and bars of 4, 3 and 2), shuffled;
+everyone draws 3. Starting gold follows turn order: 1 for the first player, 2 for the second,
+and so on. The bank shows 5 cards dealt from the shuffled bonus deck (2 copies of each
+bank card).
+
+On your turn, in any order (place and patch as often as you like):
+- Place: play a hand card, putting its shape on your board. Shapes may be rotated in quarter
+  turns but never mirrored; every tile must land on an empty cell of the board.
+- Patch: discard a hand card to place a blank 1x1 tile instead.
+- Goblin cards (purple, from the bank) are placed the same way but on an opponent's board (one
+  still in), then leave your deck. Their tiles need not touch.
+  A cleared row or column holding a goblin (purple) tile has no effect (its symbols give nothing, unless
+  another cleared, goblin-free line crosses that cell), except on grey tiles: goblins never
+  spoil those. Siege cards are grey. Lines a goblin completes clear too.
+- Buy (once per turn): take a bank card for its price, the slot's position: slot 1 costs 1 gold, slot 2 costs 2
+  ... slot 5 costs 5. Bought cards go to your discard pile. The bought slot stays
+  empty until the end of the turn.
+Played and patched cards go to your discard pile. After each placement, every full row and
+column on your board clears at once (a cell where a row and a column cross counts once). Each
+symbol on a cleared cell:
+- coin: +1 gold.
+- attack: 1 damage to your target. The target's shield absorbs damage first, point for point,
+  and is used up doing so; the rest comes off their health.
+- shield: +1 shield. Shield also drops by 1 at the start of each of your turns.
+- chapel: +1 card removal. Spend one at any time (also on other players' turns) to remove a card
+  in your hand from your deck for good (not discarded).
+- siege: every 3 siege symbols cleared (counted across clears) give +1 strength. Each point of
+  strength adds 1 to the total damage of each of your attacks (a clear with attack symbols:
+  2 attack symbols do 3 damage with strength 1); strength gained in a clear applies from the
+  next clear on.
+Cards marked with the discard icon (goblin and siege cards) leave your deck for good once played
+(they still go to the discard pile when patched). Siege cards are 4x4 with 3 loose siege tiles
+and go on your own board.
+Then End turn: you draw back up to 3 cards (your discard pile is shuffled into a new draw pile
+when it runs out; cards you didn't play stay in your hand), the bank's remaining cards shift
+towards slot 1 and new ones fill the empty slots at the end (until the bonus deck runs out).
+
+Target: each player aims at one opponent (shown to everyone), changeable at any time, also on
+other players' turns; it starts as the next player in turn order and moves on by itself when
+the target is out. At 0 health a player is out (off the turn order, board greyed). The last
+player left wins. A player who leaves mid-game is out the same way; if it was their turn, the
+bank refills and the turn passes.
+
+Hidden: hands and the order of draw piles (state.private: your hand, and your draw pile's
+contents sorted). Everything else is public: boards, health, gold, shield, card removals, siege,
+strength, targets, hand/draw/discard
+sizes, the bank, the log.
+
+Player options:  none
+Settings:        {"health": 1-50 (10)}
+Game messages:
+    {"action": "place", "uid": n, "rotation": 0-3, "row": r, "col": c}
+        a hand card's shape, turned `rotation` quarter turns clockwise (card.rotations[rotation]
+        in the state), with its top-left corner at (row, col); goblin cards add
+        "player": "<public id>", the opponent whose board it goes on
+    {"action": "patch", "uid": n, "row": r, "col": c}    discard a hand card for a 1x1 tile
+    {"action": "buy", "slot": 0-4}
+    {"action": "aim", "player": "<public id>"}           any time while you're in
+    {"action": "remove", "uid": n}                       spend a card removal on a hand card;
+                                                         any time while you're in
+    {"action": "end_turn"}
+
+Code: this file connects the game to the lobby (settings, messages, phases). The rules live in
+logic/ (see logic/__init__.py for its modules).
+"""
+
+from gamekit import Int, LobbyError, LobbyGame
+from gamekit.validate import whole_number
+
+from .logic.bank import SLOTS
+from .logic.board import SIZE
+from .logic.match import Match
+
+
+ANY_TIME = ("aim", "remove")  # actions allowed on other players' turns too
+
+
+def position(data, key, label):
+    return whole_number(data.get(key), label, 0, SIZE - 1, clamp=False)
+
+
+def card_uid(data):
+    return whole_number(data.get("uid"), "Card", 0)
+
+
+class Game(LobbyGame):
+    MIN_PLAYERS = 2
+    MAX_PLAYERS = 4
+    SETTINGS = {
+        "health": Int("Starting health", default=10, low=1, high=50),
+    }
+    ACTIONS = {
+        "place": "on_place",
+        "patch": "on_patch",
+        "buy": "on_buy",
+        "aim": "on_aim",
+        "end_turn": "on_end_turn",
+        "remove": "on_remove",
+    }
+
+    def __init__(self, room):
+        super().__init__(room)
+        self.reset_game()
+
+    def reset_game(self):
+        self.match = None
+
+    def start_game(self):
+        self.match = Match({p.id: p.name for p in self.players}, self.settings)
+
+    def game_state(self):
+        return self.match.public()
+
+    def private_state(self, member):
+        return self.match.private(member.id) if member.playing else None
+
+    async def on_game_message(self, member, data):
+        if data.get("action") not in ANY_TIME and self.match.turn() != member.id:
+            raise LobbyError("It's not your turn.")
+        await self.dispatch(member, data)
+
+    def on_place(self, member, data):
+        rotation = whole_number(data.get("rotation"), "Rotation", 0, 3, clamp=False)
+        board = data.get("player")  # goblin cards: the opponent whose board it goes on
+        self.match.place(member.id, card_uid(data), rotation, position(data, "row", "Row"), position(data, "col", "Column"),
+                         board if isinstance(board, str) else None)
+        self.check_over()
+
+    def on_patch(self, member, data):
+        self.match.patch(member.id, card_uid(data), position(data, "row", "Row"), position(data, "col", "Column"))
+        self.check_over()
+
+    def on_buy(self, member, data):
+        self.match.buy(member.id, whole_number(data.get("slot"), "Slot", 0, SLOTS - 1, clamp=False))
+
+    def on_aim(self, member, data):
+        self.match.aim(member.id, data.get("player"))
+
+    def on_remove(self, member, data):
+        self.match.remove_card(member.id, card_uid(data))
+
+    def on_end_turn(self, member, data):
+        self.match.end_turn(member.id)
+
+    def on_player_removed(self, member):
+        self.match.remove(member.id)
+        self.check_over()
+
+    def check_over(self):
+        if self.match.result is not None:
+            self.finish(self.match.result)

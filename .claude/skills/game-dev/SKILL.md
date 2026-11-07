@@ -43,6 +43,10 @@ Games at a glance (details in each `NOTES.md`):
 - **smugglers**: built with `logic/` modules; graph board from JSON maps (SVG), Interpol vs.
   smugglers, deck-building (`gamekit.Deck`), inspections that interrupt a turn, `PatchState`.
   Content files: `content/README.md`.
+- **block-blast**: `logic/` modules; 9x9 boards filled with rotatable shape cards (JSON in
+  `cards/`) that place tiles (types with behaviours, `logic/tiles.py`) carrying symbols
+  (`logic/symbols.py`, effects in `logic/effects.py`) as separate layers, row/column clears that pay gold or deal damage, a per-player `gamekit.Deck`, a
+  conveyor-priced bank, a hover ghost on the board (class toggles only), aiming at a target.
 - **arena**: real-time demo (`RealtimeGame`): keyboard inputs as state, per-tick delta
   snapshots, canvas drawing with interpolation, ping shown above each player.
 

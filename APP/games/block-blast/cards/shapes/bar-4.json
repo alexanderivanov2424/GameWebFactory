@@ -1,0 +1,9 @@
+{
+  "name": "Bar of Four",
+  "tiles": [
+    "####"
+  ],
+  "symbols": [
+    "..S."
+  ]
+}

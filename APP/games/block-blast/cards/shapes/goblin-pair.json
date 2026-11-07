@@ -1,0 +1,15 @@
+{
+  "name": "Goblin Pair",
+  "tile": "goblin",
+  "playOn": "opponent",
+  "exile": true,
+  "loose": true,
+  "tiles": [
+    "#.",
+    ".#"
+  ],
+  "symbols": [
+    "G.",
+    ".G"
+  ]
+}

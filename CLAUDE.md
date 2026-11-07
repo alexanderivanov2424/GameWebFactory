@@ -167,6 +167,9 @@ Summary:
    `games/smugglers/` is the first game built with `logic/` modules: a graph board from JSON
    map files drawn as SVG, asymmetric roles, deck-building (`Deck`), an interrupt inside a
    turn, and `PatchState`.
+   `games/block-blast/` (`logic/` modules): a personal deck per player (`Deck`), polyomino
+   cards from JSON placed with rotations (never mirrored), a hover ghost with a "would clear"
+   preview on a grid, a conveyor-priced market.
 
 ## Lobby model (shared by all games)
 - Every connected tab is a **member**: a **spectator** until it joins, then a **player**. Players join and leave explicitly, and only in the lobby phase.

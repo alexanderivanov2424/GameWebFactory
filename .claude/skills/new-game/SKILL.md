@@ -26,6 +26,10 @@ the pitfalls hit while building it; read the one closest to your game):
   roles, deck-building with `gamekit.Deck`, an interrupt that hands the action to another
   player mid-turn (`actor()` vs `turn()`), a two-message action, `PatchState`, and the server
   sending reachable spots/targets so the client holds no rules.
+- `APP/games/block-blast/`: `logic/` modules; shape cards (polyominoes) placed on a grid with
+  rotations, sent precomputed in the state so the client never rotates anything itself; a
+  hover ghost with a "would clear" preview; one `gamekit.Deck` per player; a market whose
+  slots stay empty until the end of the turn.
 - `APP/games/arena/`: real-time (`RealtimeGame`): keyboard input as state, per-tick delta
   snapshots, canvas drawing with interpolation, showing ping. Start from it for continuous movement.
 

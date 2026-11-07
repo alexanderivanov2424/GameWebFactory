@@ -1,0 +1,17 @@
+{
+  "name": "Goblin Ambush",
+  "tile": "goblin",
+  "playOn": "opponent",
+  "exile": true,
+  "loose": true,
+  "tiles": [
+    "#.#",
+    "...",
+    "#.."
+  ],
+  "symbols": [
+    "G.G",
+    "...",
+    "G.."
+  ]
+}
