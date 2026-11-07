@@ -25,12 +25,6 @@ class RegistryTests(unittest.TestCase):
             self.assertTrue(cls.LABEL and cls.SIZE_SETTING and cls.RULES)
             self.assertTrue(1 <= cls.DEFAULT_SIZE <= cls.MAX_SIZE <= market.MAX_SIZE)
 
-    def test_every_bonus_card_has_a_cost(self):
-        for card_id, card in CARDS.items():
-            self.assertIsInstance(card["cost"], int, card_id)
-        self.assertEqual(CARDS["dagger"]["cost"], 5)  # 1 tile, +1 attack, +3 all symbols
-        self.assertEqual(CARDS["crate"]["cost"], 9)  # 9 tiles, no attack
-
 
 class ConveyorTests(unittest.TestCase):
     def setUp(self):
@@ -115,7 +109,7 @@ class CostTests(unittest.TestCase):
         public = self.match.public()["market"]
         self.assertEqual((public["type"], public["label"], public["canRemove"]), ("cost", "Cost Market", True))
         self.assertEqual([s["price"] for s in public["slots"]], [CARDS[c["card"]]["cost"] for c in self.stall.slots])
-        self.assertEqual(public["deck"], 49 - 10)
+        self.assertEqual(public["deck"], helpers.pool_size() - 10)
         self.assertEqual(len(new_match(market="cost", costSize=4).market.slots), 4)
 
     def test_buy_any_slot_for_its_cost(self):

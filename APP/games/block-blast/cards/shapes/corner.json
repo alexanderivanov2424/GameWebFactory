@@ -1,0 +1,13 @@
+{
+  "name": "Corner",
+  "cost": 3,
+  "tile": "grey",
+  "tiles": [
+    "##",
+    "#."
+  ],
+  "symbols": [
+    "..",
+    ".."
+  ]
+}

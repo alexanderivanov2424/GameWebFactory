@@ -1,4 +1,4 @@
-"""Block Blast: card packs (logic/packs.py, cards/packs/): what each real pack holds, the loader,
+"""Block Blast: card packs (logic/packs.py, cards/packs/): the loader,
 the pool a Match deals its market from, and the lobby setting.
 Run: python3 -I tools/run_tests.py block-blast
 """
@@ -16,23 +16,6 @@ from gamekit.sim import Sim
 helpers = importlib.import_module("games.block-blast.tests.helpers")  # the id contains "-"
 packs = importlib.import_module("games.block-blast.logic.packs")
 CARDS = importlib.import_module("games.block-blast.logic.cards").CARDS
-
-
-class RealPackTests(unittest.TestCase):
-    def test_packs_and_what_they_hold(self):
-        self.assertEqual(list(packs.PACKS), ["base", "chapel", "goblin", "siege"])
-        self.assertEqual(sum(len(packs.pool([p], packs.PACKS)) for p in packs.PACKS), 49)
-        for pack_id, pack in packs.PACKS.items():
-            self.assertTrue(pack["name"] and pack["description"], pack_id)
-            for card_id in pack["cards"]:
-                card = CARDS[card_id]
-                kind = ("goblin" if card["tile"] == "goblin" else "siege" if "siege" in card["symbols"]
-                        else "chapel" if "chapel" in card["symbols"] else "base")
-                self.assertEqual(kind, pack_id, card_id)
-
-    def test_starter_cards_are_in_no_pack(self):
-        in_packs = {card_id for pack in packs.PACKS.values() for card_id in pack["cards"]}
-        self.assertFalse(in_packs & set(importlib.import_module("games.block-blast.logic.cards").STARTING_DECK))
 
 
 class LoaderTests(unittest.TestCase):
@@ -61,11 +44,13 @@ class MatchPackTests(unittest.TestCase):
     def test_market_dealt_from_selected_packs_only(self):
         match = helpers.new_match(packs=["siege", "goblin"])
         dealt = [c["card"] for c in match.market.slots] + [c["card"] for c in match.market.deck.draw_pile]
-        self.assertEqual(len(dealt), 9)
+        self.assertEqual(sorted(dealt), sorted(packs.pool(["siege", "goblin"], packs.PACKS)))
         self.assertEqual(set(dealt), set(packs.PACKS["siege"]["cards"]) | set(packs.PACKS["goblin"]["cards"]))
 
     def test_small_pool_leaves_slots_empty(self):
-        match = helpers.new_match(packs=["siege"], market="cost")  # 3 cards for a market of 10
+        tiny = {"tiny": {"cards": {"dagger": 2, "pair": 1}}}  # 3 cards for a market of 10
+        settings = {**helpers.SETTINGS, "packs": ["tiny"], "market": "cost", "costSize": 10}
+        match = helpers.Match({"p1": "A", "p2": "B"}, settings, rng=random.Random(1), packs=tiny)
         self.assertEqual(sum(1 for s in match.market.slots if s), 3)
         self.assertEqual(len(match.market.deck), 0)
 
@@ -75,7 +60,6 @@ class LobbyPackTests(unittest.TestCase):
         sim = Sim(helpers.GAME, start=False)
         spec = {s["key"]: s for s in sim.state(0)["settingsSpec"]}["packs"]
         self.assertEqual((spec["type"], spec["min"]), ("multi", 1))
-        self.assertEqual([o["label"] for o in spec["options"]], ["Base cards", "Chapel cards", "Goblin cards", "Siege cards"])
         self.assertIn("pick at least 1", sim.lobby(0, {"type": "settings", "settings": {"packs": []}}))
         self.assertIsNone(sim.lobby(0, {"type": "settings", "settings": {"packs": ["siege", "base"]}}))
         self.assertEqual(sim.state(0)["settings"]["packs"], ["base", "siege"])
@@ -83,7 +67,7 @@ class LobbyPackTests(unittest.TestCase):
     def test_game_uses_the_packs(self):
         sim = Sim(helpers.GAME, players=2, settings={"packs": ["chapel"], "market": "cost", "costSize": 10})
         slots = sim.state(0)["game"]["market"]["slots"]
-        self.assertEqual(sorted(s["card"] for s in slots if s), ["chapel", "chapel", "shrine", "shrine"])
+        self.assertLessEqual({s["card"] for s in slots if s}, set(packs.PACKS["chapel"]["cards"]))
 
 
 if __name__ == "__main__":

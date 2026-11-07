@@ -60,7 +60,7 @@ Tests: `tests/` (`python3 -I tools/run_tests.py block-blast`).
   still counts through a crossing unspoiled line, or when its own tile is `unspoilable`.
   Client: every board is interactive; `dropsOn(pid)` decides where the selected card may go,
   and the ghost works on any board.
-- **Card flags** in the JSON: `playOn`, `loose` (tiles need not touch) and `exile` (the card
+- **Card flags** in the JSON: `playOn` and `exile` (the card
   leaves its owner's deck once played: `put_down(..., exile=True)` skips the discard; a patch
   still discards). The client shows 🗑 on exile cards. Goblin and siege cards are exile.
 - **Siege and strength**: siege symbols (on grey tiles on the siege cards); `seat.siege`
@@ -116,8 +116,14 @@ Tests: `tests/` (`python3 -I tools/run_tests.py block-blast`).
 - `tests/`: `helpers.py` (shared fixtures: `new_match`, `give`, one-letter board cells; imported
   as `games.block-blast.tests.helpers`), `test_rules.py` (Match: setup, placing, clearing, aim,
   turns, leaving, state views), `test_market.py` (both types, buy/remove, the settings),
-  `test_packs.py` (real packs, loader, pool, the setting), `test_effects.py` (shields, chapels, goblins, siege, and
-  `effects.py` on its own), `test_lobby.py` (Sim), `test_cards.py` (registries, loader, files).
+  `test_packs.py` (loader, pool, the setting), `test_effects.py` (shields, chapels, goblins, siege, and
+  `effects.py` on its own), `test_lobby.py` (Sim), `test_cards.py` (registries, loader, rotations).
+  Tests check behaviour (what an ability does: a goblin in a cleared row stops its attack
+  counting, etc.), never card content: cards are added, removed and rebalanced all the time,
+  so no checks of how many cards/packs there are, a card's cost, symbols, shape or pack.
+  Compute sizes (`helpers.pool_size()`, `helpers.starting_size()`) or use fixture
+  cards/packs (e.g. a tiny pack passed as `Match(..., packs=...)`). Ask the user before
+  adding any new test.
 
 ## Pitfalls seen here
 - `one_of(x, (0, 1, 2, 3))` accepts `True` (it equals 1): rotation and uids go through

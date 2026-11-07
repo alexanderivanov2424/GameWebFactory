@@ -21,12 +21,12 @@ class SetupTests(unittest.TestCase):
         for place, pid in enumerate(match.order):
             seat = match.seats[pid]
             self.assertEqual(len(seat.hand), 3)
-            self.assertEqual(len(seat.deck), 3)
+            self.assertEqual(len(seat.deck) + len(seat.hand), helpers.starting_size())
             self.assertEqual(seat.health, 10)
             self.assertEqual(seat.gold, place + 1)  # 1 for the first player, 2, 3
         self.assertEqual(len(match.market.slots), 5)  # the default: a Conveyor Market of 5
         self.assertTrue(all(match.market.slots))
-        self.assertEqual(len(match.market.deck), 49 - 5)
+        self.assertEqual(len(match.market.deck), helpers.pool_size() - 5)
 
     def test_initial_targets_are_next_in_order(self):
         match = new_match(players=3)

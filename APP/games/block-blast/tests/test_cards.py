@@ -1,4 +1,4 @@
-"""Block Blast: tile types, symbols, the card loader and the real card files."""
+"""Block Blast: tile types, symbols, the card loader and rotating cards."""
 
 import importlib
 import json
@@ -42,17 +42,7 @@ class RegistryTests(unittest.TestCase):
         self.assertIn(tiles.DEFAULT_TILE, tiles.TILE_TYPES)
 
 
-class RealFilesTests(unittest.TestCase):
-    def test_all_cards_load(self):
-        self.assertEqual(len(cards.CARDS), 35)
-        self.assertEqual(sum(cards.STARTING_DECK.values()), 6)
-        goblins = [c for c in cards.CARDS.values() if c["tile"] == "goblin"]
-        self.assertEqual(len(goblins), 6)
-        self.assertTrue(all(c["playOn"] == "opponent" and c["exile"] for c in goblins))
-        for card in goblins:  # purple tiles with the decorative goblin face, which isn't counted
-            self.assertEqual({(t, s) for _, _, t, s in card["pieces"][0]}, {("goblin", "goblin")})
-            self.assertEqual(card["symbols"], {})
-
+class RotationTests(unittest.TestCase):
     def test_rotations_fit_5x5_and_keep_tiles_and_symbols(self):
         for card in cards.CARDS.values():
             base = sorted(((t, s) for _, _, t, s in card["pieces"][0]), key=repr)
@@ -69,28 +59,6 @@ class RealFilesTests(unittest.TestCase):
         self.assertNotIn(mirrored(hook["pieces"][0], w), [positions(p) for p in hook["pieces"]])
         self.assertEqual(cards.public(hook)["rotations"][1], {"tiles": ["bbb", "b.."], "symbols": ["A..", "..."]})
 
-    def test_symbol_counts(self):
-        self.assertEqual(cards.CARDS["bulwark"]["symbols"], {"shield": 2})
-        self.assertEqual(cards.CARDS["pair"]["symbols"], {"coin": 1, "attack": 1})
-        self.assertEqual(cards.CARDS["square"]["symbols"], {"shield": 1})  # the starter with a shield
-        self.assertEqual(cards.CARDS["bar-4"]["symbols"], {"shield": 1})
-        self.assertEqual(cards.CARDS["bar-3"]["symbols"], {})
-        self.assertEqual(cards.CARDS["goblin-pair"]["symbols"], {})  # the goblin face is decorative
-
-    def test_siege_cards(self):
-        siege = [c for c in cards.CARDS.values() if "siege" in c["symbols"]]
-        self.assertEqual(len(siege), 3)
-        for card in siege:
-            self.assertEqual(card["symbols"], {"siege": 3})
-            self.assertEqual(card["sizes"][0], (4, 4))
-            self.assertTrue(card["exile"] and card["loose"])
-            self.assertEqual({t for _, _, t, _ in card["pieces"][0]}, {"grey"})
-            cells = positions(card["pieces"][0])
-            for r, c in cells:  # no two siege tiles touch
-                self.assertFalse({(r + 1, c), (r, c + 1)} & cells, card["id"])
-        exiled = {c["id"] for c in cards.CARDS.values() if c["exile"]}
-        self.assertEqual(exiled, {c["id"] for c in cards.CARDS.values() if c["tile"] == "goblin"} | {c["id"] for c in siege})
-
 
 class LoaderTests(unittest.TestCase):
     def load(self, files):
@@ -105,8 +73,7 @@ class LoaderTests(unittest.TestCase):
             "good": {"name": "Good", "cost": 1, "tiles": ["##"], "symbols": [".C"]},
             "mixed": {"name": "Mixed", "cost": 1, "tiles": ["#g"], "symbols": ["CC"]},
             "grey-ok": {"name": "Grey", "cost": 1, "tile": "grey", "tiles": ["##"], "symbols": ["A."]},
-            "loose-ok": {"name": "Loose", "cost": 1, "loose": True, "tiles": ["#.#"]},
-            "bad-split": {"name": "Bad", "cost": 1, "tiles": ["#.#"]},
+            "apart-ok": {"name": "Apart", "cost": 1, "tiles": ["#.#"]},
             "bad-big": {"name": "Bad", "cost": 1, "tiles": ["######"]},
             "bad-tile-letter": {"name": "Bad", "cost": 1, "tiles": ["Q"]},
             "bad-symbol-letter": {"name": "Bad", "cost": 1, "tiles": ["#"], "symbols": ["Z"]},
@@ -120,7 +87,7 @@ class LoaderTests(unittest.TestCase):
             "bad-tile-type": {"name": "Bad", "cost": 1, "tile": "lava", "tiles": ["#"]},
             "bad-play-on": {"name": "Bad", "cost": 1, "playOn": "everyone", "tiles": ["#"]},
         })
-        self.assertEqual(sorted(loaded), ["good", "grey-ok", "loose-ok", "mixed"])
+        self.assertEqual(sorted(loaded), ["apart-ok", "good", "grey-ok", "mixed"])
         self.assertEqual(loaded["mixed"]["pieces"][0], [(0, 0, "blue", "coin"), (0, 1, "grey", "coin")])
         self.assertEqual(loaded["grey-ok"]["pieces"][0], [(0, 0, "grey", "attack"), (0, 1, "grey", None)])
         self.assertEqual(cards.public(loaded["good"])["rotations"][0], {"tiles": ["bb"], "symbols": [".C"]})

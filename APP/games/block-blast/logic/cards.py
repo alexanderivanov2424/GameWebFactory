@@ -10,7 +10,6 @@ folder or file so tests can feed them temporary files.
                        "cost":    gold to buy it in the Cost Market (market/cost.py)
                        "tile":    the card's main tile type (what "#" means; colours the card)
                        "playOn":  "self" or "opponent" (whose board the card goes on)
-                       "loose":   tiles need not touch
                        "exile":   leaves its owner's deck for good once played (not when patched)
                        "symbols": {symbol name: count} (art-only symbols left out)
                        "pieces":  4 pieces (board.py), turned clockwise 0-3 quarter turns (never
@@ -45,18 +44,6 @@ MAX_COST = 30
 def rotate(piece, height, width):
     """One quarter turn clockwise: the cell at (r, c) moves to (c, height - 1 - r)."""
     return [(dc, height - 1 - dr, tile, symbol) for dr, dc, tile, symbol in piece], width, height
-
-
-def connected(piece):
-    cells = {(dr, dc) for dr, dc, _, _ in piece}
-    seen, todo = set(), [next(iter(cells))]
-    while todo:
-        r, c = todo.pop()
-        if (r, c) in seen:
-            continue
-        seen.add((r, c))
-        todo += [n for n in ((r + 1, c), (r - 1, c), (r, c + 1), (r, c - 1)) if n in cells]
-    return seen == cells
 
 
 def _grid(data, key, height=None, width=None):
@@ -124,9 +111,6 @@ def parse_card(card_id, data):
     height, width = len(tile_rows), len(tile_rows[0])
     symbol_rows = _grid(data, "symbols", height, width) if "symbols" in data else [EMPTY * width] * height
     piece = _piece(tile_rows, symbol_rows, tile)
-    loose = flag(data, "loose")
-    if not loose and not connected(piece):
-        raise ValueError('tiles must all touch (one piece), or "loose": true')
     pieces, sizes = rotations(piece, height, width)
     return {
         "id": card_id,
@@ -134,7 +118,6 @@ def parse_card(card_id, data):
         "cost": whole(data, "cost", 0, MAX_COST),
         "tile": tile,
         "playOn": play_on,
-        "loose": loose,
         "exile": flag(data, "exile"),
         "symbols": symbol_counts(piece),
         "pieces": pieces,

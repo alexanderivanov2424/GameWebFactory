@@ -35,11 +35,11 @@ The file name (lowercase letters, digits, `-`, `_`) is the card id.
   ignores it (price = slot position).
 - `tiles`: rows of equal length, at most 5×5. `.` is no tile, `#` is a tile of the card's
   `tile` type, and a tile code (`b`, `g`, `x`) is a tile of that type (for cards that mix types).
+  Tiles need not touch each other.
 - `symbols` (optional): the same size as `tiles`; `.` or a symbol code on top of a tile.
 - `tile` (optional, default `"blue"`): the card's main tile type, what `#` means. It also
   colours the card (`.card-<tile>` in `client/index.html`).
 - `playOn` (optional, default `"self"`): `"opponent"` puts the card on an opponent's board (goblins).
-- `loose` (optional): `true` lets the tiles sit apart; otherwise they must touch edge to edge.
 - `exile` (optional): `true` removes the card from its owner's deck once played (shown with
   🗑). Patching it for a 1×1 tile still discards it normally.
 

@@ -57,7 +57,7 @@ symbol on a cleared cell:
   2 attack symbols do 3 damage with strength 1); strength gained in a clear applies from the
   next clear on.
 Cards marked with the discard icon (goblin and siege cards) leave your deck for good once played
-(they still go to the discard pile when patched). Siege cards are 4x4 with 3 loose siege tiles
+(they still go to the discard pile when patched). Siege cards are 4x4 with 3 separate siege tiles
 and go on your own board.
 Then End turn: you draw back up to 3 cards (your discard pile is shuffled into a new draw pile
 when it runs out; cards you didn't play stay in your hand) and the market refills.

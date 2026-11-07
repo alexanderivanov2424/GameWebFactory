@@ -6,6 +6,8 @@ Import from a test file with
     new_match(players=2, **settings)   a Match with a fixed seed (players "p1".."pN"), default
                                        settings unless given (e.g. market="cost", costSize=4)
     give(match, pid, card_id)          a fresh instance of card_id in pid's hand -> its uid
+    pool_size(selected=None)           cards the market is dealt from (default: SETTINGS' packs)
+    starting_size()                    cards in the starting deck (count from the files, never hard-code)
     cell(letter) / rows(grid)          board cells written as one letter (below), and back
     fill(match, pid, cells, letter)    put that cell on each (r, c) of pid's board
     row_cells(r, skip) / col_cells(c, skip)   the (r, c) of a row / column, minus `skip`
@@ -21,9 +23,20 @@ GAME = "block-blast"
 Match = importlib.import_module(f"games.{GAME}.logic.match").Match
 board = importlib.import_module(f"games.{GAME}.logic.board")
 symbols = importlib.import_module(f"games.{GAME}.logic.symbols")
+cards = importlib.import_module(f"games.{GAME}.logic.cards")
+packs = importlib.import_module(f"games.{GAME}.logic.packs")
 
 SETTINGS = {"health": 10, "market": "conveyor", "conveyorSize": 5, "costSize": 10,  # the lobby's defaults
             "packs": ["base", "chapel", "goblin", "siege"]}
+
+
+def pool_size(selected=None):
+    """How many cards the market is dealt from (SETTINGS' packs unless `selected`)."""
+    return len(packs.pool(selected or SETTINGS["packs"], packs.PACKS))
+
+
+def starting_size():
+    return sum(cards.STARTING_DECK.values())
 
 
 def new_match(players=2, **settings):
