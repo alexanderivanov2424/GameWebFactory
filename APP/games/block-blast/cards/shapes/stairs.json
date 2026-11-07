@@ -1,5 +1,6 @@
 {
   "name": "Stairs",
+  "cost": 6,
   "tiles": [
     "#..",
     "##.",

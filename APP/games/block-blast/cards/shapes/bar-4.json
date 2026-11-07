@@ -1,5 +1,6 @@
 {
   "name": "Bar of Four",
+  "cost": 4,
   "tiles": [
     "####"
   ],

@@ -1,5 +1,6 @@
 {
   "name": "Pair",
+  "cost": 6,
   "tiles": [
     "##"
   ],

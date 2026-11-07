@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <!-- Block Blast game page: lobby (players, settings, rules) and the game (boards with health and
-     gold, bank, log, fixed hand bar), plus every style. Behaviour: game.js (the page), board.js
+     gold, market, log, fixed hand bar), plus every style. Behaviour: game.js (the page), board.js
      (a board, hover ghost, clear flash), draw.js (tiles, symbols, cards); rules in ../server.py. -->
 <html lang="en">
 <head>
@@ -36,6 +36,8 @@
     #lobby { max-width: 760px; }
     main.with-hand { padding-bottom: 230px; }
     .rules p { margin: 6px 0; }
+    .rules ul { margin: 6px 0; padding-left: 22px; }
+    .rules li { margin: 4px 0; }
     .legend-goblin { color: #6b3fa0; font-weight: 700; }
     .rules .sym { display: inline-flex; width: 1.3em; height: 1.3em; vertical-align: -0.25em; font-size: 0.85em; }
 
@@ -100,18 +102,20 @@
     .cell.flash { animation: flash 0.9s ease-out; }
     @keyframes flash { 0% { background: #fff6b0; transform: scale(1.12); } 100% { background: var(--empty); transform: scale(1); } }
 
-    /* Bank and log */
+    /* Market and log */
     #lower { display: grid; grid-template-columns: 1fr 400px; gap: 20px; margin-top: 20px; }
-    #bank { display: flex; gap: 12px; flex-wrap: wrap; }
-    .bank-slot { width: 150px; }
-    .bank-empty { width: 150px; min-height: 170px; border: 2px dashed var(--gwf-line); border-radius: 10px; display: flex; align-items: center; justify-content: center; text-align: center; color: var(--gwf-muted); font-size: 0.8rem; padding: 8px; }
-    .price { font-weight: 700; font-size: 0.85rem; margin: 6px 0; text-align: center; }
-    .bank-slot button { width: 100%; }
+    #market-type { color: var(--gwf-muted); font-weight: 600; }
+    #market { display: flex; gap: 12px; flex-wrap: wrap; }
+    .market-slot { width: 150px; display: flex; flex-direction: column; gap: 6px; }
+    .market-empty { width: 150px; min-height: 170px; border: 2px dashed var(--gwf-line); border-radius: 10px; display: flex; align-items: center; justify-content: center; text-align: center; color: var(--gwf-muted); font-size: 0.8rem; padding: 8px; }
+    .price { font-weight: 700; font-size: 0.85rem; text-align: center; }
+    .market-slot button { width: 100%; }
+    .market-slot button.remove { font-size: 0.75rem; padding: 3px 8px; }
     #log { max-height: 260px; overflow-y: auto; font-size: 0.85rem; margin: 0; padding-left: 36px; } /* room for 2-digit numbers */
     #log li { margin: 3px 0; }
     #log li.mine { font-weight: 600; }
 
-    /* Cards (hand and bank) */
+    /* Cards (hand and market) */
     .pcard { background: #fff; border: 2px solid #c9cedb; border-radius: 10px; padding: 8px; display: flex; flex-direction: column; align-items: center; gap: 6px; min-width: 110px; min-height: 150px; }
     .pcard { position: relative; }
     .pcard .cname { font-weight: 700; font-size: 0.85rem; text-align: center; }
@@ -192,16 +196,25 @@
           shield, which absorbs incoming damage point for point and is used up (it also drops by 1 at the
           start of each of your turns); each <span class="sym sym-chapel">✝</span> chapel gives a card removal:
           spend it any time with <b>Delete</b> under a hand card to remove that card from your deck for good.</p>
-        <p><span class="legend-goblin">👺 Goblin cards</span> (purple, from the bank) are placed on an
+        <p><span class="legend-goblin">👺 Goblin cards</span> (purple, from the market) are placed on an
           <b>opponent's</b> board instead of yours. A cleared row or column with a purple goblin tile in it has
           no effect (the 👺 on it is just decoration), except on <b>grey tiles</b> (like siege cards), which goblins can't spoil.</p>
         <p><span class="sym sym-siege">⚙</span> <b>Siege</b>: every 3 siege symbols you clear give <b>💪 1 strength</b>, which adds 1 to the
           total damage of each of your attacks (2 attack symbols then do 3 damage). Cards marked 🗑 (goblin and siege cards) leave your deck once
           played.</p>
-        <p>Buy one card a turn from the bank: slot 1 costs 1 gold, slot 2 costs 2, … slot 5 costs 5. You start
-          with 1 gold if you go first, 2 if you go second, and so on. Bought cards go to
-          your discard pile; the bought slot refills when the turn ends. Ending your turn draws you back up
-          to 3 cards. At 0 health you're out; the last one standing wins.</p>
+        <p><b>The market</b> (the host picks which, its size and the <b>card packs</b> in it: base,
+          chapel, goblin and siege cards): buy one card a turn with gold; bought cards
+          go to your discard pile. You start with 1 gold if you go first, 2 if you go second, and so on.</p>
+        <ul>
+          <li><b>Conveyor Market</b>: a row of cards (5 by default) priced by position: slot 1 costs 1 gold,
+            slot 2 costs 2, and so on. A bought slot stays empty until the turn ends; then the cards shift
+            towards slot 1 and new ones fill the end.</li>
+          <li><b>Cost Market</b>: face-up cards (10 by default), each with its own cost (roughly its number of
+            tiles, +1 with an attack, +2 or +3 for small cards that are mostly symbols). Buy any one, or
+            instead <b>remove</b> one from the market (it leaves the game; that's your buy for the turn).
+            Empty slots refill when the turn ends.</li>
+        </ul>
+        <p>Ending your turn draws you back up to 3 cards. At 0 health you're out; the last one standing wins.</p>
       </div>
     </section>
 
@@ -219,11 +232,12 @@
       <div id="lower">
         <div class="card">
           <div class="row" style="margin-bottom: 10px">
-            <h2 style="margin: 0">Bank</h2>
+            <h2 style="margin: 0">Market</h2>
+            <span id="market-type"></span>
             <span class="spacer"></span>
-            <span id="bonus-deck" class="muted small"></span>
+            <span id="market-info" class="muted small"></span>
           </div>
-          <div id="bank"></div>
+          <div id="market"></div>
         </div>
         <div class="card">
           <h2>Log</h2>
@@ -252,7 +266,7 @@
       <span class="spacer"></span>
       <div class="turn-box">
         <button id="end-turn" class="green">End turn</button>
-        <label class="switch" title="Ends your turn by itself once you've played or patched every card in your hand and can't afford any bank card.">
+        <label class="switch" title="Ends your turn by itself once you've played or patched every card in your hand and can't afford any market card.">
           <input type="checkbox" id="auto-end">
           <span class="track"></span>
           Auto end turn

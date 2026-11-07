@@ -1,5 +1,6 @@
 {
   "name": "Crossguard",
+  "cost": 6,
   "tiles": [
     ".#.",
     "###",

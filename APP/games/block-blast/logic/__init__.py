@@ -10,11 +10,15 @@ Modules (keep this list and NOTES.md's map up to date as you add more):
                 rows/columns, clearing, the two-layer form clients get.
     tiles.py    Tile types (blue, grey, goblin) and their behaviour flags (spoils, unspoilable).
     symbols.py  Symbols (coin, attack, shield, chapel, siege, the decorative goblin face).
-    bank.py     Bank: the 5 face-up bonus cards, prices by slot, refill at the end of a turn.
-    cards.py    Loading cards/ (tiles + symbols layers, flags, deck counts) and precomputing
-                the 4 rotations of each card's piece.
+    market/     The market (shared pool of bonus cards) and its types, one module each:
+                base.py (Market), conveyor.py (ConveyorMarket), cost.py (CostMarket); the
+                registry MARKETS in market/__init__.py drives the lobby settings.
+    cards.py    Loading cards/shapes/ (tiles + symbols layers, flags, cost) and the starting
+                deck, precomputing the 4 rotations of each card's piece.
+    packs.py    Card packs (cards/packs/): the sets of bonus cards the host picks for the
+                market's pool.
 
-Imports go one way: match -> seat, bank, cards -> effects -> board -> tiles, symbols (cards
+Imports go one way: match -> seat, market, packs -> cards -> effects -> board -> tiles, symbols (cards
 uses effects only to leave art-only symbols out of its counts).
 
 Code here knows players only by public id ("p1", "p2", ...), never by Member objects, the

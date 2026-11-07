@@ -1,5 +1,6 @@
 {
   "name": "Goblin Ambush",
+  "cost": 3,
   "tile": "goblin",
   "playOn": "opponent",
   "exile": true,

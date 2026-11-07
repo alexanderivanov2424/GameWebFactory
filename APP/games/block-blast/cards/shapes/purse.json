@@ -1,5 +1,6 @@
 {
   "name": "Purse",
+  "cost": 5,
   "tiles": [
     "###"
   ],

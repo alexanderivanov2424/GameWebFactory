@@ -1,13 +1,13 @@
 /*
  * Block Blast client: the game page. Renders the state from the server (rules in ../server.py)
- * and sends place / patch / buy / aim / remove / end_turn. Holds no rules: card rotations, the
+ * and sends place / patch / buy / market_remove / aim / remove / end_turn. Holds no rules: card rotations, the
  * patch piece and the rule numbers come from the state (game.cards, game.rules), and the hover
  * ghost / "would clear" outline are only previews (the server decides).
  *
  * Files: draw.js (BlockBlastDraw: tiles, symbols, cards from layers), board.js (BlockBlastBoard:
  * one board's cells, the hover ghost, the clear flash), this file (the page).
  * Sections: setup, selection + keyboard, auto end turn, render (lobby / game), boards (seat
- * panels, drop targets, hover ghost, clear animation), bank and log, hand bar.
+ * panels, drop targets, hover ghost, clear animation), market and log, hand bar.
  */
 (() => {
   const { $, el } = AppDom;
@@ -101,7 +101,7 @@
 
   // --- Auto end turn -------------------------------------------------------------
   // A browser-only preference (sessionStorage, never sent). When it's on, the turn ends by itself
-  // once your hand is empty and you can't afford anything in the bank (after a short pause so the
+  // once your hand is empty and you can't afford anything in the market (after a short pause so the
   // last move shows).
 
   const AUTO_KEY = "block-blast:autoEnd";
@@ -117,7 +117,7 @@
     maybeAutoEnd();
   });
 
-  const canBuy = () => game().buysLeft > 0 && game().bank.some((slot) => slot && slot.price <= game().seats[state.you].gold);
+  const canBuy = () => game().buysLeft > 0 && game().market.slots.some((slot) => slot && slot.price <= game().seats[state.you].gold);
   const nothingLeft = () => isMyTurn() && hand().length === 0 && !canBuy();
   const autoEndDue = () => $("auto-end").checked && nothingLeft() && autoEndTurn !== game().turnNumber;
 
@@ -186,12 +186,12 @@
       $("result").textContent = `${winner} ${result.reason || ""}`;
     }
     if (finished) $("status-text").textContent = "Game over.";
-    else if (myTurn) $("status-text").textContent = "Your turn: play cards, buy from the bank, then End turn.";
+    else if (myTurn) $("status-text").textContent = "Your turn: play cards, buy from the market, then End turn.";
     else if (g.seats[state.you] && g.seats[state.you].out) $("status-text").textContent = `You're out. ${name(g.turn)}'s turn.`;
     else $("status-text").textContent = `${name(g.turn)}'s turn.`;
 
     renderBoards();
-    renderBank();
+    renderMarket();
     renderLog();
     renderHand();
     updateGhost();
@@ -366,26 +366,46 @@
     if (cells) Board.flash(cells, game().rules.boardSize, clear.cells);
   }
 
-  // --- Bank and log --------------------------------------------------------------
+  // --- Market and log ------------------------------------------------------------
+  // game.market: {type, label, canRemove, slots: [null | {uid, card, price}], deck}. The price is
+  // the server's (slot position on the Conveyor Market, the card's cost on the Cost Market).
+  // With canRemove, a card can be removed from the market instead of buying (uses the buy).
 
-  function renderBank() {
+  function renderMarket() {
     const g = game();
+    const market = g.market;
     const me = g.seats[state.you];
     const myTurn = isMyTurn();
-    $("bonus-deck").textContent = `${plural(g.rules.buysPerTurn, "buy")} per turn · bonus deck: ${g.bonusDeck}`;
-    $("bank").replaceChildren(...g.bank.map((slot, i) => {
+    const used = g.buysLeft <= 0;
+    const action = market.canRemove ? `${plural(g.rules.buysPerTurn, "buy")} or removal` : plural(g.rules.buysPerTurn, "buy");
+    $("market-type").textContent = `· ${market.label}`;
+    $("market-info").textContent = `${action} per turn · bonus deck: ${market.deck}`;
+    $("market").replaceChildren(...market.slots.map((slot, i) => {
       if (!slot) {
-        return el("div", { className: "bank-empty" }, g.bonusDeck ? "Bought: refills when the turn ends" : "Empty (the bonus deck is used up)");
+        return el("div", { className: "market-empty" }, market.deck ? "Empty: refills when the turn ends" : "Empty (the bonus deck is used up)");
       }
+      const cardName = g.cards[slot.card].name;
       const price = el("div", { className: "price" }, `💰 ${slot.price}`);
       const buy = el("button", { className: "small green", textContent: "Buy" });
-      const used = g.buysLeft <= 0;
       buy.disabled = !myTurn || !me || used || me.gold < slot.price;
       buy.title = !myTurn ? "Only on your turn"
-        : used ? `You've already bought ${plural(g.rules.buysPerTurn, "card")} this turn`
+        : used ? (market.canRemove ? "You've already bought or removed a card this turn" : `You've already bought ${plural(g.rules.buysPerTurn, "card")} this turn`)
         : me && me.gold < slot.price ? "Not enough gold" : "Goes to your discard pile";
       buy.addEventListener("click", () => lobby.sendGame({ action: "buy", slot: i }));
-      return el("div", { className: "bank-slot" }, Draw.cardFace(g, slot.card), price, buy);
+      const buttons = [buy];
+      if (market.canRemove) {
+        const remove = el("button", { className: "small plain remove", textContent: "Remove" });
+        remove.disabled = !myTurn || !me || used;
+        remove.title = !myTurn ? "Only on your turn"
+          : used ? "You've already bought or removed a card this turn"
+          : "Instead of buying: this card leaves the market and the game";
+        remove.addEventListener("click", () => {
+          if (!confirm(`Remove ${cardName} from the market? It leaves the game, and it uses your buy this turn.`)) return;
+          lobby.sendGame({ action: "market_remove", slot: i });
+        });
+        buttons.push(remove);
+      }
+      return el("div", { className: "market-slot" }, Draw.cardFace(g, slot.card), price, ...buttons);
     }));
   }
 

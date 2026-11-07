@@ -1,5 +1,6 @@
 {
   "name": "Square",
+  "cost": 4,
   "tiles": [
     "##",
     "##"

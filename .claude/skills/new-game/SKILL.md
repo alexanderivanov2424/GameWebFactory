@@ -148,6 +148,10 @@ and `settings.py`. Hooks below are on `Game` in `server.py`; most delegate to `s
   validated (non-integers rejected, out-of-range clamped) and drawn on the client by
   `settingsForm`. A bound may name an earlier setting (`high="boardSize"`). For other
   cross-setting rules override `clean_settings`, call `super()`, then adjust.
+  `Choice("Label", default="a", options={"a": "Option A", "b": "Option B"})` is a drop-down
+  of fixed string values (block-blast builds one from a registry of market types);
+  `MultiChoice("Label", default=["a"], options={...}, low=1)` is a set of checkboxes whose value
+  is a list (block-blast's card packs).
 - `ACTIONS = {"move": "move"}`: game messages `{"action": "move", ...}` → `self.move(member, data)`.
   Override `on_game_message` only for checks shared by every action (whose turn, stage), then
   `await self.dispatch(member, data)`.

@@ -1,16 +1,20 @@
 """Block Blast: Match, one game from start to finish (no lobby, network or members).
 
-    match = Match({"p1": "Ann", "p2": "Bob"}, {"health": 10})
+    match = Match({"p1": "Ann", "p2": "Bob"},
+                  {"health": 10, "market": "conveyor", "conveyorSize": 5, "costSize": 10,
+                   "packs": ["base", "chapel", "goblin", "siege"]})
     match.turn()                          public id of the player to act, or None once over
     match.place(pid, uid, rotation, row, col, board=None)
                                           play a hand card as its shape, on your own board, or for
                                           a goblin card on `board`, an opponent still in
     match.patch(pid, uid, row, col)       discard a hand card for a blank 1x1 tile
-    match.buy(pid, slot)                  buy a bank card (to the discard pile; BUYS_PER_TURN a turn)
+    match.buy(pid, slot)                  buy a market card (to the discard pile; BUYS_PER_TURN a turn)
+    match.market_remove(pid, slot)        markets with CAN_REMOVE: instead of buying, a market card
+                                          leaves the game (uses the turn's buy)
     match.aim(pid, target)                choose whom your attacks hit (any time, not just your turn)
     match.remove_card(pid, uid)           spend a chapel token: a hand card leaves your deck for good
                                           (any time, not just your turn)
-    match.end_turn(pid)                   refill the hand, refill the bank, next player
+    match.end_turn(pid)                   refill the hand, refill the market, next player
     match.leave(pid)                      pid left mid-game
     match.public() / match.private(pid)   what clients see
     match.result                          None while playing; then {"winner": pid or None, "reason"}
@@ -18,7 +22,9 @@
 Each action raises LobbyError if it isn't allowed and changes nothing in that case. This class
 is the only place that decides who may act when: require_turn (current player only) or
 require_in (any time while still in: aim, remove_card).
-Players' state is in self.seats[pid] (a Seat, seat.py); what a clear does is in effects.py.
+Players' state is in self.seats[pid] (a Seat, seat.py); what a clear does is in effects.py; the
+market (self.market) is the type the settings pick (market/, settings["market"] and the size in
+that type's SIZE_SETTING), dealt from the card packs in settings["packs"] (packs.py).
 """
 
 import random
@@ -28,8 +34,9 @@ from gamekit import Deck, LobbyError, TurnQueue
 from . import board as boards
 from . import cards as card_defs
 from . import effects, symbols, tiles
-from .bank import Bank
-from .cards import BONUS_DECK, CARDS, STARTING_DECK, deck_ids
+from . import market as markets
+from . import packs as card_packs
+from .cards import CARDS, STARTING_DECK, deck_ids
 from .seat import Seat
 
 HAND_SIZE = 3
@@ -39,7 +46,7 @@ LOG_SENT = 60  # newest log entries in the public state
 
 
 class Match:
-    def __init__(self, names, settings, rng=random, cards=CARDS, starting=STARTING_DECK, bonus=BONUS_DECK):
+    def __init__(self, names, settings, rng=random, cards=CARDS, starting=STARTING_DECK, packs=card_packs.PACKS):
         self.names = dict(names)  # public id -> name, fixed at the start (the log stays readable)
         self.cards = cards
         self.order = list(self.names)  # seating order = turn order
@@ -57,11 +64,14 @@ class Match:
             )
         for pid in self.order:
             self.seats[pid].target = self.next_opponent(pid)
-        self.bank = Bank(deck_ids(bonus), rng)
+        kind = settings["market"]
+        size = settings[markets.MARKETS[kind].SIZE_SETTING]
+        pool = card_packs.pool(settings["packs"], packs)  # the bonus deck: the host's packs
+        self.market = markets.make(kind, size, pool, rng, cards)
         self.log = []
         self.step = 0  # +1 per change, for client animations
         self.turn_number = 1
-        self.buys = 0  # bank cards bought this turn
+        self.buys = 0  # market cards bought (or removed) this turn
         self.last_clear = None  # {"step", "pid", "cells": [[r, c], ...]}
         self.result = None
         self.catalog = self.static_state()  # the part of public() that never changes: built once
@@ -161,24 +171,41 @@ class Match:
         if target is not None and self.seats[target].health == 0:
             self.knock_out(target, f"{self.names[target]} is knocked out!")
 
-    # --- Bank, aim, card removal, turns -------------------------------------------------------
+    # --- Market, aim, card removal, turns -----------------------------------------------------
+
+    def market_card(self, pid, slot):
+        """Checks shared by buying and removing: pid's turn, a buy left, a card in that slot."""
+        self.require_turn(pid)
+        if not 0 <= slot < len(self.market.slots):
+            raise LobbyError("There's no such market slot.")
+        if self.buys >= BUYS_PER_TURN:
+            also = " (removing one counts as a buy)" if self.market.CAN_REMOVE else ""
+            raise LobbyError(f"You can only buy {effects.plural(BUYS_PER_TURN, 'card')} a turn{also}.")
+        card = self.market.slots[slot]
+        if card is None:
+            raise LobbyError("That market slot is empty until the end of the turn.")
+        return card
 
     def buy(self, pid, slot):
-        self.require_turn(pid)
+        card = self.market_card(pid, slot)
         seat = self.seats[pid]
-        if self.buys >= BUYS_PER_TURN:
-            raise LobbyError(f"You can only buy {effects.plural(BUYS_PER_TURN, 'card')} a turn.")
-        card = self.bank.slots[slot]
-        if card is None:
-            raise LobbyError("That bank slot is empty until the end of the turn.")
-        price = self.bank.price(slot)
+        price = self.market.price(slot)
         if seat.gold < price:
             raise LobbyError(f"That card costs {price} gold; you have {seat.gold}.")
-        self.bank.take(slot)
+        self.market.take(slot)
         seat.gold -= price
         self.buys += 1
-        seat.deck.add(card["card"])  # a new instance of the player's own, on their discard pile
+        # A new instance of the buyer's own deck (on their discard pile): uids stay per deck.
+        seat.deck.add(card["card"])
         self.add_log(pid, f"{self.names[pid]} bought {self.cards[card['card']]['name']} for {price} gold.")
+
+    def market_remove(self, pid, slot):
+        if not self.market.CAN_REMOVE:
+            raise LobbyError(f"The {self.market.LABEL} doesn't let you remove cards.")
+        card = self.market_card(pid, slot)
+        self.market.take(slot)  # out of the game
+        self.buys += 1
+        self.add_log(pid, f"{self.names[pid]} removed {self.cards[card['card']]['name']} from the market.")
 
     def aim(self, pid, target):
         self.require_in(pid)
@@ -204,7 +231,7 @@ class Match:
         self.next_turn(pid)
 
     def next_turn(self, pid):
-        self.bank.refill()
+        self.market.refill()
         self.queue.advance(pid)
         self.buys = 0
         self.turn_number += 1
@@ -269,11 +296,7 @@ class Match:
             "step": self.step,
             "buysLeft": max(0, BUYS_PER_TURN - self.buys),  # for the player whose turn it is
             "seats": {pid: seat.public() for pid, seat in self.seats.items()},
-            "bank": [
-                None if card is None else {"uid": card["uid"], "card": card["card"], "price": self.bank.price(i)}
-                for i, card in enumerate(self.bank.slots)
-            ],
-            "bonusDeck": len(self.bank.deck),
+            "market": self.market.public(),  # {"type", "label", "canRemove", "slots", "deck"}
             "log": self.log[-LOG_SENT:],
             "lastClear": self.last_clear,
         }

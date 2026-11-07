@@ -18,7 +18,7 @@ class SettingsTests(unittest.TestCase):
         sim = Sim(GAME, start=False)
         self.assertIn("whole number", sim.lobby(0, {"type": "settings", "settings": {"health": "x"}}))
         sim.lobby(0, {"type": "settings", "settings": {"health": 500}})
-        self.assertEqual(sim.state(0)["settings"], {"health": 50})
+        self.assertEqual(sim.state(0)["settings"]["health"], 50)
 
 
 class LobbyTests(unittest.TestCase):

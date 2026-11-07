@@ -1,5 +1,6 @@
 {
   "name": "Shrine",
+  "cost": 4,
   "tiles": [
     "##",
     "##"

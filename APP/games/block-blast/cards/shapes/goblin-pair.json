@@ -1,5 +1,6 @@
 {
   "name": "Goblin Pair",
+  "cost": 2,
   "tile": "goblin",
   "playOn": "opponent",
   "exile": true,

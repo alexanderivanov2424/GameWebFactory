@@ -1,5 +1,6 @@
 {
   "name": "Catapult",
+  "cost": 6,
   "tile": "grey",
   "loose": true,
   "exile": true,

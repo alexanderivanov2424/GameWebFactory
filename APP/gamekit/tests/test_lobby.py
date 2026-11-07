@@ -2,7 +2,7 @@
 
 import unittest
 
-from gamekit import FINISHED, LOBBY, PLAYING, Int, LobbyError, LobbyGame
+from gamekit import FINISHED, LOBBY, PLAYING, Choice, Int, LobbyError, LobbyGame, MultiChoice
 from gamekit.sim import Sim
 
 
@@ -89,6 +89,71 @@ class SettingsTests(unittest.TestCase):
         self.assertEqual(sim.lobby(0, {"type": "settings", "settings": {"size": "5"}}), "Size must be a whole number.")
         self.assertEqual(sim.lobby(0, {"type": "settings", "settings": {"size": True}}), "Size must be a whole number.")
         self.assertEqual(sim.lobby(1, {"type": "settings", "settings": {"size": 5}}), "Only the host can do that.")
+
+
+class Picker(LobbyGame):
+    MIN_PLAYERS = 1
+    SETTINGS = {
+        "mode": Choice("Mode", default="classic", options={"classic": "Classic", "fast": "Fast"}, hint="How fast"),
+        "size": Int("Size", default=4, low=2, high=8),
+    }
+
+
+class ChoiceSettingTests(unittest.TestCase):
+    def test_default_spec_and_update(self):
+        sim = Sim(Picker, start=False)
+        state = sim.state(0)
+        self.assertEqual(state["settings"], {"mode": "classic", "size": 4})
+        spec = {s["key"]: s for s in state["settingsSpec"]}
+        self.assertEqual(spec["mode"], {
+            "key": "mode", "type": "choice", "label": "Mode", "hint": "How fast",
+            "options": [{"value": "classic", "label": "Classic"}, {"value": "fast", "label": "Fast"}],
+        })
+        self.assertEqual(spec["size"]["type"], "int")
+        self.assertIsNone(sim.lobby(0, {"type": "settings", "settings": {"mode": "fast"}}))
+        self.assertEqual(sim.game.settings, {"mode": "fast", "size": 4})
+
+    def test_rejects_other_values(self):
+        sim = Sim(Picker, start=False)
+        for bad in ("slow", "Fast", 1, None, ["fast"]):
+            self.assertEqual(sim.lobby(0, {"type": "settings", "settings": {"mode": bad}}),
+                             "Mode must be one of: Classic, Fast.")
+        self.assertEqual(sim.game.settings["mode"], "classic")
+
+    def test_default_must_be_an_option(self):
+        with self.assertRaises(ValueError):
+            Choice("Mode", default="nope", options={"a": "A"})
+
+
+class Packer(LobbyGame):
+    MIN_PLAYERS = 1
+    SETTINGS = {
+        "packs": MultiChoice("Packs", default=["a", "b"], options={"a": "A", "b": "B", "c": "C"}, low=1),
+    }
+
+
+class MultiChoiceSettingTests(unittest.TestCase):
+    def test_default_spec_and_update(self):
+        sim = Sim(Packer, start=False)
+        self.assertEqual(sim.state(0)["settings"], {"packs": ["a", "b"]})
+        spec = sim.state(0)["settingsSpec"][0]
+        self.assertEqual((spec["type"], spec["min"], [o["value"] for o in spec["options"]]), ("multi", 1, ["a", "b", "c"]))
+        self.assertIsNone(sim.lobby(0, {"type": "settings", "settings": {"packs": ["c", "a", "c"]}}))
+        self.assertEqual(sim.game.settings["packs"], ["a", "c"])  # options order, no repeats
+
+    def test_rejects(self):
+        sim = Sim(Packer, start=False)
+        for bad in ("a", ["z"], [1], None, {"a": True}):
+            self.assertEqual(sim.lobby(0, {"type": "settings", "settings": {"packs": bad}}),
+                             "Packs must be a list of: A, B, C.")
+        self.assertEqual(sim.lobby(0, {"type": "settings", "settings": {"packs": []}}), "Packs: pick at least 1.")
+        self.assertEqual(sim.game.settings["packs"], ["a", "b"])
+
+    def test_bad_default(self):
+        with self.assertRaises(ValueError):
+            MultiChoice("Packs", default=["z"], options={"a": "A"})
+        with self.assertRaises(ValueError):
+            MultiChoice("Packs", default=[], options={"a": "A"}, low=1)
 
 
 class ActionTests(unittest.TestCase):

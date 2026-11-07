@@ -46,7 +46,7 @@ Games at a glance (details in each `NOTES.md`):
 - **block-blast**: `logic/` modules; 9x9 boards filled with rotatable shape cards (JSON in
   `cards/`) that place tiles (types with behaviours, `logic/tiles.py`) carrying symbols
   (`logic/symbols.py`, effects in `logic/effects.py`) as separate layers, row/column clears that pay gold or deal damage, a per-player `gamekit.Deck`, a
-  conveyor-priced bank, a hover ghost on the board (class toggles only), aiming at a target.
+  market of swappable types (Conveyor / Cost, `logic/market/`, picked with a `Choice` setting) dealt from card packs the host ticks (`cards/packs/`, `MultiChoice`), a hover ghost on the board (class toggles only), aiming at a target.
 - **arena**: real-time demo (`RealtimeGame`): keyboard inputs as state, per-tick delta
   snapshots, canvas drawing with interpolation, ping shown above each player.
 

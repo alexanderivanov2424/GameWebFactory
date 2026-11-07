@@ -1,5 +1,6 @@
 {
   "name": "Goblin Wedge",
+  "cost": 3,
   "tile": "goblin",
   "playOn": "opponent",
   "exile": true,

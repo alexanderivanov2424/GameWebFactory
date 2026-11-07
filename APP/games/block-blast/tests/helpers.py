@@ -3,7 +3,8 @@
 Import from a test file with
     helpers = importlib.import_module("games.block-blast.tests.helpers")  # the id contains "-"
 
-    new_match(players=2, **settings)   a Match with a fixed seed (players "p1".."pN")
+    new_match(players=2, **settings)   a Match with a fixed seed (players "p1".."pN"), default
+                                       settings unless given (e.g. market="cost", costSize=4)
     give(match, pid, card_id)          a fresh instance of card_id in pid's hand -> its uid
     cell(letter) / rows(grid)          board cells written as one letter (below), and back
     fill(match, pid, cells, letter)    put that cell on each (r, c) of pid's board
@@ -21,7 +22,8 @@ Match = importlib.import_module(f"games.{GAME}.logic.match").Match
 board = importlib.import_module(f"games.{GAME}.logic.board")
 symbols = importlib.import_module(f"games.{GAME}.logic.symbols")
 
-SETTINGS = {"health": 10}
+SETTINGS = {"health": 10, "market": "conveyor", "conveyorSize": 5, "costSize": 10,  # the lobby's defaults
+            "packs": ["base", "chapel", "goblin", "siege"]}
 
 
 def new_match(players=2, **settings):

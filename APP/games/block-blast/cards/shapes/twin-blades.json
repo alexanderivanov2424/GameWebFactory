@@ -1,5 +1,6 @@
 {
   "name": "Twin Blades",
+  "cost": 5,
   "tiles": [
     "##",
     "##"

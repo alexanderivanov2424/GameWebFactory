@@ -1,5 +1,6 @@
 {
   "name": "Bulwark",
+  "cost": 5,
   "tiles": [
     "##",
     "##",

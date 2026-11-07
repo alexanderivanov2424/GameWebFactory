@@ -1,0 +1,8 @@
+{
+  "name": "Chapel cards",
+  "description": "Chapel symbols give card removals, to thin your deck.",
+  "cards": {
+    "chapel": 2,
+    "shrine": 2
+  }
+}

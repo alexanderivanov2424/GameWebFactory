@@ -1,5 +1,6 @@
 {
   "name": "Bar of Two",
+  "cost": 2,
   "tiles": [
     "##"
   ]

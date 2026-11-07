@@ -15,22 +15,34 @@ tables in game.tileTypes and game.symbolTypes; game.rules holds the constants th
 Setup: turn order is random. Everyone's deck is the starting deck (Square: a 2x2 with a shield
 in one corner, Hook: an L with an attack in its corner, Tee: a T with a coin on its left arm,
 a bar of 4 with a shield, and bars of 3 and 2), shuffled; everyone draws 3. Starting gold
-follows turn order: 1 for the first player, 2 for the second, and so on. The bank shows 5 cards
-dealt from the shuffled bonus deck (cards/bonus-deck.json: 2 copies of most cards, 1 of each
-goblin and siege card).
+follows turn order: 1 for the first player, 2 for the second, and so on.
+
+Card packs: the host picks which packs of bonus cards make up the market's pool, the bonus deck
+(cards/packs/, logic/packs.py; at least one, all by default): Base cards (coins, attacks,
+shields), Chapel cards, Goblin cards and Siege cards. Most cards come in 2 copies, goblin and
+siege cards in 1.
+
+Market: the shared pool of bonus cards, dealt face up from the shuffled bonus deck. Cards bought
+or removed never return to it. The host picks its type and each type's size (logic/market/):
+- Conveyor Market (5 cards by default, 1-10): a card's price is its slot position: slot 1 costs
+  1 gold ... the last slot costs its size. A bought slot stays empty until the end of the turn;
+  then the remaining cards shift towards slot 1 and new ones fill the empty slots at the end.
+- Cost Market (10 cards by default, 1-20): any card can be bought for its own cost (each card
+  file's "cost"). Instead of buying, a player may remove a card from the market: it leaves the
+  game. Empty slots refill in place at the end of the turn.
+New cards stop coming once the bonus deck runs out.
 
 On your turn, in any order (place and patch as often as you like):
 - Place: play a hand card, putting its shape on your board. Shapes may be rotated in quarter
   turns but never mirrored; every tile must land on an empty cell of the board.
 - Patch: discard a hand card to place a blank 1x1 tile instead.
-- Goblin cards (purple, from the bank) are placed the same way but on an opponent's board (one
+- Goblin cards (purple, from the market) are placed the same way but on an opponent's board (one
   still in), then leave your deck. Their tiles need not touch.
   A cleared row or column holding a goblin (purple) tile has no effect (its symbols give nothing, unless
   another cleared, goblin-free line crosses that cell), except on grey tiles: goblins never
   spoil those. Siege cards are grey. Lines a goblin completes clear too.
-- Buy (once per turn): take a bank card for its price, the slot's position: slot 1 costs 1 gold, slot 2 costs 2
-  ... slot 5 costs 5. Bought cards go to your discard pile. The bought slot stays
-  empty until the end of the turn.
+- Buy (once per turn): take a market card for its price. Bought cards go to your discard pile.
+  In the Cost Market, removing a card from the market instead counts as your buy.
 Played and patched cards go to your discard pile. After each placement, every full row and
 column on your board clears at once (a cell where a row and a column cross counts once). Each
 symbol on a cleared cell:
@@ -48,28 +60,31 @@ Cards marked with the discard icon (goblin and siege cards) leave your deck for 
 (they still go to the discard pile when patched). Siege cards are 4x4 with 3 loose siege tiles
 and go on your own board.
 Then End turn: you draw back up to 3 cards (your discard pile is shuffled into a new draw pile
-when it runs out; cards you didn't play stay in your hand), the bank's remaining cards shift
-towards slot 1 and new ones fill the empty slots at the end (until the bonus deck runs out).
+when it runs out; cards you didn't play stay in your hand) and the market refills.
 
 Target: each player aims at one opponent (shown to everyone), changeable at any time, also on
 other players' turns; it starts as the next player in turn order and moves on by itself when
 the target is out. At 0 health a player is out (off the turn order, board greyed). The last
 player left wins. A player who leaves mid-game is out the same way; if it was their turn, the
-bank refills and the turn passes.
+market refills and the turn passes.
 
 Hidden: hands and the order of draw piles (state.private: your hand, and your draw pile's
 contents sorted). Everything else is public: boards, health, gold, shield, card removals, siege,
-strength, targets, hand/draw/discard sizes, the bank, the log.
+strength, targets, hand/draw/discard sizes, the market, the log.
 
 Player options:  none
-Settings:        {"health": 1-50 (10)}
+Settings:        {"health": 1-50 (10), "market": "conveyor" | "cost" ("conveyor"),
+                  "conveyorSize": 1-10 (5), "costSize": 1-20 (10),
+                  "packs": [pack ids, at least 1] (all: ["base", "chapel", "goblin", "siege"])}
 Game messages:
     {"action": "place", "uid": n, "rotation": 0-3, "row": r, "col": c}
         a hand card's shape, turned `rotation` quarter turns clockwise (card.rotations[rotation]
         in the state), with its top-left corner at (row, col); goblin cards add
         "player": "<public id>", the opponent whose board it goes on
     {"action": "patch", "uid": n, "row": r, "col": c}    discard a hand card for a 1x1 tile
-    {"action": "buy", "slot": 0-4}
+    {"action": "buy", "slot": n}                         0 to the market's size - 1
+    {"action": "market_remove", "slot": n}               Cost Market: remove that card instead of
+                                                         buying (uses the turn's buy)
     {"action": "aim", "player": "<public id>"}           any time while you're in
     {"action": "remove", "uid": n}                       spend a card removal on a hand card;
                                                          any time while you're in
@@ -80,10 +95,11 @@ message fields. The rules live in logic/ (see logic/__init__.py for its modules)
 whose turn it is and which actions are allowed off-turn.
 """
 
-from gamekit import Int, LobbyGame
+from gamekit import Choice, Int, LobbyGame, MultiChoice
 from gamekit.validate import whole_number
 
-from .logic.bank import SLOTS
+from .logic import market
+from .logic.packs import PACKS
 from .logic.board import SIZE
 from .logic.match import Match
 
@@ -96,16 +112,35 @@ def card_uid(data):
     return whole_number(data.get("uid"), "Card", 0)
 
 
+def market_slot(data):
+    return whole_number(data.get("slot"), "Slot", 0, market.MAX_SIZE - 1, clamp=False)  # Match checks the size
+
+
+def market_settings():
+    """The market type (one option per market.MARKETS entry) and each type's size."""
+    types = market.MARKETS.values()
+    settings = {"market": Choice("Market", default=market.DEFAULT, options={m.KEY: m.LABEL for m in types},
+                                 hint=" · ".join(f"{m.LABEL}: {m.RULES}" for m in types))}
+    for m in types:
+        settings[m.SIZE_SETTING] = Int(f"{m.LABEL} size", default=m.DEFAULT_SIZE, low=1, high=m.MAX_SIZE,
+                                       hint=f"Cards on offer in the {m.LABEL}")
+    return settings
+
+
 class Game(LobbyGame):
     MIN_PLAYERS = 2
     MAX_PLAYERS = 4
     SETTINGS = {
         "health": Int("Starting health", default=10, low=1, high=50),
+        **market_settings(),
+        "packs": MultiChoice("Card packs", default=list(PACKS), options={p["id"]: p["name"] for p in PACKS.values()},
+                             low=min(1, len(PACKS)), hint=" · ".join(f"{p['name']}: {p['description']}" for p in PACKS.values())),
     }
     ACTIONS = {
         "place": "on_place",
         "patch": "on_patch",
         "buy": "on_buy",
+        "market_remove": "on_market_remove",
         "aim": "on_aim",
         "end_turn": "on_end_turn",
         "remove": "on_remove_card",
@@ -141,7 +176,10 @@ class Game(LobbyGame):
         self.match.patch(member.id, card_uid(data), position(data, "row", "Row"), position(data, "col", "Column"))
 
     def on_buy(self, member, data):
-        self.match.buy(member.id, whole_number(data.get("slot"), "Slot", 0, SLOTS - 1, clamp=False))
+        self.match.buy(member.id, market_slot(data))
+
+    def on_market_remove(self, member, data):
+        self.match.market_remove(member.id, market_slot(data))
 
     def on_aim(self, member, data):
         self.match.aim(member.id, data.get("player"))

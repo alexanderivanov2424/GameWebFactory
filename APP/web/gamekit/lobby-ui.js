@@ -16,8 +16,11 @@
  *       Back to lobby (the host, once the game is finished). Call render() on every state.
  *   AppLobbyUI.settingsForm(element, lobby)       Returns render(). Fills `element` with an
  *       input per host setting from state.settingsSpec (declared in the game's SETTINGS on
- *       the server), plus a note on who can change them. Only the host can edit; changes
- *       are sent after a short pause. Call render() on every lobby render.
+ *       the server): a number input for "int" fields (whole numbers, min/max from the spec),
+ *       a <select> of the spec's options for "choice" fields (sends the option's value),
+ *       checkboxes for "multi" fields (sends the list of ticked values, never fewer than min), plus
+ *       a note on who can change them. Only the host can edit; number changes are sent after a
+ *       short pause, a select's or checkbox's at once. Call render() on every lobby render.
  *   AppLobbyUI.connectionText(status, roomId)     Text for AppLobby's onConnection
  *   AppLobbyUI.errorBox(element)                  Returns show(message): auto-hiding error banner
  *   AppLobbyUI.turnAlert(element, { text })       Returns update(turnId). Call it on every render
@@ -62,6 +65,8 @@
     }
     .gwf-settings { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center; }
     .gwf-setting { display: flex; align-items: center; gap: 8px; }
+    .gwf-multi { display: inline-flex; flex-wrap: wrap; gap: 4px 12px; }
+    .gwf-multi-option { display: inline-flex; align-items: center; gap: 4px; cursor: pointer; }
     .gwf-settings-note { margin: 10px 0 0; color: #666; font-size: 0.85rem; }
     .gwf-error { background: #fdecec; color: #b4232a; border-radius: 8px; padding: 10px 14px; margin-bottom: 16px; }
   `;
@@ -188,35 +193,83 @@
 
   function settingsForm(element, lobby) {
     let builtFor = null;
-    let inputs = {};
+    let fields = {}; // key -> { field, input } (input: <input>, <select> or a box of checkboxes)
     let note;
     let timer;
 
+    // The value of one field's input, or undefined if it isn't valid yet.
+    function valueOf({ field, input }) {
+      if (field.type === "choice") return input.value;
+      if (field.type === "multi") return [...input.querySelectorAll("input:checked")].map((box) => box.value);
+      const value = Number(input.value);
+      return input.value !== "" && Number.isInteger(value) ? value : undefined;
+    }
+
     function send() {
+      clearTimeout(timer);
       const values = {};
-      for (const [key, input] of Object.entries(inputs)) {
-        const value = Number(input.value);
-        if (input.value !== "" && Number.isInteger(value)) values[key] = value;
+      for (const [key, entry] of Object.entries(fields)) {
+        const value = valueOf(entry);
+        if (value !== undefined) values[key] = value;
       }
       if (Object.keys(values).length) lobby.updateSettings(values);
     }
 
+    function choiceInput(field) {
+      const select = el("select");
+      for (const option of field.options || []) {
+        const node = el("option", "", option.label);
+        node.value = option.value;
+        select.append(node);
+      }
+      select.addEventListener("change", send);
+      return select;
+    }
+
+    // Checkboxes; never lets the host untick below field.min.
+    function multiInput(field) {
+      const box = el("span", "gwf-multi");
+      for (const option of field.options || []) {
+        const item = el("label", "gwf-multi-option");
+        const check = el("input");
+        check.type = "checkbox";
+        check.value = option.value;
+        check.addEventListener("change", () => {
+          if (box.querySelectorAll("input:checked").length < (field.min || 0)) {
+            check.checked = true;
+            return;
+          }
+          send();
+        });
+        item.append(check, option.label);
+        box.append(item);
+      }
+      return box;
+    }
+
+    function numberInput() {
+      const input = el("input");
+      input.type = "number";
+      input.step = "1";
+      input.addEventListener("input", () => {
+        clearTimeout(timer);
+        timer = setTimeout(send, 400);
+      });
+      return input;
+    }
+
     function build(spec) {
-      inputs = {};
+      fields = {};
       const row = el("div", "gwf-settings");
       for (const field of spec) {
-        const label = el("label", "gwf-setting", field.label);
+        // A box of checkboxes can't sit inside a <label> (clicks would hit the first box).
+        const label = el(field.type === "multi" ? "div" : "label", "gwf-setting", field.label);
         if (field.hint) label.title = field.hint;
-        const input = el("input");
-        input.type = "number";
-        input.step = "1";
-        input.addEventListener("input", () => {
-          clearTimeout(timer);
-          timer = setTimeout(send, 400);
-        });
+        const input = field.type === "choice" ? choiceInput(field)
+          : field.type === "multi" ? multiInput(field) : numberInput();
         label.append(input);
         if (field.suffix) label.append(el("span", "", field.suffix));
-        inputs[field.key] = input;
+        fields[field.key] = { field, input };
         row.append(label);
       }
       note = el("p", "gwf-settings-note");
@@ -233,12 +286,21 @@
       }
       const isHost = lobby.isHost();
       const bound = (field, name) => (field[name + "From"] ? state.settings[field[name + "From"]] : field[name]);
-      for (const field of spec) {
-        const input = inputs[field.key];
-        input.min = bound(field, "min");
-        input.max = bound(field, "max");
+      for (const { field, input } of Object.values(fields)) {
+        const value = state.settings[field.key];
+        if (field.type === "multi") {
+          for (const check of input.querySelectorAll("input")) {
+            check.disabled = !isHost;
+            check.checked = (value || []).includes(check.value);
+          }
+          continue;
+        }
+        if (field.type !== "choice") {
+          input.min = bound(field, "min");
+          input.max = bound(field, "max");
+        }
         input.disabled = !isHost;
-        if (document.activeElement !== input) input.value = state.settings[field.key];
+        if (document.activeElement !== input) input.value = value;
       }
       const host = state.players.find((p) => p.id === state.hostId);
       note.textContent = !spec.length

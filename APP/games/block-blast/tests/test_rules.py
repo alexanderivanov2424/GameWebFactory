@@ -1,5 +1,6 @@
-"""Block Blast: rules tests on logic.Match directly (setup, placing, clearing, aiming, the bank,
-turns, leaving). Symbol effects are in test_effects.py, the lobby side in test_lobby.py.
+"""Block Blast: rules tests on logic.Match directly (setup, placing, clearing, aiming, turns,
+leaving). Symbol effects are in test_effects.py, the market in test_market.py, the lobby side
+in test_lobby.py.
 Run: python3 -I tools/run_tests.py block-blast
 """
 
@@ -12,11 +13,10 @@ from gamekit import LobbyError
 helpers = importlib.import_module("games.block-blast.tests.helpers")  # the id contains "-"
 new_match, give, cell, rows, fill = helpers.new_match, helpers.give, helpers.cell, helpers.rows, helpers.fill
 row_cells, col_cells = helpers.row_cells, helpers.col_cells
-bank_module = importlib.import_module("games.block-blast.logic.bank")
 
 
 class SetupTests(unittest.TestCase):
-    def test_starting_hands_and_bank(self):
+    def test_starting_hands_and_market(self):
         match = new_match(players=3)
         for place, pid in enumerate(match.order):
             seat = match.seats[pid]
@@ -24,9 +24,9 @@ class SetupTests(unittest.TestCase):
             self.assertEqual(len(seat.deck), 3)
             self.assertEqual(seat.health, 10)
             self.assertEqual(seat.gold, place + 1)  # 1 for the first player, 2, 3
-        self.assertEqual(len(match.bank.slots), 5)
-        self.assertTrue(all(match.bank.slots))
-        self.assertEqual(len(match.bank.deck), 49 - 5)
+        self.assertEqual(len(match.market.slots), 5)  # the default: a Conveyor Market of 5
+        self.assertTrue(all(match.market.slots))
+        self.assertEqual(len(match.market.deck), 49 - 5)
 
     def test_initial_targets_are_next_in_order(self):
         match = new_match(players=3)
@@ -156,68 +156,6 @@ class AimTests(unittest.TestCase):
             match.aim(c, a)
 
 
-class BankTests(unittest.TestCase):
-    def setUp(self):
-        self.match = new_match()
-        self.me, self.other = self.match.order
-
-    def test_prices_by_slot_and_empty_until_end_of_turn(self):
-        bank = self.match.bank
-        seat = self.match.seats[self.me]
-        seat.gold = 2
-        with self.assertRaisesRegex(LobbyError, "costs 3 gold"):
-            self.match.buy(self.me, 2)
-        third = bank.slots[2]
-        seat.gold = 5
-        self.match.buy(self.me, 2)  # 3 gold
-        self.assertEqual(seat.gold, 2)
-        self.assertIsNone(bank.slots[2])
-        self.assertEqual([c["card"] for c in seat.deck.discard_pile], [third["card"]])
-        rest = [bank.slots[0], bank.slots[1], bank.slots[3], bank.slots[4]]
-        left = len(bank.deck)
-        self.match.end_turn(self.me)
-        self.assertEqual(bank.slots[:4], rest)  # shifted towards slot 0
-        self.assertTrue(all(bank.slots))
-        self.assertEqual(len(bank.deck), left - 1)
-
-    def test_one_buy_per_turn(self):
-        seat = self.match.seats[self.me]
-        seat.gold = 15
-        self.match.buy(self.me, 0)
-        self.assertEqual(self.match.public()["buysLeft"], 0)
-        with self.assertRaisesRegex(LobbyError, "only buy 1 card a turn"):
-            self.match.buy(self.me, 1)
-        with self.assertRaisesRegex(LobbyError, "only buy 1"):
-            self.match.buy(self.me, 0)  # the limit is checked before the empty slot
-        self.assertEqual(seat.gold, 14)
-        self.match.end_turn(self.me)
-        self.assertEqual(self.match.public()["buysLeft"], 1)  # the next player's buy
-        self.match.seats[self.other].gold = 5
-        self.match.buy(self.other, 0)
-        self.match.end_turn(self.other)
-        self.match.buy(self.me, 0)  # a new turn, a new buy
-        self.assertEqual(seat.gold, 13)
-
-    def test_bonus_deck_runs_out(self):
-        bank = bank_module.Bank(["dagger"] * 7, random.Random(1))  # 5 dealt, 2 left
-        bank.take(0)
-        bank.take(1)
-        bank.refill()
-        self.assertEqual(sum(1 for s in bank.slots if s), 5)
-        bank.take(0)
-        bank.take(4)
-        bank.refill()
-        self.assertEqual(sum(1 for s in bank.slots if s), 3)
-        self.assertEqual(bank.slots[3:], [None, None])
-
-    def test_bought_cards_have_own_uids(self):
-        self.match.buy(self.me, 0)
-        uids = [c["uid"] for c in self.match.seats[self.me].hand]
-        uids += [c["uid"] for c in self.match.seats[self.me].deck.draw_pile]
-        uids += [c["uid"] for c in self.match.seats[self.me].deck.discard_pile]
-        self.assertEqual(len(uids), len(set(uids)))
-
-
 class TurnTests(unittest.TestCase):
     def test_end_turn_draws_to_three_and_reshuffles(self):
         match = new_match()
@@ -245,13 +183,13 @@ class TurnTests(unittest.TestCase):
         match.end_turn(me)
         self.assertEqual(match.seats[me].hand, hand)
 
-    def test_leaving_on_own_turn_passes_turn_and_refills_bank(self):
+    def test_leaving_on_own_turn_passes_turn_and_refills_market(self):
         match = new_match(players=3)
         a, b, c = match.order
         match.buy(a, 0)
         match.leave(a)
         self.assertEqual(match.turn(), b)
-        self.assertTrue(all(match.bank.slots))
+        self.assertTrue(all(match.market.slots))
         self.assertEqual(match.seats[c].target, b)
         self.assertIsNone(match.result)
         match.leave(c)

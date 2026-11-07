@@ -46,15 +46,12 @@ class RealFilesTests(unittest.TestCase):
     def test_all_cards_load(self):
         self.assertEqual(len(cards.CARDS), 35)
         self.assertEqual(sum(cards.STARTING_DECK.values()), 6)
-        self.assertEqual(sum(cards.BONUS_DECK.values()), 49)
         goblins = [c for c in cards.CARDS.values() if c["tile"] == "goblin"]
         self.assertEqual(len(goblins), 6)
         self.assertTrue(all(c["playOn"] == "opponent" and c["exile"] for c in goblins))
         for card in goblins:  # purple tiles with the decorative goblin face, which isn't counted
             self.assertEqual({(t, s) for _, _, t, s in card["pieces"][0]}, {("goblin", "goblin")})
             self.assertEqual(card["symbols"], {})
-        self.assertTrue(all(c["id"] in cards.BONUS_DECK for c in goblins))
-        self.assertFalse(set(cards.STARTING_DECK) & set(cards.BONUS_DECK))
 
     def test_rotations_fit_5x5_and_keep_tiles_and_symbols(self):
         for card in cards.CARDS.values():
@@ -105,21 +102,23 @@ class LoaderTests(unittest.TestCase):
 
     def test_bad_files_skipped(self):
         loaded = self.load({
-            "good": {"name": "Good", "tiles": ["##"], "symbols": [".C"]},
-            "mixed": {"name": "Mixed", "tiles": ["#g"], "symbols": ["CC"]},
-            "grey-ok": {"name": "Grey", "tile": "grey", "tiles": ["##"], "symbols": ["A."]},
-            "loose-ok": {"name": "Loose", "loose": True, "tiles": ["#.#"]},
-            "bad-split": {"name": "Bad", "tiles": ["#.#"]},
-            "bad-big": {"name": "Bad", "tiles": ["######"]},
-            "bad-tile-letter": {"name": "Bad", "tiles": ["Q"]},
-            "bad-symbol-letter": {"name": "Bad", "tiles": ["#"], "symbols": ["Z"]},
-            "bad-symbol-on-nothing": {"name": "Bad", "tiles": ["#."], "symbols": [".C"]},
-            "bad-symbol-size": {"name": "Bad", "tiles": ["##"], "symbols": ["C"]},
-            "bad-ragged": {"name": "Bad", "tiles": ["##", "#"]},
-            "bad-empty": {"name": "Bad", "tiles": ["."]},
-            "bad-name": {"tiles": ["#"]},
-            "bad-tile-type": {"name": "Bad", "tile": "lava", "tiles": ["#"]},
-            "bad-play-on": {"name": "Bad", "playOn": "everyone", "tiles": ["#"]},
+            "good": {"name": "Good", "cost": 1, "tiles": ["##"], "symbols": [".C"]},
+            "mixed": {"name": "Mixed", "cost": 1, "tiles": ["#g"], "symbols": ["CC"]},
+            "grey-ok": {"name": "Grey", "cost": 1, "tile": "grey", "tiles": ["##"], "symbols": ["A."]},
+            "loose-ok": {"name": "Loose", "cost": 1, "loose": True, "tiles": ["#.#"]},
+            "bad-split": {"name": "Bad", "cost": 1, "tiles": ["#.#"]},
+            "bad-big": {"name": "Bad", "cost": 1, "tiles": ["######"]},
+            "bad-tile-letter": {"name": "Bad", "cost": 1, "tiles": ["Q"]},
+            "bad-symbol-letter": {"name": "Bad", "cost": 1, "tiles": ["#"], "symbols": ["Z"]},
+            "bad-symbol-on-nothing": {"name": "Bad", "cost": 1, "tiles": ["#."], "symbols": [".C"]},
+            "bad-symbol-size": {"name": "Bad", "cost": 1, "tiles": ["##"], "symbols": ["C"]},
+            "bad-ragged": {"name": "Bad", "cost": 1, "tiles": ["##", "#"]},
+            "bad-empty": {"name": "Bad", "cost": 1, "tiles": ["."]},
+            "bad-name": {"cost": 1, "tiles": ["#"]},
+            "bad-no-cost": {"name": "Bad", "tiles": ["#"]},
+            "bad-cost": {"name": "Bad", "cost": 99, "tiles": ["#"]},
+            "bad-tile-type": {"name": "Bad", "cost": 1, "tile": "lava", "tiles": ["#"]},
+            "bad-play-on": {"name": "Bad", "cost": 1, "playOn": "everyone", "tiles": ["#"]},
         })
         self.assertEqual(sorted(loaded), ["good", "grey-ok", "loose-ok", "mixed"])
         self.assertEqual(loaded["mixed"]["pieces"][0], [(0, 0, "blue", "coin"), (0, 1, "grey", "coin")])

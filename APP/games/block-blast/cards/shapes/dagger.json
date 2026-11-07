@@ -1,5 +1,6 @@
 {
   "name": "Dagger",
+  "cost": 5,
   "tiles": [
     "#"
   ],

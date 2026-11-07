@@ -1,4 +1,5 @@
-"""Block Blast: loading the card files (cards/ next to server.py) when the game is imported.
+"""Block Blast: loading the card files (cards/shapes/ and the starting deck) when the game is imported.
+The market's card packs are in packs.py.
 
 A card places tiles (tiles.py), some carrying symbols (symbols.py). Fields are documented in
 cards/README.md. Bad files are logged (logger "block-blast") and skipped. Loaders take a
@@ -6,6 +7,7 @@ folder or file so tests can feed them temporary files.
 
     CARDS          {id: card}, card = {
                        "id", "name",
+                       "cost":    gold to buy it in the Cost Market (market/cost.py)
                        "tile":    the card's main tile type (what "#" means; colours the card)
                        "playOn":  "self" or "opponent" (whose board the card goes on)
                        "loose":   tiles need not touch
@@ -14,9 +16,9 @@ folder or file so tests can feed them temporary files.
                        "pieces":  4 pieces (board.py), turned clockwise 0-3 quarter turns (never
                                   mirrored), each [(dr, dc, tile, symbol), ...]
                        "sizes":   [(height, width)] of each rotation }
-    public(card)   what clients get: name, tile, playOn, exile, symbols, rotations (board.layers)
+    public(card)   what clients get: name, cost, tile, playOn, exile, symbols, rotations (board.layers)
     STARTING_DECK  {card id: copies}   cards/starting-deck.json
-    BONUS_DECK     {card id: copies}   cards/bonus-deck.json
+    parse_counts(data, cards, where)   {card id: copies} from JSON (packs.py uses it too)
     rotate(piece, height, width)       one clockwise quarter turn -> (piece, height, width)
     rotations(piece, height, width)    all 4 -> (pieces, sizes)
     deck_ids(counts)                   [card id, ...] with each id repeated `copies` times
@@ -25,7 +27,7 @@ folder or file so tests can feed them temporary files.
 import logging
 from pathlib import Path
 
-from gamekit.data import flag, load_json, load_json_dir, text
+from gamekit.data import flag, load_json, load_json_dir, text, whole
 
 from . import effects, symbols, tiles
 from .board import EMPTY, layers
@@ -37,6 +39,7 @@ MAX_SIZE = 5  # cards fit in 5x5
 CARD_TILE = "#"  # in a card's "tiles" rows: a tile of the card's own "tile" type
 PLAY_ON = ("self", "opponent")
 MAX_COPIES = 20
+MAX_COST = 30
 
 
 def rotate(piece, height, width):
@@ -128,6 +131,7 @@ def parse_card(card_id, data):
     return {
         "id": card_id,
         "name": text(data, "name", 30, required=True),
+        "cost": whole(data, "cost", 0, MAX_COST),
         "tile": tile,
         "playOn": play_on,
         "loose": loose,
@@ -141,6 +145,7 @@ def parse_card(card_id, data):
 def public(card):
     return {
         "name": card["name"],
+        "cost": card["cost"],
         "tile": card["tile"],
         "playOn": card["playOn"],
         "exile": card["exile"],
@@ -156,21 +161,23 @@ def load_cards(folder):
     return load_json_dir(folder, parse_card, log)
 
 
-def load_counts(path, cards):
-    def parse(data):
-        if not isinstance(data, dict):
-            raise ValueError("must be a JSON object of card id -> copies")
-        counts = {}
-        for card_id, copies in data.items():
-            if card_id not in cards:
-                log.error("%s: unknown card %r skipped", path, card_id)
-            elif type(copies) is not int or not 0 <= copies <= MAX_COPIES:
-                log.error("%s: copies of %r must be 0 to %d", path, card_id, MAX_COPIES)
-            elif copies:
-                counts[card_id] = copies
-        return counts
+def parse_counts(data, cards, where):
+    """{card id: copies} from JSON; unknown cards and bad counts are logged (as `where`) and skipped."""
+    if not isinstance(data, dict):
+        raise ValueError("must be a JSON object of card id -> copies")
+    counts = {}
+    for card_id, copies in data.items():
+        if card_id not in cards:
+            log.error("%s: unknown card %r skipped", where, card_id)
+        elif type(copies) is not int or not 0 <= copies <= MAX_COPIES:
+            log.error("%s: copies of %r must be 0 to %d", where, card_id, MAX_COPIES)
+        elif copies:
+            counts[card_id] = copies
+    return counts
 
-    return load_json(path, parse, log, default={})
+
+def load_counts(path, cards):
+    return load_json(path, lambda data: parse_counts(data, cards, path), log, default={})
 
 
 def deck_ids(counts):
@@ -179,4 +186,3 @@ def deck_ids(counts):
 
 CARDS = load_cards(CARDS_DIR / "shapes")
 STARTING_DECK = load_counts(CARDS_DIR / "starting-deck.json", CARDS)
-BONUS_DECK = load_counts(CARDS_DIR / "bonus-deck.json", CARDS)

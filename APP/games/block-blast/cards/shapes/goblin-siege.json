@@ -1,5 +1,6 @@
 {
   "name": "Goblin Siege",
+  "cost": 4,
   "tile": "goblin",
   "playOn": "opponent",
   "exile": true,

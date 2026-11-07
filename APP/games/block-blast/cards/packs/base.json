@@ -1,0 +1,24 @@
+{
+  "name": "Base cards",
+  "description": "Shapes with coins, attacks and shields.",
+  "cards": {
+    "coin-zig": 2,
+    "strike-zig": 2,
+    "slab": 2,
+    "great-tee": 2,
+    "lance": 2,
+    "pair": 2,
+    "dagger": 2,
+    "purse": 2,
+    "crossguard": 2,
+    "twin-blades": 2,
+    "coin-snake": 2,
+    "big-corner": 2,
+    "cup": 2,
+    "crate": 2,
+    "stairs": 2,
+    "great-cross": 2,
+    "buckler": 2,
+    "bulwark": 2
+  }
+}

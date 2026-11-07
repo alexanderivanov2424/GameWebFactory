@@ -1,5 +1,6 @@
 {
   "name": "Big Corner",
+  "cost": 6,
   "tiles": [
     "#..",
     "#..",
