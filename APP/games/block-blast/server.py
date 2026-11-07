@@ -10,7 +10,8 @@ Cards place tiles (up to 5x5) and symbols on them; tiles and symbols are separat
 Card files: cards/README.md. Boards and card rotations reach clients as two layers,
 {"tiles": [rows of tile codes], "symbols": [rows of symbol codes]} ("." = none), with the code
 tables in game.tileTypes and game.symbolTypes; game.rules holds the constants the client needs
-(boardSize, handSize, buysPerTurn, siegePerStrength, patch: the 1x1 patch tile as layers).
+(boardSize, handSize, buysPerTurn, siegePerStrength, patch: the 1x1 patch tile as layers). The
+help window's legend reads tileTypes[code].help and game.symbolHelp (symbol name -> text).
 
 Setup: turn order is random. Everyone's deck is the starting deck (Square: a 2x2 with a shield
 in one corner, Hook: an L with an attack in its corner, Tee: a T with a coin on its left arm,
@@ -70,7 +71,9 @@ market refills and the turn passes.
 
 Hidden: hands and the order of draw piles (state.private: your hand, and your draw pile's
 contents sorted). Everything else is public: boards, health, gold, shield, card removals, siege,
-strength, targets, hand/draw/discard sizes, the market, the log.
+strength, targets, hand/draw/discard sizes, each player's whole deck (seats[pid].deck: every card
+they own, hand and piles together, sorted by cost then name so it doesn't say where each one is),
+the market, the log.
 
 Player options:  none
 Settings:        {"health": 1-50 (10), "market": "conveyor" | "cost" ("conveyor"),

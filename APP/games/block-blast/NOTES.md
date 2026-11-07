@@ -53,7 +53,12 @@ Tests: `tests/` (`python3 -I tools/run_tests.py block-blast`).
   one-letter codes plus the code tables (`game.tileTypes`, `game.symbolTypes`); the client draws
   the tile as the cell background (`.tile-<name>`) and the symbol as a rounded square on top
   (`.sym-<name>`, icons in `SYMBOL_ICONS` in `client/draw.js`). A new tile type or symbol is a registry entry, a
-  style and (for new behaviour) code in `effects.py`; see `cards/README.md`.
+  style and (for new behaviour) code in `effects.py`; see `cards/README.md`. Each also has a
+  legend line for the client's help window (`?`): `TileType.help`, and `effects.HELP` for symbols
+  (sent as `tileTypes[code].help` and `game.symbolHelp`).
+- **Deck view**: `seats[pid].deck` is everything a player owns (hand + draw + discard, from
+  `Seat.card_ids()`), sorted by cost then name in `Match.deck_list` so it never reveals which card
+  is where; the client's Deck button on each seat panel shows it in a window, grouped as ×n.
 - **Cards played onto someone else's board**: `playOn: "opponent"` cards (goblins) go on an
   opponent's board (`place` with `board`; the message's `"player"`). `Match.resolve_clears(owner)`
   runs for the board's owner; lines holding a `spoils` tile are spoiled (no effect), but a symbol
@@ -106,6 +111,9 @@ Tests: `tests/` (`python3 -I tools/run_tests.py block-blast`).
 - `client/game.js` (the page): `renderGame()` -> `renderBoards` (`seatPanel`: name, ♥ health,
   💰 gold, 🛡 shield, ✝ removals, tags, aim button, board), `renderMarket` (Buy, plus Remove when `canRemove`), `renderLog`,
   `renderHand` (fixed bottom bar; a Delete button under each card while you have removals);
+  windows (native `<dialog>`s in index.html): `renderDeckWindow` (the 🂠 Deck button on each seat
+  panel; re-rendered while open) and `renderHelp` (the ? button, kept above the hand bar by a
+  ResizeObserver); the keyboard shortcuts are off while a window is open;
   selection state (`selection`, `hover`) with `checkSelection()` dropping it when the turn
   passes; `dropsOn(pid)`, `currentPiece()` (a patch is `rules.patch`), the hint text;
   `flashClear()` animates `lastClear` once (not on the first render after a reload).

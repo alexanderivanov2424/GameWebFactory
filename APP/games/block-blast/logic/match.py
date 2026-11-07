@@ -281,10 +281,17 @@ class Match:
                 "siegePerStrength": effects.SIEGE_PER_STRENGTH,
                 "patch": boards.layers({(dr, dc): (t, s) for dr, dc, t, s in PATCH}, 1, 1),
             },
-            "tileTypes": tiles.public_table(),  # code -> {"name", "spoils", "unspoilable"}
+            "tileTypes": tiles.public_table(),  # code -> {"name", "spoils", "unspoilable", "help"}
             "symbolTypes": symbols.public_table(),  # code -> name
+            "symbolHelp": dict(effects.HELP),  # name -> what it does (the client's legend)
             "cards": {cid: card_defs.public(c) for cid, c in self.cards.items()},
         }
+
+    def deck_list(self, seat):
+        """Every card the player owns, sorted by cost then name: public, but it doesn't tell which
+        are in the hand, the draw pile or the discard pile."""
+        card = self.cards
+        return sorted(seat.card_ids(), key=lambda cid: (card[cid]["cost"], card[cid]["name"], cid))
 
     def public(self):
         return {
@@ -295,7 +302,7 @@ class Match:
             "turnNumber": self.turn_number,
             "step": self.step,
             "buysLeft": max(0, BUYS_PER_TURN - self.buys),  # for the player whose turn it is
-            "seats": {pid: seat.public() for pid, seat in self.seats.items()},
+            "seats": {pid: {**seat.public(), "deck": self.deck_list(seat)} for pid, seat in self.seats.items()},
             "market": self.market.public(),  # {"type", "label", "canRemove", "slots", "deck"}
             "log": self.log[-LOG_SENT:],
             "lastClear": self.last_clear,

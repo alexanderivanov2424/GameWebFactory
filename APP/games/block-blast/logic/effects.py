@@ -17,7 +17,8 @@ still counts if another cleared line through its cell is unspoiled, or if its ow
 `unspoilable` (grey). Each cell counts once either way.
 
 Symbols: EFFECTS has one function per symbol name, called as effect(clear, n) with the number
-counted; they run in symbols.SYMBOLS order. An attack (a clear with attack symbols) does 1
+counted; they run in symbols.SYMBOLS order. HELP has one line per symbol name saying what it does,
+for the client's legend (keep it true when an effect changes). An attack (a clear with attack symbols) does 1
 damage per symbol plus the attacker's strength once, using the strength from before the clear.
 """
 
@@ -105,6 +106,15 @@ def decorative(clear, n):
 
 
 EFFECTS = {"coin": coin, "attack": attack, "shield": shield, "chapel": chapel, "siege": siege, "goblin": decorative}
+
+HELP = {
+    "coin": "+1 gold.",
+    "attack": "1 damage to the player you're aiming at. Your strength adds to the total once per clear.",
+    "shield": "+1 shield: absorbs 1 incoming damage, then it's used up. Shield drops by 1 at the start of your turn.",
+    "chapel": "+1 card removal: spend it any time to delete a card from your deck for good.",
+    "siege": f"Every {SIEGE_PER_STRENGTH} cleared give +1 strength (+1 damage to each of your attacks).",
+    "goblin": "Just the face on goblin tiles: the tile is what spoils lines.",
+}
 
 
 def apply_symbols(seat, counts):

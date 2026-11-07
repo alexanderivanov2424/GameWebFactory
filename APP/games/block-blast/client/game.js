@@ -7,7 +7,8 @@
  * Files: draw.js (BlockBlastDraw: tiles, symbols, cards from layers), board.js (BlockBlastBoard:
  * one board's cells, the hover ghost, the clear flash), this file (the page).
  * Sections: setup, selection + keyboard, auto end turn, render (lobby / game), boards (seat
- * panels, drop targets, hover ghost, clear animation), market and log, hand bar.
+ * panels, drop targets, hover ghost, clear animation), market and log, hand bar, windows (deck
+ * viewer, help legend, the ? button).
  */
 (() => {
   const { $, el } = AppDom;
@@ -81,6 +82,7 @@
   document.addEventListener("keydown", (event) => {
     const target = event.target;
     if (target.closest && target.closest("input, textarea, select, [contenteditable]")) return;
+    if (document.querySelector("dialog[open]")) return; // a window is open: Esc closes it natively
     if (!isMyTurn() || event.ctrlKey || event.metaKey || event.altKey) return;
     const key = event.key.toLowerCase();
     if (key === "r") rotate();
@@ -146,6 +148,7 @@
     const inLobby = state.phase === "lobby";
     $("lobby").hidden = !inLobby;
     $("game").hidden = inLobby;
+    $("help-open").hidden = inLobby;
     renderButtons();
     if (inLobby) {
       firstGameRender = true;
@@ -153,6 +156,7 @@
       hover = null;
       $("hand-bar").hidden = true;
       $("main").classList.remove("with-hand");
+      closeWindows();
       renderLobby();
     } else {
       if (seenGame !== state.gameNumber) {
@@ -194,6 +198,7 @@
     renderMarket();
     renderLog();
     renderHand();
+    renderDeckWindow();
     updateGhost();
     maybeAutoEnd();
   }
@@ -245,6 +250,7 @@
       ...tags,
       seat.out ? "" : el("span", {}, seat.target ? `aims at ${seat.target === state.you ? "you" : name(seat.target)}` : ""),
       el("span", { title: "Hand · draw pile · discard pile" }, `✋${seat.hand} · ▤${seat.draw} · ♻${seat.discard}`),
+      deckButton(pid),
     );
     // Players can drop cards on their own board, and playOn "opponent" cards on opponents' boards.
     const interactive = Boolean(me) && (you || !seat.out);
@@ -461,4 +467,74 @@
     $("cancel").disabled = !selection;
     $("end-turn").disabled = !myTurn;
   }
+
+  // --- Windows: deck viewer, help legend -----------------------------------------
+  // Native <dialog>s (index.html): Esc, the Close button or a click outside the window closes them.
+
+  let deckOwner = null; // pid whose deck the deck window shows (kept up to date while open)
+
+  for (const dialog of document.querySelectorAll("dialog.window")) {
+    dialog.addEventListener("click", (event) => {
+      if (event.target === dialog || event.target.closest("[data-close]")) dialog.close();
+    });
+  }
+  $("deck-window").addEventListener("close", () => { deckOwner = null; });
+
+  function closeWindows() {
+    for (const dialog of document.querySelectorAll("dialog[open]")) dialog.close();
+  }
+
+  function deckButton(pid) {
+    const button = el("button", { className: "small plain", textContent: "🂠 Deck",
+      title: "See every card in this deck (sorted by cost)" });
+    button.addEventListener("click", () => {
+      deckOwner = pid;
+      renderDeckWindow();
+      $("deck-window").showModal();
+    });
+    return button;
+  }
+
+  // seats[pid].deck is every card the player owns, already sorted by the server (cost, then name);
+  // copies of one card show once with ×n.
+  function renderDeckWindow() {
+    const g = game();
+    if (deckOwner === null || !g || !g.seats[deckOwner]) return;
+    const deck = g.seats[deckOwner].deck;
+    $("deck-title").textContent = deckOwner === state.you ? "Your deck" : `${name(deckOwner)}'s deck`;
+    $("deck-info").textContent = plural(deck.length, "card");
+    const groups = [];
+    for (const id of deck) {
+      const last = groups[groups.length - 1];
+      if (last && last.id === id) last.copies += 1;
+      else groups.push({ id, copies: 1 });
+    }
+    $("deck-cards").replaceChildren(...groups.map(({ id, copies }) =>
+      Draw.cardFace(g, id, 0, copies > 1 ? [el("div", { className: "copies" }, `×${copies}`)] : [])));
+    if (!deck.length) $("deck-cards").append(el("span", { className: "muted" }, "No cards."));
+  }
+
+  // The legend comes from the state: tileTypes[code].help and symbolHelp[name].
+  function renderHelp() {
+    const g = game();
+    if (!g) return;
+    const row = (swatch, label, text) => el("div", { className: "legend-row" },
+      swatch, el("span", { className: "legend-name" }, label), el("span", {}, text));
+    $("legend-tiles").replaceChildren(...Object.values(g.tileTypes).map((type) =>
+      row(el("span", { className: `legend-swatch t tile-${type.name}` }), type.name, type.help || "")));
+    $("legend-symbols").replaceChildren(...Object.values(g.symbolTypes).map((symbol) =>
+      row(el("span", { className: "legend-swatch" }, Draw.symbolEl(symbol)), symbol, (g.symbolHelp || {})[symbol] || "")));
+  }
+
+  $("help-open").addEventListener("click", () => {
+    renderHelp();
+    $("help-window").showModal();
+  });
+
+  // Keep the ? button just above the hand bar (its height changes with the hand and the window).
+  const placeHelpButton = () => {
+    const bar = $("hand-bar");
+    $("help-open").style.bottom = `${(bar.hidden ? 0 : bar.offsetHeight) + 16}px`;
+  };
+  new ResizeObserver(placeHelpButton).observe($("hand-bar"));
 })();

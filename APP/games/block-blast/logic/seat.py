@@ -2,6 +2,7 @@
 
     seat = Seat(board, health, gold, deck, hand)
     seat.hand_card(uid)     the hand instance with that uid (LobbyError if it isn't there)
+    seat.card_ids()         card ids of every card the player owns (hand, draw and discard piles)
     seat.public()           what everyone sees (hand and draw pile only as counts)
     seat.private()          what only the player sees: the hand, the draw pile's contents (sorted,
                             not its order)
@@ -40,6 +41,9 @@ class Seat:
         if card is None:
             raise LobbyError("That card isn't in your hand.")
         return card
+
+    def card_ids(self):
+        return [card["card"] for card in (*self.hand, *self.deck.draw_pile, *self.deck.discard_pile)]
 
     def public(self):
         return {
