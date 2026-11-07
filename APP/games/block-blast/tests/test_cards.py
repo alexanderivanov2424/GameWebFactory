@@ -25,8 +25,12 @@ def mirrored(piece, width):
 class RegistryTests(unittest.TestCase):
     def test_every_symbol_has_an_effect_and_unique_codes(self):
         self.assertEqual(set(effects.EFFECTS), set(symbols.SYMBOLS))
-        self.assertEqual(len(set(symbols.SYMBOLS.values())), len(symbols.SYMBOLS))
-        self.assertTrue(all(code.isupper() and len(code) == 1 for code in symbols.SYMBOLS.values()))
+        codes = [s.code for s in symbols.SYMBOLS.values()]
+        self.assertEqual(len(set(codes)), len(codes))
+        self.assertTrue(all(code.isupper() and len(code) == 1 for code in codes))
+        self.assertTrue(all(name == s.name for name, s in symbols.SYMBOLS.items()))
+        art_only = [name for name, effect in effects.EFFECTS.items() if effect is effects.decorative]
+        self.assertEqual(art_only, ["goblin"])
 
     def test_tile_codes(self):
         codes = [t.code for t in tiles.TILE_TYPES.values()]
@@ -72,7 +76,9 @@ class RealFilesTests(unittest.TestCase):
         self.assertEqual(cards.CARDS["bulwark"]["symbols"], {"shield": 2})
         self.assertEqual(cards.CARDS["pair"]["symbols"], {"coin": 1, "attack": 1})
         self.assertEqual(cards.CARDS["square"]["symbols"], {"shield": 1})  # the starter with a shield
-        self.assertEqual(cards.CARDS["bar-4"]["symbols"], {})
+        self.assertEqual(cards.CARDS["bar-4"]["symbols"], {"shield": 1})
+        self.assertEqual(cards.CARDS["bar-3"]["symbols"], {})
+        self.assertEqual(cards.CARDS["goblin-pair"]["symbols"], {})  # the goblin face is decorative
 
     def test_siege_cards(self):
         siege = [c for c in cards.CARDS.values() if "siege" in c["symbols"]]

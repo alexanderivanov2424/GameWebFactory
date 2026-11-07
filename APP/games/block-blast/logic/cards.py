@@ -10,7 +10,7 @@ folder or file so tests can feed them temporary files.
                        "playOn":  "self" or "opponent" (whose board the card goes on)
                        "loose":   tiles need not touch
                        "exile":   leaves its owner's deck for good once played (not when patched)
-                       "symbols": {symbol name: count} (decorative symbols left out)
+                       "symbols": {symbol name: count} (art-only symbols left out)
                        "pieces":  4 pieces (board.py), turned clockwise 0-3 quarter turns (never
                                   mirrored), each [(dr, dc, tile, symbol), ...]
                        "sizes":   [(height, width)] of each rotation }
@@ -18,6 +18,7 @@ folder or file so tests can feed them temporary files.
     STARTING_DECK  {card id: copies}   cards/starting-deck.json
     BONUS_DECK     {card id: copies}   cards/bonus-deck.json
     rotate(piece, height, width)       one clockwise quarter turn -> (piece, height, width)
+    rotations(piece, height, width)    all 4 -> (pieces, sizes)
     deck_ids(counts)                   [card id, ...] with each id repeated `copies` times
 """
 
@@ -26,7 +27,7 @@ from pathlib import Path
 
 from gamekit.data import flag, load_json, load_json_dir, text
 
-from . import symbols, tiles
+from . import effects, symbols, tiles
 from .board import EMPTY, layers
 
 log = logging.getLogger("block-blast")
@@ -66,20 +67,11 @@ def _grid(data, key, height=None, width=None):
     return rows
 
 
-def parse_card(card_id, data):
-    tile = data.get("tile", tiles.DEFAULT_TILE)
-    if tile not in tiles.TILE_TYPES:
-        raise ValueError(f"tile must be one of {sorted(tiles.TILE_TYPES)}")
-    play_on = data.get("playOn", "self")
-    if play_on not in PLAY_ON:
-        raise ValueError(f"playOn must be one of {PLAY_ON}")
-    tile_rows = _grid(data, "tiles")
-    height, width = len(tile_rows), len(tile_rows[0])
-    symbol_rows = _grid(data, "symbols", height, width) if "symbols" in data else [EMPTY * width] * height
+def _piece(tile_rows, symbol_rows, tile):
+    """The card's cells as a piece (board.py), from its two grids; `#` is `tile`."""
     piece = []
-    for r in range(height):
-        for c in range(width):
-            t, s = tile_rows[r][c], symbol_rows[r][c]
+    for r, (tile_row, symbol_row) in enumerate(zip(tile_rows, symbol_rows)):
+        for c, (t, s) in enumerate(zip(tile_row, symbol_row)):
             if t == EMPTY:
                 if s != EMPTY:
                     raise ValueError(f"symbol {s!r} at row {r + 1}, column {c + 1} has no tile under it")
@@ -92,21 +84,47 @@ def parse_card(card_id, data):
                 raise ValueError(f"tiles may only use {EMPTY!r}, {CARD_TILE!r} and {sorted(tiles.BY_CODE)}")
             if s != EMPTY and s not in symbols.BY_CODE:
                 raise ValueError(f"symbols may only use {EMPTY!r} and {sorted(symbols.BY_CODE)}")
-            piece.append((r, c, cell_tile, symbols.BY_CODE.get(s)))
+            piece.append((r, c, cell_tile, symbols.BY_CODE[s].name if s != EMPTY else None))
     if not piece:
         raise ValueError("needs at least one tile")
-    loose = flag(data, "loose")
-    if not loose and not connected(piece):
-        raise ValueError('tiles must all touch (one piece), or "loose": true')
+    return piece
+
+
+def rotations(piece, height, width):
+    """The 4 clockwise rotations (0-3 quarter turns) -> (pieces, sizes)."""
     pieces, sizes = [piece], [(height, width)]
     for _ in range(3):
         turned, h, w = rotate(pieces[-1], *sizes[-1])
         pieces.append(turned)
         sizes.append((h, w))
+    return pieces, sizes
+
+
+def symbol_counts(piece):
+    """{symbol name: count} in symbols.SYMBOLS order, leaving out art-only symbols (whose effect
+    is the no-op effects.decorative)."""
     counts = {}
-    for _, _, _, symbol in piece:
-        if symbol and symbol not in symbols.DECORATIVE:
-            counts[symbol] = counts.get(symbol, 0) + 1
+    for _, _, _, name in piece:
+        if name and effects.EFFECTS[name] is not effects.decorative:
+            counts[name] = counts.get(name, 0) + 1
+    return {name: counts[name] for name in symbols.SYMBOLS if name in counts}
+
+
+def parse_card(card_id, data):
+    tile = data.get("tile", tiles.DEFAULT_TILE)
+    if tile not in tiles.TILE_TYPES:
+        raise ValueError(f"tile must be one of {sorted(tiles.TILE_TYPES)}")
+    play_on = data.get("playOn", "self")
+    if play_on not in PLAY_ON:
+        raise ValueError(f"playOn must be one of {PLAY_ON}")
+    tile_rows = _grid(data, "tiles")
+    height, width = len(tile_rows), len(tile_rows[0])
+    symbol_rows = _grid(data, "symbols", height, width) if "symbols" in data else [EMPTY * width] * height
+    piece = _piece(tile_rows, symbol_rows, tile)
+    loose = flag(data, "loose")
+    if not loose and not connected(piece):
+        raise ValueError('tiles must all touch (one piece), or "loose": true')
+    pieces, sizes = rotations(piece, height, width)
     return {
         "id": card_id,
         "name": text(data, "name", 30, required=True),
@@ -114,7 +132,7 @@ def parse_card(card_id, data):
         "playOn": play_on,
         "loose": loose,
         "exile": flag(data, "exile"),
-        "symbols": {name: counts[name] for name in symbols.SYMBOLS if name in counts},
+        "symbols": symbol_counts(piece),
         "pieces": pieces,
         "sizes": sizes,
     }

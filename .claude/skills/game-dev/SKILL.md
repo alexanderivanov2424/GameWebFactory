@@ -88,6 +88,9 @@ Games at a glance (details in each `NOTES.md`):
    Cover the new rules, rejections, hidden-info leaks (check other players' and spectators'
    `state(i)`), game end (win, draw, last player destroyed by their own action) and a
    player leaving mid-game. Make them deterministic (set internals or seed `random`).
+   Split tests by topic (`test_rules.py`, `test_lobby.py`, ...); fixtures several files share go
+   in `tests/helpers.py` (not collected: only `test_*.py` are), imported with
+   `importlib.import_module("games.<id>.tests.helpers")` (see block-blast).
    Real-time games: `Sim` never ticks on its own, so drive them with `sim.tick(n)`,
    `sim.input(i, {...})` and `sim.ping(i, rtt)`.
    Shared code gets tests in `APP/gamekit/tests/` (a tiny Game class passed to `Sim(MyGame)`).

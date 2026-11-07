@@ -9,14 +9,15 @@ Cards place tiles (up to 5x5) and symbols on them; tiles and symbols are separat
   logic/symbols.py, effects in logic/effects.py.
 Card files: cards/README.md. Boards and card rotations reach clients as two layers,
 {"tiles": [rows of tile codes], "symbols": [rows of symbol codes]} ("." = none), with the code
-tables in game.tileTypes and game.symbolTypes.
+tables in game.tileTypes and game.symbolTypes; game.rules holds the constants the client needs
+(boardSize, handSize, buysPerTurn, siegePerStrength, patch: the 1x1 patch tile as layers).
 
 Setup: turn order is random. Everyone's deck is the starting deck (Square: a 2x2 with a shield
-in one corner, Hook: an L with an
-attack in its corner, Tee: a T with a coin on its left arm, and bars of 4, 3 and 2), shuffled;
-everyone draws 3. Starting gold follows turn order: 1 for the first player, 2 for the second,
-and so on. The bank shows 5 cards dealt from the shuffled bonus deck (2 copies of each
-bank card).
+in one corner, Hook: an L with an attack in its corner, Tee: a T with a coin on its left arm,
+a bar of 4 with a shield, and bars of 3 and 2), shuffled; everyone draws 3. Starting gold
+follows turn order: 1 for the first player, 2 for the second, and so on. The bank shows 5 cards
+dealt from the shuffled bonus deck (cards/bonus-deck.json: 2 copies of most cards, 1 of each
+goblin and siege card).
 
 On your turn, in any order (place and patch as often as you like):
 - Place: play a hand card, putting its shape on your board. Shapes may be rotated in quarter
@@ -58,8 +59,7 @@ bank refills and the turn passes.
 
 Hidden: hands and the order of draw piles (state.private: your hand, and your draw pile's
 contents sorted). Everything else is public: boards, health, gold, shield, card removals, siege,
-strength, targets, hand/draw/discard
-sizes, the bank, the log.
+strength, targets, hand/draw/discard sizes, the bank, the log.
 
 Player options:  none
 Settings:        {"health": 1-50 (10)}
@@ -75,19 +75,17 @@ Game messages:
                                                          any time while you're in
     {"action": "end_turn"}
 
-Code: this file connects the game to the lobby (settings, messages, phases). The rules live in
-logic/ (see logic/__init__.py for its modules).
+Code: this file connects the game to the lobby (settings, messages, phases) and type-checks
+message fields. The rules live in logic/ (see logic/__init__.py for its modules); Match decides
+whose turn it is and which actions are allowed off-turn.
 """
 
-from gamekit import Int, LobbyError, LobbyGame
+from gamekit import Int, LobbyGame
 from gamekit.validate import whole_number
 
 from .logic.bank import SLOTS
 from .logic.board import SIZE
 from .logic.match import Match
-
-
-ANY_TIME = ("aim", "remove")  # actions allowed on other players' turns too
 
 
 def position(data, key, label):
@@ -110,7 +108,7 @@ class Game(LobbyGame):
         "buy": "on_buy",
         "aim": "on_aim",
         "end_turn": "on_end_turn",
-        "remove": "on_remove",
+        "remove": "on_remove_card",
     }
 
     def __init__(self, room):
@@ -130,20 +128,17 @@ class Game(LobbyGame):
         return self.match.private(member.id) if member.playing else None
 
     async def on_game_message(self, member, data):
-        if data.get("action") not in ANY_TIME and self.match.turn() != member.id:
-            raise LobbyError("It's not your turn.")
-        await self.dispatch(member, data)
+        await self.dispatch(member, data)  # Match checks turns (some actions are allowed any time)
+        self.check_over()  # any action that knocks someone out can end the game
 
     def on_place(self, member, data):
         rotation = whole_number(data.get("rotation"), "Rotation", 0, 3, clamp=False)
         board = data.get("player")  # goblin cards: the opponent whose board it goes on
         self.match.place(member.id, card_uid(data), rotation, position(data, "row", "Row"), position(data, "col", "Column"),
                          board if isinstance(board, str) else None)
-        self.check_over()
 
     def on_patch(self, member, data):
         self.match.patch(member.id, card_uid(data), position(data, "row", "Row"), position(data, "col", "Column"))
-        self.check_over()
 
     def on_buy(self, member, data):
         self.match.buy(member.id, whole_number(data.get("slot"), "Slot", 0, SLOTS - 1, clamp=False))
@@ -151,14 +146,14 @@ class Game(LobbyGame):
     def on_aim(self, member, data):
         self.match.aim(member.id, data.get("player"))
 
-    def on_remove(self, member, data):
+    def on_remove_card(self, member, data):
         self.match.remove_card(member.id, card_uid(data))
 
     def on_end_turn(self, member, data):
         self.match.end_turn(member.id)
 
     def on_player_removed(self, member):
-        self.match.remove(member.id)
+        self.match.leave(member.id)
         self.check_over()
 
     def check_over(self):

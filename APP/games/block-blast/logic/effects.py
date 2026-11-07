@@ -1,16 +1,27 @@
-"""Block Blast: what happens when rows and columns clear: spoiling (by tile type) and symbol effects.
+"""Block Blast: what a clear does: which lines clear, spoiling (by tile type) and symbol effects.
 
-    resolve_clears(match, pid)   clears every full row and column on pid's board at once and
-                                 applies the symbols on the cleared cells to pid
+Pure rules on one board and seat; Match (match.py) runs them after each placement and writes
+the log, the clear animation and knock-outs.
+
+    cleared = clear_lines(board)     empties every full row and column at once; returns a Cleared
+                                     (rows, cols, removed cells, symbol counts, spoiled lines),
+                                     or None if no line is full
+    clear = apply_symbols(seat, cleared.counts)
+                                     runs EFFECTS on the seat (gold, shield, chapels, siege) and
+                                     returns a Clear: log phrases (`gains`) and the attack's damage
+    blocked = deal_damage(defender, damage)
+                                     the defender's shield absorbs first, the rest is health lost
 
 Spoiling: a cleared line holding a tile whose type `spoils` (goblin) has no effect. A symbol
 still counts if another cleared line through its cell is unspoiled, or if its own tile is
 `unspoilable` (grey). Each cell counts once either way.
 
 Symbols: EFFECTS has one function per symbol name, called as effect(clear, n) with the number
-counted. `clear` (a Clear) holds the seat, the log phrases (`gains`) and the attack total; the
-attack itself is dealt after every effect ran (deal_attack). Effects run in symbols.SYMBOLS order.
+counted; they run in symbols.SYMBOLS order. An attack (a clear with attack symbols) does 1
+damage per symbol plus the attacker's strength once, using the strength from before the clear.
 """
+
+from dataclasses import dataclass
 
 from . import board as boards
 from .symbols import SYMBOLS
@@ -23,68 +34,19 @@ def plural(count, word):
     return f"{count} {word}{'' if count == 1 else 's'}"
 
 
-class Clear:
-    def __init__(self, seat):
-        self.seat = seat
-        self.gains = []  # log phrases, e.g. "+2 gold"
-        self.attacks = 0
-        self.strength = seat["strength"]  # from before this clear: new strength counts next time
+@dataclass
+class Cleared:
+    rows: list  # indexes of the cleared rows
+    cols: list
+    removed: list  # [(r, c, (tile, symbol))], each cell once
+    counts: dict  # {symbol name: n} that take effect (not spoiled)
+    spoiled: int  # lines with no effect
 
 
-def coin(clear, n):
-    clear.seat["gold"] += n
-    clear.gains.append(f"+{n} gold")
-
-
-def attack(clear, n):
-    clear.attacks += n
-
-
-def shield(clear, n):
-    clear.seat["shield"] += n
-    clear.gains.append(f"+{n} shield")
-
-
-def chapel(clear, n):
-    clear.seat["chapels"] += n
-    clear.gains.append(f"+{plural(n, 'card removal')}")
-
-
-def siege(clear, n):
-    seat = clear.seat
-    gained, seat["siege"] = divmod(seat["siege"] + n, SIEGE_PER_STRENGTH)
-    seat["strength"] += gained
-    clear.gains.append(f"+{n} siege" + (f" → +{gained} strength" if gained else ""))
-
-
-def decorative(clear, n):
-    """Art only (the goblin face): the goblin tile under it is what spoils lines."""
-
-
-EFFECTS = {"coin": coin, "attack": attack, "shield": shield, "chapel": chapel, "siege": siege, "goblin": decorative}
-
-
-def deal_attack(match, clear):
-    """An attack = a clear with attack symbols: 1 damage each, plus the attacker's strength once.
-    The target's shield absorbs it first. Returns the target if it was hit."""
-    target = clear.seat["target"]
-    if not clear.attacks or target is None:
-        return None
-    damage = clear.attacks + clear.strength
-    defender = match.seats[target]
-    blocked = min(defender["shield"], damage)
-    defender["shield"] -= blocked
-    defender["health"] = max(0, defender["health"] - (damage - blocked))
-    clear.gains.append(f"{damage} damage to {match.names[target]}" + (f" ({blocked} blocked by their shield)" if blocked else ""))
-    return target
-
-
-def resolve_clears(match, pid):
-    seat = match.seats[pid]
-    grid = seat["board"]
+def clear_lines(grid):
     rows, cols = boards.full_lines(grid)
     if not rows and not cols:
-        return
+        return None
     spoils = lambda cell: TILE_TYPES[cell[0]].spoils  # noqa: E731
     spoiled_rows = [r for r in rows if any(spoils(grid[r][c]) for c in range(boards.SIZE))]
     spoiled_cols = [c for c in cols if any(spoils(grid[r][c]) for r in range(boards.SIZE))]
@@ -94,17 +56,67 @@ def resolve_clears(match, pid):
     for r, c, (tile, symbol) in removed:
         if symbol and ((r, c) in live or TILE_TYPES[tile].unspoilable):
             counts[symbol] = counts.get(symbol, 0) + 1
+    return Cleared(rows, cols, removed, counts, len(spoiled_rows) + len(spoiled_cols))
+
+
+class Clear:
+    """What the symbols of one clear did for the seat that cleared."""
+
+    def __init__(self, seat):
+        self.seat = seat
+        self.gains = []  # log phrases, e.g. "+2 gold"
+        self.attacks = 0
+        self.strength = seat.strength  # from before this clear: new strength counts next time
+
+    @property
+    def damage(self):
+        return self.attacks + self.strength if self.attacks else 0
+
+
+def coin(clear, n):
+    clear.seat.gold += n
+    clear.gains.append(f"+{n} gold")
+
+
+def attack(clear, n):
+    clear.attacks += n
+
+
+def shield(clear, n):
+    clear.seat.shield += n
+    clear.gains.append(f"+{n} shield")
+
+
+def chapel(clear, n):
+    clear.seat.chapels += n
+    clear.gains.append(f"+{plural(n, 'card removal')}")
+
+
+def siege(clear, n):
+    seat = clear.seat
+    gained, seat.siege = divmod(seat.siege + n, SIEGE_PER_STRENGTH)
+    seat.strength += gained
+    clear.gains.append(f"+{n} siege" + (f" → +{gained} strength" if gained else ""))
+
+
+def decorative(clear, n):
+    """Art only (the goblin face): the goblin tile under it is what spoils lines. Symbols with
+    this effect are also left out of card symbol counts (cards.symbol_counts)."""
+
+
+EFFECTS = {"coin": coin, "attack": attack, "shield": shield, "chapel": chapel, "siege": siege, "goblin": decorative}
+
+
+def apply_symbols(seat, counts):
     clear = Clear(seat)
     for name in SYMBOLS:
         if counts.get(name):
             EFFECTS[name](clear, counts[name])
-    target = deal_attack(match, clear)
-    lines = [plural(len(rows), "row")] * bool(rows) + [plural(len(cols), "column")] * bool(cols)
-    text = f"{match.names[pid]} cleared {' and '.join(lines)}" + (f": {', '.join(clear.gains)}." if clear.gains else ".")
-    spoiled = len(spoiled_rows) + len(spoiled_cols)
-    if spoiled:
-        text += f" Goblins spoiled {plural(spoiled, 'line')}."
-    match.add_log(pid, text)
-    match.last_clear = {"step": match.step, "pid": pid, "cells": [[r, c] for r, c, _ in removed]}
-    if target is not None and match.seats[target]["health"] == 0:
-        match.knock_out(target, f"{match.names[target]} is knocked out!")
+    return clear
+
+
+def deal_damage(defender, damage):
+    blocked = min(defender.shield, damage)
+    defender.shield -= blocked
+    defender.health = max(0, defender.health - (damage - blocked))
+    return blocked

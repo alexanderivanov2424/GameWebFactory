@@ -1,40 +1,19 @@
 /*
- * Block Blast client: renders the state from the server (rules in ../server.py) and sends
- * place / patch / buy / aim / end_turn. Holds no rules: card rotations come from game.cards
- * (as tile and symbol layers, like the boards),
- * and the hover ghost / "would clear" outline are only previews (the server decides).
+ * Block Blast client: the game page. Renders the state from the server (rules in ../server.py)
+ * and sends place / patch / buy / aim / remove / end_turn. Holds no rules: card rotations, the
+ * patch piece and the rule numbers come from the state (game.cards, game.rules), and the hover
+ * ghost / "would clear" outline are only previews (the server decides).
  *
+ * Files: draw.js (BlockBlastDraw: tiles, symbols, cards from layers), board.js (BlockBlastBoard:
+ * one board's cells, the hover ghost, the clear flash), this file (the page).
  * Sections: setup, selection + keyboard, auto end turn, render (lobby / game), boards (seat
- * panels, hover ghost), bank, log, hand bar, clear animation.
+ * panels, drop targets, hover ghost, clear animation), bank and log, hand bar.
  */
 (() => {
   const { $, el } = AppDom;
-  const EMPTY = ".";
-  // Tiles and symbols are separate layers: boards and card rotations arrive as
-  // {tiles: [rows of tile codes], symbols: [rows of symbol codes]} ("." = none); the code tables
-  // are game.tileTypes (code -> {name, ...}) and game.symbolTypes (code -> name).
-  // Icons per symbol name; colours are the .sym-<name> / .tile-<name> styles in index.html.
-  const SYMBOL_ICONS = { coin: "●", attack: "⚔", shield: "🛡", chapel: "✝", siege: "⚙", goblin: "👺" };
-  const PATCH_TILE = "blue"; // the 1x1 tile a patch places (DEFAULT_TILE in logic/tiles.py)
+  const Draw = BlockBlastDraw;
+  const Board = BlockBlastBoard;
   let state = null;
-
-  const tileName = (code) => (code === EMPTY ? null : (game().tileTypes[code] || {}).name || "unknown");
-  const symbolName = (code) => (code === EMPTY ? null : game().symbolTypes[code] || "unknown");
-  const tileCode = (name) => Object.keys(game().tileTypes).find((code) => game().tileTypes[code].name === name);
-
-  function symbolEl(name) {
-    return el("span", { className: `sym sym-${name}`, title: name }, SYMBOL_ICONS[name] || "?");
-  }
-
-  // One cell of a layered grid: the tile (a class on the element) with its symbol on top.
-  function tileEl(tag, className, layers, r, c) {
-    const tile = tileName(layers.tiles[r][c]);
-    const symbol = symbolName(layers.symbols[r][c]);
-    const classes = [className, tile && `t tile-${tile}`].filter(Boolean).join(" ");
-    const node = el(tag, { className: classes });
-    if (symbol) node.append(symbolEl(symbol));
-    return node;
-  }
 
   // --- Setup ---------------------------------------------------------------------
 
@@ -61,10 +40,11 @@
   let hover = null; // { pid, r, c } under the mouse on a board
 
   const game = () => state && state.game;
-  const isMyTurn = () => state && state.phase === "playing" && game().turn === state.you;
+  const isMyTurn = () => Boolean(state && state.phase === "playing" && game() && game().turn === state.you);
   const hand = () => (state && state.private && state.private.hand) || [];
   const handCard = (uid) => hand().find((card) => card.uid === uid);
   const name = (pid) => game().names[pid] || pid;
+  const plural = (n, word) => `${n} ${word}${n === 1 ? "" : "s"}`;
 
   function select(uid) {
     if (!isMyTurn() || !handCard(uid)) return;
@@ -106,10 +86,8 @@
     if (key === "r") rotate();
     else if (key === "p") togglePatch();
     else if (key === "escape") cancel();
-    else if (["1", "2", "3", "4", "5", "6"].includes(key)) {
-      const card = hand()[Number(key) - 1];
-      if (card) select(card.uid);
-    } else return;
+    else if (/^[1-9]$/.test(key) && hand()[Number(key) - 1]) select(hand()[Number(key) - 1].uid);
+    else return;
     event.preventDefault();
   });
 
@@ -121,9 +99,11 @@
     lobby.sendGame({ action: "end_turn" });
   });
 
-  // Auto end turn: a browser-only preference (sessionStorage, never sent). When it's on, the
-  // turn ends by itself once your hand is empty and you can't afford anything in the bank
-  // (after a short pause so the last move shows).
+  // --- Auto end turn -------------------------------------------------------------
+  // A browser-only preference (sessionStorage, never sent). When it's on, the turn ends by itself
+  // once your hand is empty and you can't afford anything in the bank (after a short pause so the
+  // last move shows).
+
   const AUTO_KEY = "block-blast:autoEnd";
   const AUTO_DELAY = 600; // ms
   let autoEndTurn = null; // turnNumber we already ended automatically
@@ -170,6 +150,7 @@
     if (inLobby) {
       firstGameRender = true;
       selection = null;
+      hover = null;
       $("hand-bar").hidden = true;
       $("main").classList.remove("with-hand");
       renderLobby();
@@ -266,7 +247,12 @@
       el("span", { title: "Hand · draw pile · discard pile" }, `✋${seat.hand} · ▤${seat.draw} · ♻${seat.discard}`),
     );
     // Players can drop cards on their own board, and playOn "opponent" cards on opponents' boards.
-    const { element, cells } = buildBoard(pid, seat.board, big, Boolean(me) && (you || !seat.out));
+    const interactive = Boolean(me) && (you || !seat.out);
+    const { element, cells } = Board.build(g, seat.board, {
+      big,
+      size: g.rules.boardSize,
+      handlers: interactive ? boardHandlers(pid) : null,
+    });
     boardCells[pid] = cells;
     boardEls[pid] = element;
     const classes = ["seat"];
@@ -275,40 +261,23 @@
     return el("div", { className: classes.join(" ") }, head, sub, element);
   }
 
-  function buildBoard(pid, layers, big, interactive) {
-    const cells = [];
-    const element = el("div", { className: `board ${big ? "big" : "small"}` });
-    layers.tiles.forEach((row, r) => {
-      [...row].forEach((_, c) => {
-        const cell = tileEl("div", "cell", layers, r, c);
-        if (interactive) {
-          cell.addEventListener("mouseenter", () => {
-            hover = { pid, r, c };
-            updateGhost();
-          });
-          cell.addEventListener("click", () => placeAt(pid, r, c));
-        }
-        cells.push(cell);
-        element.append(cell);
-      });
-    });
-    if (interactive) {
-      element.addEventListener("mouseleave", () => {
+  function boardHandlers(pid) {
+    return {
+      onHover(r, c) {
+        hover = { pid, r, c };
+        updateGhost();
+      },
+      onLeave() {
         hover = null;
         updateGhost();
-      });
-      element.addEventListener("contextmenu", (event) => {
-        if (!selection || !dropsOn(pid)) return;
-        event.preventDefault();
+      },
+      onClick: (r, c) => placeAt(pid, r, c),
+      onRotate() {
+        if (!selection || !dropsOn(pid)) return false;
         rotate();
-      });
-      element.addEventListener("wheel", (event) => {
-        if (!selection || !dropsOn(pid)) return;
-        event.preventDefault();
-        rotate();
-      }, { passive: false });
-    }
-    return { element, cells };
+        return true;
+      },
+    };
   }
 
   // Cards with playOn "opponent" (goblins) go on an opponent's board.
@@ -319,97 +288,56 @@
 
   // Whether the selected card goes on pid's board: on opponents still in, or on yours.
   function dropsOn(pid) {
-    if (!selection || !game().seats[pid]) return false;
+    if (!selection || !game() || !game().seats[pid]) return false;
     return playsOnOpponent() ? pid !== state.you && !game().seats[pid].out : pid === state.you;
   }
 
-  // The selected card's layers in its current rotation (a patch is one blank tile).
+  // The selected card's layers in its current rotation (a patch is the server's 1x1 piece).
   function currentPiece() {
     if (!selection) return null;
-    if (selection.patch) return { tiles: [tileCode(PATCH_TILE)], symbols: [EMPTY] };
+    if (selection.patch) return game().rules.patch;
     const card = handCard(selection.uid);
     return card ? game().cards[card.card].rotations[selection.rotation] : null;
   }
 
-  // Where the shape goes with the mouse on (r, c): the cell under the mouse is the shape's middle.
-  function placement(pid, r, c) {
-    const piece = currentPiece();
-    const size = game().rules.boardSize;
-    const row = r - Math.floor((piece.tiles.length - 1) / 2);
-    const col = c - Math.floor((piece.tiles[0].length - 1) / 2);
-    const occupied = game().seats[pid].board.tiles;
-    const tiles = [];
-    let fits = true;
-    piece.tiles.forEach((line, dr) => [...line].forEach((code, dc) => {
-      if (code === EMPTY) return;
-      const tr = row + dr;
-      const tc = col + dc;
-      const inside = tr >= 0 && tr < size && tc >= 0 && tc < size;
-      if (!inside || occupied[tr][tc] !== EMPTY) fits = false;
-      tiles.push({ r: tr, c: tc, tile: tileName(code), symbol: symbolName(piece.symbols[dr][dc]), inside });
-    }));
-    return { row, col, tiles, fits };
+  function placementOn(pid, r, c) {
+    const g = game();
+    return Board.placement(g, currentPiece(), g.seats[pid].board.tiles, g.rules.boardSize, r, c);
   }
 
-  // Hover preview: toggles classes on the existing cells (never rebuilds the boards).
+  // Hover preview and the hint under the hand: toggles classes on the existing cells.
   function updateGhost() {
     for (const [pid, cells] of Object.entries(boardCells)) {
-      for (const cell of cells) {
-        cell.classList.remove("ghost", "bad", "would-clear", "gsym", ...Object.keys(SYMBOL_ICONS).map((name) => `gsym-${name}`));
-        delete cell.dataset.ghost;
-      }
+      Board.clearPreview(cells);
       boardEls[pid].classList.toggle("drop", dropsOn(pid));
     }
     const hint = $("hand-hint");
-    if (!selection || !game() || !game().seats[state.you]) {
-      hint.textContent = isMyTurn() ? "Pick a card (click or 1–3), then click your board." : "";
+    if (!game()) {
+      hint.textContent = "";
       return;
     }
-    const card = handCard(selection.uid);
-    const toOpponent = playsOnOpponent();
-    const label = selection.patch ? `a 1×1 tile (discarding ${game().cards[card.card].name})` : game().cards[card.card].name;
+    const card = selection && handCard(selection.uid);
+    if (!card || !game().seats[state.you]) {
+      hint.textContent = isMyTurn() ? `Pick a card (click or 1–${game().rules.handSize}), then click your board.` : "";
+      return;
+    }
+    const cardName = game().cards[card.card].name;
+    const label = selection.patch ? `a 1×1 tile (discarding ${cardName})` : cardName;
     if (!hover || !dropsOn(hover.pid)) {
-      hint.textContent = toOpponent
+      hint.textContent = playsOnOpponent()
         ? `${label}: click an opponent's board to drop it there. R / right-click / wheel rotates.`
         : `Placing ${label}. R / right-click / wheel rotates.`;
       return;
     }
-    const size = game().rules.boardSize;
-    const cells = boardCells[hover.pid];
-    const { tiles, fits } = placement(hover.pid, hover.r, hover.c);
-    for (const tile of tiles) {
-      if (!tile.inside) continue;
-      const cell = cells[tile.r * size + tile.c];
-      cell.classList.add("ghost");
-      if (!fits) cell.classList.add("bad");
-      if (tile.symbol) {
-        cell.classList.add("gsym", `gsym-${tile.symbol}`);
-        cell.dataset.ghost = SYMBOL_ICONS[tile.symbol] || "?";
-      }
-    }
+    const place = placementOn(hover.pid, hover.r, hover.c);
+    Board.showGhost(boardCells[hover.pid], game().rules.boardSize, game().seats[hover.pid].board.tiles, place);
     const where = hover.pid === state.you ? "" : ` on ${name(hover.pid)}'s board`;
-    hint.textContent = fits ? `Click to place ${label}${where}.` : "It doesn't fit there.";
-    if (!fits) return;
-    // Outline the rows and columns this placement would complete.
-    const occupied = game().seats[hover.pid].board.tiles;
-    const filled = (r, c) => occupied[r][c] !== EMPTY || tiles.some((t) => t.r === r && t.c === c);
-    for (let i = 0; i < size; i++) {
-      let fullRow = true;
-      let fullCol = true;
-      for (let j = 0; j < size; j++) {
-        if (!filled(i, j)) fullRow = false;
-        if (!filled(j, i)) fullCol = false;
-      }
-      for (let j = 0; j < size; j++) {
-        if (fullRow) cells[i * size + j].classList.add("would-clear");
-        if (fullCol) cells[j * size + i].classList.add("would-clear");
-      }
-    }
+    hint.textContent = place.fits ? `Click to place ${label}${where}.` : "It doesn't fit there.";
   }
 
   function placeAt(pid, r, c) {
-    if (!selection || !isMyTurn() || !dropsOn(pid)) return;
-    const { row, col, fits } = placement(pid, r, c);
+    if (!selection || !isMyTurn() || !dropsOn(pid) || !currentPiece()) return;
+    const { row, col, fits } = placementOn(pid, r, c);
     if (!fits) {
       showError("It doesn't fit there.");
       return;
@@ -424,8 +352,7 @@
     lobby.sendGame(message);
   }
 
-  // --- Clear animation -----------------------------------------------------------
-
+  // Clear animation: flash lastClear's cells once (not on the first render after a reload).
   function flashClear() {
     const clear = game().lastClear;
     const step = clear ? clear.step : 0;
@@ -436,45 +363,16 @@
     if (!clear || step <= seenClear) return;
     seenClear = step;
     const cells = boardCells[clear.pid];
-    if (!cells) return;
-    const size = game().rules.boardSize;
-    for (const [r, c] of clear.cells) cells[r * size + c].classList.add("flash");
+    if (cells) Board.flash(cells, game().rules.boardSize, clear.cells);
   }
 
-  // --- Cards, bank and log -------------------------------------------------------
-
-  // A small drawing of a card's layers (one rotation).
-  function miniShape(layers) {
-    const grid = el("div", { className: "mini" });
-    grid.style.gridTemplateColumns = `repeat(${layers.tiles[0].length}, 16px)`;
-    layers.tiles.forEach((row, r) => [...row].forEach((_, c) => {
-      grid.append(tileEl("span", "", layers, r, c));
-    }));
-    return grid;
-  }
-
-  function symbolsText(card) {
-    const parts = Object.entries(card.symbols).map(([name, n]) => `${SYMBOL_ICONS[name] || name} ${n}`);
-    if (card.playOn === "opponent") parts.unshift("↗ opponent's board");
-    return parts.join("  ");
-  }
-
-  function cardFace(cardId, rotation = 0, extra = []) {
-    const card = game().cards[cardId];
-    return el("div", { className: `pcard card-${card.tile}` },
-      card.exile ? el("div", { className: "exile", title: "Leaves your deck for good once played" }, "🗑") : "",
-      el("div", { className: "cname" }, card.name),
-      miniShape(card.rotations[rotation]),
-      el("div", { className: "csyms" }, symbolsText(card)),
-      ...extra);
-  }
+  // --- Bank and log --------------------------------------------------------------
 
   function renderBank() {
     const g = game();
     const me = g.seats[state.you];
     const myTurn = isMyTurn();
-    const buys = g.rules.buysPerTurn;
-    $("bonus-deck").textContent = `${buys} buy${buys === 1 ? "" : "s"} per turn · bonus deck: ${g.bonusDeck}`;
+    $("bonus-deck").textContent = `${plural(g.rules.buysPerTurn, "buy")} per turn · bonus deck: ${g.bonusDeck}`;
     $("bank").replaceChildren(...g.bank.map((slot, i) => {
       if (!slot) {
         return el("div", { className: "bank-empty" }, g.bonusDeck ? "Bought: refills when the turn ends" : "Empty (the bonus deck is used up)");
@@ -484,10 +382,10 @@
       const used = g.buysLeft <= 0;
       buy.disabled = !myTurn || !me || used || me.gold < slot.price;
       buy.title = !myTurn ? "Only on your turn"
-        : used ? "You've already bought a card this turn"
+        : used ? `You've already bought ${plural(g.rules.buysPerTurn, "card")} this turn`
         : me && me.gold < slot.price ? "Not enough gold" : "Goes to your discard pile";
       buy.addEventListener("click", () => lobby.sendGame({ action: "buy", slot: i }));
-      return el("div", { className: "bank-slot" }, cardFace(slot.card), price, buy);
+      return el("div", { className: "bank-slot" }, Draw.cardFace(g, slot.card), price, buy);
     }));
   }
 
@@ -500,25 +398,24 @@
   // --- Hand bar ------------------------------------------------------------------
 
   function renderHand() {
-    const seatNow = game() && game().seats[state.you];
-    const show = Boolean(state.private && state.private.hand) && state.phase === "playing" && Boolean(seatNow) && !seatNow.out;
+    const g = game();
+    const seat = g && g.seats[state.you];
+    const show = Boolean(state.private && state.private.hand) && state.phase === "playing" && Boolean(seat) && !seat.out;
     $("hand-bar").hidden = !show;
     $("main").classList.toggle("with-hand", show);
     if (!show) return;
-    const g = game();
-    const seat = g.seats[state.you];
     const myTurn = isMyTurn();
     $("pile-counts").textContent = `Draw pile ${seat.draw} · discard ${seat.discard}`;
     $("pile-counts").title = state.private.drawPile.length
       ? `In your draw pile: ${state.private.drawPile.map((id) => g.cards[id].name).join(", ")}`
       : "Your draw pile is empty: the discard pile is shuffled in when you next draw.";
-    $("removals").textContent = seat.chapels ? `✝ ${seat.chapels} card removal${seat.chapels === 1 ? "" : "s"}` : "";
+    $("removals").textContent = seat.chapels ? `✝ ${plural(seat.chapels, "card removal")}` : "";
     $("hand").replaceChildren(...hand().map((card, i) => {
       const selected = selection && selection.uid === card.uid;
       const face = selected && selection.patch
-        ? el("div", { className: "pcard" }, el("div", { className: "cname" }, "Patch 1×1"), miniShape({ tiles: [tileCode(PATCH_TILE)], symbols: [EMPTY] }),
+        ? el("div", { className: "pcard" }, el("div", { className: "cname" }, "Patch 1×1"), Draw.miniShape(g, g.rules.patch),
             el("div", { className: "csyms" }, `discarding ${g.cards[card.card].name}`))
-        : cardFace(card.card, selected ? selection.rotation : 0);
+        : Draw.cardFace(g, card.card, selected ? selection.rotation : 0);
       face.append(el("div", { className: "key" }, myTurn ? `key ${i + 1}` : ""));
       if (selected) face.classList.add("selected");
       if (!myTurn) face.classList.add("disabled");
@@ -537,7 +434,7 @@
       }
       return slot;
     }));
-    if (!hand().length) $("hand").append(el("span", { className: "muted" }, "No cards left. End your turn to draw 3."));
+    if (!hand().length) $("hand").append(el("span", { className: "muted" }, `No cards left. End your turn to draw ${g.rules.handSize}.`));
     $("rotate").disabled = !selection || selection.patch;
     $("patch").disabled = !selection;
     $("patch").classList.toggle("on", Boolean(selection && selection.patch));

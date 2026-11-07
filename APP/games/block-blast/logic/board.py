@@ -66,7 +66,7 @@ def layers(cells, height, width):
         for c in range(width):
             cell = cells.get((r, c))
             tile_row.append(tiles.TILE_TYPES[cell[0]].code if cell else EMPTY)
-            symbol_row.append(symbols.SYMBOLS[cell[1]] if cell and cell[1] else EMPTY)
+            symbol_row.append(symbols.SYMBOLS[cell[1]].code if cell and cell[1] else EMPTY)
         tile_rows.append("".join(tile_row))
         symbol_rows.append("".join(symbol_row))
     return {"tiles": tile_rows, "symbols": symbol_rows}

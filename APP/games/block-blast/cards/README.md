@@ -43,8 +43,8 @@ cards. The client draws any card from the definitions in the game state, so a ne
 
 Adding a tile type: a `TileType` in `logic/tiles.py` (flags `spoils` / `unspoilable`, or a new
 flag read in `logic/effects.py`) and a `.tile-<name>` style in `client/index.html`.
-Adding a symbol: a code in `logic/symbols.py`, its function in `EFFECTS` (`logic/effects.py`),
-and an icon (`SYMBOL_ICONS` in `client/game.js`) plus a `.sym-<name>` style.
+Adding a symbol: a `Symbol` in `logic/symbols.py`, its function in `EFFECTS` (`logic/effects.py`),
+and an icon (`SYMBOL_ICONS` in `client/draw.js`) plus a `.sym-<name>` style.
 
 ## `starting-deck.json` and `bonus-deck.json`
 `{card id: copies}`: each player's starting deck, and the bonus deck the bank is dealt from.
