@@ -21,6 +21,11 @@ the pitfalls hit while building it; read the one closest to your game):
   (`self.schedule`), a private hand with a fixed bottom bar, cards as JSON files loaded with
   `gamekit.data` in its own `cards.py` module, interrupt stages, a resolve queue for effects
   that wait on decisions, branching paths, per-copy card state, animations for new items only.
+- `APP/games/smugglers/`: the first game built with `logic/` modules (read it for the layout):
+  a graph board loaded from swappable JSON maps and drawn as SVG (`AppDom.svg`), asymmetric
+  roles, deck-building with `gamekit.Deck`, an interrupt that hands the action to another
+  player mid-turn (`actor()` vs `turn()`), a two-message action, `PatchState`, and the server
+  sending reachable spots/targets so the client holds no rules.
 - `APP/games/arena/`: real-time (`RealtimeGame`): keyboard input as state, per-tick delta
   snapshots, canvas drawing with interpolation, showing ping. Start from it for continuous movement.
 
@@ -49,19 +54,25 @@ Map the request onto the shared lobby model before writing code:
 - **Pauses** (show a reveal for a few seconds, then move on): `self.schedule(seconds, fn)`.
   It sends the state after `fn` runs and is cancelled automatically by `finish()`, a new
   start or going back to the lobby. Re-check `self.stage` in `fn`.
+- **Decks of cards** (draw, discard, reshuffle; deck-building): `gamekit.Deck` keeps card
+  instances `{"uid", "card"}` in a draw and a discard pile; hands and tables are the game's.
 - **Content that will grow** (cards, units, levels): one JSON file per item in a folder inside
-  the game, loaded and validated at import with `gamekit.data.load_json_dir` (bad files are
-  logged and skipped), in its own module (e.g. `cards.py`); send the definitions in the game
-  state so the client renders any item without code changes.
+  the game (next to `server.py`, e.g. `cards/`), loaded and validated at import with
+  `gamekit.data.load_json_dir` (bad files are logged and skipped), in its own module
+  (`logic/cards.py`); send the definitions in the game state so the client renders any item
+  without code changes.
 - **Setup inside play:** for something like secret placement or drafting, use a `stage` field
   in the game state within the `playing` phase. Don't add lobby phases.
 - **Real-time vs turn-based:** continuous movement (things move without waiting for turns) →
-  subclass `RealtimeGame` (`APP/gamekit/realtime.py`) and start from `games/arena` rather than
-  the templates' turn logic. Turn-based game with a big state → `SYNC = PatchState`. Otherwise
+  subclass `RealtimeGame` (`APP/gamekit/realtime.py`): generate the folder with the script,
+  then follow `games/arena` instead of the template's turn logic (`TurnQueue`, the turn check
+  in `on_game_message`), with the simulation in `logic/` (e.g. `World.step(dt, inputs)` that
+  `tick(dt)` calls with `{pid: member.input}`). Turn-based game with a big state → `SYNC = PatchState`. Otherwise
   keep the default `FullState`. Games that send deltas (`PatchState`, `Snapshots`; see
   `APP/gamekit/sync.py`) must: key changing collections by id (dicts, not lists, since a changed
   list is resent whole), never put None inside dicts (null deletes the key), and round floats
-  with `quantize`.
+  with `quantize`. A growing log fits as a dict keyed by index plus a count
+  (see smugglers).
 - **Data kept between games** (stats, unlocks, progress): `self.load_data(member)` and
   `self.save_data(member, value)` (server only, one plain-JSON value per game per player). Works
   the same for guests (memory, until the tab closes) and logged-in players (disk). Save at
@@ -72,26 +83,63 @@ Map the request onto the shared lobby model before writing code:
   and list every assumption in the final message.
 
 ## 2. Create the files
-Copy the templates in this skill's `templates/` folder:
+Generate the folder with the script (don't copy the templates by hand):
 
-| Template | Destination |
-|---|---|
-| `game.json` | `APP/games/<id>/game.json` |
-| `server.py` | `APP/games/<id>/server.py` |
-| `index.html` | `APP/games/<id>/client/index.html` |
-| `game.js` | `APP/games/<id>/client/game.js` |
-| `tests/test_game.py` | `APP/games/<id>/tests/test_<id>.py` |
-| `NOTES.md` | `APP/games/<id>/NOTES.md` |
+```
+python3 -I tools/new_game.py <id> --name "Game Name" --description "One sentence for the home page."
+```
 
-- The folder name `<id>` must be lowercase letters, digits, `-` or `_`. It's also the id
+It copies this skill's `templates/` (which mirror a game folder) to `APP/games/<id>/`, fills in
+the id, name and description, and refuses to touch an existing folder. The result already
+passes `python3 -I tools/run_tests.py <id>` (a placeholder round-robin game), so you start
+from green and keep it green:
+
+```
+APP/games/<id>/
+  game.json            name + description on the home page
+  server.py            rules docstring + class Game(LobbyGame): the lobby side
+  logic/               the game's rules, organized however the game needs
+    __init__.py        docstring listing the modules in logic/
+    match.py           class Match: the state of one game and the rules that change it
+  client/index.html    page: shared script tags, lobby and game sections
+  client/game.js       AppLobby.connect + render functions
+  tests/test_<id>.py   rules tests (Match directly) + lobby tests (Sim); `-` becomes `_` in the name
+  NOTES.md             developer notes
+```
+
+- The `<id>` must be lowercase letters, digits, `-` or `_`. It's also the id
   passed to `AppLobby.connect("<id>", ...)` and to `Sim("<id>")`.
-- The game folder is a Python package (`games.<id>`): split a large server into modules and
-  import them relatively (`from .cards import CARDS`).
-- Replace every `TODO` in the copies.
+- Replace every `TODO` (`grep -rn TODO APP/games/<id>`), deleting the hooks and imports you don't need.
+- Changing a template: keep the `{{GAME_ID}}`, `{{GAME_NAME}}` and `{{DESCRIPTION}}`
+  placeholders, and run `python3 -I tools/run_tests.py tools` (it generates a game from the
+  templates and runs that game's tests).
 
-## 3. Server (`server.py`): `class Game(LobbyGame)`
+### Where server code goes: `server.py` vs `logic/`
+- `server.py` is the **lobby side**: the rules docstring (the spec and message list),
+  `SETTINGS`, `ACTIONS`, player options, `start_check`, timers (`self.schedule`), saved data,
+  `finish()`, and thin action methods that unpack and type-check a message, call the rules,
+  then react (`check_over()` finishes the game when `match.result` is set). Keep it short.
+- `logic/` is the **game itself**, a package `games.<id>.logic` with no lobby, network or
+  `Member` objects: players are public ids (`"p1"`). `Match` holds one game's state and
+  raises `LobbyError` for illegal moves; `public()` / `private(pid)` build what clients see.
+  Tests drive it directly, which makes rule tests short and fast.
+- **Avoid monolithic files.** One topic per module: `match.py` keeps the game's state and turn
+  flow and calls out to the rest (`board.py` geometry, `cards.py` content loaders, `effects.py`
+  one function per card/ability type, `scoring.py`, a module per stage of a multi-stage game...).
+  Split a module as soon as it mixes topics or passes ~400 lines; that includes `match.py`.
+  Plan the modules while pinning down the design, rather than splitting one big file later.
+  Import siblings relatively (`from .board import Board`; from server.py:
+  `from .logic.board import Board`), and list every module in `logic/__init__.py`'s docstring
+  and the `NOTES.md` map. Content files (JSON) stay in a folder next to `server.py`.
+- Never name a folder `server/` (it would shadow `server.py`) and don't import the site's
+  `server` package from either; games import only `gamekit`.
+- The existing example games predate `logic/` (their rules sit in `server.py`, plus
+  peruvian-silver's `cards.py`; its ~1200-line `server.py` is the monolith to avoid); learn
+  their patterns, not their file layout, and put new rules in `logic/`.
+
+## 3. Server (`server.py` + `logic/`): `class Game(LobbyGame)`
 Import from `gamekit` only (never from `server`). See the headers of `APP/gamekit/lobby.py`
-and `settings.py`.
+and `settings.py`. Hooks below are on `Game` in `server.py`; most delegate to `self.match`.
 - `SETTINGS = {"key": Int("Label", default=, low=, high=, suffix="%")}`: host settings,
   validated (non-integers rejected, out-of-range clamped) and drawn on the client by
   `settingsForm`. A bound may name an earlier setting (`high="boardSize"`). For other
@@ -102,18 +150,21 @@ and `settings.py`.
 - `default_options(member)` / `clean_options(member, options)`: per-player lobby choices.
   Enforce uniqueness here (see the color check in tictactoe).
 - `start_check()`: return a reason string if the game can't start yet.
-- `start_game()`: build the game state from `self.players` and `self.settings`. Snapshot
-  anything that must stay fixed during the game, such as names and colors. `self.game_number`
-  has just been increased (clients get `state.gameNumber`).
-- Validate everything in action methods (`gamekit.validate`: `whole_number`, `one_of`, `cell`;
-  `type(x) is int`, ranges) and raise `LobbyError` to reject. Call `self.finish({...})` when the game ends.
-- `on_player_removed(member)`: keep the game consistent, for example by fixing the turn. Finish
-  the game if it can't continue.
-- `game_state()`: JSON-safe public state. Refer to players by `member.id` (public id),
-  **never** `member.client_id`.
-- `private_state(member)`: per-member secrets. It's called for spectators too (return None for
-  them). It's sent as `state.private`.
-- `reset_game()`: clear the state when going back to the lobby. Also call it from `__init__`.
+- `start_game()`: create `self.match = Match(names, self.settings)` from `self.players`.
+  Snapshot anything that must stay fixed during the game, such as names and colors, into it.
+  `self.game_number` has just been increased (clients get `state.gameNumber`).
+- Validate everything: action methods check message shapes and types (`gamekit.validate`:
+  `whole_number`, `one_of`, `cell`; `type(x) is int`), `Match` checks the rules; either raises
+  `LobbyError` to reject. Call `self.finish({...})` when the game ends (the template's
+  `check_over()` does it when `match.result` is set).
+- `on_player_removed(member)`: keep the game consistent (`match.remove(pid)` fixes the turn).
+  Finish the game if it can't continue.
+- `game_state()` → `match.public()`: JSON-safe public state. Refer to players by `member.id`
+  (public id), **never** `member.client_id`.
+- `private_state(member)` → `match.private(pid)`: per-member secrets. It's called for
+  spectators too (return None for them). It's sent as `state.private`.
+- `reset_game()`: clear the state when going back to the lobby (`self.match = None`). Also
+  called from `__init__`.
 - Real-time games (`RealtimeGame`, header of `APP/gamekit/realtime.py`): `tick(dt)` runs
   `TICK_RATE` times a second while playing; `on_input(member, data)` stores the latest input
   in `member.input` (inputs are held state such as keys, so don't send them as ACTIONS);
@@ -128,8 +179,8 @@ Rules and pitfalls:
 - A player whose action can destroy their own piece may no longer be in the `TurnQueue`
   afterwards: check `pid in self.queue` before `advance`, and decide the winner from who's
   left (possibly nobody), not from who acted.
-- Rules the user called fixed are constants in `server.py`. Send them in the game state for
-  display rather than making them settings.
+- Rules the user called fixed are constants in `logic/` (top of the module that uses them).
+  Send them in the game state for display rather than making them settings.
 - Model for growth from the start: per-copy state (make items instances with a uid, not bare
   ids) and per-branch/per-player positions are cheap early and expensive to retrofit.
 
@@ -144,8 +195,9 @@ Rules and pitfalls:
   `--gwf-main-width`, ...; see its header).
 - Render everything from the `state` passed to `onState`: `state.game` is public, and
   `state.private` is yours only. Don't keep game logic on the client.
-- Helpers: `const { $, el, debounce, setInput, listNames } = AppDom;`. Build the DOM with
-  `el`/`textContent`; never put player-supplied text into `innerHTML`.
+- Helpers: `const { $, el, svg, debounce, setInput, listNames } = AppDom;`. Build the DOM with
+  `el`/`textContent` (`svg` for SVG elements, e.g. a graph board); never put player-supplied
+  text into `innerHTML`.
 - Use `AppLobbyUI` instead of hand-rolling: `lobbyButtons(lobby, {join, leave, ready, back})`
   and `settingsForm(element, lobby)` (both return a render function to call on every
   render), `renderPlayers` (with `afterName` for game-specific extras), `renderStart` (the
@@ -178,7 +230,7 @@ Rules and pitfalls:
 
 ## 5. Promote shared code (do this every time)
 Before finishing, look for anything the new game needed that another game would also need:
-- **Server:** generic game behavior goes in `APP/gamekit/` (a new module, or `lobby.py` for
+- **Server:** generic game behavior (a pattern two games' `logic/` would both need) goes in `APP/gamekit/` (a new module, or `lobby.py` for
   lobby/phase behavior; re-export public names in `gamekit/__init__.py`). `APP/server/` is the
   site platform (connections, rooms, chat): only change it for platform needs.
 - **Client:** generic game-page code goes in `APP/web/gamekit/` as a self-contained script
@@ -190,15 +242,18 @@ Before finishing, look for anything the new game needed that another game would 
   - Document the API in the module's header comment.
 
 ## 6. Update the docs (do this every time)
-- The game's `server.py` docstring (rules, settings, messages) and its `NOTES.md` (what it's
-  a good example of, map, pitfalls you hit).
+- The game's `server.py` docstring (rules, settings, messages), `logic/__init__.py`'s module
+  list, and its `NOTES.md` (what it's a good example of, map, pitfalls you hit).
 - `CLAUDE.md`: the layout tree, the lobby model and the hook list if they changed.
 - **This skill and its templates:** new shared APIs, and general lessons. Game-specific
-  details belong in that game's `NOTES.md`, not here.
+  details belong in that game's `NOTES.md`, not here. After changing a template, run
+  `python3 -I tools/run_tests.py tools` (it builds a game from them and runs its tests).
 
 ## 7. Test and hand off
 `python3 -I tools/run_tests.py <id>` until it passes, then the whole suite. See the `game-dev`
 skill, section 3, for what the tests should cover and how to check the client by reading.
+Test rules on `Match` directly (`RulesTests` in the template: set up a position, act, check)
+and the lobby side with `Sim` (turn checks, what each player and spectator receives, leaving).
 Real-time games are never ticked by `Sim` on its own: tests call `sim.tick(n)`,
 `sim.input(i, {...})` and `sim.ping(i, rtt)`.
 Then hand testing to the user:

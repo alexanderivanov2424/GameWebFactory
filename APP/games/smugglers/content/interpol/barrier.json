@@ -1,0 +1,11 @@
+{
+  "name": "Barrier",
+  "kind": "action",
+  "cost": 3,
+  "supply": 5,
+  "start": 1,
+  "effects": {
+    "piece": "barrier"
+  },
+  "text": "Gives you a barrier. Place or move a barrier onto an empty dot: ships can't enter or pass it."
+}

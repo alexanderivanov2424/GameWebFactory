@@ -1,0 +1,11 @@
+{
+  "name": "Checkpoint",
+  "kind": "action",
+  "cost": 4,
+  "supply": 4,
+  "start": 0,
+  "effects": {
+    "piece": "checkpoint"
+  },
+  "text": "Gives you a checkpoint. Place or move it onto any spot: loaded ships there or flying in stop and are inspected."
+}

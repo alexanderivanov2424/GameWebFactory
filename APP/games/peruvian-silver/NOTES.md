@@ -6,7 +6,9 @@ Tests: `tests/` (`python3 -I tools/run_tests.py peruvian-silver`).
 
 ## Read this game to learn
 The biggest game (server ~1300 lines, client ~1300), and the pattern book for anything with
-simultaneous secret choices:
+simultaneous secret choices. It predates `logic/`: copy its patterns, not its one big
+`server.py` (new games put rules in `logic/` modules; see the `new-game` skill). Sizeable new
+features here go in a new `logic/<topic>.py` rather than growing `server.py`:
 - **Stages inside `playing`**: `self.stage` is one of the constants near the top of
   `server.py` (choosing, reveal, charm, saved, fountain, fork, forked, robbery, auction,
   gem, marking, over). Each stage has a `SecretChoices` (or, for the auction, a turn

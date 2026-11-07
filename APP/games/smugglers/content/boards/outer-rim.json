@@ -1,0 +1,232 @@
+{
+  "name": "Outer Rim",
+  "width": 1020,
+  "height": 660,
+  "planets": {
+    "kessar": {
+      "name": "Kessar",
+      "color": "#e53935",
+      "x": 90,
+      "y": 90
+    },
+    "lumen": {
+      "name": "Lumen",
+      "color": "#fdd835",
+      "x": 320,
+      "y": 70
+    },
+    "vortan": {
+      "name": "Vortan",
+      "color": "#8e24aa",
+      "x": 560,
+      "y": 100
+    },
+    "orrin": {
+      "name": "Orrin",
+      "color": "#1e88e5",
+      "x": 800,
+      "y": 80
+    },
+    "pallas": {
+      "name": "Pallas",
+      "color": "#43a047",
+      "x": 930,
+      "y": 250
+    },
+    "thessa": {
+      "name": "Thessa",
+      "color": "#fb8c00",
+      "x": 110,
+      "y": 320
+    },
+    "merrow": {
+      "name": "Merrow",
+      "color": "#00bcd4",
+      "x": 360,
+      "y": 250
+    },
+    "caldus": {
+      "name": "Caldus",
+      "color": "#8d6e63",
+      "x": 610,
+      "y": 290
+    },
+    "ysolde": {
+      "name": "Ysolde",
+      "color": "#f48fb1",
+      "x": 830,
+      "y": 420
+    },
+    "drask": {
+      "name": "Drask",
+      "color": "#78909c",
+      "x": 80,
+      "y": 560
+    },
+    "nimbus": {
+      "name": "Nimbus",
+      "color": "#c0ca33",
+      "x": 300,
+      "y": 470
+    },
+    "halcyon": {
+      "name": "Halcyon",
+      "color": "#3949ab",
+      "x": 520,
+      "y": 540
+    },
+    "opaline": {
+      "name": "Opaline",
+      "color": "#eceff1",
+      "x": 720,
+      "y": 590
+    },
+    "ferro": {
+      "name": "Ferro",
+      "color": "#00897b",
+      "x": 940,
+      "y": 590
+    },
+    "tarsis": {
+      "name": "Tarsis",
+      "color": "#880e4f",
+      "x": 450,
+      "y": 400
+    }
+  },
+  "routes": {
+    "r1": {
+      "from": "kessar",
+      "to": "lumen",
+      "length": 3
+    },
+    "r2": {
+      "from": "lumen",
+      "to": "vortan",
+      "length": 3
+    },
+    "r3": {
+      "from": "vortan",
+      "to": "orrin",
+      "length": 3
+    },
+    "r4": {
+      "from": "orrin",
+      "to": "pallas",
+      "length": 3
+    },
+    "r5": {
+      "from": "kessar",
+      "to": "thessa",
+      "length": 3
+    },
+    "r6": {
+      "from": "lumen",
+      "to": "merrow",
+      "length": 3
+    },
+    "r7": {
+      "from": "vortan",
+      "to": "caldus",
+      "length": 3
+    },
+    "r8": {
+      "from": "merrow",
+      "to": "caldus",
+      "length": 4
+    },
+    "r9": {
+      "from": "thessa",
+      "to": "drask",
+      "length": 3
+    },
+    "r10": {
+      "from": "thessa",
+      "to": "nimbus",
+      "length": 4
+    },
+    "r11": {
+      "from": "merrow",
+      "to": "tarsis",
+      "length": 3
+    },
+    "r12": {
+      "from": "tarsis",
+      "to": "halcyon",
+      "length": 2
+    },
+    "r13": {
+      "from": "drask",
+      "to": "nimbus",
+      "length": 4
+    },
+    "r14": {
+      "from": "nimbus",
+      "to": "halcyon",
+      "length": 3
+    },
+    "r15": {
+      "from": "halcyon",
+      "to": "opaline",
+      "length": 3
+    },
+    "r16": {
+      "from": "opaline",
+      "to": "ferro",
+      "length": 3
+    },
+    "r17": {
+      "from": "ysolde",
+      "to": "ferro",
+      "length": 3
+    },
+    "r18": {
+      "from": "pallas",
+      "to": "ysolde",
+      "length": 3
+    },
+    "r19": {
+      "from": "caldus",
+      "to": "ysolde",
+      "length": 4
+    },
+    "r20": {
+      "from": "orrin",
+      "to": "caldus",
+      "length": 4
+    },
+    "r21": {
+      "from": "tarsis",
+      "to": "caldus",
+      "length": 3
+    },
+    "r22": {
+      "from": "opaline",
+      "to": "ysolde",
+      "length": 3
+    },
+    "r23": {
+      "from": "r10.2",
+      "to": "merrow",
+      "length": 3
+    },
+    "r24": {
+      "from": "r2.2",
+      "to": "r8.2",
+      "length": 3
+    },
+    "r25": {
+      "from": "kessar",
+      "to": "merrow",
+      "length": 5
+    }
+  },
+  "starts": [
+    "kessar",
+    "drask",
+    "ferro",
+    "orrin",
+    "pallas"
+  ],
+  "interpolHome": "tarsis"
+}

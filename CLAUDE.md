@@ -7,7 +7,12 @@ a Python standard-library WebSocket server plus plain HTML/JS pages behind nginx
 - **Changing, fixing or testing an existing game or shared code:** use the `game-dev` skill
   (`.claude/skills/game-dev/`). It maps where everything is documented so you don't need to
   read whole files.
-- **Adding a game:** use the `new-game` skill.
+- **Adding a game:** use the `new-game` skill; it generates the folder with `tools/new_game.py`.
+- **Organize game server code in modules, not one big file:** a game's rules go in its `logic/`
+  package, one topic per module (board, cards, effects, scoring...); `server.py` stays the thin
+  lobby side. Split a module when it mixes topics or passes ~400 lines. Older games predate
+  `logic/`; when adding a sizeable feature to one, put it in a new `logic/<topic>.py` instead
+  of growing `server.py`.
 - Every file starts with a header comment describing it; each game's `server.py` docstring
   is its rules spec and message list, and its `NOTES.md` holds developer notes (patterns,
   map, pitfalls). Read headers before bodies.
@@ -65,7 +70,7 @@ APP/
     tests/              Protocol, rooms/reconnects, accounts/sessions, turtle, game loading
   gamekit/              Shared game library, server side (Python package `gamekit`). Games import only this.
     __init__.py         Re-exports: LobbyGame, LobbyError, PLAYING/FINISHED/LOBBY, Int, TurnQueue, SecretChoices,
-                        RealtimeGame, FullState, PatchState, Snapshots, turtle
+                        Deck, RealtimeGame, FullState, PatchState, Snapshots, turtle
     lobby.py            LobbyGame: spectators/players, host, ready, phases, public + private state sync,
                         SETTINGS, ACTIONS dispatch, game_number, schedule() timers, SYNC,
                         saved player data (load_data / save_data / account_name)
@@ -75,6 +80,7 @@ APP/
     validate.py         LobbyError and validators for player input (whole_number, one_of, cell, clean_text)
     turns.py            TurnQueue: turn counters (cost 1 per action = round-robin)
     choices.py          SecretChoices: hidden simultaneous picks (required + optional choosers), revealed all at once
+    deck.py             Deck: shuffled draw pile + discard pile of card instances (uids), reshuffles when empty
     data.py             Loading JSON content files (cards, units...): bad files are logged and skipped
     sim.py              Sim: drives a game through the real lobby for tests (no network); also ticks and inputs
     tests/
@@ -87,7 +93,7 @@ APP/
                         Account tab (log in / create account / log out over /ws/account)
       chat.js           Site-wide chat component
     gamekit/            Shared game library, client side (served at /gamekit/)
-      dom.js            AppDom: $, el, debounce, setInput, listNames
+      dom.js            AppDom: $, el, svg, debounce, setInput, listNames
       room.js           AppRoom.connect(gameId, handlers): low-level game room connection
       lobby.js          AppLobby.connect(gameId, handlers): lobby client (use this for games)
       lobby-ui.js       AppLobbyUI: player list, start button/status, spectators, connection text, error banner,
@@ -95,14 +101,19 @@ APP/
       realtime.js       AppRealtime.attach(lobby): interpolated sampling, keyboard controls, ping (real-time games)
   games/<game-id>/      One folder per game: a Python package `games.<game-id>`
     game.json           {"name": ..., "description": ...} shown on the home page
-    server.py           class Game(LobbyGame): one instance per room. Docstring = rules spec + message list
-    *.py, data folders  Optional: more modules (`from . import cards`) and content files
+    server.py           class Game(LobbyGame): one instance per room, the lobby side (settings, messages,
+                        timers). Docstring = rules spec + message list
+    logic/              The game's rules (package games.<id>.logic): match.py's Match holds one game's state;
+                        more modules by topic as it grows (board.py, cards.py...). No lobby/Member code.
+                        Older games predate it and keep their rules in server.py (+ peruvian-silver's cards.py)
+    data folders        Optional content files (e.g. cards/*.json) next to server.py, loaded from logic/
     client/             Game page, served at /games/<game-id>/
     tests/              unittest files (test_*.py) using gamekit.sim.Sim; not deployed
     NOTES.md            Developer notes: what to learn from it, map, pitfalls; not deployed
 tools/
   run_tests.py          All checks (compile, import games, unit tests, JS syntax); deploy.sh runs it
   jscheck.py            Rough JS syntax check (no Node allowed)
+  new_game.py           Creates APP/games/<id>/ from the new-game skill's templates (agents use it)
   accounts.py           Account manager behind accounts.sh (list/find, select, show, delete)
   tests/                Tests for the tools (run_tests.py runs them too: `run_tests.py tools`)
 deploy.sh               Runs the checks, then deploys everything; safe to re-run (--skip-tests to force);
@@ -115,7 +126,8 @@ accounts.sh             Host account manager: find, select, show and delete acco
                         restarts app-server (it keeps accounts in memory); no backup is kept
 .claude/skills/
   game-dev/             Working on existing games and shared code: where things are, testing, pitfalls
-  new-game/             Adding a game: shared API rules, pitfalls, templates/
+  new-game/             Adding a game: shared API rules, pitfalls, templates/ (mirror a game folder; filled in
+                        by tools/new_game.py, whose tests build a game from them and run its tests)
 ```
 - nginx serves the static files on port 8080 and forwards `/ws/` to the Python server (systemd unit `app-server`, 127.0.0.1:8765).
 - Shared components (settings, chat) must keep working no matter how a page changes. Pages only include their `<script>` tags.
@@ -127,12 +139,15 @@ Use the `new-game` skill (`.claude/skills/new-game/`). Each time a game is added
 - **Promote shared code:** anything another game would also need goes into gamekit
   (`APP/gamekit/` for the server, `APP/web/gamekit/` for the client; site-wide page pieces in
   `APP/web/shared/`), with tests in `APP/gamekit/tests/`, and existing games are updated to use it.
-- **Keep the docs true:** the game's `server.py` docstring and `NOTES.md`, this file, and the
+- **Keep the docs true:** the game's `server.py` docstring, `logic/__init__.py` module list and `NOTES.md`, this file, and the
   skills and their templates (including anything learned along the way).
 
 Summary:
-1. Create `APP/games/<game-id>/` (lowercase letters, digits, `-`, `_`).
-2. Copy the templates: `game.json`, `server.py`, `client/index.html` + `client/game.js`, `tests/`, `NOTES.md`.
+1. Generate the folder: `python3 -I tools/new_game.py <game-id> --name "Name" --description "..."`
+   (id: lowercase letters, digits, `-`, `_`). It creates `game.json`, `server.py`, `logic/`,
+   `client/index.html` + `client/game.js`, `tests/` and `NOTES.md`, already passing the tests.
+2. Put the rules in `logic/` (`Match` in `logic/match.py`, more modules as needed; players are
+   public ids, no lobby code) and keep `server.py` as the thin lobby side.
 3. `server.py` defines `class Game(LobbyGame)` (from `gamekit`), declares `SETTINGS` (host settings)
    and `ACTIONS` (game messages), and overrides only the hooks it needs:
    `default_options`, `clean_options`, `start_check`, `start_game`, `on_game_message`
@@ -149,6 +164,9 @@ Summary:
    counters, secret mines, building walls), `games/peruvian-silver/` (simultaneous secret plays,
    timed reveals, cards defined as JSON files, game split into modules). Each has a `NOTES.md`.
    `games/arena/` is the real-time example (tick loop, inputs, delta snapshots, interpolation).
+   `games/smugglers/` is the first game built with `logic/` modules: a graph board from JSON
+   map files drawn as SVG, asymmetric roles, deck-building (`Deck`), an interrupt inside a
+   turn, and `PatchState`.
 
 ## Lobby model (shared by all games)
 - Every connected tab is a **member**: a **spectator** until it joins, then a **player**. Players join and leave explicitly, and only in the lobby phase.

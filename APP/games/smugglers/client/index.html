@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Smugglers</title>
+
+  <!-- Shared components: keep these, in this order. theme.js isn't deferred (no unstyled flash). -->
+  <script src="/shared/theme.js"></script>
+  <script src="/shared/home.js" defer></script>
+  <script src="/shared/settings.js" defer></script>
+  <script src="/shared/chat.js" defer></script>
+  <script src="/gamekit/dom.js" defer></script>
+  <script src="/gamekit/room.js" defer></script>
+  <script src="/gamekit/lobby.js" defer></script>
+  <script src="/gamekit/lobby-ui.js" defer></script>
+  <script src="board.js" defer></script>
+  <script src="game.js" defer></script>
+
+  <style>
+    :root { --gwf-main-width: 1480px; --space: #0b0f1e; --outline: #b9bdd0; }
+    main { padding-top: 16px; }  /* the title row sits beside the fixed GWF / settings buttons */
+    main.with-hand { padding-bottom: 190px; }
+    .top-bar { display: flex; align-items: center; gap: 16px; min-height: 40px; padding: 0 64px 0 104px; margin-bottom: 10px; }
+    .top-bar h1 { margin: 0; font-size: 1.5rem; }
+    .top-bar p { margin: 0; }
+
+    /* Layout */
+    .layout { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 16px; align-items: start; }
+    .side > .panel { margin-bottom: 12px; }
+    .status-bar { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; min-height: 38px; margin-bottom: 8px; }
+    .status-bar .hint { color: var(--gwf-muted); }
+    #prompt:empty { display: none; }
+    #prompt { border: 2px solid var(--gwf-accent); }
+    #prompt h3 { margin-bottom: 6px; }
+    #result { font-size: 1.05rem; border: 2px solid var(--gwf-green); }
+
+    /* Board */
+    .board { border-radius: var(--gwf-radius); overflow: hidden; background: var(--space); line-height: 0; }
+    .board-svg { width: 100%; height: auto; display: block; user-select: none; }
+    .board-svg .space { fill: var(--space); }
+    .board-svg .stars circle { fill: #c9d3ff; opacity: 0.55; }
+    .board-svg .edges line { stroke: #3a4670; stroke-width: 2.5; stroke-linecap: round; }
+    .board-svg .pip { fill: #8a96c2; }
+    .board-svg .hit { fill: transparent; }
+    .board-svg .globe { stroke: rgba(255, 255, 255, 0.35); stroke-width: 1.5; }
+    .board-svg .planet-name {
+      fill: #f1f4ff; font: 600 14px system-ui, sans-serif; text-anchor: middle;
+      paint-order: stroke; stroke: var(--space); stroke-width: 4px; pointer-events: none;
+    }
+    .board-svg .ring { fill: none; stroke: none; stroke-width: 3; }
+    .board-svg .node.reach, .board-svg .node.target { cursor: pointer; }
+    .board-svg .node.reach .ring { stroke: #69f0ae; }
+    .board-svg .node.reach.stop .ring { stroke: #ffd740; stroke-dasharray: 5 3; }
+    .board-svg .node.target .ring { stroke: #40c4ff; }
+    .board-svg .node.reach:hover .ring, .board-svg .node.target:hover .ring { stroke-width: 5; fill: rgba(255, 255, 255, 0.12); }
+    .board-svg .node.reach .pip, .board-svg .node.target .pip { fill: #fff; }
+    .board-svg .token rect { fill: #c8a26b; stroke: #5a3e1b; stroke-width: 1.5; }
+    .board-svg .token text { fill: #2b1a05; font: 700 10px system-ui, sans-serif; text-anchor: middle; }
+    .board-svg .ship { cursor: default; }
+    .board-svg .ship path { stroke: #0b0f1e; stroke-width: 1.5; }
+    .board-svg .ship.mine { cursor: pointer; }
+    .board-svg .ship.mine.acted path { opacity: 0.55; }
+    .board-svg .ship .select-ring { fill: transparent; stroke: none; }
+    .board-svg .ship.selected .select-ring { stroke: #fff; stroke-width: 2.5; }
+    .board-svg .ship .cargo-box { fill: #fff; stroke: #0b0f1e; stroke-width: 1; }
+    .board-svg .piece.barrier circle { fill: #3b0d0d; stroke: #ff5252; stroke-width: 2.5; }
+    .board-svg .piece.barrier path { stroke: #ff5252; stroke-width: 3; stroke-linecap: round; }
+    .board-svg .piece.checkpoint rect { fill: none; stroke: #ffd740; stroke-width: 3; stroke-dasharray: 6 3; }
+    .board-svg .piece.patrol path { fill: #2962ff; stroke: #fff; stroke-width: 1.5; }
+    .board-svg .piece.patrol text { fill: #fff; font: 700 10px system-ui, sans-serif; text-anchor: middle; pointer-events: none; }
+    .board-svg .piece.selected rect, .board-svg .piece.selected circle, .board-svg .piece.selected path { stroke: #fff; stroke-width: 4; }
+
+    /* Chips */
+    .planet-chip, .good-chip, .who { display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; }
+    .disc { width: 14px; height: 14px; border-radius: 50%; display: inline-block; flex: none;
+            box-shadow: inset -3px -3px 5px rgba(0, 0, 0, 0.35), inset 2px 2px 4px rgba(255, 255, 255, 0.4); }
+    .disc.big { width: 26px; height: 26px; }
+    .good-chip { padding: 1px 7px; border-radius: 999px; font-size: 0.8rem; color: #fff; text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6); }
+    .good-chip.illegal { outline: 2px solid #ff1744; }
+    .swatch { width: 10px; height: 10px; border-radius: 2px; display: inline-block; flex: none; }
+
+    /* Contract tiles (above the map) */
+    .contract-row { display: flex; gap: 10px; margin-bottom: 10px; flex-wrap: wrap; }
+    .contract-tile { width: 136px; height: 216px; border-radius: 8px; border: 2px solid var(--outline); background: var(--gwf-surface);
+                     display: flex; flex-direction: column; overflow: hidden; position: relative; font-size: 0.85rem; }
+    .contract-tile .half { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; padding: 6px; text-align: center; }
+    .contract-tile .route { background: var(--space); color: #f1f4ff; }
+    .contract-tile .stop { display: flex; flex-direction: column; align-items: center; gap: 2px; font-weight: 600; }
+    .contract-tile .arrow { line-height: 1; opacity: 0.7; }
+    .contract-tile .order { border-top: 1px solid var(--gwf-line); }
+    .contract-tile .num { position: absolute; top: 5px; right: 5px; background: #c8a26b; color: #2b1a05; font-weight: 700;
+                          border-radius: 4px; min-width: 22px; padding: 1px 4px; font-size: 0.8rem; }
+    .contract-tile.pickable { cursor: pointer; border-color: #69f0ae; box-shadow: 0 0 0 3px rgba(105, 240, 174, 0.45); }
+    .contract-tile.pickable:hover { transform: translateY(-3px); }
+    .contract-tile .pick { color: #00a152; font-weight: 700; }
+    .contract-tile.taken .route { opacity: 0.6; }
+    .contract-tile.deck { width: 90px; align-items: center; justify-content: center; border-style: dashed; color: var(--gwf-muted); }
+    .contract-tile.deck .big { font-size: 1.8rem; font-weight: 800; }
+
+    /* Scoreboard (side) */
+    .scores { width: 100%; border-collapse: collapse; }
+    .scores th { font-size: 0.8rem; color: var(--gwf-muted); font-weight: 600; }
+    .scores th, .scores td { text-align: right; padding: 4px 6px; }
+    .scores td:first-child { text-align: left; }
+    .scores td:not(:first-child) { font-variant-numeric: tabular-nums; font-weight: 700; width: 56px; }
+    .scores tr.current td { background: var(--gwf-soft); }
+    #round { text-align: right; margin: 8px 6px 0; }
+
+    /* Player boards (below the map) */
+    .player-boards { display: grid; grid-template-columns: repeat(auto-fill, minmax(400px, 1fr)); gap: 12px; margin-top: 12px; }
+    .pboard { border: 2px solid var(--outline); border-radius: 10px; padding: 6px 12px 12px; margin: 0; min-width: 0; }
+    .pboard.current { border-color: var(--gwf-accent); }
+    .pboard legend { display: inline-flex; align-items: center; gap: 6px; font-weight: 700; padding: 0 6px; }
+    .pboard.interpol { grid-column: 1 / -1; }
+    .pboard h3 { margin: 10px 0 6px; font-size: 0.95rem; }
+    .pboard .tiles { display: flex; gap: 10px; flex-wrap: wrap; align-items: flex-start; }
+    .ship-tile { width: 180px; border: 2px solid var(--outline); border-radius: 8px; padding: 8px; font-size: 0.85rem;
+                 display: flex; flex-direction: column; gap: 6px; }
+    .ship-tile .top { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
+    .ship-tile .slot { width: 26px; height: 26px; flex: none; border: 2px dashed var(--outline); border-radius: 4px; background: var(--gwf-surface);
+                       display: flex; align-items: center; justify-content: center; font-weight: 700; }
+    .ship-tile .slot.filled { border: 2px solid #5a3e1b; background: #c8a26b; color: #2b1a05; }
+    .ship-tile .stats { display: flex; flex-direction: column; gap: 3px; }
+    .ship-tile.can-act { cursor: pointer; border-color: #69f0ae; }
+    .ship-tile.can-act:hover { background: var(--gwf-soft); }
+    .ship-tile.selected { border-color: var(--gwf-accent); box-shadow: 0 0 0 3px var(--gwf-accent); }
+    .ship-tile.acted { opacity: 0.65; }
+    .ship-tile .declared { display: flex; align-items: center; justify-content: space-between; gap: 6px; padding: 4px 6px;
+                           border-radius: 5px; background: var(--gwf-soft); font-size: 0.8rem; font-weight: 600; }
+    .stack { display: flex; flex-direction: column; }
+    .stack.empty { padding: 4px 0; }
+    .scard { display: flex; justify-content: space-between; align-items: center; height: 26px; padding: 0 8px; border-radius: 5px;
+             color: #fff; text-shadow: 0 1px 2px rgba(0, 0, 0, 0.7); font-size: 0.8rem; border: 2px solid rgba(0, 0, 0, 0.25);
+             box-shadow: 0 2px 3px rgba(0, 0, 0, 0.25); }
+    .scard + .scard { margin-top: -5px; }
+    .scard.illegal { border-color: #ff1744; }
+    .scard.back { justify-content: center; background: repeating-linear-gradient(45deg, #1c2541, #1c2541 6px, #26315a 6px, #26315a 12px); }
+
+    /* Log */
+    .log { max-height: 340px; overflow-y: auto; font-size: 0.85rem; }
+    .log-entry { padding: 4px 0 4px 8px; border-left: 3px solid var(--gwf-line); margin-bottom: 4px; }
+    .log-entry .cards { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 3px; }
+
+    /* Cards (goods in hand, Interpol cards, market) */
+    .cards-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: stretch; }
+    .gcard { width: 112px; min-height: 96px; border-radius: 8px; padding: 8px; color: #fff; display: flex; flex-direction: column;
+             gap: 4px; box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25); text-shadow: 0 1px 2px rgba(0, 0, 0, 0.7); font-size: 0.8rem;
+             border: 3px solid transparent; position: relative; }
+    .gcard .title { font-weight: 700; font-size: 0.9rem; }
+    .gcard .value { font-size: 1.4rem; font-weight: 800; margin-top: auto; }
+    .gcard.illegal { border-color: #ff1744; }
+    .gcard.illegal::after { content: "ILLEGAL"; position: absolute; top: 6px; right: -2px; transform: rotate(18deg);
+                            font-size: 0.6rem; font-weight: 800; background: #ff1744; padding: 1px 4px; border-radius: 3px; }
+    .gcard.pickable { cursor: pointer; }
+    .gcard.mark-load { border-color: #69f0ae; transform: translateY(-8px); }
+    .gcard.mark-discard { opacity: 0.4; border-color: #555; }
+    .gcard .mark { font-weight: 800; font-size: 0.75rem; }
+    .icard { width: 150px; min-height: 130px; border-radius: 8px; padding: 8px; background: #1c2541; color: #e8ecff;
+             display: flex; flex-direction: column; gap: 4px; font-size: 0.8rem; border: 2px solid #3a4670; text-align: left; }
+    .icard.funding { background: #3d3315; border-color: #a68a2c; }
+    .icard .title { font-weight: 700; font-size: 0.9rem; display: flex; justify-content: space-between; gap: 4px; }
+    .icard .cost { background: #ffd740; color: #222; border-radius: 999px; padding: 0 7px; font-weight: 800; }
+    .icard .foot { margin-top: auto; display: flex; gap: 6px; align-items: center; justify-content: space-between; }
+    button.icard { cursor: pointer; font: inherit; }
+    button.icard:hover:not(:disabled) { background: #2a3766; }
+    button.icard.funding:hover:not(:disabled) { background: #54461b; }
+    button.icard.chosen { outline: 3px solid #40c4ff; }
+    .market { display: flex; flex-wrap: wrap; gap: 8px; }
+    .market .icard { width: 170px; }
+
+    /* Hand bar */
+    #hand-bar { position: fixed; left: 0; right: 0; bottom: 0; background: #11162b; color: #e8ecff;
+                padding: 10px 110px 12px 16px; box-shadow: 0 -4px 14px rgba(0, 0, 0, 0.3); z-index: 5; }
+    #hand-bar .label { font-size: 0.85rem; margin-bottom: 6px; display: flex; gap: 14px; flex-wrap: wrap; }
+    #hand-bar .label b { color: #ffd740; }
+
+    .rules-text { line-height: 1.45; }
+    .rules-text li { margin-bottom: 4px; }
+  </style>
+</head>
+<body>
+  <main>
+    <div class="top-bar">
+      <h1>Smugglers</h1>
+      <p id="connection" class="muted small">Connecting…</p>
+    </div>
+    <div id="error" hidden></div>
+
+    <section id="lobby" hidden>
+      <div class="card">
+        <div class="row" style="margin-bottom: 8px">
+          <h2 style="margin: 0">Players</h2>
+          <span class="spacer"></span>
+          <button id="join" class="green" hidden>Join game</button>
+          <button id="ready" class="green" hidden>Ready</button>
+          <button id="leave" class="red" hidden>Leave game</button>
+        </div>
+        <ul id="players"></ul>
+        <div id="start"></div>
+        <p id="spectators" class="muted"></p>
+      </div>
+      <div class="card">
+        <h2>Game settings</h2>
+        <div id="settings"></div>
+      </div>
+      <div class="card rules-text">
+        <h2>How to play</h2>
+        <p>One player, picked at random, is <b>Interpol</b>. Everyone else is a <b>smuggler</b> with two ships.</p>
+        <ul>
+          <li><b>Smugglers:</b> each ship gets one action per turn: <b>move</b> up to its speed (ships can stop on the dots
+            along a route), or <b>pick up</b> cargo at a planet with a crate token: draw 5 goods, load any of your
+            hand onto the ship face down, declare which legal good it carries, and discard down to 5.</li>
+          <li>Fly the ship to the contract's destination and <b>deliver</b> (free): your largest set of one legal good pays
+            its value per card, +the contract's bonus if it's the good the contract asks for, and every illegal good pays
+            its own big value.</li>
+          <li><b>Interpol</b> plays a small deck-building game: play cards (1 action per turn; Funding is free), buy one new
+            card with the budget, draw 3. Barrier, Checkpoint and Patrol cards each give a piece on the board:
+            barriers block routes; a loaded ship on the same spot as a checkpoint or patrol is stopped and inspected,
+            so patrols chase ships down.</li>
+          <li>An <b>inspection</b> lets the smuggler offer a bribe first; then Interpol takes it, or searches the ship: anything
+            that isn't the declared good is seized, with a fine.</li>
+          <li>When every contract is delivered, the richest smuggler wins, unless Interpol's score (seized goods, fines and
+            bribes) is higher.</li>
+        </ul>
+      </div>
+    </section>
+
+    <section id="game" hidden>
+      <div id="result" class="panel" hidden></div>
+      <div id="status" class="status-bar"></div>
+      <div id="prompt" class="panel"></div>
+      <div class="layout">
+        <div class="left">
+          <div id="contracts" class="contract-row"></div>
+          <div id="board" class="board"></div>
+          <div id="player-boards" class="player-boards"></div>
+        </div>
+        <div class="side">
+          <div class="panel"><h2>Players</h2><div id="people"></div><p id="round" class="small muted"></p></div>
+          <div class="panel"><h2>Log</h2><div id="log" class="log"></div></div>
+        </div>
+      </div>
+      <button id="back" hidden>Back to lobby</button>
+    </section>
+  </main>
+  <div id="hand-bar" hidden></div>
+</body>
+</html>

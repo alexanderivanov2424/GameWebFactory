@@ -1,17 +1,20 @@
-"""TODO Game name: one-paragraph description of the rules.
+"""{{GAME_NAME}}: TODO one-paragraph description of the rules.
 
 Player options:  TODO e.g. {"color": "#rrggbb"}   (or none)
 Settings:        TODO e.g. {"rounds": 3}           (see SETTINGS; or none)
 Game messages:   TODO e.g. {"action": "move", ...}
+
+Code: this file connects the game to the lobby (settings, player options, messages, phases,
+timers). The rules themselves live in logic/ (see logic/__init__.py for its modules).
 """
 
-import random
-
-from gamekit import PLAYING, Int, LobbyError, LobbyGame, TurnQueue  # noqa: F401
+from gamekit import Int, LobbyError, LobbyGame  # noqa: F401  (remove unused)
 from gamekit.validate import cell, one_of, whole_number  # noqa: F401  (remove unused)
+
+from .logic.match import Match
 # Also available: `from gamekit import SecretChoices` (everyone picks in secret, reveal together),
 # self.schedule(seconds, fn) (timed pauses; see gamekit/lobby.py), gamekit.data (JSON content
-# files such as cards), and modules of your own next to this file (`from . import rules`).
+# files such as cards; put the loader in logic/) and `from gamekit import Deck` (draw/discard piles).
 
 
 class Game(LobbyGame):
@@ -42,49 +45,42 @@ class Game(LobbyGame):
     def start_check(self):
         return None  # TODO return a reason string if the game can't start
 
-    # --- Game ------------------------------------------------------------------
+    # --- Game: glue between the lobby and logic.Match --------------------------------
 
     def reset_game(self):
-        self.names = {}  # public id -> name, fixed at the start
-        self.queue = TurnQueue()
-        # TODO other game state
+        self.match = None
 
     def start_game(self):
         # self.players: players in join order. Refer to them by p.id (public id).
         # self.game_number was just increased (clients get it as state.gameNumber).
-        self.names = {p.id: p.name for p in self.players}
-        order = list(self.names)
-        random.shuffle(order)
-        self.queue = TurnQueue(order)  # cost 1 per action = round-robin
-        # TODO build the game state from self.settings
+        self.match = Match({p.id: p.name for p in self.players}, self.settings)
 
     def game_state(self):
-        """Public: everyone (players and spectators) sees this."""
-        return {
-            "names": self.names,
-            "turnOrder": self.queue.order(),
-            "turn": self.queue.current() if self.phase == PLAYING else None,
-            # TODO public game state (JSON-safe; public ids only)
-        }
+        """Public: everyone (players and spectators) sees this. Only called while playing/finished."""
+        return self.match.public()
 
     def private_state(self, member):
-        """Only `member` sees this (hidden hands, secret positions...). Delete if unused."""
-        return None
+        """Only `member` sees this (hidden hands, secret positions...). Called for spectators too."""
+        return self.match.private(member.id) if member.playing else None
 
     async def on_game_message(self, member, data):
         # Checks shared by every action; then ACTIONS picks the method.
-        if self.queue.current() != member.id:
+        if self.match.turn() != member.id:
             raise LobbyError("It's not your turn.")
         await self.dispatch(member, data)
 
+    # Action methods: unpack and type-check the message, let Match apply the rules, then
+    # finish the game if Match says it's over.
+
     def move(self, member, data):
-        # TODO validate (type(x) is int, ranges; see gamekit.validate), then apply.
-        # When the game ends: self.finish({"winner": member.id, "reason": None})
-        self.queue.advance(member.id)  # pass a cost for counter-based turns
+        # TODO unpack data (gamekit.validate: whole_number, one_of, cell) and pass it on.
+        self.match.move(member.id)
+        self.check_over()
 
     def on_player_removed(self, member):
-        if member.id not in self.queue:
-            return
-        self.queue.remove(member.id)
-        if len(self.queue) == 1:
-            self.finish({"winner": self.queue.current(), "reason": "Everyone else left."})
+        self.match.remove(member.id)
+        self.check_over()
+
+    def check_over(self):
+        if self.match.result is not None:
+            self.finish(self.match.result)

@@ -1,0 +1,11 @@
+{
+  "name": "Funding",
+  "kind": "funding",
+  "cost": 2,
+  "supply": 20,
+  "start": 3,
+  "effects": {
+    "budget": 2
+  },
+  "text": "+2 budget."
+}

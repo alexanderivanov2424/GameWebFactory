@@ -3,7 +3,7 @@
     python3 -I tools/run_tests.py            # everything
     python3 -I tools/run_tests.py tanks      # one game's tests (plus compile + JS checks)
     python3 -I tools/run_tests.py gamekit    # the shared library's tests
-    python3 -I tools/run_tests.py tools      # the host tools' tests (accounts.sh)
+    python3 -I tools/run_tests.py tools      # the tools' tests (accounts.sh, new_game.py + templates)
 
 Steps (stops with exit code 1 if any fails):
 1. Compile every .py file under APP.

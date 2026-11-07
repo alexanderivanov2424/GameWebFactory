@@ -16,12 +16,13 @@ bodies only for what you change.
 |---|---|
 | Rules of a game, its settings, every message the client sends | Docstring at the top of `APP/games/<id>/server.py` (`python3 -c "import ast;print(ast.get_docstring(ast.parse(open('APP/games/<id>/server.py').read())))"`) |
 | How a game is built, where things are, its pitfalls | `APP/games/<id>/NOTES.md` |
-| What the client receives | `game_state()` and `private_state()` in that `server.py` |
+| Where the rules code is | Games made from the current template: `APP/games/<id>/logic/` (its `__init__.py` docstring lists the modules; `match.py` holds `Match`) with `server.py` as the lobby side. Older games (tictactoe, tanks, peruvian-silver, arena) keep their rules in `server.py` |
+| What the client receives | `game_state()` and `private_state()` in that `server.py` (with `logic/`: `Match.public()` / `Match.private(pid)`) |
 | Host settings | `SETTINGS` in that `server.py` (the client draws them; no client code per setting) |
 | Client layout | `grep -n "^  // ---" APP/games/<id>/client/game.js` lists its sections; element ids are in `client/index.html` |
 | Rules text players read | The lobby rules paragraph in `client/index.html`, banners/targeting text and the log in `client/game.js` |
 | Lobby, phases, hooks, SETTINGS, ACTIONS, timers | Header of `APP/gamekit/lobby.py` (and `settings.py`) |
-| Turn order / secret simultaneous picks | Headers of `APP/gamekit/turns.py` / `APP/gamekit/choices.py` |
+| Turn order / secret simultaneous picks / card decks | Headers of `APP/gamekit/turns.py` / `APP/gamekit/choices.py` / `APP/gamekit/deck.py` |
 | Validating input / loading content files | Headers of `APP/gamekit/validate.py` / `APP/gamekit/data.py` |
 | Real-time games: tick loop, inputs, ping | Header of `APP/gamekit/realtime.py` |
 | How state reaches clients (full state / patches / snapshots) | Header of `APP/gamekit/sync.py` |
@@ -39,18 +40,32 @@ Games at a glance (details in each `NOTES.md`):
   modes on a board with walls, private notes on public log entries.
 - **peruvian-silver**: the biggest; stages inside `playing`, simultaneous secret plays,
   timed reveals, cards as JSON files (loaded in `cards.py`), forks/branches.
+- **smugglers**: built with `logic/` modules; graph board from JSON maps (SVG), Interpol vs.
+  smugglers, deck-building (`gamekit.Deck`), inspections that interrupt a turn, `PatchState`.
+  Content files: `content/README.md`.
 - **arena**: real-time demo (`RealtimeGame`): keyboard inputs as state, per-tick delta
   snapshots, canvas drawing with interpolation, ping shown above each player.
 
 ## 2. Make the change
 - Server and client both: the server validates everything; the client only renders state.
-- Constants the user specified go in `server.py` and reach the client through
-  `game_state()` (e.g. `costs`, `rules`), never duplicated in JS.
+- Constants the user specified go in the server code (`logic/` for games that have it,
+  otherwise `server.py`) and reach the client through `game_state()` (e.g. `costs`, `rules`),
+  never duplicated in JS.
+- Games with `logic/`: rules changes go there and lobby changes (settings, messages, timers)
+  in `server.py`; keep `logic/` free of lobby/`Member` code. A new module goes in the
+  `logic/__init__.py` docstring and the `NOTES.md` map. Test rules on `Match` directly.
+- Avoid monolithic files: one topic per module in `logic/`; split a module when it mixes topics
+  or passes ~400 lines (`match.py` too) rather than adding to it.
+- Games without `logic/` (tictactoe, tanks, peruvian-silver, arena): small changes stay in
+  `server.py`. For a sizeable feature (a new stage, a family of card types, a subsystem), create
+  `logic/__init__.py` (module list docstring) plus a `logic/<topic>.py` holding that rule code,
+  called from `server.py`, instead of growing `server.py`. Don't restructure the rest of the
+  game unless the user asks; note the new module in the game's `NOTES.md` map.
 - A new setting is one line in `SETTINGS`; a new message is one entry in `ACTIONS` plus its
   method. Renaming a setting is the `SETTINGS` key plus any `self.settings[...]` reads. Rooms
   live in memory and reset on deploy, so no migration is needed.
 - Keep the docs true in the same change: the `server.py` docstring (rules + message list),
-  the game's `NOTES.md`, the lobby rules paragraph in `index.html`, and anything in
+  `logic/__init__.py`'s module list, the game's `NOTES.md`, the lobby rules paragraph in `index.html`, and anything in
   `CLAUDE.md` / skills it affects.
 - Shared code: changing `APP/gamekit/` or `APP/web/gamekit/` affects every game. Run the full
   test suite, and update every game that uses what you changed. Promote anything reusable

@@ -1,0 +1,11 @@
+{
+  "name": "Federal Grant",
+  "kind": "funding",
+  "cost": 5,
+  "supply": 8,
+  "start": 0,
+  "effects": {
+    "budget": 3
+  },
+  "text": "+3 budget."
+}
