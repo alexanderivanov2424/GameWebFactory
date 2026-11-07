@@ -3,6 +3,7 @@
 Games import everything they need from here; they never import the site server (`server`).
 
     from gamekit import LobbyGame, LobbyError, PLAYING, FINISHED, Int, TurnQueue, SecretChoices
+    from gamekit import Deck                            # draw/discard piles of card instances
     from gamekit import RealtimeGame                    # real-time games (tick loop)
     from gamekit import FullState, PatchState, Snapshots  # SYNC choices
     from gamekit.sync import quantize                   # round floats so deltas stay small
@@ -20,6 +21,7 @@ Modules (each header documents its API):
     validate.py  LobbyError and validators for what players send
     turns.py     TurnQueue: turn order by counters (cost 1 per action = round-robin)
     choices.py   SecretChoices: hidden simultaneous picks, revealed together
+    deck.py      Deck: shuffled draw pile + discard pile of card instances (uids), reshuffles
     data.py      Loading and validating JSON content files
     sim.py       Sim: drives a game through the real lobby for tests (no network)
 
@@ -27,6 +29,7 @@ Client-side counterpart: web/gamekit/ (room.js, lobby.js, lobby-ui.js, dom.js, r
 """
 
 from gamekit.choices import SecretChoices
+from gamekit.deck import Deck
 from gamekit.lobby import FINISHED, LOBBY, PLAYING, LobbyGame
 from gamekit.realtime import RealtimeGame
 from gamekit.settings import Int
@@ -35,5 +38,5 @@ from gamekit.turns import TurnQueue
 from gamekit.validate import LobbyError
 from server.turtle import turtle  # emergency shutdown for safety checks (server/turtle.py)
 
-__all__ = ["FINISHED", "LOBBY", "PLAYING", "FullState", "Int", "LobbyError", "LobbyGame", "PatchState",
+__all__ = ["Deck", "FINISHED", "LOBBY", "PLAYING", "FullState", "Int", "LobbyError", "LobbyGame", "PatchState",
            "RealtimeGame", "SecretChoices", "Snapshots", "TurnQueue", "turtle"]

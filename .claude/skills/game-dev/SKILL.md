@@ -22,7 +22,7 @@ bodies only for what you change.
 | Client layout | `grep -n "^  // ---" APP/games/<id>/client/game.js` lists its sections; element ids are in `client/index.html` |
 | Rules text players read | The lobby rules paragraph in `client/index.html`, banners/targeting text and the log in `client/game.js` |
 | Lobby, phases, hooks, SETTINGS, ACTIONS, timers | Header of `APP/gamekit/lobby.py` (and `settings.py`) |
-| Turn order / secret simultaneous picks | Headers of `APP/gamekit/turns.py` / `APP/gamekit/choices.py` |
+| Turn order / secret simultaneous picks / card decks | Headers of `APP/gamekit/turns.py` / `APP/gamekit/choices.py` / `APP/gamekit/deck.py` |
 | Validating input / loading content files | Headers of `APP/gamekit/validate.py` / `APP/gamekit/data.py` |
 | Real-time games: tick loop, inputs, ping | Header of `APP/gamekit/realtime.py` |
 | How state reaches clients (full state / patches / snapshots) | Header of `APP/gamekit/sync.py` |
@@ -40,6 +40,9 @@ Games at a glance (details in each `NOTES.md`):
   modes on a board with walls, private notes on public log entries.
 - **peruvian-silver**: the biggest; stages inside `playing`, simultaneous secret plays,
   timed reveals, cards as JSON files (loaded in `cards.py`), forks/branches.
+- **smugglers**: built with `logic/` modules; graph board from JSON maps (SVG), Interpol vs.
+  smugglers, deck-building (`gamekit.Deck`), inspections that interrupt a turn, `PatchState`.
+  Content files: `content/README.md`.
 - **arena**: real-time demo (`RealtimeGame`): keyboard inputs as state, per-tick delta
   snapshots, canvas drawing with interpolation, ping shown above each player.
 

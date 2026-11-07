@@ -1,0 +1,11 @@
+{
+  "name": "Repeat Operation",
+  "kind": "action",
+  "cost": 4,
+  "supply": 6,
+  "start": 0,
+  "effects": {
+    "repeat": true
+  },
+  "text": "Play the effect of an action card you played this turn again (new targets)."
+}

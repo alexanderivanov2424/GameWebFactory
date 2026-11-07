@@ -70,7 +70,7 @@ APP/
     tests/              Protocol, rooms/reconnects, accounts/sessions, turtle, game loading
   gamekit/              Shared game library, server side (Python package `gamekit`). Games import only this.
     __init__.py         Re-exports: LobbyGame, LobbyError, PLAYING/FINISHED/LOBBY, Int, TurnQueue, SecretChoices,
-                        RealtimeGame, FullState, PatchState, Snapshots, turtle
+                        Deck, RealtimeGame, FullState, PatchState, Snapshots, turtle
     lobby.py            LobbyGame: spectators/players, host, ready, phases, public + private state sync,
                         SETTINGS, ACTIONS dispatch, game_number, schedule() timers, SYNC,
                         saved player data (load_data / save_data / account_name)
@@ -80,6 +80,7 @@ APP/
     validate.py         LobbyError and validators for player input (whole_number, one_of, cell, clean_text)
     turns.py            TurnQueue: turn counters (cost 1 per action = round-robin)
     choices.py          SecretChoices: hidden simultaneous picks (required + optional choosers), revealed all at once
+    deck.py             Deck: shuffled draw pile + discard pile of card instances (uids), reshuffles when empty
     data.py             Loading JSON content files (cards, units...): bad files are logged and skipped
     sim.py              Sim: drives a game through the real lobby for tests (no network); also ticks and inputs
     tests/
@@ -92,7 +93,7 @@ APP/
                         Account tab (log in / create account / log out over /ws/account)
       chat.js           Site-wide chat component
     gamekit/            Shared game library, client side (served at /gamekit/)
-      dom.js            AppDom: $, el, debounce, setInput, listNames
+      dom.js            AppDom: $, el, svg, debounce, setInput, listNames
       room.js           AppRoom.connect(gameId, handlers): low-level game room connection
       lobby.js          AppLobby.connect(gameId, handlers): lobby client (use this for games)
       lobby-ui.js       AppLobbyUI: player list, start button/status, spectators, connection text, error banner,
@@ -163,6 +164,9 @@ Summary:
    counters, secret mines, building walls), `games/peruvian-silver/` (simultaneous secret plays,
    timed reveals, cards defined as JSON files, game split into modules). Each has a `NOTES.md`.
    `games/arena/` is the real-time example (tick loop, inputs, delta snapshots, interpolation).
+   `games/smugglers/` is the first game built with `logic/` modules: a graph board from JSON
+   map files drawn as SVG, asymmetric roles, deck-building (`Deck`), an interrupt inside a
+   turn, and `PatchState`.
 
 ## Lobby model (shared by all games)
 - Every connected tab is a **member**: a **spectator** until it joins, then a **player**. Players join and leave explicitly, and only in the lobby phase.

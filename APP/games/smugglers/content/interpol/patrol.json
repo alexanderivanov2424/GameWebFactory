@@ -1,0 +1,12 @@
+{
+  "name": "Patrol",
+  "kind": "action",
+  "cost": 4,
+  "supply": 4,
+  "start": 1,
+  "effects": {
+    "piece": "patrol",
+    "move": 3
+  },
+  "text": "Gives you a patrol ship. Move a patrol ship up to 3 steps. Loaded ships on its spot are inspected."
+}

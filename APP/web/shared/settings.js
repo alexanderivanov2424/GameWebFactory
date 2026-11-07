@@ -440,7 +440,8 @@
 
     buildTabs(tabList, panelContainer) {
       this.inputs = [];
-      TABS.forEach((tab, index) => {
+      let first = null;
+      TABS.forEach((tab) => {
         const button = document.createElement("button");
         button.className = "tab";
         button.setAttribute("role", "tab");
@@ -456,8 +457,10 @@
         button.addEventListener("click", () => this.selectTab(button, panel));
         tabList.append(button);
         panelContainer.append(panel);
-        if (index === 0) this.selectTab(button, panel);
+        first ||= [button, panel];
       });
+      // Select once every panel exists, so the others are all hidden.
+      if (first) this.selectTab(...first);
     }
 
     buildField(field) {

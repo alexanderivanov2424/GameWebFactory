@@ -13,8 +13,8 @@ from gamekit.validate import cell, one_of, whole_number  # noqa: F401  (remove u
 
 from .logic.match import Match
 # Also available: `from gamekit import SecretChoices` (everyone picks in secret, reveal together),
-# self.schedule(seconds, fn) (timed pauses; see gamekit/lobby.py) and gamekit.data (JSON content
-# files such as cards; put the loader in logic/).
+# self.schedule(seconds, fn) (timed pauses; see gamekit/lobby.py), gamekit.data (JSON content
+# files such as cards; put the loader in logic/) and `from gamekit import Deck` (draw/discard piles).
 
 
 class Game(LobbyGame):

@@ -1,0 +1,11 @@
+{
+  "name": "Informant",
+  "kind": "action",
+  "cost": 3,
+  "supply": 8,
+  "start": 0,
+  "effects": {
+    "cards": 2
+  },
+  "text": "+2 cards."
+}

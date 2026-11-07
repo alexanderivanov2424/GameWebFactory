@@ -21,6 +21,11 @@ the pitfalls hit while building it; read the one closest to your game):
   (`self.schedule`), a private hand with a fixed bottom bar, cards as JSON files loaded with
   `gamekit.data` in its own `cards.py` module, interrupt stages, a resolve queue for effects
   that wait on decisions, branching paths, per-copy card state, animations for new items only.
+- `APP/games/smugglers/`: the first game built with `logic/` modules (read it for the layout):
+  a graph board loaded from swappable JSON maps and drawn as SVG (`AppDom.svg`), asymmetric
+  roles, deck-building with `gamekit.Deck`, an interrupt that hands the action to another
+  player mid-turn (`actor()` vs `turn()`), a two-message action, `PatchState`, and the server
+  sending reachable spots/targets so the client holds no rules.
 - `APP/games/arena/`: real-time (`RealtimeGame`): keyboard input as state, per-tick delta
   snapshots, canvas drawing with interpolation, showing ping. Start from it for continuous movement.
 
@@ -49,6 +54,8 @@ Map the request onto the shared lobby model before writing code:
 - **Pauses** (show a reveal for a few seconds, then move on): `self.schedule(seconds, fn)`.
   It sends the state after `fn` runs and is cancelled automatically by `finish()`, a new
   start or going back to the lobby. Re-check `self.stage` in `fn`.
+- **Decks of cards** (draw, discard, reshuffle; deck-building): `gamekit.Deck` keeps card
+  instances `{"uid", "card"}` in a draw and a discard pile; hands and tables are the game's.
 - **Content that will grow** (cards, units, levels): one JSON file per item in a folder inside
   the game (next to `server.py`, e.g. `cards/`), loaded and validated at import with
   `gamekit.data.load_json_dir` (bad files are logged and skipped), in its own module
@@ -64,7 +71,8 @@ Map the request onto the shared lobby model before writing code:
   keep the default `FullState`. Games that send deltas (`PatchState`, `Snapshots`; see
   `APP/gamekit/sync.py`) must: key changing collections by id (dicts, not lists, since a changed
   list is resent whole), never put None inside dicts (null deletes the key), and round floats
-  with `quantize`.
+  with `quantize`. A growing log fits as a dict keyed by index plus a count
+  (see smugglers).
 - **Data kept between games** (stats, unlocks, progress): `self.load_data(member)` and
   `self.save_data(member, value)` (server only, one plain-JSON value per game per player). Works
   the same for guests (memory, until the tab closes) and logged-in players (disk). Save at
@@ -187,8 +195,9 @@ Rules and pitfalls:
   `--gwf-main-width`, ...; see its header).
 - Render everything from the `state` passed to `onState`: `state.game` is public, and
   `state.private` is yours only. Don't keep game logic on the client.
-- Helpers: `const { $, el, debounce, setInput, listNames } = AppDom;`. Build the DOM with
-  `el`/`textContent`; never put player-supplied text into `innerHTML`.
+- Helpers: `const { $, el, svg, debounce, setInput, listNames } = AppDom;`. Build the DOM with
+  `el`/`textContent` (`svg` for SVG elements, e.g. a graph board); never put player-supplied
+  text into `innerHTML`.
 - Use `AppLobbyUI` instead of hand-rolling: `lobbyButtons(lobby, {join, leave, ready, back})`
   and `settingsForm(element, lobby)` (both return a render function to call on every
   render), `renderPlayers` (with `afterName` for game-specific extras), `renderStart` (the

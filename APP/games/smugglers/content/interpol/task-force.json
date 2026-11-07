@@ -1,0 +1,13 @@
+{
+  "name": "Task Force",
+  "kind": "action",
+  "cost": 5,
+  "supply": 8,
+  "start": 0,
+  "effects": {
+    "cards": 1,
+    "actions": 1,
+    "budget": 1
+  },
+  "text": "+1 card, +1 action, +1 budget."
+}

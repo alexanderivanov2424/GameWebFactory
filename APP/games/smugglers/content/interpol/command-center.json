@@ -1,0 +1,12 @@
+{
+  "name": "Command Center",
+  "kind": "action",
+  "cost": 3,
+  "supply": 8,
+  "start": 0,
+  "effects": {
+    "cards": 1,
+    "actions": 2
+  },
+  "text": "+1 card, +2 actions."
+}
