@@ -2,7 +2,7 @@
 <!--
   Deep Colony page: lobby section (players, settings, rules) and game section (top bar, left
   toolbar, canvas in a scrollable box, right panel). Scripts: shared components, gamekit, then
-  grid.js (row decoding), render.js (canvas), tools.js (mouse/keys -> orders), panels.js (DOM
+  grid.js (row decoding), render2.js + render.js (canvas), tools.js (mouse/keys -> orders), panels.js (DOM
   panels), game.js (lobby wiring). All share the small global window.DC.
 -->
 <html lang="en">
@@ -118,10 +118,14 @@
         <summary>How to play</summary>
         <ul>
           <li>Dig out rock with Dig (G): drag a rectangle. Colonists mine it and leave debris.</li>
-          <li>Build Ladders up from a floor so colonists can climb; put a Storage Bin down so debris gets hauled.</li>
+          <li>Debris is only hauled after you mark it with Sweep (W); put a Storage Bin down so it has somewhere to go. Storage filters are in the hover panel.</li>
+          <li>Build Ladders up from a floor so colonists can climb.</li>
+          <li>New buildings come from research: pick one in the Research panel. A Research Station needs a colonist, dirt and power.</li>
           <li>Oxygen: build an Algae Oxygenator, powered by a Manual Generator joined to it with Wire.</li>
           <li>Food: a Nutrient Press (dirt + piped water) or Fungus Beds.</li>
           <li>Toilet: an Outhouse; add a Wash Basin to fight germs.</li>
+          <li>Colonists sleep in Cots during sleep hours. In the Schedules panel click blocks to change work / downtime / sleep.</li>
+          <li>R rotates buildings with ports before you place them. Ventilation buildings and gas pipes move gas.</li>
           <li>Anyone can pause (Space) or change speed (1/2/3). Everyone sees everyone's plans in their colour.</li>
           <li>Hotkeys: Space pause, 1/2/3 speed, G dig, C cancel, X deconstruct, P priority, I inspect, Esc/right-click cancel.</li>
         </ul>

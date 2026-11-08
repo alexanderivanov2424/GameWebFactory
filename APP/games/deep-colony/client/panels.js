@@ -41,6 +41,8 @@
     if (d.powerPort) bits.push("power port");
     if (d.pipeIn) bits.push("pipe in");
     if (d.pipeOut) bits.push("pipe out");
+    if (d.gasIn) bits.push("gas in");
+    if (d.gasOut) bits.push("gas out");
     return bits.length ? ` [${bits.join(", ")}]` : "";
   }
 
@@ -51,7 +53,7 @@
       cancel: "Cancel: drag over orders to remove them", deconstruct: "Deconstruct: drag over buildings",
       sweep: "Sweep: drag over debris to have it hauled to storage",
       priority: `Priority: drag over orders to set priority ${prio}` };
-    let t = tool === "build" ? (d ? `Build ${d.name}: click` + (d.layer === "pipe" || d.layer === "wire" ? " or drag a line" : d.w * d.h === 1 ? " or drag" : "") : "Build: pick a building") : hints[tool] || "";
+    let t = tool === "build" ? (d ? `Build ${d.name}: click` + (d.layer === "pipe" || d.layer === "gaspipe" || d.layer === "wire" ? " or drag a line" : d.w * d.h === 1 ? " or drag" : "") : "Build: pick a building") : hints[tool] || "";
     if (tool !== "inspect") t += ` (priority ${prio}). Right-click / Esc to cancel`;
     $("toolhint").textContent = t;
   }
@@ -169,7 +171,8 @@
     const out = [];
     for (const [id, b] of Object.entries(g.buildings)) {
       const d = g.defs.buildings[b.t];
-      if (d && x >= b.x && x < b.x + d.w && y >= b.y && y < b.y + d.h) out.push([id, b, d]);
+      const fp = d && DC.grid.footprint(d, b.r);
+      if (d && x >= b.x && x < b.x + fp.w && y >= b.y && y < b.y + fp.h) out.push([id, b, d]);
     }
     return out;
   }
@@ -178,12 +181,12 @@
   let netCache = null;
   function netId(g, layer, x, y) {
     if (!netCache || netCache.src !== g.buildings) {
-      const cells = { wire: new Set(), pipe: new Set() };
+      const cells = { wire: new Set() };
       for (const b of Object.values(g.buildings)) {
         const d = g.defs.buildings[b.t];
         if (d && b.b === 1 && cells[d.layer]) cells[d.layer].add(b.y * g.w + b.x);
       }
-      netCache = { src: g.buildings, cells, ids: { wire: new Map(), pipe: new Map() } };
+      netCache = { src: g.buildings, cells, ids: { wire: new Map() } };
     }
     const set = netCache.cells[layer], ids = netCache.ids[layer], start = y * g.w + x;
     if (x < 0 || y < 0 || x >= g.w || y >= g.h || !set.has(start)) return null;
@@ -204,21 +207,24 @@
     const id = netId(g, "wire", x, y), p = id && g.power && g.power[id];
     return p ? `Power network: makes ${Math.round(p.gen)} W, uses ${Math.round(p.use)} W, battery ${Math.round(p.stored)}/${Math.round(p.cap)} J` : null;
   }
-  function pipeText(g, x, y) {
-    const id = netId(g, "pipe", x, y), p = id && g.pipes && g.pipes[id];
-    if (!p) return null;
-    const items = Object.entries(p).filter(([, v]) => v > 0.05).map(([k, v]) => `${elName(g, k)} ${kgText(v)}`);
-    return "Pipe: " + (items.length ? items.join(", ") : "empty");
+  // Pipe segments are keyed by cell index: {el, kg} per segment (liquid in pipes, gas in gaspipes).
+  function segText(g, key, label, x, y) {
+    const p = g[key] && g[key][y * g.w + x];
+    return p ? `${label}: ${elName(g, p.el)} ${kgText(p.kg)}` : null;
   }
-  // Network lines for hovered cell (wire/pipe) and a building's ports.
+  // Network lines for hovered cell (wire/pipe) and a building's ports (rotated).
   function netLines(g, x, y, b, d) {
     const out = [];
     const add = (label, t) => { if (t) out.push(label ? `${label}: ${t}` : t); };
-    if (!b) { add("", powerText(g, x, y)); add("", pipeText(g, x, y)); return out; }
-    if (d.layer === "wire" || d.layer === "pipe") return out;
-    if (d.powerPort) add("Power port", powerText(g, b.x + d.powerPort[0], b.y + d.powerPort[1]));
-    if (d.pipeIn) add("Pipe in", pipeText(g, b.x + d.pipeIn[0], b.y + d.pipeIn[1]));
-    if (d.pipeOut) add("Pipe out", pipeText(g, b.x + d.pipeOut[0], b.y + d.pipeOut[1]));
+    if (!b) {
+      add("", powerText(g, x, y)); add("", segText(g, "pipes", "Pipe", x, y)); add("", segText(g, "gaspipes", "Gas pipe", x, y));
+      return out;
+    }
+    if (d.layer === "wire" || d.layer === "pipe" || d.layer === "gaspipe") return out;
+    const at = (k) => { const o = DC.grid.rotOffset(d, b.r, d[k]); return [b.x + o[0], b.y + o[1]]; };
+    if (d.powerPort) add("Power port", powerText(g, ...at("powerPort")));
+    for (const [k, key, label] of [["pipeIn", "pipes", "Pipe in"], ["pipeOut", "pipes", "Pipe out"], ["gasIn", "gaspipes", "Gas in"], ["gasOut", "gaspipes", "Gas out"]])
+      if (d[k]) add("", segText(g, key, label, ...at(k)));
     return out;
   }
 
