@@ -260,5 +260,88 @@ class RobustnessTests(unittest.TestCase):
         self.assertNotIn("cell", sim.state(spectator).get("private") or {})
 
 
+
+import importlib  # noqa: E402
+
+buildings_mod = importlib.import_module("games.deep-colony.logic.buildings")
+research_mod = importlib.import_module("games.deep-colony.logic.research")
+content_mod = importlib.import_module("games.deep-colony.logic.content")
+Match = importlib.import_module("games.deep-colony.logic.match").Match
+
+
+def any_rotatable(ports=False):
+    for bid, d in content_mod.BUILDINGS.items():
+        if d["rotatable"] and d["w"] != d["h"] and (not ports or any(d[p] for p in content_mod.PORTS)):
+            return bid, d
+    return None, None
+
+
+class GroundworkTests(unittest.TestCase):
+    def test_footprint_rotation_swaps_size_and_keeps_cell_count(self):
+        bid, d = any_rotatable()
+        if bid is None:
+            self.skipTest("no non-square rotatable building")
+        for rot in range(4):
+            w, h, cells = buildings_mod.footprint(d, rot)
+            self.assertEqual((w, h), (d["w"], d["h"]) if rot % 2 == 0 else (d["h"], d["w"]))
+            self.assertEqual(sorted(cells), sorted((x, y) for x in range(w) for y in range(h)))
+
+    def test_four_turns_bring_a_port_back(self):
+        bid, d = any_rotatable(ports=True)
+        if bid is None:
+            self.skipTest("no rotatable building with ports")
+        port = next(p for p in content_mod.PORTS if d[p])
+        self.assertEqual(buildings_mod.rotate_offset(d, 4, d[port]), tuple(d[port]))
+        m = Match.blank(12, 12)
+        b = m.buildings.place(bid, 3, 3, "p1", built=True, rot=1)
+        self.assertIn(b.port_cell(port), b.cells())
+
+    def test_non_rotatable_building_refuses_rotation(self):
+        bid = next(b for b, d in content_mod.BUILDINGS.items() if d["buildable"] and not d["rotatable"])
+        m = Match.blank(12, 12)
+        self.assertEqual(m.buildings.can_place(bid, 3, 3, 1), "That building can't be turned.")
+
+    def test_locked_building_needs_research(self):
+        if not research_mod.LOCKED_BY:
+            self.skipTest("no locked buildings")
+        btype, tech = next(iter(research_mod.LOCKED_BY.items()))
+        m = Match.blank(16, 16)
+        orders = importlib.import_module("games.deep-colony.logic.orders")
+        with self.assertRaises(Exception) as ctx:
+            orders.build(m, "p1", btype, [(4, 4)])
+        self.assertIn("Research", str(ctx.exception))
+        m.research.done.add(tech)
+        self.assertTrue(m.research.is_unlocked(btype))
+
+    def test_store_temperature_is_mass_averaged(self):
+        m = Match.blank(12, 12)
+        b = m.buildings.place("storage_bin", 3, 3, "p1", built=True)
+        b.deliver("sand", 10, 40.0)
+        b.deliver("sand", 10, 0.0)
+        kg, temp, _ = b.take("sand", 5)
+        self.assertEqual((kg, round(temp, 3)), (5, 20.0))
+
+    def test_sweep_filter_research_schedule_actions(self):
+        sim = new_game()
+        m = sim.game.match
+        x, y = open_cell(sim)
+        m.items.add("sand", 50, x, y)
+        sim.ok(1, {"action": "sweep", "rect": [x, y, x, y]})
+        self.assertEqual(m.items.at(x, y)[0].sweep["by"], sim.pid(1))
+        sim.ok(0, {"action": "cancel", "rect": [x, y, x, y]})
+        self.assertIsNone(m.items.at(x, y)[0].sweep)
+        pod = next(b for b in m.buildings if b.type == "arrival_pod")
+        sim.fails(0, {"action": "filter", "building": pod.id, "elements": ["sand"]}, "no filter")
+        tech = next(t for t, d in research_mod.TECHS.items() if not d["requires"])
+        sim.ok(1, {"action": "research", "tech": tech})
+        self.assertEqual(m.research.current, tech)
+        sim.ok(0, {"action": "schedule", "schedule": "2", "blocks": "s" * 24})
+        sim.fails(0, {"action": "schedule", "schedule": "2", "blocks": "x" * 24}, "24 blocks")
+        dupe = next(iter(m.dupes))
+        sim.ok(1, {"action": "assign", "colonist": dupe, "schedule": "2"})
+        self.assertEqual(m.dupes[dupe].schedule, "2")
+        sim.fails(0, {"action": "build", "building": "ladder", "cells": [[x, y]], "rot": 1}, "can't be turned")
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -40,8 +40,15 @@ def colonist(m, x, **fields):
     return d
 
 
-def run(m, cond, steps=600, dt=0.1):
+def sweep_all(m):
+    for it in m.items:
+        it.sweep = it.sweep or {"by": "p1", "prio": 5}
+
+
+def run(m, cond, steps=600, dt=0.1, sweep=False):
     for _ in range(steps):
+        if sweep:
+            sweep_all(m)
         m.step(dt)
         if cond():
             return True
@@ -99,7 +106,7 @@ class IntegrationTests(unittest.TestCase):
         out.store["polluted_dirt"] = 100.0
         bin_ = put(m, "storage_bin", 10)
         colonist(m, 6)
-        self.assertTrue(run(m, lambda: bin_.store.get("polluted_dirt", 0.0) >= 99.0, steps=1500),
+        self.assertTrue(run(m, lambda: bin_.store.get("polluted_dirt", 0.0) >= 99.0, steps=1500, sweep=True),
                         (out.state, bin_.store, list(m.items)))
         self.assertEqual(out.state["uses"], 0)
 
@@ -109,7 +116,7 @@ class IntegrationTests(unittest.TestCase):
         bed.state["growth"] = bed.d["params"]["growTime"]
         box = put(m, "ration_box", 9)
         colonist(m, 6)
-        self.assertTrue(run(m, lambda: box.store.get("fungus", 0.0) > 0, steps=1200), (bed.state, list(m.items)))
+        self.assertTrue(run(m, lambda: box.store.get("fungus", 0.0) > 0, steps=1200, sweep=True), (bed.state, list(m.items)))
         self.assertEqual(bed.state["growth"] < bed.d["params"]["growTime"], True)
 
     def test_hungry_colonist_eats_from_ration_box(self):

@@ -9,8 +9,6 @@ from . import content
 from .chore_common import (CARRY_MAX, Chore, STORAGE_KINDS, best_goal, failing, is_food, reach_goals,
                            storage_room, store_free, take_carry)
 
-HAUL_PRIO = 3
-
 
 def _sources(match, dist):
     """Everything that can be picked up and is reachable: [(distance, ("item"|"store", obj), el, kg)]."""
@@ -71,16 +69,17 @@ def _add_haul(match, d, dist, sources, add):
     stores = [(sb, g[0]) for sb, g in stores if g]
     if not stores:
         return
-    for n, src, el, kg in sorted((s for s in sources if s[1][0] == "item"), key=lambda s: s[0]):
+    swept = (s for s in sources if s[1][0] == "item" and s[1][1].sweep)
+    for n, src, el, kg in sorted(swept, key=lambda s: (-s[1][1].sweep["prio"], s[0])):
         it = src[1]
         here = match.buildings.at(it.x, it.y)
         if here is not None and here.built and here.d["kind"] in STORAGE_KINDS:
             continue
-        if failing(match, ("haul", it.id)):
+        if not it.sweep or failing(match, ("haul", it.id)):
             continue
         pick = None
         for sb, sn in stores:
-            if storage_room(sb, el) < 0.01:
+            if not sb.accepts_element(el) or storage_room(sb, el) < 0.01:
                 continue
             rank = (0 if is_food(el) and sb.d["kind"] == "ration_box" else 1, sn)
             if pick is None or rank < pick[0]:
@@ -88,7 +87,7 @@ def _add_haul(match, d, dist, sources, add):
         if pick is None:
             continue
         sb = pick[1]
-        add(HAUL_PRIO, n, lambda it=it, sb=sb, kg=min(kg, CARRY_MAX):
+        add(it.sweep["prio"], n, lambda it=it, sb=sb, kg=min(kg, CARRY_MAX):
             Chore("haul", ("haul", it.id), [("building", sb.id)], _haul(match, d, it, sb, kg)))
         return
 
@@ -115,7 +114,7 @@ def _supply(match, d, tb, key, kg, src, el):
         tb.unreserve(key, kg)
         target_held = 0.0
         if tb.id in match.buildings.by_id:
-            tb.deliver(el, d.carry["kg"])
+            tb.deliver(el, d.carry["kg"], d.carry["temp"], d.carry["germs"])
             d.carry = None
     finally:
         if src_held > 0:
@@ -137,13 +136,7 @@ def _pick_up(match, obj, kind, el, kg):
         return got, temp, germs
     if obj.id not in match.buildings.by_id:
         return 0.0, 20.0, 0.0
-    got = min(kg, obj.store.get(el, 0.0))
-    left = obj.store.get(el, 0.0) - got
-    if left > 0.001:
-        obj.store[el] = left
-    else:
-        obj.store.pop(el, None)
-    return got, 20.0, 0.0
+    return obj.take(el, kg)
 
 
 def _haul(match, d, it, sb, kg):
@@ -159,9 +152,12 @@ def _haul(match, d, it, sb, kg):
         take_carry(d, el, got, temp, germs)
         yield ("goto", reach_goals(match.world, sb), f"Hauling {content.ELEMENTS[el]['name']}")
         if sb.id in match.buildings.by_id:
-            put = min(d.carry["kg"], storage_room(sb, el))
+            have = d.carry["kg"]
+            put = min(have, storage_room(sb, el)) if sb.accepts_element(el) else 0.0
             if put > 0:
-                sb.deliver(el, put)
+                share = d.carry["germs"] * put / have
+                sb.deliver(el, put, d.carry["temp"], share)
+                d.carry["germs"] -= share
                 d.carry["kg"] -= put
                 if d.carry["kg"] < 0.01:
                     d.carry = None

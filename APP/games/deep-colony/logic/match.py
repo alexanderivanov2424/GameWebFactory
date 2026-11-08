@@ -106,7 +106,7 @@ class Match:
             self._fluid_acc -= FLUID_DT
             fluids.step(world, FLUID_DT)
             heat.step(world, FLUID_DT)
-            germs.step(world, self.items, FLUID_DT)
+            germs.step(world, self.items, FLUID_DT, self.buildings)
             self.items.settle(world)
         version = (self.buildings.version, self.items.version)
         if version != self._decor_version:

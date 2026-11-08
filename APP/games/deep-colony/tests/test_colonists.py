@@ -120,6 +120,7 @@ class ColonistTests(unittest.TestCase):
         dupes.spawn(m, 1, 6, 7)
         bin_ = m.buildings.place("storage_bin", 10, 7, "p1", built=True)
         item = m.items.add("sandstone", 50, 3, 7)
+        item.sweep = {"by": "p1", "prio": 5}
         self.assertTrue(run(m, 60, until=lambda: bin_.store.get("sandstone", 0) > 49))
         self.assertAlmostEqual(bin_.store.get("sandstone", 0), 50, places=1)
         self.assertEqual(item.reserved, 0)
@@ -183,7 +184,7 @@ class ColonistTests(unittest.TestCase):
     def test_a_dropped_load_becomes_debris(self):
         m = floor_world()
         d = dupes.spawn(m, 1, 5, 7)[0]
-        m.items.add("sandstone", 100, 5, 7)
+        m.items.add("sandstone", 100, 5, 7).sweep = {"by": "p1", "prio": 5}
         m.buildings.place("storage_bin", 10, 7, "p1", built=True)
         chores.step(m, 0.1)           # chose a haul chore and reserved the pile
         chores.step(m, 0.3)           # picked it up
@@ -291,6 +292,7 @@ class EdgeCaseTests(unittest.TestCase):
         m = floor_world()
         d = dupes.spawn(m, 1, 5, 7)[0]
         item = m.items.add("sandstone", 100, 5, 7)
+        item.sweep = {"by": "p1", "prio": 5}
         m.buildings.place("storage_bin", 12, 7, "p1", built=True)
         chores.step(m, 0.1)
         chores.step(m, 0.3)
