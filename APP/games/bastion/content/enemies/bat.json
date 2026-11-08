@@ -1,9 +1,0 @@
-{
-  "name": "Giant Bat",
-  "icon": "🦇",
-  "hp": 22,
-  "speed": 0.3,
-  "keep": 1,
-  "flying": true,
-  "text": "Flies over walls, soldiers and traps. Only towers that hit flyers can stop it."
-}

@@ -1,0 +1,27 @@
+{
+  "name": "Frost Witch",
+  "icon": "❄️",
+  "tier": 2,
+  "hp": 4,
+  "defeat": {
+    "resources": {
+      "wood": 2
+    }
+  },
+  "text": "Steel passes through her; only bonfires (wood) melt her away.",
+  "attacks": [
+    {
+      "name": "Freeze",
+      "freeze": 2
+    },
+    {
+      "name": "Numb",
+      "curse": "frostbite",
+      "to": "each"
+    },
+    {
+      "name": "Icicles",
+      "keep": 2
+    }
+  ]
+}

@@ -19,7 +19,7 @@ folder or file so tests can feed them temporary files.
     STARTING_DECK  {card id: copies}   cards/starting-deck.json
     parse_counts(data, cards, where)   {card id: copies} from JSON (packs.py uses it too)
     rotate(piece, height, width)       one clockwise quarter turn -> (piece, height, width)
-    rotations(piece, height, width)    all 4 -> (pieces, sizes)
+    rotations(piece, height, width)    all 4 -> (pieces, sizes)   (both from gamekit.shapes)
     deck_ids(counts)                   [card id, ...] with each id repeated `copies` times
 """
 
@@ -27,6 +27,7 @@ import logging
 from pathlib import Path
 
 from gamekit.data import flag, load_json, load_json_dir, text, whole
+from gamekit.shapes import rotate, rotations  # noqa: F401 (rotate: part of this module's API)
 
 from . import effects, symbols, tiles
 from .board import EMPTY, layers
@@ -39,11 +40,6 @@ CARD_TILE = "#"  # in a card's "tiles" rows: a tile of the card's own "tile" typ
 PLAY_ON = ("self", "opponent")
 MAX_COPIES = 20
 MAX_COST = 30
-
-
-def rotate(piece, height, width):
-    """One quarter turn clockwise: the cell at (r, c) moves to (c, height - 1 - r)."""
-    return [(dc, height - 1 - dr, tile, symbol) for dr, dc, tile, symbol in piece], width, height
 
 
 def _grid(data, key, height=None, width=None):
@@ -78,16 +74,6 @@ def _piece(tile_rows, symbol_rows, tile):
     if not piece:
         raise ValueError("needs at least one tile")
     return piece
-
-
-def rotations(piece, height, width):
-    """The 4 clockwise rotations (0-3 quarter turns) -> (pieces, sizes)."""
-    pieces, sizes = [piece], [(height, width)]
-    for _ in range(3):
-        turned, h, w = rotate(pieces[-1], *sizes[-1])
-        pieces.append(turned)
-        sizes.append((h, w))
-    return pieces, sizes
 
 
 def symbol_counts(piece):

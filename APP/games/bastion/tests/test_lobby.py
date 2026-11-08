@@ -1,92 +1,62 @@
-"""Bastion: lobby tests through gamekit.sim.Sim (real messages, PatchState sync, hidden hands).
-Uses the real content (the lobby doesn't take fixtures) but checks only behaviour.
-
+"""Bastion: the lobby side through gamekit.sim.Sim (real content; never checks card or enemy
+details): hidden hands, message validation, rounds, leaving.
 Run: python3 -I tools/run_tests.py bastion
 """
 
-import importlib
 import unittest
 
 from gamekit.sim import Sim
 
-helpers = importlib.import_module("games.bastion.tests.helpers")
-
-GAME = "bastion"
-
-
-def hand(sim, i):
-    return sim.state(i)["private"]["hand"]
-
 
 class LobbyTests(unittest.TestCase):
-    def test_solo_game_starts(self):
-        sim = Sim(GAME, players=1)
-        self.assertEqual(sim.state(0)["phase"], "playing")
-        self.assertEqual(sim.state(0)["game"]["stage"], "build")
-
-    def test_settings_validated(self):
-        sim = Sim(GAME, start=False)
-        self.assertIn("whole number", sim.lobby(0, {"type": "settings", "settings": {"keepHealth": "x"}}))
-        self.assertIn("one of", sim.lobby(0, {"type": "settings", "settings": {"difficulty": "brutal"}}))
-
     def test_hands_are_private(self):
-        sim = Sim(GAME, players=2)
-        watcher = sim.spectator()
-        mine = hand(sim, 0)
-        self.assertTrue(mine)
-        self.assertNotEqual(sim.state(1)["private"]["hand"], mine)
-        self.assertIsNone(sim.state(watcher).get("private"))
-        self.assertEqual(sim.state(watcher)["game"]["seats"][sim.pid(0)]["hand"], len(mine))  # just the count
+        sim = Sim("bastion", players=2)
+        spectator = sim.spectator()
+        for i in (0, 1):  # each player gets their own hand, nobody else's
+            own = [c["uid"] for c in sim.game.match.seats[sim.pid(i)].hand]
+            self.assertEqual([c["uid"] for c in sim.state(i)["private"]["hand"]], own)
+            self.assertEqual(len(own), 5)
+        self.assertIsNone(sim.state(spectator)["private"])
+        for seat in sim.state(spectator)["game"]["seats"].values():
+            self.assertEqual(seat["hand"], 5)  # only the size is public
 
-    def test_bad_messages_rejected(self):
-        sim = Sim(GAME, players=2)
-        sim.fails(0, {"action": "play", "uid": "x"}, "whole number")
-        sim.fails(0, {"action": "play", "uid": 9999}, "isn't in your hand")
+    def test_message_validation(self):
+        sim = Sim("bastion", players=1)
+        sim.fails(0, {"action": "play", "uid": "x"}, "Card")
+        sim.fails(0, {"action": "play", "uid": 99999}, "isn't in your hand")
+        sim.fails(0, {"action": "play", "uid": 1, "x": 1}, "Row")
+        sim.fails(0, {"action": "play", "uid": 1, "x": 1, "y": 1, "rotation": 4}, "Rotation")
+        sim.fails(0, {"action": "strike", "foe": 0, "way": "magic"}, "soldiers or resources")
+        sim.fails(0, {"action": "raze"}, "Pick a cell")
         sim.fails(0, {"action": "end_turn", "done": "yes"}, "true or false")
-        sim.fails(0, {"action": "buy", "slot": 0}, "market is closed")
-        sim.fails(0, {"action": "demolish"}, "Pick a structure")
 
-    def test_play_by_message(self):
-        helpers.install()
-        try:
-            sim = Sim(GAME, players=1)
-            seat = sim.game.match.seats[sim.pid(0)]
-            uid = helpers.give(sim.game.match, sim.pid(0), "t-tower")
-            sim.fails(0, {"action": "play", "uid": uid}, "Pick where")
-            target = next(iter(sim.game.match.private(sim.pid(0))["targets"]["t-tower"]))
-            x, y = map(int, target.split(","))
-            sim.ok(0, {"action": "play", "uid": uid, "x": x, "y": y})
-            self.assertEqual(sim.state(0)["game"]["structures"][target]["card"], "t-tower")
-            self.assertNotIn(uid, [c["uid"] for c in seat.hand])
-        finally:
-            helpers.remove()
+    def test_spectators_cant_act(self):
+        sim = Sim("bastion", players=1)
+        spectator = sim.spectator()
+        self.assertIsNotNone(sim.send(spectator, {"action": "end_turn"}))
 
-    def test_full_level_flow_and_sync(self):
-        sim = Sim(GAME, players=2)
+    def test_round_ends_when_everyone_is_done(self):
+        sim = Sim("bastion", players=2)
         sim.ok(0, {"action": "end_turn"})
-        sim.ok(0, {"action": "end_turn", "done": False})
-        turns = sim.state(0)["game"]["levels"][0]["buildTurns"]
-        for _ in range(turns):
-            sim.ok(0, {"action": "end_turn"})
-            sim.ok(1, {"action": "end_turn"})
-        state = sim.state(1)  # patches applied the way lobby.js does
-        game = state["game"]
-        self.assertEqual(game["stage"], "market")
-        self.assertEqual(game["battle"]["level"], 1)
-        self.assertEqual(len(game["battle"]["frames"]), game["battle"]["ticks"])
-        self.assertEqual(state["private"]["hand"], [])
-        sim.ok(0, {"action": "ready"})
-        sim.ok(1, {"action": "ready"})
-        self.assertEqual(sim.state(0)["game"]["level"], 2)
-        self.assertEqual(sim.state(0)["game"]["stage"], "build")
-
-    def test_player_leaves_mid_game(self):
-        sim = Sim(GAME, players=2)
+        self.assertTrue(sim.state(1)["game"]["seats"][sim.pid(0)]["done"])
+        self.assertEqual(sim.state(1)["game"]["round"], 1)
         sim.ok(1, {"action": "end_turn"})
-        sim.leave(1)
-        self.assertEqual(sim.state(0)["phase"], "playing")
-        self.assertNotIn(sim.pid(1), sim.state(0)["game"]["seats"])
-        self.assertTrue(sim.state(0)["game"]["seats"][sim.pid(0)]["done"] is False)
+        self.assertEqual(sim.state(0)["game"]["round"], 2)
+        self.assertFalse(sim.state(0)["game"]["seats"][sim.pid(0)]["done"])
+
+    def test_leaving_mid_game(self):
+        sim = Sim("bastion", players=2)
+        sim.ok(1, {"action": "end_turn"})
+        sim.leave(0)
+        state = sim.state(1)
+        self.assertEqual(list(state["game"]["seats"]), [sim.pid(1)])
+        self.assertEqual(state["game"]["round"], 2)  # the one left was done: the round ended
+
+    def test_last_player_leaving_ends_the_game(self):
+        sim = Sim("bastion", players=1)
+        spectator = sim.spectator()
+        sim.leave(0)
+        self.assertNotEqual(sim.state(spectator)["phase"], "playing")
 
 
 if __name__ == "__main__":

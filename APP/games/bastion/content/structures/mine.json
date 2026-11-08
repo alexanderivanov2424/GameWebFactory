@@ -1,0 +1,40 @@
+{
+  "name": "Mine",
+  "icon": "⚒️",
+  "shape": [
+    "##",
+    "#."
+  ],
+  "price": 3,
+  "cost": {
+    "wood": 2,
+    "stone": 1
+  },
+  "crew": "Miners",
+  "requires": [
+    {
+      "near": "mountain"
+    }
+  ],
+  "work": {
+    "makes": {
+      "ore": 1
+    }
+  },
+  "bonuses": [
+    {
+      "near": "mountain",
+      "min": 3,
+      "bonus": 1
+    },
+    {
+      "near": "smithy",
+      "bonus": 1
+    },
+    {
+      "near": "storage-yard",
+      "bonus": 1
+    }
+  ],
+  "text": "Digs ore out of the mountain. Smiths next door keep the picks sharp."
+}

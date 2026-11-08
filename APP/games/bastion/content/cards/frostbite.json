@@ -1,0 +1,7 @@
+{
+  "name": "Frostbite",
+  "kind": "curse",
+  "pay": {
+    "wood": 2
+  }
+}

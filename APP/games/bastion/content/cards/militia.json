@@ -1,0 +1,10 @@
+{
+  "name": "Militia",
+  "gain": {
+    "soldiers": 1
+  },
+  "cost": {
+    "food": 1
+  },
+  "price": 3
+}

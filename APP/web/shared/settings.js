@@ -12,7 +12,9 @@
  * the tab's server session alive; the session is tied to the tab's UUID, so game rooms know
  * the account without the page doing anything. The account name and password are sent to the
  * server only when you press Log in / Create account. Logging in or out is refused while you
- * are playing a game. A server restart (deploy) logs everyone out.
+ * are playing a game. The tab stays logged in across reloads and server restarts: the server
+ * sends a login token with each status, kept in sessionStorage (LOGIN_KEY) and sent back as
+ * "resume" whenever the account socket connects. Logging out (or a refused token) clears it.
  *
  * API for other components:
  *   AppSettings.get(key)
@@ -29,6 +31,11 @@
  * per game and player. It shows the display name and a game picker (starts on the page's game,
  * or "Site" off a game page); the "New game" checkbox (ticked by default off a game page) files it
  * under new_game instead.
+ *
+ * Settings tab (global settings): "Enable Admin Mode" takes the admin password. It is kept in
+ * sessionStorage like any setting and, while set, loads /shared/admin.js, which sends it to
+ * /ws/admin (server/admin.py) to check it and then shows the read-only admin view button below
+ * the gear. The password is only checked on the server; this file doesn't know it.
  *
  * To add a setting, add a field to TABS. To add a tab, add an entry to TABS: either `fields`
  * (text inputs) or `render(panel)` (builds its own content).
@@ -65,6 +72,11 @@
       id: "feedback",
       label: "Feedback",
       render: (panel) => renderFeedback(panel),
+    },
+    {
+      id: "settings",
+      label: "Settings",
+      render: (panel) => renderGlobalSettings(panel),
     },
   ];
 
@@ -193,8 +205,28 @@
     account.listeners.forEach((fn) => fn());
   }
 
+  // Login token (server/sessions.py "resume"): this tab only, like the client id.
+  const LOGIN_KEY = "app.loginToken";
+
+  function loginToken() {
+    try {
+      return sessionStorage.getItem(LOGIN_KEY) || "";
+    } catch {
+      return "";
+    }
+  }
+
+  function setLoginToken(token) {
+    try {
+      if (token) sessionStorage.setItem(LOGIN_KEY, token);
+      else sessionStorage.removeItem(LOGIN_KEY);
+    } catch {}
+  }
+
   function connectAccount() {
     let socket;
+    let statuses = 0; // status messages on this socket; the first comes before "resume" is answered
+    let resuming = false;
     try {
       socket = new WebSocket(socketUrl("/ws/account"));
     } catch {
@@ -204,6 +236,9 @@
     socket.addEventListener("open", () => {
       account.retries = 0;
       account.online = true;
+      const token = loginToken();
+      resuming = !!token;
+      if (token) socket.send(JSON.stringify({ type: "resume", token }));
       accountChanged();
     });
     socket.addEventListener("message", (event) => {
@@ -215,6 +250,10 @@
       }
       if (data.type === "account") {
         const user = typeof data.user === "string" ? data.user : null;
+        statuses++;
+        if (typeof data.token === "string") setLoginToken(data.token);
+        else if (!user && statuses > 1) setLoginToken(""); // logged out, or the token was refused
+        if (!user && statuses === 1 && resuming) return; // wait for the answer to "resume"
         const changed = user !== account.user;
         account.user = user;
         account.savedName = user && typeof data.displayName === "string" ? data.displayName : null;
@@ -417,6 +456,65 @@
     panel.append(name, pick, text, submit, result);
   }
 
+  // --- Settings (global) -------------------------------------------------
+  // Admin mode: the password setting loads /shared/admin.js (once), which checks it with the
+  // server and reports back with a document "app-admin" event ({detail: {status}}):
+  // "checking", "on", "wrong" or "offline". The status survives here for panels opened later.
+
+  const ADMIN_KEY = "adminPassword";
+  let adminStatus = "";
+  let adminScript = null;
+
+  function loadAdmin() {
+    if (adminScript || !values[ADMIN_KEY]) return;
+    adminScript = make("script", { src: "/shared/admin.js", defer: true });
+    document.head.append(adminScript);
+  }
+
+  document.addEventListener("app-admin", (e) => (adminStatus = e.detail?.status || ""));
+  loadAdmin();
+
+  const ADMIN_STATUS_TEXT = {
+    checking: ["hint", "Checking..."],
+    on: ["hint ok", "Admin mode is on. The admin view button is below the settings button."],
+    wrong: ["error", "Wrong password."],
+    offline: ["error", "Couldn't reach the server."],
+  };
+
+  function renderGlobalSettings(panel) {
+    const field = make("div", { className: "field" });
+    const input = make("input", {
+      id: "admin-password",
+      type: "password",
+      autocomplete: "off",
+      maxLength: 64,
+      value: values[ADMIN_KEY] || "",
+    });
+    const status = make("p", { className: "hint" });
+    field.append(make("label", { htmlFor: "admin-password" }, "Enable Admin Mode"), input, status);
+    field.append(make("p", { className: "hint" }, "Enter the admin password for a view-only look at accounts, feedback, sessions and rooms. Clear it to turn admin mode off."));
+
+    function draw() {
+      const shown = values[ADMIN_KEY] ? ADMIN_STATUS_TEXT[adminStatus] : null;
+      status.className = shown ? shown[0] : "hint";
+      status.textContent = shown ? shown[1] : "";
+      status.hidden = !shown;
+    }
+    document.addEventListener("app-admin", draw);
+
+    let timer;
+    input.addEventListener("input", () => {
+      clearTimeout(timer);
+      timer = setTimeout(() => {
+        AppSettings.set(ADMIN_KEY, input.value.trim());
+        loadAdmin(); // admin.js follows later changes through AppSettings.onChange
+        draw();
+      }, 500);
+    });
+    draw();
+    panel.append(field);
+  }
+
   // --- UI ------------------------------------------------------------------
 
   const STYLE = `
@@ -493,6 +591,8 @@
     .feedback-pick .check input { width: auto; margin: 0; }
     .feedback-text:focus { outline: 2px solid #4a5cff; outline-offset: -1px; }
     .hint.warning { color: #c62828; font-weight: 600; }
+    .hint.ok { color: #2e7d32; font-weight: 600; }
+    .field .error { margin: 6px 0 0; }
 
     @media (max-width: 600px) {
       .body { flex-direction: column; }

@@ -1,0 +1,38 @@
+{
+  "name": "Quarry",
+  "icon": "⛏️",
+  "shape": [
+    "##"
+  ],
+  "price": 2,
+  "cost": {
+    "wood": 2
+  },
+  "crew": "Stonecutters",
+  "requires": [
+    {
+      "near": "mountain"
+    }
+  ],
+  "work": {
+    "makes": {
+      "stone": 2
+    }
+  },
+  "bonuses": [
+    {
+      "near": "mountain",
+      "min": 3,
+      "bonus": 1
+    },
+    {
+      "near": "storage-yard",
+      "bonus": 1
+    },
+    {
+      "near": "road",
+      "bonus": 1
+    }
+  ],
+  "text": "Cuts stone from the mountain next to it. Carts on a road next to it speed it up."
+}

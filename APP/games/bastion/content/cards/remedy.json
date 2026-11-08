@@ -1,0 +1,8 @@
+{
+  "name": "Remedy",
+  "cure": true,
+  "cost": {
+    "food": 1
+  },
+  "price": 2
+}

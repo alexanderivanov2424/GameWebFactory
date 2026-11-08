@@ -24,6 +24,7 @@ bodies only for what you change.
 | Rules text players read | The lobby rules paragraph in `client/index.html`, banners/targeting text and the log in `client/game.js` |
 | Lobby, phases, hooks, SETTINGS, ACTIONS, timers | Header of `APP/gamekit/lobby.py` (and `settings.py`) |
 | Turn order / secret simultaneous picks / card decks | Headers of `APP/gamekit/turns.py` / `APP/gamekit/choices.py` / `APP/gamekit/deck.py` |
+| Polyomino shapes and rotations | Header of `APP/gamekit/shapes.py` |
 | Validating input / loading content files | Headers of `APP/gamekit/validate.py` / `APP/gamekit/data.py` |
 | Real-time games: tick loop, inputs, ping | Header of `APP/gamekit/realtime.py` |
 | How state reaches clients (full state / patches / snapshots) | Header of `APP/gamekit/sync.py` |
@@ -31,6 +32,7 @@ bodies only for what you change.
 | Client real-time helpers (interpolation, keyboard input, ping) | Header of `APP/web/gamekit/realtime.js` |
 | Shared UI (player list, start, lobby buttons, settings form, error banner, turn alert) | Header of `APP/web/gamekit/lobby-ui.js` |
 | Base page styles and the CSS variables a game can set | Header of `APP/web/shared/theme.js` |
+| Admin view (read-only accounts / feedback / sessions / rooms) | Headers of `APP/server/admin.py` and `APP/web/shared/admin.js`; a game's Rooms-tab summary is `admin_info()` (`LobbyGame` provides it) |
 | Connections, reconnects, the WebSocket server | Headers of `APP/server/rooms.py`, `main.py`, `websocket.py` (platform; games don't use it directly) |
 | Saved player data, guests vs. accounts, login, limits | "Saved player data" in the header of `APP/gamekit/lobby.py`; headers of `APP/server/sessions.py`, `accounts.py` |
 | Turtle (emergency site shutdown) and its triggers | Header of `APP/server/turtle.py`; CLAUDE.md "Turtle" |
@@ -44,6 +46,11 @@ Games at a glance (details in each `NOTES.md`):
 - **smugglers**: built with `logic/` modules; graph board from JSON maps (SVG), Interpol vs.
   smugglers, deck-building (`gamekit.Deck`), inspections that interrupt a turn, `PatchState`.
   Content files: `content/README.md`.
+- **bastion**: `logic/` modules; co-op city-builder, simultaneous rounds (`done` flags),
+  polyomino buildings placed with rotation whose output comes from adjacency conditions in JSON
+  (`content/structures/`), goods stored in buildings and hauled along roads to depots, a deck per
+  player (blueprints leave the deck, crew cards join it), enemy cards with cycling attacks and
+  their own defeat rules (`content/enemies/`), server-computed placement targets.
 - **block-blast**: `logic/` modules; 9x9 boards filled with rotatable shape cards (JSON in
   `cards/`) that place tiles (types with behaviours, `logic/tiles.py`) carrying symbols
   (`logic/symbols.py`, effects in `logic/effects.py`) as separate layers, row/column clears that pay gold or deal damage, a per-player `gamekit.Deck`, a

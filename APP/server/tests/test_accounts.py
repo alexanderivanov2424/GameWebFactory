@@ -184,6 +184,59 @@ class LoginTests(Base):
             store.create("Broken", {})
 
 
+class LoginTokenTests(Base):
+    def make(self, name="Alice"):
+        record = self.sessions.store.create(name, accounts.hash_password("", iterations=1))
+        return record, self.sessions.store.login_token(name)
+
+    def test_token_survives_a_restart(self):
+        _, token = self.make()
+        key_file = self.folder / accounts.LOGIN_KEY_FILE
+        self.assertEqual(key_file.stat().st_mode & 0o777, 0o600)
+        restarted = AccountStore(self.folder)  # same folder, new process: same key
+        self.assertEqual(restarted.check_login_token(token), "alice")
+        self.assertEqual(restarted.count(), 1)  # the key file isn't read as an account
+
+    def test_bad_tokens(self):
+        _, token = self.make()
+        body, signature = token.split(".")
+        for bad in [None, 5, "", "x" * 600, "a.b.c", f"{body}.{'0' * 64}", f"{body[:-2]}xx.{signature}"]:
+            self.assertIsNone(self.sessions.store.check_login_token(bad), bad)
+        self.assertIsNone(AccountStore(None).check_login_token(token))  # another key
+
+    def test_expired_token(self):
+        Limits(self, LOGIN_TOKEN_DAYS=-1)
+        _, token = self.make()
+        self.assertIsNone(self.sessions.store.check_login_token(token))
+
+    def test_deleted_and_recreated_account_rejects_old_token(self):
+        record, token = self.make()
+        record["created"] -= 10  # stands in for a new account with the same name
+        self.assertIsNone(self.sessions.store.check_login_token(token))
+
+    async def test_resume(self):
+        _, token = self.make()
+        self.assertTrue(self.sessions.resume(TAB_A, token))
+        self.assertEqual(self.sessions.account_name(TAB_A), "Alice")
+
+    async def test_resume_moves_guest_data_like_a_login(self):
+        _, token = self.make()
+        self.sessions.save(TAB_A, "demo", {"wins": 2})
+        self.sessions.resume(TAB_A, token)
+        self.assertEqual(self.sessions.load(TAB_A, "demo"), {"wins": 2})
+        self.assertTrue(self.sessions.store.has("alice", "demo"))
+
+    async def test_resume_never_switches_or_interrupts(self):
+        _, token = self.make()
+        self.sessions.bind(TAB_A, "Bob")
+        self.sessions.resume(TAB_A, token)
+        self.assertEqual(self.sessions.account_name(TAB_A), "Bob")  # already logged in: ignored
+        self.sessions.logout(TAB_A)
+        self.playing.add(TAB_A)
+        self.assertFalse(self.sessions.resume(TAB_A, token))
+        self.assertIsNone(self.sessions.account_name(TAB_A))
+
+
 class DataTests(Base):
     def test_guest_data_in_memory(self):
         s = self.sessions

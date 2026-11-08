@@ -1,71 +1,59 @@
 # Bastion content files
 
-One JSON file per item; the file name (without `.json`) is its id (lowercase letters, digits,
-`-`, `_`). Files are loaded when the game is imported; a bad file is logged (logger "bastion")
-and skipped, so check the server log after editing. Balance numbers live here, not in code.
+One JSON file per item; the file name (lowercase letters, digits, `-`, `_`) is its id. Bad files
+are logged and skipped (logger "bastion"). Loaders: `logic/structures.py`, `logic/cards.py`,
+`logic/enemies.py`, `logic/maps.py`. Resources: `gold`, `wood`, `stone`, `ore`, `food`, `tools`
+(gold is never stored in buildings; the others are "goods").
 
-## cards/*.json (logic/cards.py)
-```json
-{"name": "Archer Tower", "icon": "🏹", "kind": "tower", "labor": 2, "cost": 3, "unlock": 1,
- "shot": "arrow", "maxLevel": 3, "text": "Shown on the card.",
- "stats": {"damage": [3, 4, 6], "range": [2.5, 2.5, 3], "cooldown": 4, "air": true}}
-```
-- `kind`: `order` or a structure kind (below). `labor`: labor to play it (0-5). `cost`: market
-  price in gold (0 = never offered). `unlock`: the first market that may offer it (the one after
-  level N). `maxLevel`: 1-3 (default 3 for structures, 1 for orders). `shot` (towers): `arrow`,
-  `bolt`, `rock`, `oil` or `none` (what the client draws).
-- `stats`: each value is a number, `true`/`false`, or a list with one number per level. Only the
-  stats listed for the kind are accepted:
+## structures/<id>.json
+Buildings, plus the `road` and `wall` tiles and the `keep` (start only).
+- `name`, `icon` (an emoji), `text` (shown in the inspector and on the blueprint)
+- `shape`: rows of `#` (filled) and `.` (empty), at most 4x4; players may turn it, never mirror it
+- `tile`: `"road"` or `"wall"` for tiles (cell sets, never worked); leave out for buildings
+- `cost`: `{resource: n}` paid from the stockpile when built
+- `price`: gold for its blueprint (`plan-<id>`) in the market; leave out to never sell it
+- `reusable`: `true` keeps the blueprint in the deck after building (roads, walls)
+- `requires`: `[{"near": X, "min": n}]` all must hold where it's placed
+- `work`: `{"uses": {resource: n}, "makes": {output: n}}`, one output: a resource, `soldiers`,
+  `keep` (heals it) or `cure` (cures that many plagued buildings)
+- `bonuses` (buildings that work): `[{"near": X, "min": n, "bonus": b}]` adds b when at least n
+  are next to it, or `[{"near": X, "each": b, "max": m}]` adds b per one next to it (up to m).
+  Negative values are penalties.
+- `near` (X) is a terrain (`forest`, `mountain`, `water`, `grass`), `empty` (empty grass),
+  `road` / `wall` (tiles), or a structure id (counts distinct buildings of that kind)
+- `income`: `{resource: n}` made every round without a card (the keep's gold)
+- `depot`: buildings next to it deliver goods at once; roads haul to it
+- `protects`: radius (square) in which building tiles can't be ruined by raids
+- `card`: the card id added to the builder's deck when built. Buildings with `work` get their
+  crew card `crew-<id>` ("Work a <name>") unless `card` names another; `crew` names it.
 
-| kind | goes on | stats |
-|---|---|---|
-| `tower` | grass | `damage`, `range` (cells, from the tower's center), `cooldown` (ticks between shots), `air` (hits flyers), `ground` (default true), `pierce` (ignores armor), `splash` (radius around the target, ground only), `minRange`, `area` (hits everything in range) |
-| `wall` | road | `hp` |
-| `spikes` | road | `damage` per tick to ground enemies on it (ignores armor) |
-| `tar` | road | `slow` (% speed lost on it) |
-| `barracks` | grass next to the road | `hp`, `damage`, `cooldown`, `respawn` (ticks; halved next to a farm) |
-| `farm` | grass | `gold` per build turn for its owner |
-| `forge` | grass | `bonus` damage for towers/barracks next to it |
-| `watch` | grass | `bonus` range for towers next to it |
-| `quarry` | grass | `labor` per build turn for its owner |
-| `chapel` | grass | after each siege held: `keep` health, `repair` for walls next to it |
-| `order` | — | `labor`, `draw`, `gold`, `keep`, `repair` (all walls), `teamLabor`, `teamGold`, `teamDraw` (everyone else), `upgrade` (true: pick a structure, +1 level) |
+## cards/<id>.json
+Actions and enemy curses (blueprints and crew cards are made from the structure files).
+- `name`, `kind`: `"action"` (default) or `"curse"`, `price` (gold in the market; leave out to
+  never sell it), `text` (optional: generated from the fields otherwise)
+- Actions, any of: `cost` `{resource: n}` paid when played; one target: `work` (`"any"` or a
+  list of structure ids) with optional `boost`, or `repair: true` (1 wood per ruined tile), or
+  `cure: true`; plus `haul` n, `gain` `{resource or "soldiers": n}`, `draw` n
+- Curses: `pay` `{resource: n}` to play it (it then leaves the deck), `hurts: true` deals 1
+  damage to the enemy that sent it (if that enemy has `defeat.cards`)
 
-A new structure kind or order effect needs code (`logic/cards.py` KINDS / ORDER_STATS, then
-`logic/battle.py`, `logic/match.py` or `logic/orders.py`, and `statLines` in `client/game.js`).
+## enemies/<id>.json
+- `name`, `icon`, `text` (flavour), `tier` 1-3 (a game's lineup: lower tiers first, a random
+  tier-3 boss last), `hp` (scaled by difficulty and +50% per player after the first)
+- `defeat` (at least one): `soldiers` n per damage, `resources` `{resource: n}` per damage,
+  `cure: true` (each building it plagued that is cured hurts it), `cards: true` (each of its
+  curse cards paid off hurts it), `raze` n soldiers per lair tile (needs `lair`)
+- `lair`: `{"name", "icon", "shape"}` placed on empty grass when it arrives; its tiles are its health
+- `attacks`: 1-4 attacks made in turn, one per round. Each: `name`, optional `text`, and any of
+  `steal` `{resource | "most": n}`, `ruin` n (+ `prefer` [structure ids]), `keep` n (+ `shield`:
+  each wall tile next to the keep blocks 1), `place` `{"name", "icon"}` + `count` (blight tiles:
+  -1 output to buildings next to them), `curse` card id + `to` `"each"` | `"one"`, `plague` n,
+  `freeze` n, `kill` n soldiers. Nothing: it rests.
+
+## maps/<id>.json
+- `name`, `rows`: equal-length strings (6-24) of `.` grass, `F` forest, `M` mountain, `~` water
+- `start`: `[{"structure", "x", "y", "rotation"}]` the starting town (needs a `keep`); x, y is the
+  top-left of the turned shape. Entries that don't fit are logged and skipped.
 
 ## starting-deck.json
-`{"cards": {"archer-tower": 3, ...}}`: every player's deck at the start.
-
-## enemies/*.json (logic/enemies.py)
-```json
-{"name": "Goblin", "icon": "👺", "hp": 26, "speed": 0.25, "keep": 1, "attack": 2, "attackEvery": 2,
- "text": "Quick and weak."}
-```
-`hp` is for 2 players on Normal (scaled by `PLAYER_SCALE` and `DIFFICULTY` in `logic/match.py`).
-`speed`: road cells per tick (the client plays 8 ticks a second). Optional: `armor`, `keep`
-(damage to the keep, default 1), `attack` + `attackEvery` (against walls and soldiers), `siege`
-(multiplier against walls), `flying`, `regen` (hp per tick), `explode` (damage to the first
-blocker, then it dies), `boss` (drawn bigger), `heal` `{"amount", "radius", "every"}`,
-`summon` `{"enemy", "every", "max"}`, `breath` `{"radius", "every", "stun", "damage"}` (stuns
-towers, hurts walls and soldiers in range).
-
-## levels/*.json (logic/enemies.py)
-Played in file-name order (`01-...`, `02-...`).
-```json
-{"name": "Goblin Scouts", "text": "Shown before the level.", "buildTurns": 3, "reward": 6,
- "waves": [{"enemy": "goblin", "count": 10, "road": "main", "start": 0, "gap": 8}]}
-```
-`buildTurns`: build turns before the siege. `reward`: gold for every player when it's held.
-Each wave sends `count` enemies down `road` (`main` or `flank`), the first at tick `start`, then
-one every `gap` ticks.
-
-## maps/*.json (logic/maps.py)
-```json
-{"name": "Green Valley", "terrain": ["................", "..."], "keep": [0, 5],
- "roads": {"main": [[15, 2], [11, 2], [0, 2]], "flank": [[9, 9], [9, 2], [0, 2]]}}
-```
-`terrain`: one string per row (`.` grass, `^` rocks, `~` water, `T` forest; up to 24x24). Roads are
-waypoints joined by straight runs, must end on the keep, may merge, and never cross themselves.
-Road over water is drawn as a bridge. Every map needs both roads. A new map file shows up in the
-host's Map setting automatically.
+`{card id: copies}` every player starts with.

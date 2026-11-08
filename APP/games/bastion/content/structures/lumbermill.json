@@ -1,0 +1,38 @@
+{
+  "name": "Lumbermill",
+  "icon": "🪓",
+  "shape": [
+    "##"
+  ],
+  "price": 2,
+  "cost": {
+    "wood": 2
+  },
+  "crew": "Lumberjacks",
+  "requires": [
+    {
+      "near": "forest"
+    }
+  ],
+  "work": {
+    "makes": {
+      "wood": 2
+    }
+  },
+  "bonuses": [
+    {
+      "near": "forest",
+      "min": 3,
+      "bonus": 1
+    },
+    {
+      "near": "storage-yard",
+      "bonus": 1
+    },
+    {
+      "near": "lumbermill",
+      "bonus": -1
+    }
+  ],
+  "text": "Cuts wood from the forest next to it. Two mills side by side fight over the trees."
+}

@@ -18,7 +18,11 @@ Login (only from the /ws/account socket, and never while the tab plays a game: i
   that game; otherwise the account's data wins and the guest data is dropped. Guest data that
   doesn't fit in the account is dropped too (logged). Then the guest data is cleared.
 - Creating an account logs in the same way. Logging out leaves a fresh, empty guest.
-- Logins are kept in memory: a server restart (deploy) logs everyone out.
+- Staying logged in: every status sent while logged in carries a fresh login token
+  (accounts.AccountStore.login_token). The tab keeps it (sessionStorage) and sends it back as
+  "resume" whenever its account socket connects, which logs the session back in if it had been
+  forgotten (a server restart or deploy, or the tab gone longer than SESSION_GRACE). A session
+  that is already logged in ignores it; so does a tab that is playing (no reply then).
 - Display name: while logged in, the tab sends its display name ("name") whenever it changes,
   and it is saved to the account (each one counts as a save for the rate limits). The status
   sent after logging in carries the saved one (displayName), and the tab switches to it. A
@@ -30,9 +34,11 @@ SAVE_WINDOW seconds, and the account count (accounts.MAX_ACCOUNTS).
 
 /ws/account?client=<uuid> messages:
     client -> server  {"type": "register" | "login", "name", "password"}, {"type": "logout"},
+                      {"type": "resume", "token"}                 log back in with a saved token
                       {"type": "name", "name": display name}     (logged in only; no reply)
-    server -> client  {"type": "account", "user": name | null, "displayName": text | null}
-                                                                 on connect and after each change
+    server -> client  {"type": "account", "user": name | null, "displayName": text | null,
+                       "token": login token | null}              on connect, after each change
+                                                                 and in reply to "resume"
                       {"type": "error", "message"}               a request was refused
 """
 
@@ -214,6 +220,19 @@ class Sessions:
         self._check_not_playing(client_id)
         self._log_in(self._session(client_id), name.lower())
 
+    def resume(self, client_id, token):
+        """Log a forgotten session back in from a login token. Returns False if nothing should be
+        answered (the tab is playing); a bad token just leaves it a guest."""
+        session = self._session(client_id)
+        if session.account is not None:
+            return True
+        if self.is_playing(client_id):
+            return False
+        key = self.store.check_login_token(token)
+        if key is not None:
+            self._log_in(session, key)
+        return True
+
     def logout(self, client_id):
         self._check_not_playing(client_id)
         session = self._session(client_id)
@@ -264,6 +283,9 @@ class Sessions:
                         await self.login(client_id, data.get("name"), data.get("password"))
                     elif kind == "logout":
                         self.logout(client_id)
+                    elif kind == "resume":
+                        if not self.resume(client_id, data.get("token")):
+                            continue
                     elif kind == "name":
                         self.set_display_name(client_id, data.get("name"))
                         continue  # no reply: nothing the tab doesn't already know
@@ -280,8 +302,9 @@ class Sessions:
             self.detach(client_id)
 
     async def _send_status(self, client_id, sockets):
-        text = json.dumps({"type": "account", "user": self.account_name(client_id),
-                           "displayName": self.display_name(client_id)})
+        user = self.account_name(client_id)
+        text = json.dumps({"type": "account", "user": user, "displayName": self.display_name(client_id),
+                           "token": self.store.login_token(user) if user else None})
         await asyncio.gather(*(ws.send(text) for ws in sockets))
 
 

@@ -1,0 +1,7 @@
+{
+  "name": "Hex",
+  "kind": "curse",
+  "pay": {
+    "gold": 2
+  }
+}

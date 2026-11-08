@@ -1,0 +1,59 @@
+{
+  "name": "Highlands",
+  "rows": [
+    "MMMM....FFFF..MM",
+    "MMM......FFF...M",
+    "MM.............M",
+    "M.....~~.......F",
+    "......~~......FF",
+    "..............FF",
+    "F.......~......F",
+    "FF......~~......",
+    "FFF......~.....M",
+    "FF.............M",
+    "F.....FF.....MMM"
+  ],
+  "start": [
+    {
+      "structure": "keep",
+      "x": 7,
+      "y": 5
+    },
+    {
+      "structure": "workshop",
+      "x": 6,
+      "y": 6,
+      "rotation": 0
+    },
+    {
+      "structure": "lumbermill",
+      "x": 13,
+      "y": 4,
+      "rotation": 1
+    },
+    {
+      "structure": "road",
+      "x": 8,
+      "y": 5,
+      "rotation": 0
+    },
+    {
+      "structure": "road",
+      "x": 10,
+      "y": 5,
+      "rotation": 0
+    },
+    {
+      "structure": "road",
+      "x": 12,
+      "y": 4,
+      "rotation": 1
+    },
+    {
+      "structure": "road",
+      "x": 5,
+      "y": 5,
+      "rotation": 0
+    }
+  ]
+}

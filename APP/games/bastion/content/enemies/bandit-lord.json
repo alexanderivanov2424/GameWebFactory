@@ -1,0 +1,28 @@
+{
+  "name": "Bandit Lord",
+  "icon": "🏴",
+  "tier": 2,
+  "hp": 4,
+  "defeat": {
+    "soldiers": 2,
+    "cards": true
+  },
+  "text": "Armoured, and happy to be paid off instead.",
+  "attacks": [
+    {
+      "name": "Extort",
+      "curse": "ransom-note",
+      "to": "each"
+    },
+    {
+      "name": "Toll",
+      "steal": {
+        "gold": 3
+      }
+    },
+    {
+      "name": "Ambush",
+      "kill": 2
+    }
+  ]
+}

@@ -1,0 +1,8 @@
+{
+  "name": "Ransom Note",
+  "kind": "curse",
+  "pay": {
+    "gold": 3
+  },
+  "hurts": true
+}

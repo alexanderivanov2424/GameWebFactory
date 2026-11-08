@@ -1,131 +1,129 @@
 """Bastion: shared test helpers (not a test file: run_tests.py only collects test_*.py).
 
-Tests use fixture content (cards "t-...", enemies "t-...", a tiny map and hand-made levels) so
-they check rules, never the real cards, enemies or levels, which get rebalanced all the time.
+Tests never depend on the real content: FixtureCase installs small fixture structures, cards and
+enemies (parsed by the real loaders) into the registries for each test and restores them after.
 
-    helpers = importlib.import_module("games.bastion.tests.helpers")
-    helpers.install()                  add the fixture cards/enemies to the game's registries
-                                       (call from setUpModule; remove() in tearDownModule)
-    new_match(players=2, levels=None, **settings)   a Match on the fixture map, fixed seed;
-                                       default levels: [level(wave("t-grunt", 1))] * 3
-    level(*waves, turns=1, reward=5) / wave(enemy, count=1, road="main", start=0, gap=4)
+    class MyTests(helpers.FixtureCase): ...     # setUp installs the fixtures
+    new_match(players=1, enemies=(), **settings)   a Match on MAP with a fixed seed; `enemies` =
+                                       fixture enemy ids in arrival order (none by default)
     give(match, pid, card_id)          a fresh instance of card_id in pid's hand -> its uid
-    build(match, card_id, x, y, owner="p1", level=1)   put a structure straight on the board
-    siege(match, *waves)               run one siege of those waves on match's board -> Result
+    build(match, kind, x, y, rotation=0, owner="p1")   place a structure directly (no checks)
+    foe(match, enemy_id)               a fixture enemy made active right now -> Foe
 
-Fixture map (8 x 5), keep at (0, 2):
-    main road:  (7, 2) -> (0, 2), straight along row 2 (8 cells; (7, 2) is its entrance)
-    flank road: (4, 4) -> (4, 2), then along row 2 to the keep
-    rocks at (2, 0); everything else is grass.
+MAP (8 x 6), keep at (3, 2):          Fixture structures (see STRUCTURES below):
+    y0  F F . . . . . .                  mill "##" next to forest; wood 2; +1 next to >=2 forest,
+    y1  F . . . . . . .                       +1 next to a yard, -1 next to another mill
+    y2  . . . K . . . .                  yard "#" depot; shop "#" 2 wood -> 1 tools;
+    y3  . . . . . . . .                  field "##/##" food 2, +1 per cottage-like "hut" (max 2);
+    y4  . . . . . . M M                  clinic "#" 1 food -> cure 1; tower "#" protects 1;
+    y5  ~ . . . . . M M                  hut "#" gives the "work-any" card; road, wall tiles
 """
 
 import importlib
 import random
+import unittest
 
 GAME = "bastion"
-match_module = importlib.import_module(f"games.{GAME}.logic.match")
+structures = importlib.import_module(f"games.{GAME}.logic.structures")
 cards = importlib.import_module(f"games.{GAME}.logic.cards")
 enemies = importlib.import_module(f"games.{GAME}.logic.enemies")
 maps = importlib.import_module(f"games.{GAME}.logic.maps")
-battle = importlib.import_module(f"games.{GAME}.logic.battle")
-Match = match_module.Match
+match_module = importlib.import_module(f"games.{GAME}.logic.match")
+foes_module = importlib.import_module(f"games.{GAME}.logic.foes")
 
-MAP = maps.parse_map("t-map", {
-    "name": "Test",
-    "terrain": ["..^.....", "........", "........", "........", "........"],
-    "keep": [0, 2],
-    "roads": {"main": [[7, 2], [0, 2]], "flank": [[4, 4], [4, 2], [0, 2]]},
-})
-
+STRUCTURES = {
+    "keep": {"name": "Keep", "shape": ["#"], "depot": True, "income": {"gold": 1}},
+    "road": {"name": "Road", "shape": ["##"], "tile": "road", "price": 1, "reusable": True},
+    "wall": {"name": "Wall", "shape": ["##"], "tile": "wall", "price": 1, "reusable": True, "cost": {"stone": 1}},
+    "mill": {"name": "Mill", "shape": ["##"], "price": 1, "cost": {"wood": 1}, "requires": [{"near": "forest"}],
+             "work": {"makes": {"wood": 2}},
+             "bonuses": [{"near": "forest", "min": 2, "bonus": 1}, {"near": "yard", "bonus": 1}, {"near": "mill", "bonus": -1}]},
+    "yard": {"name": "Yard", "shape": ["#"], "price": 1, "depot": True},
+    "shop": {"name": "Shop", "shape": ["#"], "price": 1, "work": {"uses": {"wood": 2}, "makes": {"tools": 1}}},
+    "field": {"name": "Field", "shape": ["##", "##"], "price": 1, "work": {"makes": {"food": 2}},
+              "bonuses": [{"near": "hut", "each": 1, "max": 2}]},
+    "clinic": {"name": "Clinic", "shape": ["#"], "price": 1, "work": {"uses": {"food": 1}, "makes": {"cure": 1}}},
+    "tower": {"name": "Tower", "shape": ["#"], "price": 1, "protects": 1},
+    "hut": {"name": "Hut", "shape": ["#"], "price": 1, "card": "work-any"},
+    "ell": {"name": "Ell", "shape": ["##", "#."], "price": 1},
+}
 CARDS = {
-    "t-tower": {"name": "T Tower", "icon": "T", "kind": "tower", "labor": 2, "cost": 3,
-                "stats": {"damage": [5, 8, 11], "range": [1.5, 2, 2.5], "cooldown": 1}},
-    "t-air": {"name": "T Air", "icon": "A", "kind": "tower", "labor": 2, "cost": 3,
-              "stats": {"damage": 5, "range": 9, "cooldown": 1, "air": True, "ground": False}},
-    "t-pierce": {"name": "T Pierce", "icon": "P", "kind": "tower", "labor": 2, "cost": 3,
-                 "stats": {"damage": 2, "range": 9, "cooldown": 1, "pierce": True}},
-    "t-weak": {"name": "T Weak", "icon": "W", "kind": "tower", "labor": 2, "cost": 3,
-               "stats": {"damage": 2, "range": 9, "cooldown": 1}},
-    "t-wall": {"name": "T Wall", "icon": "#", "kind": "wall", "labor": 1, "cost": 2, "stats": {"hp": [10, 20, 30]}},
-    "t-spikes": {"name": "T Spikes", "icon": "^", "kind": "spikes", "labor": 1, "cost": 2, "stats": {"damage": 5}},
-    "t-tar": {"name": "T Tar", "icon": "~", "kind": "tar", "labor": 1, "cost": 2, "stats": {"slow": 50}},
-    "t-barracks": {"name": "T Barracks", "icon": "B", "kind": "barracks", "labor": 3, "cost": 5,
-                   "stats": {"hp": 30, "damage": 4, "cooldown": 1, "respawn": 20}},
-    "t-farm": {"name": "T Farm", "icon": "F", "kind": "farm", "labor": 1, "cost": 4, "stats": {"gold": [1, 2, 3]}},
-    "t-quarry": {"name": "T Quarry", "icon": "Q", "kind": "quarry", "labor": 1, "cost": 4, "maxLevel": 2,
-                 "stats": {"labor": [1, 2]}},
-    "t-forge": {"name": "T Forge", "icon": "G", "kind": "forge", "labor": 1, "cost": 4, "stats": {"bonus": 3}},
-    "t-watch": {"name": "T Watch", "icon": "O", "kind": "watch", "labor": 1, "cost": 4, "stats": {"bonus": 1}},
-    "t-chapel": {"name": "T Chapel", "icon": "C", "kind": "chapel", "labor": 1, "cost": 4,
-                 "stats": {"keep": 2, "repair": 5}},
-    "t-hustle": {"name": "T Hustle", "icon": "H", "kind": "order", "labor": 0, "cost": 3, "stats": {"labor": 2, "draw": 1}},
-    "t-gift": {"name": "T Gift", "icon": "$", "kind": "order", "labor": 1, "cost": 3, "stats": {"teamGold": 2}},
-    "t-mason": {"name": "T Mason", "icon": "M", "kind": "order", "labor": 1, "cost": 3, "stats": {"upgrade": True}},
-    "t-fix": {"name": "T Fix", "icon": "R", "kind": "order", "labor": 1, "cost": 3, "stats": {"repair": 4, "keep": 3}},
+    "work-any": {"name": "Work Any", "work": "any"},
+    "haul-2": {"name": "Haul Two", "haul": 2},
+    "mend": {"name": "Mend", "repair": True},
+    "remedy": {"name": "Remedy", "cure": True, "cost": {"food": 1}},
+    "boon": {"name": "Boon", "gain": {"gold": 2, "soldiers": 1}, "draw": 1},
+    "note": {"name": "Note", "kind": "curse", "pay": {"gold": 1}, "hurts": True},
+    "dread": {"name": "Dread", "kind": "curse", "pay": {"food": 1}},
 }
-
 ENEMIES = {
-    "t-grunt": {"name": "Grunt", "icon": "g", "hp": 10, "speed": 0.5, "keep": 2, "attack": 5, "attackEvery": 1},
-    "t-flyer": {"name": "Flyer", "icon": "f", "hp": 10, "speed": 0.5, "keep": 1, "flying": True},
-    "t-armored": {"name": "Armored", "icon": "a", "hp": 20, "speed": 0.25, "keep": 1, "armor": 4},
-    "t-tank": {"name": "Tank", "icon": "k", "hp": 1000, "speed": 0.5, "keep": 1, "attack": 2, "attackEvery": 1},
-    "t-bomber": {"name": "Bomber", "icon": "b", "hp": 10, "speed": 0.5, "keep": 1, "explode": 25},
-    "t-summoner": {"name": "Summoner", "icon": "s", "hp": 1000, "speed": 0.1, "keep": 1,
-                   "summon": {"enemy": "t-grunt", "every": 5, "max": 2}},
-    "t-troll": {"name": "Troll", "icon": "r", "hp": 20, "speed": 0.1, "keep": 1, "regen": 3},
-    "t-healer": {"name": "Healer", "icon": "h", "hp": 1000, "speed": 0.25, "keep": 1,
-                 "heal": {"amount": 100, "radius": 2, "every": 1}},
-    "t-dragon": {"name": "Dragon", "icon": "d", "hp": 1000, "speed": 0.25, "keep": 1, "flying": True,
-                 "breath": {"radius": 3, "every": 1, "stun": 5, "damage": 0}},
+    "brute": {"name": "Brute", "tier": 1, "hp": 2, "defeat": {"soldiers": 2},
+              "attacks": [{"name": "Smash", "ruin": 1}, {"name": "Rob", "steal": {"gold": 2}}, {"name": "Rest"}]},
+    "sender": {"name": "Sender", "tier": 1, "hp": 2, "defeat": {"cards": True},
+               "attacks": [{"name": "Send", "curse": "note", "to": "each"}]},
+    "rat": {"name": "Rat", "tier": 1, "hp": 2, "defeat": {"cure": True}, "attacks": [{"name": "Sicken", "plague": 1}]},
+    "witch": {"name": "Witch", "tier": 2, "hp": 2, "defeat": {"resources": {"wood": 2}},
+              "attacks": [{"name": "Freeze", "freeze": 1}, {"name": "Hit", "keep": 3, "shield": True}]},
+    "lich": {"name": "Lich", "tier": 3, "defeat": {"raze": 1}, "lair": {"name": "Altar", "shape": ["#"]},
+             "attacks": [{"name": "Grave", "place": {"name": "Grave"}}, {"name": "Kill", "kill": 2}]},
 }
-
-SETTINGS = {"difficulty": "normal", "keepHealth": 30, "map": "t-map"}
-
-
-def install():
-    for card_id, data in CARDS.items():
-        cards.CARDS[card_id] = cards.parse_card(card_id, data)
-    for enemy_id, data in ENEMIES.items():
-        enemies.ENEMIES[enemy_id] = enemies.parse_enemy(enemy_id, data)
+MAP = maps.GameMap("Test", 8, 6, ["FF......", "F.......", "........", "........", "......MM", "~.....MM"],
+                   [{"structure": "keep", "x": 3, "y": 2, "rotation": 0}])
+SETTINGS = {"map": "test", "keepHealth": 10, "difficulty": "normal", "enemies": 3, "peaceRounds": 2, "enemyGap": 2}
 
 
-def remove():
-    for card_id in CARDS:
-        cards.CARDS.pop(card_id, None)
-    for enemy_id in ENEMIES:
-        enemies.ENEMIES.pop(enemy_id, None)
+def fixture_registries():
+    found = {sid: structures.parse_structure(sid, data) for sid, data in STRUCTURES.items()}
+    structures.check_names(found)
+    return found
 
 
-def wave(enemy, count=1, road="main", start=0, gap=4):
-    return {"enemy": enemy, "count": count, "road": road, "start": start, "gap": gap}
+class FixtureCase(unittest.TestCase):
+    """Installs the fixture structures/cards in place (modules share these dicts) per test."""
+
+    def setUp(self):
+        saved = [(registry, dict(registry)) for registry in (structures.STRUCTURES, cards.CARDS)]
+
+        def restore():
+            for registry, old in saved:
+                registry.clear()
+                registry.update(old)
+        self.addCleanup(restore)
+        structures.STRUCTURES.clear()
+        structures.STRUCTURES.update(fixture_registries())
+        made = {cid: cards.parse_card(cid, data, structures.STRUCTURES) for cid, data in CARDS.items()}
+        made.update(cards.structure_cards(structures.STRUCTURES))
+        cards.CARDS.clear()
+        cards.CARDS.update(made)
+        self.enemies = {eid: enemies.parse_enemy(eid, data, cards.CARDS) for eid, data in ENEMIES.items()}
 
 
-def level(*waves, turns=1, reward=5, name="Test level"):
-    return enemies.parse_level("t-level", {"name": name, "buildTurns": turns, "reward": reward,
-                                           "waves": list(waves) or [wave("t-grunt")]}, enemies.ENEMIES)
-
-
-def new_match(players=2, levels=None, **settings):
-    names = {f"p{i + 1}": f"Player {i + 1}" for i in range(players)}
-    if levels is None:
-        levels = [level() for _ in range(3)]
-    return Match(names, {**SETTINGS, **settings}, rng=random.Random(1), levels=levels, maps={"t-map": MAP})
+def new_match(case, players=1, enemies=(), **settings):
+    """A Match with fixed seed on MAP; `enemies` = fixture enemy ids in arrival order."""
+    picked = {eid: case.enemies[eid] for eid in enemies}
+    merged = {**SETTINGS, "enemies": len(enemies), **settings}
+    names = {f"p{i + 1}": f"P{i + 1}" for i in range(players)}
+    original = foes_module.lineup
+    foes_module.lineup = lambda pool, count, rng: [pool[eid] for eid in enemies]
+    try:
+        return match_module.Match(names, merged, rng=random.Random(1), enemies=picked, maps={"test": MAP},
+                                  deck={"work-any": 5})
+    finally:
+        foes_module.lineup = original
 
 
 def give(match, pid, card_id):
-    seat = match.seats[pid]
-    instance = seat.deck.make(card_id)
-    seat.hand.append(instance)
+    instance = match.seats[pid].deck.make(card_id)
+    match.seats[pid].hand.append(instance)
     return instance["uid"]
 
 
-def build(match, card_id, x, y, owner="p1", level=1):
-    match.board.place(cards.CARDS[card_id], x, y, owner)
-    structure = match.board.at(x, y)
-    structure.level = level
-    structure.hp = structure.max_hp()
-    return structure
+def build(match, kind, x, y, rotation=0, owner="p1"):
+    return match.board.place(kind, rotation, x, y, owner)
 
 
-def siege(match, *waves, keep=30, hp_scale=1.0):
-    return battle.run_siege(match.board, level(*waves), keep, hp_scale, 1, 1)
+def foe(case, match, enemy_id):
+    made = foes_module.Foe(len(match.foes), case.enemies[enemy_id], match.round, 1.0)
+    match.foes.append(made)
+    made.arrive(match.board, match.rng)
+    return made

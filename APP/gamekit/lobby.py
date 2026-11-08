@@ -230,6 +230,20 @@ class LobbyGame(BaseGame):
         member = self.members.get(client_id)
         return bool(member and member.playing and self.phase == PLAYING)
 
+    def admin_info(self):
+        """Read-only room summary for the site's admin view (server/admin.py)."""
+        return {
+            "phase": self.phase,
+            "gameNumber": self.game_number,
+            "host": self.host_id,
+            "settings": self.settings,
+            "members": [
+                {"client": m.client_id, "id": m.id, "name": m.name, "playing": m.playing,
+                 "ready": m.ready, "host": m.id == self.host_id}
+                for m in self.members.values()
+            ],
+        }
+
     async def on_disconnect(self, player):
         self.sync.reset(player.id)
         member = self.members.pop(player.id, None)

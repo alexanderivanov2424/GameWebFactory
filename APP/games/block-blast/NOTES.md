@@ -6,7 +6,7 @@ Tests: `tests/` (`python3 -I tools/run_tests.py block-blast`).
 
 ## Read this game to learn
 - **Shapes on a grid with rotation but no mirroring**: `logic/cards.py` precomputes the 4
-  clockwise rotations of each shape at load time and sends them in `game.cards`, so the client
+  clockwise rotations of each shape at load time (`gamekit.shapes.rotations`) and sends them in `game.cards`, so the client
   draws the selected rotation and the ghost without any geometry rules of its own. Placement
   is "rotation index + top-left corner"; `logic/board.py` checks and applies it.
 - **Line clears**: full rows and columns clear together; a crossing cell counts once

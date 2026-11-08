@@ -1,22 +1,18 @@
 /*
- * Bastion: the game page. Renders everything from the state (no rules: placement targets come
- * from state.private.targets, effective tower stats from game.structures, sieges as replays).
+ * Bastion: the game page. Renders everything from the state and holds no rules: where a card may
+ * go and what it would make there come from state.private.targets; outputs, links and bonus
+ * breakdowns from game.structures; card and enemy text from the server.
  *
- * Sections: lobby; status bar (renderStatus); board (BastionBoard + hover ghost, range circles,
- * demolish mode); side panel (renderTeam, renderNext, renderInspector, renderLog); bottom bar
- * (renderHand while building, renderMarket between levels); deck window (retire a card) and help.
- * Siege replays (BastionReplay) play once per battle id, never on the first render after a reload
- * (the status bar's "Watch last siege" button replays it).
+ * Sections: lobby; status bar (renderStatus); enemy cards (renderFoes, with strike buttons);
+ * board (BastionBoard + hover: ghost for blueprints with R / wheel to turn, target outlines for
+ * work/repair/cure cards, click an enemy tile to raze it); side panel (renderInspector,
+ * renderMarket, renderTeam, renderLog); bottom bar (renderBar: hand, End turn); deck window, help.
  */
 (() => {
-  const { $, el, svg } = AppDom;
+  const { $, el } = AppDom;
   let state = null;
-  let board = null;
-  let selection = null; // {uid, card} of the selected hand card
-  let demolish = false;
-  let hover = null; // {x, y}
-  let firstRender = true;
-  let seenBattle = 0; // highest battle id already shown (per game number)
+  let selection = null; // {uid, card, rotation}
+  let hover = null; // [x, y]
 
   const lobby = AppLobby.connect("bastion", {
     onState(newState) {
@@ -33,12 +29,17 @@
     join: $("join"), leave: $("leave"), ready: $("ready"), back: $("back"),
   });
   const renderSettings = AppLobbyUI.settingsForm($("settings"), lobby);
-  const updateTurnAlert = AppLobbyUI.turnAlert($("board-wrap"), { text: "Your move!" });
-
-  const replay = BastionReplay.create({
-    overlay: $("overlay"), bar: $("replay-bar"), banner: $("replay-banner"),
-    onKeep: () => renderStatus(),
-    onEnd: () => render(),
+  const updateTurnAlert = AppLobbyUI.turnAlert($("board-wrap"), { text: "New round!" });
+  const board = BastionBoard.create($("board"), {
+    onHover(x, y) { hover = [x, y]; updateHover(); },
+    onLeave() { hover = null; updateHover(); },
+    onClick: clickCell,
+    onRightClick: cancel,
+    onWheel(direction) {
+      if (!selection || !isBuild(selection.card)) return false;
+      turn(direction);
+      return true;
+    },
   });
 
   // --- helpers ----------------------------------------------------------------------------
@@ -46,68 +47,58 @@
   const game = () => state.game;
   const mySeat = () => (state.game && state.game.seats[state.you]) || null;
   const priv = () => state.private || null;
-  const at = (list, level) => (Array.isArray(list) ? list[Math.min(level, list.length) - 1] : list);
-  const perLevel = (v) => (Array.isArray(v) ? v.join("/") : String(v));
-  const fmt = (n) => String(Math.round(n * 10) / 10);
+  const cardOf = (id) => game().cards[id];
+  const isBuild = (id) => cardOf(id).kind === "build";
+  const icon = (key) => game().icons[key] || "";
+  const amounts = (obj) => Object.entries(obj || {}).map(([k, n]) => `${n}${icon(k)}`).join(" ");
+  const affordable = (cost) => Object.entries(cost || {}).every(([k, n]) => (game().stock[k] || 0) >= n);
+  const canAct = () => state.phase === "playing" && mySeat() && !mySeat().done;
+  const targetsOf = (uid) => (priv() && priv().targets[String(uid)]) || null;
+  const nameOf = (pid) => game().names[pid] || pid;
+  const signed = (n) => (n > 0 ? `+${n}` : String(n));
 
-  function battleKey() {
-    return `bastion:${lobby.roomId}:${state.gameNumber}:battle`;
-  }
-  function loadSeen() {
-    try { return Number(sessionStorage.getItem(battleKey())) || 0; } catch { return 0; }
-  }
-  function saveSeen(id) {
-    seenBattle = id;
-    try { sessionStorage.setItem(battleKey(), String(id)); } catch { /* private mode */ }
+  function costOf(cardId) {
+    const card = cardOf(cardId);
+    if (card.kind === "build") return game().kinds[card.structure].cost;
+    return card.kind === "curse" ? card.pay : card.cost;
   }
 
-  function statLines(card, level) {
-    const s = card.stats;
-    const v = (name) => (level ? fmt(at(s[name], level)) : perLevel(s[name]));
-    const parts = [];
-    switch (card.kind) {
-      case "tower":
-        parts.push(`⚔ ${v("damage")}`, `◎ range ${v("range")}`, `every ${v("cooldown")} ticks`);
-        if (s.area) parts.push("hits all around");
-        if (s.splash) parts.push("splash");
-        if (s.pierce) parts.push("ignores armor");
-        parts.push(s.air ? "hits flyers" : "ground only");
-        if (s.minRange) parts.push(`not closer than ${v("minRange")}`);
-        break;
-      case "wall": parts.push(`♥ ${v("hp")}`); break;
-      case "spikes": parts.push(`${v("damage")} damage per tick`); break;
-      case "tar": parts.push(`slows ${v("slow")}%`); break;
-      case "barracks": parts.push(`soldiers ♥ ${v("hp")}`, `⚔ ${v("damage")}`, `back after ${v("respawn")} ticks`); break;
-      case "farm": parts.push(`+${v("gold")} gold / turn`); break;
-      case "forge": parts.push(`+${v("bonus")} damage next to it`); break;
-      case "watch": parts.push(`+${v("bonus")} range next to it`); break;
-      case "quarry": parts.push(`+${v("labor")} labor / turn`); break;
-      case "chapel": parts.push(`keep +${v("keep")}`, `walls +${v("repair")}`); break;
-      default: break;
+  function anchor(cardId, rotation, x, y) {
+    const cells = game().kinds[cardOf(cardId).structure].rotations[rotation];
+    const w = Math.max(...cells.map((c) => c[0])) + 1;
+    const h = Math.max(...cells.map((c) => c[1])) + 1;
+    const ax = x - Math.floor((w - 1) / 2);
+    const ay = y - Math.floor((h - 1) / 2);
+    return { ax, ay, cells: cells.map(([dx, dy]) => [ax + dx, ay + dy]) };
+  }
+
+  function shapeEl(cells) {
+    const w = Math.max(...cells.map((c) => c[0])) + 1;
+    const h = Math.max(...cells.map((c) => c[1])) + 1;
+    const filled = new Set(cells.map(([x, y]) => `${x},${y}`));
+    const box = el("div", { className: "shape" });
+    box.style.gridTemplateColumns = `repeat(${w}, 9px)`;
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) box.append(el("i", { className: filled.has(`${x},${y}`) ? "" : "e" }));
+    return box;
+  }
+
+  function cardEl(cardId, { off = false, selected = false } = {}) {
+    const card = cardOf(cardId);
+    const kind = card.kind === "build" ? game().kinds[card.structure] : null;
+    const node = el("div", { className: `pcard ${card.kind}${off ? " off" : ""}${selected ? " sel" : ""}` });
+    node.append(el("div", { className: "name", textContent: card.name }));
+    node.append(el("div", { className: "kind", textContent: { build: "Blueprint", action: "Action", curse: "Curse" }[card.kind] }));
+    if (kind) {
+      node.append(el("span", { className: "icon", textContent: kind.icon || "" }));
+      node.append(shapeEl(kind.rotations[0]));
+      node.title = kind.text;
     }
-    return parts.join(" · ");
-  }
-
-  function cardEl(card, { cost, costClass = "", extra = [], className = "" } = {}) {
-    const node = el("div", { className: `pcard ${card.kind === "order" ? "order" : ""} ${className}` },
-      el("span", { className: `cost ${costClass}` }, cost),
-      el("div", { className: "top" }, el("span", { className: "icon" }, card.icon),
-        el("div", {}, el("div", { className: "name" }, card.name),
-          el("div", { className: "kind" }, card.kind === "order" ? "order" : `${card.place === "road" ? "road · " : ""}${card.kind}`))),
-      el("div", { className: "text", title: card.text }, card.text));
-    const stats = statLines(card, 0);
-    if (stats) node.append(el("div", { className: "stats" }, stats + (card.maxLevel > 1 ? ` (lvl ${Array.from({ length: card.maxLevel }, (_, i) => i + 1).join("/")})` : "")));
-    node.append(...extra);
+    node.append(el("div", { className: "text", textContent: card.text }));
     return node;
   }
 
-  function foeTitle(enemy) {
-    const g = game();
-    const bits = [`${enemy.name}: ${enemy.text}`,
-      `Health ${Math.round(enemy.hp * g.hpScale)} · speed ${fmt(enemy.speed * 8)} cells/s` +
-      (enemy.armor ? ` · armor ${enemy.armor}` : "") + ` · keep damage ${enemy.keep}`];
-    if (enemy.flying) bits.push("Flying");
-    return bits.join("\n");
+  function send(message) {
+    lobby.sendGame(message);
   }
 
   // --- render -------------------------------------------------------------------------------
@@ -118,8 +109,7 @@
     $("game").hidden = inLobby;
     renderButtons();
     if (inLobby) {
-      replay.stop();
-      firstRender = true;
+      selection = null;
       $("bar").hidden = true;
       $("help-button").hidden = true;
       $("main").classList.remove("with-bar");
@@ -137,36 +127,25 @@
   function renderGame() {
     const g = game();
     const finished = state.phase === "finished";
-    const seat = mySeat();
     checkSelection();
-    if (firstRender) {
-      seenBattle = loadSeen();
-      if (g.battle && g.battle.id > seenBattle) saveSeen(g.battle.id); // never animate right after a reload
-    }
-    renderBoard();
-    if (g.battle && g.battle.id > seenBattle) {
-      saveSeen(g.battle.id);
-      replay.play(g, board);
-    } else {
-      replay.update(g);
-    }
+    board.build(g);
     renderResult(finished);
     renderStatus();
+    renderFoes();
+    renderMarket();
     renderTeam();
-    renderNext();
-    renderInspector();
     renderLog();
     renderBar();
     renderDeckWindow();
+    updateHover();
     $("help-button").hidden = false;
-    const myMove = !finished && seat && !seat.done;
-    updateTurnAlert(myMove && !replay.playing ? `${state.gameNumber}:${g.step}` : null);
-    firstRender = false;
+    const seat = mySeat();
+    updateTurnAlert(!finished && seat && !seat.done ? `${state.gameNumber}:${g.step}` : null);
   }
 
   function renderResult(finished) {
     const box = $("result");
-    box.hidden = !finished || replay.playing;
+    box.hidden = !finished;
     if (!finished || !state.result) return;
     const r = state.result;
     box.className = r.victory ? "win" : "loss";
@@ -174,382 +153,348 @@
   }
 
   function renderStatus() {
-    if (!state || !state.game) return;
     const g = game();
-    const level = g.levels[g.level - 1];
-    const keep = replay.playing ? replay.keep : g.keep;
-    const meter = el("span", { className: "meter" }, el("span"));
-    meter.firstChild.style.width = `${Math.max(0, Math.min(100, (keep / g.keepMax) * 100))}%`;
-    let stage;
-    if (state.phase === "finished") stage = "Game over";
-    else if (g.stage === "market") stage = "🛒 Market";
-    else stage = `🔨 Build turn ${g.turn} of ${level.buildTurns}`;
-    const pips = el("span", { id: "levels" }, ...g.levels.map((lv, i) => {
-      const n = i + 1;
-      const done = n < g.level || (n === g.level && (g.stage === "market" || (state.result && state.result.victory)));
-      return el("span", { className: done ? "done" : n === g.level ? "now" : "", title: `Level ${n}: ${lv.name}\n${lv.text}` }, String(n));
-    }));
-    const items = [
-      el("span", { className: "level" }, `Level ${g.level}/${g.levels.length}: ${level.name}`),
-      el("span", { className: "pill" }, stage),
-      el("span", { id: "keep-bar", className: "pill" }, "🏰 Keep ", meter, ` ${keep}/${g.keepMax}`),
-      pips,
-    ];
-    if (g.battle && !replay.playing) {
-      const watch = el("button", { className: "plain small", textContent: `▶ Watch siege ${g.battle.level}` });
-      watch.onclick = () => { replay.play(game(), board); renderResult(state.phase === "finished"); renderStatus(); };
-      items.push(watch);
+    const coming = Object.values(g.foes).filter((f) => f.state === "coming").map((f) => f.arrives);
+    let phase;
+    if (coming.length) {
+      const next = Math.min(...coming);
+      const active = Object.values(g.foes).some((f) => f.state === "active");
+      phase = active ? `Next enemy arrives on round ${next}` : `Peace — the next enemy arrives on round ${next}`;
+    } else {
+      phase = `Every enemy is here: beat them all by the end of round ${g.deadline}`;
     }
-    $("status").replaceChildren(...items);
+    const keep = el("span", { className: "pill" }, "🏰 Keep ",
+      el("span", { className: "meter" }, el("span", { style: `width:${Math.round((100 * g.keep) / g.keepMax)}%` })),
+      ` ${g.keep}/${g.keepMax}`);
+    const pills = g.resources.map(([id, name, ic]) =>
+      el("span", { className: `pill${g.stock[id] ? "" : " zero"}`, title: name }, `${ic} ${g.stock[id]}`));
+    $("status").replaceChildren(
+      el("span", { className: "round" }, `Round ${g.round}`),
+      el("span", { className: "phase" }, phase),
+      keep, ...pills,
+      el("span", { className: `pill${g.soldiers ? "" : " zero"}`, title: "Soldiers" }, `${icon("soldiers")} ${g.soldiers}`));
+  }
+
+  // --- enemies ----------------------------------------------------------------------------------
+
+  function renderFoes() {
+    const g = game();
+    const foes = Object.entries(g.foes).sort((a, b) => Number(a[0]) - Number(b[0]));
+    $("foes").replaceChildren(...foes.map(([index, foe]) => foeEl(Number(index), foe)));
+  }
+
+  function foeEl(index, foe) {
+    if (foe.state === "coming") {
+      return el("div", { className: "foe coming" },
+        el("div", {}, el("div", { className: "icon" }, "❔"), el("div", {}, `Arrives on round ${foe.arrives}`)));
+    }
+    if (foe.state === "defeated") {
+      return el("div", { className: "foe defeated" },
+        el("div", { className: "head" }, el("span", { className: "icon" }, foe.icon), foe.name), el("div", {}, "Beaten"));
+    }
+    const g = game();
+    const node = el("div", { className: "foe" });
+    node.append(el("div", { className: "head" }, el("span", { className: "icon" }, foe.icon), foe.name));
+    node.append(el("div", { className: "hp" },
+      el("span", { className: "meter foe" }, el("span", { style: `width:${Math.round((100 * foe.hp) / foe.maxHp)}%` })),
+      `${foe.hp}/${foe.maxHp}`));
+    if (foe.text) node.append(el("div", { className: "text" }, foe.text));
+    const list = el("ol");
+    foe.attacks.forEach((a, i) => list.append(el("li", { className: i === foe.next ? "next" : "", title: a.text },
+      el("b", {}, a.name), `: ${a.text}`)));
+    node.append(list);
+    const beat = el("div", { className: "beat" }, el("b", {}, "Beat it: "));
+    const d = foe.defeat;
+    if (d.soldiers) {
+      const most = Math.min(foe.hp, Math.floor(g.soldiers / d.soldiers));
+      beat.append(`${d.soldiers}${icon("soldiers")} per damage.`, el("br"));
+      beat.append(strikeButton(index, "soldiers", 1, `Strike (${d.soldiers}${icon("soldiers")})`, most >= 1));
+      if (most > 1) beat.append(strikeButton(index, "soldiers", most, `All in ×${most}`, true));
+    }
+    if (d.resources) {
+      beat.append(`${amounts(d.resources)} per damage.`, el("br"));
+      beat.append(strikeButton(index, "resources", 1, `Bonfire (${amounts(d.resources)})`, affordable(d.resources)));
+    }
+    if (d.cure) beat.append("each building of its plague you cure deals 1 damage. ");
+    if (d.cards) beat.append("each of its curse cards you pay off deals 1 damage. ");
+    if (d.raze) beat.append(`raze every ${foe.lair} tile on the board (click it; ${d.raze}${icon("soldiers")} each). `);
+    node.append(beat);
+    return node;
+  }
+
+  function strikeButton(foe, way, times, label, enabled) {
+    const button = el("button", { className: "small", textContent: label });
+    button.disabled = !enabled || !canAct();
+    button.addEventListener("click", () => send({ action: "strike", foe, way, times }));
+    return button;
   }
 
   // --- board ---------------------------------------------------------------------------------
 
-  function renderBoard() {
-    board = BastionBoard.build($("board"), game(), {
-      onHover(x, y) { hover = { x, y }; updateHover(); },
-      onLeave() { hover = null; updateHover(); },
-      onClick: clickCell,
-      onCancel: cancel,
-    });
-    if (!$("ranges")) {
-      const layer = svg("svg", { id: "ranges" });
-      layer.style.cssText = "position:absolute;inset:3px;width:calc(100% - 6px);height:calc(100% - 6px);pointer-events:none;z-index:2";
-      $("board-wrap").append(layer);
-    }
-    replay.attach(board);
-    updateHover();
+  function structureCells(uid) {
+    const s = game().structures[uid];
+    return s ? s.cells : [];
   }
 
-  function targetsFor(cardId) {
-    const p = priv();
-    return (p && p.targets && p.targets[cardId]) || {};
+  function showTip(text) {
+    const tip = $("tip");
+    if (!text || !hover) {
+      tip.hidden = true;
+      return;
+    }
+    const r = board.cellRect(hover[0], hover[1]);
+    tip.textContent = text;
+    tip.style.left = `${r.left + 50}px`;
+    tip.style.top = `${r.top - 4}px`;
+    tip.hidden = false;
   }
 
   function updateHover() {
-    if (!board) return;
+    board.clearMarks();
+    if (!state || !state.game) return;
     const g = game();
-    const ranges = $("ranges");
-    if (ranges) ranges.replaceChildren();
-    for (const cell of Object.values(board.cells)) {
-      cell.classList.remove("ghost-ok", "ghost-bad", "target", "hot");
-      cell.querySelectorAll(".ghost-icon, .ghost-cost").forEach((n) => n.remove());
-    }
-    const k = hover && `${hover.x},${hover.y}`;
-    if (selection) {
-      const card = g.cards[selection.card];
-      const targets = targetsFor(selection.card);
-      for (const t of Object.keys(targets)) board.cells[t] && board.cells[t].classList.add("target");
-      if (k && board.cells[k]) {
-        const cell = board.cells[k];
-        const cost = targets[k];
-        const seat = mySeat();
-        const ok = cost !== undefined && seat && cost <= seat.labor;
-        cell.classList.add(ok ? "ghost-ok" : "ghost-bad");
-        if (card.kind !== "order" && !g.structures[k]) cell.append(el("span", { className: "ghost-icon" }, card.icon));
-        if (cost !== undefined) cell.append(el("span", { className: "ghost-cost" }, `⚒${cost}`));
-        const range = priv() && priv().ranges && priv().ranges[selection.card] && priv().ranges[selection.card][k];
-        if (range !== undefined) drawRange(hover.x, hover.y, range);
+    let tip = null;
+    const at = hover ? board.structureAt(hover[0], hover[1]) : null;
+    if (selection && isBuild(selection.card) && hover) {
+      const { ax, ay, cells } = anchor(selection.card, selection.rotation, hover[0], hover[1]);
+      const spots = (targetsOf(selection.uid) || {})[String(selection.rotation)] || {};
+      const value = spots[`${ax},${ay}`];
+      board.mark(cells, "ghost");
+      if (value === undefined) board.mark(cells, "bad");
+      const kind = g.kinds[cardOf(selection.card).structure];
+      const key = kind.work ? Object.keys(kind.work.makes)[0] : null;
+      tip = value === undefined ? "Can't build here" : key ? `Would make +${value}${icon(key)}` : "Build here";
+    } else if (selection) {
+      const targets = targetsOf(selection.uid) || {};
+      for (const uid of Object.keys(targets)) board.mark(structureCells(uid), "target");
+      if (at && targets[at]) {
+        board.mark(structureCells(at), "hl");
+        tip = targets[at];
       }
-    } else if (k && board.cells[k]) {
-      const info = g.structures[k];
-      if (demolish) board.cells[k].classList.add(info && (!info.owner || info.owner === state.you) ? "ghost-bad" : "hot");
-      if (info && info.range) drawRange(hover.x, hover.y, info.range);
-      if (info && info.rally && info.rally.length) {
-        const c = BastionBoard.center(info.rally[0], info.rally[1]);
-        ranges.append(svg("circle", { cx: c.x, cy: c.y, r: 16, class: "rally-mark" }));
-      }
+    } else if (at) {
+      board.mark(structureCells(at), "hl");
+    } else if (hover && g.blights[`${hover[0]},${hover[1]}`]) {
+      const b = g.blights[`${hover[0]},${hover[1]}`];
+      const foe = g.foes[String(b.foe)];
+      const cost = b.lair && foe.defeat ? foe.defeat.raze : 1;
+      tip = `Click to raze: ${cost}${icon("soldiers")}`;
     }
-    renderInspector();
-  }
-
-  function drawRange(x, y, radius) {
-    const c = BastionBoard.center(x, y);
-    $("ranges").append(svg("circle", { cx: c.x, cy: c.y, r: radius * BastionBoard.CELL, class: "range" }));
+    showTip(tip);
+    renderInspector(at);
   }
 
   function clickCell(x, y) {
-    const g = game();
-    const k = `${x},${y}`;
-    if (selection) {
-      const targets = targetsFor(selection.card);
-      if (targets[k] === undefined) {
-        showError(g.cards[selection.card].kind === "order" ? "Pick a structure that can be upgraded." : "You can't build that there.");
-        return;
-      }
-      const seat = mySeat();
-      if (seat && targets[k] > seat.labor) {
-        showError(`That needs ${targets[k]} labor; you have ${seat.labor}.`);
-        return;
-      }
-      lobby.sendGame({ action: "play", uid: selection.uid, x, y });
+    if (!state || !state.game || !canAct()) return;
+    if (selection && isBuild(selection.card)) {
+      const { ax, ay } = anchor(selection.card, selection.rotation, x, y);
+      const spots = (targetsOf(selection.uid) || {})[String(selection.rotation)] || {};
+      if (spots[`${ax},${ay}`] === undefined) return showError("That doesn't fit there.");
+      send({ action: "play", uid: selection.uid, x: ax, y: ay, rotation: selection.rotation });
       selection = null;
-      renderBar();
-      updateHover();
-      return;
+    } else if (selection) {
+      const at = board.structureAt(x, y);
+      if (!at || !(targetsOf(selection.uid) || {})[at]) return showError("Pick one of the outlined buildings.");
+      send({ action: "play", uid: selection.uid, x, y });
+      selection = null;
+    } else if (game().blights[`${x},${y}`]) {
+      send({ action: "raze", x, y });
     }
-    if (demolish) {
-      const info = g.structures[k];
-      if (!info) return;
-      const name = g.cards[info.card].name;
-      if (info.owner && info.owner !== state.you) { showError("You can only demolish your own structures."); return; }
-      if (window.confirm(`Demolish this ${name}? You get nothing back.`)) lobby.sendGame({ action: "demolish", x, y });
-      demolish = false;
-      renderBar();
-      updateHover();
-    }
+    updateHover();
+  }
+
+  function turn(direction) {
+    selection.rotation = (selection.rotation + direction + 4) % 4;
+    updateHover();
   }
 
   function cancel() {
-    if (selection || demolish) {
-      selection = null;
-      demolish = false;
-      renderBar();
-      updateHover();
-    }
+    if (!selection) return;
+    selection = null;
+    renderBar();
+    updateHover();
   }
 
   function checkSelection() {
+    if (!selection) return;
     const p = priv();
-    const seat = mySeat();
-    const building = state.phase === "playing" && game().stage === "build" && seat && !seat.done;
-    if (!building) { selection = null; demolish = false; return; }
-    if (selection && !(p && p.hand.some((c) => c.uid === selection.uid))) selection = null;
+    if (!canAct() || !p || !p.hand.some((c) => c.uid === selection.uid)) selection = null;
   }
 
-  // --- side panel -------------------------------------------------------------------------------
+  document.addEventListener("keydown", (e) => {
+    if (e.target.closest("input, textarea, select")) return;
+    if (e.key === "Escape") cancel();
+    if ((e.key === "r" || e.key === "R") && selection && isBuild(selection.card)) turn(e.shiftKey ? -1 : 1);
+  });
 
-  function renderTeam() {
+  // --- side panel ------------------------------------------------------------------------------
+
+  function partsList(parts) {
+    return el("ul", { className: "parts" }, ...parts.map(([why, n]) =>
+      el("li", { className: n < 0 ? "minus" : "plus" }, `${signed(n)} ${why}`)));
+  }
+
+  function kindInfo(kind) {
+    const lines = [];
+    if (kind.work) {
+      const key = Object.keys(kind.work.makes)[0];
+      const uses = Object.keys(kind.work.uses).length ? `${amounts(kind.work.uses)} → ` : "";
+      lines.push(el("div", {}, el("b", {}, "Work: "), `${uses}${kind.work.makes[key]}${icon(key)}`));
+    }
+    if (kind.requires.length) lines.push(el("div", {}, el("b", {}, "Must be "), kind.requires.join(", ")));
+    if (kind.bonuses.length) {
+      lines.push(el("div", {}, el("b", {}, "Likes / hates:")));
+      lines.push(el("ul", { className: "parts" }, ...kind.bonuses.map(([why, n]) =>
+        el("li", { className: n < 0 ? "minus" : "plus" }, `${signed(n)} ${why}`))));
+    }
+    if (Object.keys(kind.cost).length) lines.push(el("div", {}, el("b", {}, "Cost: "), amounts(kind.cost)));
+    if (kind.text) lines.push(el("div", { className: "muted" }, kind.text));
+    return lines;
+  }
+
+  function renderInspector(uid) {
     const g = game();
-    $("team").replaceChildren(...g.order.map((pid) => {
-      const s = g.seats[pid];
-      const swatch = el("span", { className: "swatch" });
-      swatch.style.background = s.color;
-      const status = state.phase !== "playing" ? "" : s.done ? "✓ done" : g.stage === "market" ? "shopping…" : "building…";
-      return el("li", {}, swatch, el("span", { className: pid === state.you ? "gwf-you" : "" }, s.name + (pid === state.you ? " (you)" : "")),
-        el("span", { className: "spacer" }),
-        el("span", { className: "stats", title: `Deck: ${s.deck.length} cards` }, `⚒${s.labor} 💰${s.gold} 🂠${s.deck.length}`),
-        el("span", { className: s.done ? "done small" : "muted small" }, status));
+    const box = $("inspector");
+    if (selection && isBuild(selection.card)) {
+      const kind = g.kinds[cardOf(selection.card).structure];
+      box.replaceChildren(el("h3", {}, `${kind.icon} ${kind.name}`), ...kindInfo(kind),
+        el("div", { className: "muted small" }, "R or mouse wheel: turn · right-click or Esc: cancel"));
+      return;
+    }
+    const s = uid ? g.structures[uid] : null;
+    if (s) {
+      const kind = g.kinds[s.kind];
+      const lines = [el("h3", {}, `${kind.icon} ${kind.name}`)];
+      if (s.owner) lines.push(el("div", { className: "muted" }, `Built by ${nameOf(s.owner)}`));
+      if (kind.work) {
+        const key = Object.keys(kind.work.makes)[0];
+        const uses = Object.keys(kind.work.uses).length ? `uses ${amounts(kind.work.uses)}, ` : "";
+        lines.push(el("div", {}, el("b", {}, `Output: +${s.output}${icon(key)}`), ` (${uses}${s.worked ? "worked this round" : "not worked yet"})`));
+        lines.push(partsList(s.parts));
+        const link = { depot: "Next to a depot: delivers at once.", road: "Linked by road: goods wait for a Haul.", none: "Cut off: no road to the keep or a storage yard." }[s.link];
+        lines.push(el("div", {}, link));
+      }
+      if (Object.keys(s.store).length) lines.push(el("div", {}, `Stored: ${amounts(s.store)} (max ${g.storeCap})`));
+      if (s.plague) lines.push(el("div", { className: "minus" }, "🦠 Plagued: can't work until cured."));
+      if (s.frozen) lines.push(el("div", {}, "❄️ Frozen this round."));
+      if (s.ruined.length) lines.push(el("div", { className: "minus" }, `🔥 ${s.ruined.length} ruined tile(s): repair before it can work.`));
+      if (s.kind !== "keep") lines.push(el("div", { className: "muted" }, `Safe from raids: ${s.protected}/${s.cells.length} tiles`));
+      if (kind.text) lines.push(el("div", { className: "muted" }, kind.text));
+      box.replaceChildren(...lines);
+      return;
+    }
+    const b = hover ? g.blights[`${hover[0]},${hover[1]}`] : null;
+    if (b) {
+      const foe = g.foes[String(b.foe)];
+      box.replaceChildren(el("h3", {}, `${b.icon} ${b.name}`),
+        el("div", {}, `Placed by the ${foe ? foe.name : "enemy"}. Buildings next to it make 1 less.`),
+        el("div", {}, b.lair ? "Its lair: razing every tile beats it." : "Raze it with 1 soldier."));
+      return;
+    }
+    box.replaceChildren(el("h3", {}, "Inspector"),
+      el("div", { className: "muted" }, "Hover a building to see what it makes and why."));
+  }
+
+  function renderMarket() {
+    const g = game();
+    $("market").replaceChildren(...g.market.map((cardId, slot) => {
+      const card = cardOf(cardId);
+      const kind = card.kind === "build" ? g.kinds[card.structure] : null;
+      const buy = el("button", { className: "small", textContent: `Buy ${card.price}${icon("gold")}` });
+      buy.disabled = !canAct() || g.stock.gold < card.price;
+      buy.addEventListener("click", () => send({ action: "buy", slot }));
+      const row = el("div", { className: "offer", title: kind ? kind.text : card.text },
+        el("div", { className: "what" }, el("b", {}, `${kind ? `${kind.icon} ` : ""}${card.name}${kind ? " (blueprint)" : ""}`),
+          el("span", {}, card.text)), buy);
+      return row;
     }));
   }
 
-  function renderNext() {
+  function renderTeam() {
     const g = game();
-    const box = $("next");
-    if (state.phase === "finished") { box.hidden = true; return; }
-    box.hidden = false;
-    const index = g.stage === "market" ? g.level : g.level - 1;
-    const level = g.levels[index];
-    const before = new Set(g.levels.slice(0, index).flatMap((lv) => lv.roads));
-    let when;
-    if (g.stage === "market") when = `Next: level ${index + 1}, after ${level.buildTurns} build turns`;
-    else {
-      const left = level.buildTurns - g.turn;
-      when = left === 0 ? "⚠ The siege comes when this turn ends!" : `Siege in ${left + 1} turns (after turn ${level.buildTurns})`;
-    }
-    const foes = Object.entries(level.counts).map(([id, n]) => {
-      const enemy = g.enemies[id];
-      return el("span", { className: "foe", title: foeTitle(enemy) }, el("span", { className: "ic" }, enemy.icon), `×${n}`);
-    });
-    const roads = level.roads.map((r) => el("span", { className: "road-tag" + (before.has(r) || index === 0 ? "" : " new"), title: before.has(r) || index === 0 ? "" : "This road is used for the first time!" },
-      r === "main" ? "Main road" : "Flank road"));
-    box.replaceChildren(el("h3", {}, `⚔ ${level.name}`), el("div", { className: "small muted" }, when),
-      el("div", { className: "small" }, level.text), el("div", { className: "foes" }, ...foes),
-      el("div", { className: "roads" }, "Roads: ", ...roads), el("div", { className: "small muted" }, `Reward: ${level.reward} gold each · enemy health ×${g.hpScale}`));
-  }
-
-  function renderInspector() {
-    if (!state || !state.game) return;
-    const g = game();
-    const box = $("inspector");
-    const k = hover && `${hover.x},${hover.y}`;
-    if (selection && !k) {
-      const card = g.cards[selection.card];
-      box.replaceChildren(el("div", { className: "title" }, `${card.icon} ${card.name}`),
-        el("div", {}, card.kind === "order" ? "Click a structure to upgrade." : "Click a highlighted cell to build (or on the same structure to upgrade). Right-click / Esc cancels."));
-      return;
-    }
-    if (!k) {
-      box.replaceChildren(el("div", { className: "title" }, "Inspector"),
-        el("div", { className: "muted" }, "Hover the board for details. Hover enemies in the siege panel for their stats."));
-      return;
-    }
-    const info = g.structures[k];
-    const [x, y] = [hover.x, hover.y];
-    const parts = [];
-    if (info) {
-      const card = g.cards[info.card];
-      const owner = info.owner && g.seats[info.owner] ? g.seats[info.owner].name : info.owner ? g.names[info.owner] : "nobody";
-      parts.push(el("div", { className: "title" }, `${card.icon} ${card.name}${card.maxLevel > 1 ? ` — level ${info.level}/${card.maxLevel}` : ""}`));
-      parts.push(el("div", { className: "muted" }, `Built by ${owner}`));
-      let stats = statLines(card, info.level);
-      if (info.damage !== undefined && card.kind === "tower") stats = stats.replace(/^⚔ [\d.]+ · ◎ range [\d.]+/, `⚔ ${fmt(info.damage)} · ◎ range ${fmt(info.range)}`);
-      if (info.damage !== undefined && card.kind === "barracks") stats = stats.replace(/⚔ [\d.]+/, `⚔ ${fmt(info.damage)}`);
-      if (info.maxHp) stats = `♥ ${info.hp}/${info.maxHp}`;
-      parts.push(el("div", {}, stats));
-      parts.push(el("div", { className: "small muted" }, card.text));
-    } else {
-      const map = g.map;
-      const isKeep = map.keep[0] === x && map.keep[1] === y;
-      const road = Object.entries(map.roads).find(([, cells]) => cells.some(([cx, cy]) => cx === x && cy === y));
-      const ground = { ".": "Grass: build towers, barracks, farms…", "^": "Rocks: nothing can be built here.", "~": "Water: nothing can be built here.", T: "Forest: nothing can be built here." }[map.terrain[y][x]];
-      if (isKeep) parts.push(el("div", { className: "title" }, `🏰 The keep — ${g.keep}/${g.keepMax}`), el("div", {}, "Enemies that reach it damage it. At 0 the realm falls."));
-      else if (road) {
-        const entrance = road[1][0][0] === x && road[1][0][1] === y;
-        parts.push(el("div", { className: "title" }, road[0] === "main" ? "Main road" : "Flank road"),
-          el("div", {}, entrance ? "Enemies enter here; nothing can be built on this cell." : "Walls, spike pits and tar pits go here."));
-      } else parts.push(el("div", { className: "title" }, `Cell ${x + 1}, ${y + 1}`), el("div", {}, ground));
-    }
-    if (selection) {
-      const card = g.cards[selection.card];
-      const cost = targetsFor(selection.card)[k];
-      parts.push(el("div", { className: "small", style: "margin-top:6px" },
-        cost === undefined ? `✖ ${card.name} can't go here.` : `${card.icon} ${card.name} here: ${cost} labor${info && card.kind !== "order" ? " (upgrade)" : ""}.`));
-    }
-    box.replaceChildren(...parts);
+    $("team").replaceChildren(...Object.entries(g.seats).map(([pid, seat]) => el("li", {},
+      el("span", { className: "dot", style: `background:${seat.color}` }),
+      el("span", {}, `${seat.name}${pid === state.you ? " (you)" : ""}`),
+      el("span", { className: "spacer" }),
+      el("span", { className: "muted small" }, `${seat.deck.length} cards`),
+      el("span", {}, seat.done ? "✓ done" : "…"))));
   }
 
   function renderLog() {
     const g = game();
-    const box = $("log");
-    const stick = box.scrollTop + box.clientHeight >= box.scrollHeight - 8;
-    const entries = [];
-    for (let i = Math.max(0, g.logCount - 80); i < g.logCount; i++) {
+    const lines = [];
+    for (let i = g.logCount - 1; i >= Math.max(0, g.logCount - 80); i--) {
       const entry = g.log[String(i)];
-      if (!entry) continue;
-      const line = el("div", {});
-      const seat = entry.pid && g.seats[entry.pid];
-      if (seat) {
-        const sw = el("span", { className: "swatch" });
-        sw.style.cssText = `display:inline-block;margin-right:5px;background:${seat.color}`;
-        line.append(sw);
-      }
-      line.append(entry.text);
-      entries.push(line);
+      if (entry) lines.push(el("p", {}, el("span", { className: "r" }, `R${entry.round} `), entry.text));
     }
-    box.replaceChildren(...entries);
-    if (stick || firstRender) box.scrollTop = box.scrollHeight;
+    $("log").replaceChildren(...lines);
   }
 
   // --- bottom bar ------------------------------------------------------------------------------
 
   function renderBar() {
     const seat = mySeat();
-    const g = game();
-    const show = state.phase === "playing" && seat;
+    const p = priv();
+    const show = Boolean(seat && p);
     $("bar").hidden = !show;
-    $("main").classList.toggle("with-bar", !!show);
-    if (!show) { $("main").style.paddingBottom = ""; return; }
-    if (g.stage === "market") renderMarket(seat);
-    else renderHand(seat);
-  }
-
-  function renderHand(seat) {
-    const g = game();
-    const p = priv();
-    const end = el("button", { className: seat.done ? "plain" : "green", textContent: seat.done ? "Take back" : "End turn" });
-    end.onclick = () => { selection = null; demolish = false; lobby.sendGame({ action: "end_turn", done: !seat.done }); };
-    const demo = el("button", { className: demolish ? "red small" : "plain small", textContent: demolish ? "Cancel demolish" : "Demolish…" });
-    demo.disabled = seat.done;
-    demo.onclick = () => { demolish = !demolish; selection = null; renderBar(); updateHover(); };
-    const deck = el("button", { className: "plain small", textContent: `🂠 Deck (${seat.deck.length})` });
-    deck.onclick = () => openDeck();
-    const waiting = g.order.filter((pid) => !g.seats[pid].done).map((pid) => g.seats[pid].name);
-    $("bar-info").replaceChildren(
-      el("div", { className: "big" }, `⚒ ${seat.labor} labor · 💰 ${seat.gold}`),
-      el("div", { className: "hint" }, `Draw ${seat.draw} · discard ${seat.discard}`),
-      end, el("div", { className: "row" }, demo, deck),
-      el("div", { className: "hint" }, seat.done ? `Waiting for ${AppDom.listNames(waiting)}…` : demolish ? "Click one of your structures." : selection ? "Click a highlighted cell." : "Pick a card."));
-    const hand = (p && p.hand) || [];
-    const cards = hand.map((inst) => {
-      const card = g.cards[inst.card];
-      const targets = targetsFor(inst.card);
-      const usable = !seat.done && card.labor <= seat.labor && (!card.place || Object.keys(targets).length > 0);
-      const node = cardEl(card, { cost: `⚒${card.labor}`, className: (usable ? "" : "disabled") + (selection && selection.uid === inst.uid ? " selected" : "") });
-      node.title = usable ? (!card.place ? "Click to play" : "Click, then pick a cell") : seat.done ? "You've ended your turn" : "Not enough labor (or nowhere to play it)";
-      node.onclick = () => {
-        if (!usable) return;
-        demolish = false;
-        if (!card.place) {
-          selection = null;
-          lobby.sendGame({ action: "play", uid: inst.uid });
-          return;
-        }
-        selection = selection && selection.uid === inst.uid ? null : { uid: inst.uid, card: inst.card };
-        renderBar();
-        updateHover();
-      };
+    $("main").classList.toggle("with-bar", show);
+    if (!show) return;
+    const finished = state.phase !== "playing";
+    const endTurn = $("end-turn");
+    endTurn.textContent = seat.done ? "Take back" : "End turn";
+    endTurn.className = seat.done ? "plain" : "green";
+    endTurn.disabled = finished;
+    let info = "Click a card to use it.";
+    if (finished) info = "The game is over.";
+    else if (seat.done) info = "Waiting for the others…";
+    else if (selection && isBuild(selection.card)) info = "Click the board to build (R turns it).";
+    else if (selection) info = "Click an outlined building.";
+    $("bar-info").textContent = info;
+    $("cards").replaceChildren(...p.hand.map((c) => {
+      const card = cardOf(c.card);
+      const targets = targetsOf(c.uid);
+      const empty = card.targeted && targets && !Object.keys(targets).length;
+      const node = cardEl(c.card, { off: !affordable(costOf(c.card)) || empty, selected: selection && selection.uid === c.uid });
+      node.addEventListener("click", () => clickCard(c));
       return node;
-    });
-    if (!cards.length) cards.push(el("div", { className: "hint" }, "No cards left in hand."));
-    $("cards").replaceChildren(...cards);
-  }
-
-  function renderMarket(seat) {
-    const g = game();
-    const done = el("button", { className: seat.done ? "plain" : "green", textContent: seat.done ? "Keep shopping" : "Done shopping" });
-    done.onclick = () => lobby.sendGame({ action: "ready", done: !seat.done });
-    const deck = el("button", { className: "plain small", textContent: `🂠 Deck (${seat.deck.length}) / retire` });
-    deck.onclick = () => openDeck();
-    const waiting = g.order.filter((pid) => !g.seats[pid].done).map((pid) => g.seats[pid].name);
-    $("bar-info").replaceChildren(el("div", { className: "big" }, `💰 ${seat.gold} gold`),
-      el("div", { className: "hint" }, "Buy cards for your deck (copies are unlimited)."),
-      done, deck,
-      el("div", { className: "hint" }, seat.done ? `Waiting for ${AppDom.listNames(waiting)}…` : ""));
-    const offers = (g.market ? g.market.offers : []).map((cardId, slot) => {
-      const card = g.cards[cardId];
-      const buy = el("button", { className: "small buy", textContent: `Buy (${card.cost} 💰)` });
-      buy.disabled = seat.done || card.cost > seat.gold;
-      buy.onclick = (event) => { event.stopPropagation(); lobby.sendGame({ action: "buy", slot }); };
-      const owned = seat.deck.filter((c) => c === cardId).length;
-      return cardEl(card, { cost: `${card.cost}💰`, costClass: "gold",
-        extra: [el("div", { className: "hint", style: "color:#6b5a40" }, `⚒${card.labor} labor · you own ${owned}`), buy] });
-    });
-    $("cards").replaceChildren(...offers);
-  }
-
-  // --- windows --------------------------------------------------------------------------------
-
-  function openDeck() {
-    const dialog = $("deck-window");
-    if (!dialog.open) dialog.showModal();
-    renderDeckWindow();
-  }
-
-  function renderDeckWindow() {
-    const dialog = $("deck-window");
-    if (!dialog.open || !state.game) return;
-    const g = game();
-    const p = priv();
-    const seat = mySeat();
-    if (!p || !seat) { dialog.close(); return; }
-    const canRetire = state.phase === "playing" && g.stage === "market" && !seat.done && !p.retired && seat.gold >= g.rules.retireCost && p.owned.length > g.rules.minDeck;
-    const groups = {};
-    p.owned.forEach((c) => { (groups[c.card] = groups[c.card] || []).push(c.uid); });
-    $("deck-note").textContent = g.stage === "market"
-      ? (p.retired ? "You've retired a card this market." : `Retire one card per market for ${g.rules.retireCost} gold (at least ${g.rules.minDeck} cards stay).`)
-      : "Cards can be retired at the market.";
-    $("deck-cards").replaceChildren(...Object.entries(groups).map(([cardId, uids]) => {
-      const card = g.cards[cardId];
-      const extra = [];
-      if (canRetire) {
-        const retire = el("button", { className: "small red buy", textContent: `Retire one (${g.rules.retireCost} 💰)` });
-        retire.onclick = () => lobby.sendGame({ action: "retire", uid: uids[0] });
-        extra.push(retire);
-      }
-      return cardEl(card, { cost: `×${uids.length}`, extra });
     }));
   }
 
-  // Keep the page's bottom padding as tall as the fixed bar (its height depends on the cards).
-  new ResizeObserver(() => {
-    const bar = $("bar");
-    $("main").style.paddingBottom = bar.hidden ? "" : `${bar.offsetHeight + 24}px`;
-  }).observe($("bar"));
+  function clickCard(instance) {
+    if (!canAct()) return;
+    const card = cardOf(instance.card);
+    if (card.kind === "build" || card.targeted) {
+      selection = selection && selection.uid === instance.uid ? null : { uid: instance.uid, card: instance.card, rotation: 0 };
+      renderBar();
+      updateHover();
+      return;
+    }
+    send({ action: "play", uid: instance.uid });
+  }
 
-  document.querySelectorAll("dialog [data-close]").forEach((b) => { b.onclick = () => b.closest("dialog").close(); });
-  $("help-button").onclick = () => $("help-window").showModal();
-  document.addEventListener("keydown", (event) => {
-    if (event.key === "Escape" && !document.querySelector("dialog[open]")) cancel();
+  $("end-turn").addEventListener("click", () => {
+    const seat = mySeat();
+    if (seat) send({ action: "end_turn", done: !seat.done });
   });
+
+  // --- windows --------------------------------------------------------------------------------
+
+  function renderDeckWindow() {
+    const seat = mySeat();
+    if (!seat || !$("deck-window").open) return;
+    const counts = {};
+    for (const id of seat.deck) counts[id] = (counts[id] || 0) + 1;
+    $("deck-note").textContent = `${seat.deck.length} cards · ${seat.draw} to draw · ${seat.discard} discarded`;
+    $("deck-cards").replaceChildren(...Object.entries(counts).map(([id, n]) => {
+      const node = cardEl(id);
+      if (n > 1) node.querySelector(".name").textContent += ` ×${n}`;
+      return node;
+    }));
+  }
+
+  $("deck-button").addEventListener("click", () => {
+    $("deck-window").showModal();
+    renderDeckWindow();
+  });
+  $("help-button").addEventListener("click", () => $("help-window").showModal());
+  document.querySelectorAll("dialog [data-close]").forEach((b) => b.addEventListener("click", () => b.closest("dialog").close()));
 })();

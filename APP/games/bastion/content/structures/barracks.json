@@ -1,0 +1,39 @@
+{
+  "name": "Barracks",
+  "icon": "🛡️",
+  "shape": [
+    "##",
+    "#."
+  ],
+  "price": 4,
+  "cost": {
+    "stone": 3,
+    "tools": 1
+  },
+  "crew": "Drill Sergeant",
+  "work": {
+    "uses": {
+      "food": 1,
+      "tools": 1
+    },
+    "makes": {
+      "soldiers": 2
+    }
+  },
+  "bonuses": [
+    {
+      "near": "wall",
+      "min": 2,
+      "bonus": 1
+    },
+    {
+      "near": "smithy",
+      "bonus": 1
+    },
+    {
+      "near": "keep",
+      "bonus": 1
+    }
+  ],
+  "text": "Trains soldiers from food and tools. Soldiers beat most enemies and raze what they build."
+}

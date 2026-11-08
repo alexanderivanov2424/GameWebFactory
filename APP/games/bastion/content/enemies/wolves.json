@@ -1,0 +1,30 @@
+{
+  "name": "Wolf Pack",
+  "icon": "🐺",
+  "tier": 1,
+  "hp": 4,
+  "defeat": {
+    "soldiers": 1
+  },
+  "text": "They circle the fields at night.",
+  "attacks": [
+    {
+      "name": "Howl",
+      "curse": "fear",
+      "to": "each"
+    },
+    {
+      "name": "Maul",
+      "ruin": 1,
+      "prefer": [
+        "farm"
+      ]
+    },
+    {
+      "name": "Prowl",
+      "steal": {
+        "food": 2
+      }
+    }
+  ]
+}

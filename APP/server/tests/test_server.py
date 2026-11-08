@@ -41,7 +41,12 @@ class Client:
         payload = text.encode()
         mask = os.urandom(4)
         masked = bytes(b ^ mask[i % 4] for i, b in enumerate(payload))
-        self.writer.write(struct.pack("!BB", (0x80 if fin else 0) | opcode, 0x80 | len(payload)) + mask + masked)
+        first = (0x80 if fin else 0) | opcode
+        if len(payload) < 126:
+            header = struct.pack("!BB", first, 0x80 | len(payload))
+        else:
+            header = struct.pack("!BBH", first, 0x80 | 126, len(payload))
+        self.writer.write(header + mask + masked)
 
     async def recv(self):
         """Next (opcode, payload) from the server, skipping pings."""
@@ -184,30 +189,40 @@ class AccountSocketTests(unittest.IsolatedAsyncioTestCase):
         self.server.close()
         await self.server.wait_closed()
 
+    async def status(self, client):
+        """Next message, with an account status's login token checked and removed."""
+        data = await client.recv_json()
+        if data.get("type") == "account":
+            token = data.pop("token")
+            self.assertEqual(token is not None, data["user"] is not None)
+            if token:
+                self.assertEqual(self.sessions.store.check_login_token(token), data["user"].lower())
+        return data
+
     async def test_register_logout_login(self):
         tab = await Client.connect(self.port, f"/ws/account?client={CLIENT_A}")
         other = await Client.connect(self.port, f"/ws/account?client={CLIENT_A}")  # same tab, another page
-        self.assertEqual(await tab.recv_json(), {"type": "account", "user": None, "displayName": None})
-        self.assertEqual(await other.recv_json(), {"type": "account", "user": None, "displayName": None})
+        self.assertEqual(await self.status(tab), {"type": "account", "user": None, "displayName": None})
+        self.assertEqual(await self.status(other), {"type": "account", "user": None, "displayName": None})
 
         tab.send(json.dumps({"type": "register", "name": "Alice", "password": "password1"}))
-        self.assertEqual(await tab.recv_json(), {"type": "account", "user": "Alice", "displayName": None})
-        self.assertEqual(await other.recv_json(), {"type": "account", "user": "Alice", "displayName": None})
+        self.assertEqual(await self.status(tab), {"type": "account", "user": "Alice", "displayName": None})
+        self.assertEqual(await self.status(other), {"type": "account", "user": "Alice", "displayName": None})
 
         tab.send(json.dumps({"type": "logout"}))
-        self.assertEqual(await tab.recv_json(), {"type": "account", "user": None, "displayName": None})
+        self.assertEqual(await self.status(tab), {"type": "account", "user": None, "displayName": None})
         tab.send(json.dumps({"type": "login", "name": "alice", "password": "nope-nope"}))
-        self.assertEqual(await tab.recv_json(), {"type": "error", "message": "Wrong name or password."})
+        self.assertEqual(await self.status(tab), {"type": "error", "message": "Wrong name or password."})
         tab.send(json.dumps({"type": "login", "name": "alice", "password": "password1"}))
-        self.assertEqual(await tab.recv_json(), {"type": "account", "user": "Alice", "displayName": None})
+        self.assertEqual(await self.status(tab), {"type": "account", "user": "Alice", "displayName": None})
         self.assertEqual(self.sessions.account_name(CLIENT_A), "Alice")
 
         # The display name is saved to the account and comes back with the next login.
         tab.send(json.dumps({"type": "name", "name": "  Captain Al  "}))
         tab.send(json.dumps({"type": "logout"}))
-        self.assertEqual(await tab.recv_json(), {"type": "account", "user": None, "displayName": None})
+        self.assertEqual(await self.status(tab), {"type": "account", "user": None, "displayName": None})
         tab.send(json.dumps({"type": "login", "name": "alice", "password": "password1"}))
-        self.assertEqual(await tab.recv_json(), {"type": "account", "user": "Alice", "displayName": "Captain Al"})
+        self.assertEqual(await self.status(tab), {"type": "account", "user": "Alice", "displayName": "Captain Al"})
 
     async def test_invalid_client_id_is_rejected(self):
         client = await Client.connect(self.port, "/ws/account?client=nope")
@@ -229,6 +244,29 @@ class AccountSocketTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(self.sessions.account_name(CLIENT_A), "Alice")  # ...the seat keeps it
         finally:
             sessions.SESSION_GRACE = old
+
+    async def test_resume_logs_a_forgotten_session_back_in(self):
+        tab = await Client.connect(self.port, f"/ws/account?client={CLIENT_A}")
+        await tab.recv_json()
+        tab.send(json.dumps({"type": "register", "name": "Alice", "password": "password1"}))
+        token = (await tab.recv_json())["token"]
+        tab.writer.close()
+        await asyncio.sleep(0.05)
+        self.sessions.end(CLIENT_A)  # forgotten, as after a restart or a long absence
+
+        again = await Client.connect(self.port, f"/ws/account?client={CLIENT_A}")
+        self.assertIsNone((await again.recv_json())["user"])
+        again.send(json.dumps({"type": "resume", "token": token}))
+        reply = await again.recv_json()
+        self.assertEqual(reply["user"], "Alice")
+        self.assertIsInstance(reply["token"], str)
+        self.assertEqual(self.sessions.account_name(CLIENT_A), "Alice")
+
+    async def test_bad_resume_token_stays_guest(self):
+        tab = await Client.connect(self.port, f"/ws/account?client={CLIENT_A}")
+        await tab.recv_json()
+        tab.send(json.dumps({"type": "resume", "token": "bad.token"}))
+        self.assertEqual(await tab.recv_json(), {"type": "account", "user": None, "displayName": None, "token": None})
 
 
 class LoadGamesTests(unittest.TestCase):

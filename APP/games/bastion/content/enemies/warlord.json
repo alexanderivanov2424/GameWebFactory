@@ -1,18 +1,31 @@
 {
   "name": "Orc Warlord",
-  "icon": "👿",
-  "hp": 900,
-  "speed": 0.09,
-  "armor": 4,
-  "keep": 12,
-  "attack": 18,
-  "attackEvery": 2,
-  "siege": 2,
-  "boss": true,
-  "heal": {
-    "amount": 6,
-    "radius": 2,
-    "every": 8
+  "icon": "⚔️",
+  "tier": 3,
+  "hp": 7,
+  "defeat": {
+    "soldiers": 1
   },
-  "text": "Boss. Armor 4, rallies (heals) the orcs around him."
+  "text": "Brings his whole horde to your gates.",
+  "attacks": [
+    {
+      "name": "War Camp",
+      "place": {
+        "name": "War Camp",
+        "icon": "⛺"
+      },
+      "count": 2
+    },
+    {
+      "name": "Assault",
+      "keep": 3,
+      "shield": true
+    },
+    {
+      "name": "War Drums",
+      "kill": 1,
+      "curse": "fear",
+      "to": "one"
+    }
+  ]
 }

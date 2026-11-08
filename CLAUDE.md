@@ -24,8 +24,9 @@ a Python standard-library WebSocket server plus plain HTML/JS pages behind nginx
 - **Changing, fixing or testing an existing game or shared code:** use the `game-dev` skill.
   It maps where everything is documented so you don't need to read whole files.
 - **Adding a game:** use the `new-game` skill. It generates the folder with `tools/new_game.py`.
-- **Player feedback:** use the `feedback` skill (implements `Feedback/<game>/`, or builds one new game
-  from `Feedback/new_game/`, then deletes the feedback it used).
+- **Player feedback:** use the `feedback` skill (implements `Feedback/<game>/`, several games at once
+  with one subagent per game on request, or builds one new game from `Feedback/new_game/`, then deletes
+  the feedback it used).
 - Every file starts with a header comment describing it. Each game's `server.py` docstring
   is its rules spec and message list, and its `NOTES.md` holds developer notes (patterns,
   map, pitfalls). Read headers before bodies.
@@ -70,13 +71,14 @@ games are built on, server and client side) and the **games** themselves.
 ```
 APP/
   server/               Site platform (Python package `server`), run as `python3 -m server.main` from APP/
-    main.py             Entry point: /ws/chat, /ws/account and /ws/game/<game-id>?room=<room-id>; imports games
+    main.py             Entry point: /ws/chat, /ws/account, /ws/feedback, /ws/admin and /ws/game/<game-id>?room=<room-id>; imports games
     websocket.py        WebSocket protocol implementation
     rooms.py            Rooms, connections, reconnect grace period, BaseGame
     chat.py             Site-wide chat
     sessions.py         Per-tab sessions (guest or logged in), saved game data, /ws/account, save-rate limits
     accounts.py         Accounts on disk (accounts_dir()/*.json), password hashes, account/data-size limits
     feedback.py         /ws/feedback: Settings -> Feedback text saved to Feedback/<game>/<uuid>_<name>.txt; limits
+    admin.py            /ws/admin: password-gated, read-only admin view of accounts, feedback, sessions, rooms
     turtle.py           turtle(reason): emergency shutdown of the whole site; state_dir()
     utils.py            Platform helpers (clean_text, CLIENT_ID)
     tests/              Protocol, rooms/reconnects, accounts/sessions, turtle, game loading
@@ -93,6 +95,7 @@ APP/
     turns.py            TurnQueue: turn counters (cost 1 per action = round-robin)
     choices.py          SecretChoices: hidden simultaneous picks (required + optional choosers), revealed all at once
     deck.py             Deck: shuffled draw pile + discard pile of card instances (uids), reshuffles when empty
+    shapes.py           Polyomino shapes: parse rows of '#', turn them, list the 4 rotations (never mirrored)
     data.py             Loading JSON content files (cards, units...): bad files are logged and skipped
     sim.py              Sim: drives a game through the real lobby for tests (no network); also ticks and inputs
     tests/
@@ -104,6 +107,8 @@ APP/
       settings.js       Settings component + AppSettings API; owns the per-tab player UUID and the
                         Account tab (log in / create account / log out over /ws/account)
       chat.js           Site-wide chat component
+      admin.js          Admin view button + dialog (view only); not in pages: settings.js loads it while
+                        Settings -> Settings -> Enable Admin Mode holds a password
     gamekit/            Shared game library, client side (served at /gamekit/)
       dom.js            AppDom: $, el, svg, debounce, setInput, listNames
       room.js           AppRoom.connect(gameId, handlers): low-level game room connection
@@ -139,7 +144,7 @@ stop.sh                 Stops app-server, nginx and any hand-started game server
 accounts.sh             Host account manager: find, select, show and delete accounts; deleting
                         restarts app-server (it keeps accounts in memory); no backup is kept
 .claude/skills/
-  feedback/             Implementing one game's feedback, or one new game from Feedback/new_game/, then deleting it
+  feedback/             Implementing one game's feedback (or several, one subagent each), or one new game from Feedback/new_game/, then deleting it
   game-dev/             Working on existing games and shared code: where things are, testing, pitfalls
   new-game/             Adding a game: shared API rules, pitfalls, templates/ (mirror a game folder; filled in
                         by tools/new_game.py, whose tests build a game from them and run its tests)
@@ -192,6 +197,10 @@ Summary:
    secret objectives (JSON with a `check` key -> scoring function), hidden picks that only work
    like a physical game (secret die rolls you may under-report, a Secret Hitler style card
    hand-off between two players), a nightly secret vote with only the tally shown, `PatchState`.
+   `games/bastion/` (`logic/` modules): a co-op city-builder with simultaneous rounds (`done`
+   flags), polyomino buildings (`gamekit.shapes`) whose output comes from adjacency conditions
+   in JSON, goods hauled along roads, server-computed placement targets with output previews,
+   and enemy cards with cycling attacks and their own ways to be beaten; `PatchState`.
    `games/gilded-trail/` (`logic/` modules): a hex map generated from a seed (preset JSON maps
    or a random one) drawn as SVG, deck-building with a shared market and reserve (`Deck` per
    player), action cards that leave a pending choice inside the turn, and the server sending
@@ -216,7 +225,9 @@ Summary:
   forgotten when the tab's session ends) and accounts (files in `Accounts/` in the Dev folder, kept across
   deploys). On login, each game's guest data moves to the account unless the account already has data for
   that game (then the account's wins). Save at milestones, never per tick.
-- Logins live in server memory: a deploy logs everyone out (accounts and their data stay).
+- Staying logged in: the server keeps logins in memory, and each tab also keeps a signed login token
+  (sessionStorage, 30 days, key in `Accounts/.login-key`) that logs it back in after a reload, a long
+  disconnect or a deploy ("resume" in `server/sessions.py`). Deleting `.login-key` logs every tab out.
 - Account files: `Accounts/<lowercase name>.json` next to `APP/` (git-ignored, mode 700). The server finds
   the folder through `$ACCOUNTS_DIRECTORY` (`accounts_dir()` in `server/accounts.py`; without it,
   `<state dir>/accounts`, e.g. `APP/.data/accounts` for a hand-started server). deploy.sh runs app-server
@@ -238,4 +249,8 @@ Summary:
   test them with `assertRaises(Turtled)`.
 
 ## Settings and privacy
-- Settings stay in the browser (sessionStorage) and are never sent to the server. Exceptions: the display name (sent with chat messages and when joining a game, and saved to the account while logged in), the player UUID (sent when connecting to a game room or the account socket), the account name and password (sent only when pressing Log in / Create account) and feedback text with the display name and chosen game (sent only when pressing Submit in the Feedback tab). The site has no HTTPS yet, so passwords travel unencrypted; the Account tab says so.
+- Settings stay in the browser (sessionStorage) and are never sent to the server. Exceptions: the display name (sent with chat messages and when joining a game, and saved to the account while logged in), the player UUID (sent when connecting to a game room or the account socket), the account name and password (sent only when pressing Log in / Create account), the login token the server gave the tab (sent when the account socket connects) and feedback text with the display name and chosen game (sent only when pressing Submit in the Feedback tab), and the admin password (Settings -> Settings -> Enable Admin Mode; sent to /ws/admin, which checks it and then answers read-only admin requests). The site has no HTTPS yet, so passwords travel unencrypted; the Account tab says so.
+- **Admin view** (`server/admin.py`, `web/shared/admin.js`): view only, and not meant to be secure (one shared
+  password, `ADMIN_PASSWORD`). Never add actions that change anything there without the user's OK, never send
+  password hashes, and only shortened client UUIDs (a full one is a seat key). Games show up in the Rooms tab
+  through `admin_info()` (`BaseGame` default; `LobbyGame` lists members, phase, host and settings).

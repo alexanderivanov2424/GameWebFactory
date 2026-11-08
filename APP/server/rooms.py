@@ -69,6 +69,11 @@ class BaseGame:
         """True while this client is in the middle of a game here (logging in or out is refused)."""
         return False
 
+    def admin_info(self):
+        """Read-only summary for the admin view (server/admin.py): a dict of plain JSON data.
+        "members" (optional): a list of dicts, each with "client" (the client id) and any details."""
+        return {}
+
 
 class Player:
     def __init__(self, client_id):

@@ -1,0 +1,27 @@
+{
+  "name": "Rat King",
+  "icon": "🐀",
+  "tier": 1,
+  "hp": 3,
+  "defeat": {
+    "cure": true
+  },
+  "text": "Swords can't catch it: only cures drive it off.",
+  "attacks": [
+    {
+      "name": "Spread",
+      "plague": 2
+    },
+    {
+      "name": "Spread",
+      "plague": 1
+    },
+    {
+      "name": "Gnaw",
+      "steal": {
+        "food": 1,
+        "wood": 1
+      }
+    }
+  ]
+}

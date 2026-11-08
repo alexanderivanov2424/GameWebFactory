@@ -22,6 +22,7 @@ Modules (each header documents its API):
     turns.py     TurnQueue: turn order by counters (cost 1 per action = round-robin)
     choices.py   SecretChoices: hidden simultaneous picks, revealed together
     deck.py      Deck: shuffled draw pile + discard pile of card instances (uids), reshuffles
+    shapes.py    Polyomino shapes: parse, rotate, the 4 rotations (from gamekit.shapes import ...)
     data.py      Loading and validating JSON content files
     sim.py       Sim: drives a game through the real lobby for tests (no network)
 

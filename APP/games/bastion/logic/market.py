@@ -1,44 +1,33 @@
-"""Bastion: the market between levels, a shared offer of card types anyone may buy.
+"""Bastion: the market, a shared row of cards anyone may buy at any time during a round with the
+team's gold. Copies are unlimited: a bought slot is dealt a new card at once.
 
-    market = Market(rng)
-    market.deal(after_level)   new offer: up to OFFER_SIZE different cards with cost > 0 whose
-                               "unlock" <= after_level, at least NEW_PICKS of them (if any) from
-                               the newest unlock reached, so new cards show up when they unlock
-    market.offers              [card id, ...]
-    market.price(slot)         card id and its cost (LobbyError on a bad slot)
-Copies are unlimited: buying doesn't take the card from the offer, so everyone may buy the same
-card. Retiring a card (removing it from your deck) costs RETIRE_COST, once per market.
+    market = Market(pool, rng)    pool = card ids that have a price (cards.py)
+    market.slots                  [card id] (SIZE of them, fewer if the pool is smaller)
+    market.take(slot) -> card id  and deals that slot a new card (LobbyError for a bad slot)
+Dealing avoids a card already on offer while the pool has others.
 """
 
 from gamekit import LobbyError
 
-from .cards import CARDS
-
-OFFER_SIZE = 6
-NEW_PICKS = 2
-RETIRE_COST = 1
+SIZE = 6
 
 
 class Market:
-    def __init__(self, rng, cards=CARDS):
+    def __init__(self, pool, rng):
+        self.pool = sorted(pool)
         self.rng = rng
-        self.cards = cards
-        self.offers = []
+        self.slots = []
+        while len(self.slots) < min(SIZE, len(self.pool)):
+            self.slots.append(self.deal())
 
-    def deal(self, after_level):
-        pool = sorted(c for c, card in self.cards.items() if card["cost"] > 0 and card["unlock"] <= after_level)
-        newest = max((self.cards[c]["unlock"] for c in pool), default=0)
-        fresh = [c for c in pool if self.cards[c]["unlock"] == newest and newest > 1]
-        picks = self.rng.sample(fresh, min(NEW_PICKS, len(fresh)))
-        rest = [c for c in pool if c not in picks]
-        picks += self.rng.sample(rest, min(OFFER_SIZE - len(picks), len(rest)))
-        self.offers = sorted(picks, key=lambda c: (self.cards[c]["cost"], self.cards[c]["name"]))
+    def deal(self, skip=None):
+        fresh = [c for c in self.pool if c not in self.slots and c != skip]
+        return self.rng.choice(fresh or self.pool)
 
-    def price(self, slot):
-        if not 0 <= slot < len(self.offers):
-            raise LobbyError("That market slot is empty.")
-        card_id = self.offers[slot]
-        return card_id, self.cards[card_id]["cost"]
-
-    def public(self):
-        return {"offers": list(self.offers), "retireCost": RETIRE_COST}
+    def take(self, slot):
+        if not 0 <= slot < len(self.slots):
+            raise LobbyError("There's no such card in the market.")
+        card = self.slots[slot]
+        self.slots[slot] = None
+        self.slots[slot] = self.deal(skip=card)
+        return card

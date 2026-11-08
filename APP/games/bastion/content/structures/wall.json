@@ -1,0 +1,14 @@
+{
+  "name": "Wall",
+  "icon": "",
+  "shape": [
+    "##"
+  ],
+  "tile": "wall",
+  "price": 2,
+  "reusable": true,
+  "cost": {
+    "stone": 1
+  },
+  "text": "Building tiles next to a wall can't be ruined by raids. When every tile is protected, raids break walls instead."
+}

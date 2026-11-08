@@ -1,16 +1,35 @@
 {
   "name": "Necromancer",
-  "icon": "🧙",
-  "hp": 100,
-  "speed": 0.12,
-  "armor": 1,
-  "keep": 3,
-  "attack": 2,
-  "attackEvery": 3,
-  "summon": {
-    "enemy": "skeleton",
-    "every": 12,
-    "max": 8
+  "icon": "💀",
+  "tier": 2,
+  "defeat": {
+    "raze": 2
   },
-  "text": "Raises skeletons as it walks."
+  "lair": {
+    "name": "Dark Altar",
+    "icon": "⛧",
+    "shape": [
+      "##",
+      "##"
+    ]
+  },
+  "text": "Hides behind his altar; raze every stone of it.",
+  "attacks": [
+    {
+      "name": "Raise Dead",
+      "place": {
+        "name": "Graveyard",
+        "icon": "🪦"
+      }
+    },
+    {
+      "name": "Drain",
+      "keep": 2
+    },
+    {
+      "name": "Hex",
+      "curse": "hex",
+      "to": "one"
+    }
+  ]
 }

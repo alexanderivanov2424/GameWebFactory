@@ -3,68 +3,71 @@
 Rules and the message list: the docstring at the top of `server.py`. Content files and their
 fields: `content/README.md`. Tests: `tests/` (`python3 -I tools/run_tests.py bastion`).
 
+Rebuilt on 2026-11-08 from player feedback: it used to be a tower-defense game (sieges simulated
+on the server and replayed). That version is in git history (before this change), if a pattern
+from it is ever needed (deterministic simulation sent as a compact replay).
+
 ## Read this game to learn
-- **Co-op with simultaneous turns**: no `TurnQueue`; every seat has a `done` flag, any player
-  acts at any time during a stage, and `Match.check_all_done()` advances (next build turn, siege,
-  next level) once every remaining seat is done. A leave re-runs it, so a leaver never blocks.
-  "Done" can be taken back (`done: false`) until the last player finishes.
-- **A server-side simulation sent as a replay**: the siege (`logic/battle.py`) runs instantly
-  and deterministically (no randomness, so tests are exact) and produces compact frames (one flat
-  list `[uid, progress*100, hp, ...]` per tick) plus events (shots, keep hits, wall/squad health,
-  breath, explosions). The client (`client/replay.js`) only interpolates and draws. With
-  `SYNC = PatchState` the ~5-30 KB replay goes out once, not after every market purchase.
-- **Server-computed targets**: `Match.private()` sends `targets` = {card id: {"x,y": labor}}
-  for every placeable card in the hand (incl. the upgrade surcharge), so the client's hover ghost,
-  target dots and "can't go here" need no placement rules. Board structures carry their effective
-  stats (`damage`, `range` with forge/watchtower bonuses, barracks `rally`) for range circles.
-- **Content-driven everything**: cards (a `kind` + per-level `stats`), enemies (abilities as
-  optional objects), levels (waves) and maps (terrain + waypoint roads) are JSON; the host's Map
-  setting is built from `MAPS`. Stats may be per level (`[3, 4, 6]`), read with `cards.stat()`.
-- **Balancing with a bot**: numbers were tuned by a scratch greedy bot (not in the repo) playing
-  full games through `Match` for 1-4 players and the three difficulties: roughly 85% wins on Easy,
-  50% on Normal, 25% on Hard with the bot; knights (armor, level 5), rams (level 8) and the bosses
-  (level 10) are the spikes. Enemy `hp` in the files is for 2 players; `PLAYER_SCALE` in
-  `match.py` scales it (solo is gentler per hand, 3-4 players tougher).
+- **Co-op with simultaneous turns**: no `TurnQueue`; every seat has a `done` flag, anyone acts
+  at any time during a round, and `Match.check_all_done()` ends the round once every remaining
+  seat is done. A leave re-runs it. "Done" can be taken back until the last player finishes;
+  a done player can't act (take it back first).
+- **Adjacency-driven buildings from data**: each structure file lists `requires` and `bonuses`
+  as `{"near": X, ...}` conditions; `Board.near()` counts terrain cells, empty grass, road/wall
+  tiles or distinct buildings of a kind, and `economy.output()` turns that into an amount with a
+  breakdown (`parts`) the inspector shows. A new interaction is a line of JSON, no code.
+- **Polyomino placement with rotation** via `gamekit.shapes` (shared with block-blast): rotations
+  are precomputed at load; placement is "rotation + top-left cell". The client puts the shape's
+  middle under the mouse (`anchor()` in game.js).
+- **Server-computed targets**: `views.private()` sends, per hand card, every legal top-left cell
+  per rotation with the output the building would have there (blueprints; cached by
+  `board.version`), or every building the card may work/repair/cure with a preview text. The
+  client's ghost, outlines and tips need no rules.
+- **Cards made from other content**: every structure file yields a blueprint `plan-<id>` and,
+  if it works, a crew card `crew-<id>` (`cards.structure_cards`).
+- **Enemies as cards with cycling attacks** (`foes.py`, `attacks.py`): attack parts are generic
+  (steal, ruin, keep, place blights, curse cards into decks, plague, freeze, kill), and each
+  enemy has its own `defeat` ways (soldiers, resources, cures, paying off its curses, razing its
+  lair), so a new enemy is usually just JSON.
+- **Card instances with extra fields**: curse cards an enemy adds carry `"from": enemy index`
+  on the Deck instance, so paying one off can hurt its sender.
 
 ## Map
-- `server.py`: settings (difficulty, keep health, map from `MAPS`), `ACTIONS`, thin wrappers
-  (`cell()` parses optional x/y), `check_over()` after every action. `SYNC = PatchState`.
-- `logic/match.py`: `Match` (constants at the top: `HAND_SIZE`, `LABOR`, `START_GOLD`,
-  `UPGRADE_LABOR`, `MIN_DECK`, `DIFFICULTY`, `PLAYER_SCALE`, seat `COLORS`): `start_turn`
-  (refill, labor, farm/quarry income), `play` (structures via `Board`, orders via `orders.py`),
-  `demolish`, `end_turn` / `ready` -> `check_all_done`, `siege` (runs `run_siege`, rewards,
-  `bless` = chapels, deals the market), `buy`, `retire`, `next_level`, `leave`, `end`,
-  `public` (static catalog cached in `catalog()`), `targets`, `private`.
-- `logic/board.py`: `Structure` (uid, card, x, y, owner, level, hp), `Board` (`check` =
-  placement rules, `place` (build or upgrade), `upgrade`, `demolish`, `disown`, `near`, `boost`,
-  `rally`, `public`).
-- `logic/battle.py`: `Siege` (one tick = `step`: spawn, towers, spikes, squads, enemy specials,
-  walk/attack, keep), `Enemy`, `Tower`, `Wall`, `Squad`, `run_siege` -> `Result` (keep, replay,
-  summary); removes destroyed walls from the board.
-- `logic/orders.py`, `logic/seat.py`, `logic/market.py`, `logic/cards.py`, `logic/enemies.py`,
-  `logic/maps.py`: see `logic/__init__.py`.
-- `client/board.js` (`BastionBoard`): builds the grid (terrain, roads, bridges, unused roads
-  dimmed, entrances, keep, structures with owner colour, ★ level, wall health).
-- `client/replay.js` (`BastionReplay`): plays `game.battle` on `#overlay` (enemy sprites with
-  health bars, squads, live walls, shot lines, blasts, keep hits, stunned towers), with pause,
-  ×1/×2/×4 and Skip, then a result banner.
-- `client/game.js`: status bar (level pips, stage, keep meter, "Watch siege"), board hover
-  (ghost, target dots, range circles on `#ranges`, demolish mode), side panel (team, next siege
-  with enemy tooltips, inspector, chronicle), bottom bar (hand or market), deck window (retire).
-- `tests/`: `helpers.py` (fixture cards/enemies installed into the registries, a tiny map,
-  `level`/`wave`, `give`, `build`, `siege`), `test_battle.py`, `test_rules.py`, `test_lobby.py`,
-  `test_content.py` (loaders). Tests never check real card/enemy/level numbers.
+- `server.py`: settings (difficulty, keep health, map from `MAPS`, enemies, peaceful rounds,
+  rounds between enemies), `ACTIONS`, thin wrappers (`cell()`), `check_over()` after every
+  action. `SYNC = PatchState`.
+- `logic/match.py`: `Match` (constants at the top: `HAND_SIZE`, `START_STOCK`, `OVERTIME`,
+  `COLORS`): `start_round` (reset worked flags, arrivals, refill hands), `end_turn` /
+  `check_all_done` -> `end_round` (income, attacks, loss checks), `play` -> `build` / `action` /
+  curse payment, `work`, `cure`, `strike`, `raze`, `hurt` (beaten: its blights and plague go;
+  all beaten wins), `buy`, `leave`, `end`.
+- `logic/views.py`: `public` (catalog cached on the match: `kinds`, `cards`, `icons`, terrain),
+  `private` + `build_targets` / `action_targets`.
+- `logic/board.py`: `Structure` (uid, kind, cells, owner, ruined, plague, frozen, worked, store),
+  `Board` (placement `check` / `place`, `near`, `link` / `road_reach`, `protected`,
+  `raid_targets`, `ruin` / `repair`, blights, `public`).
+- `logic/economy.py`: `output`, `why_not`, `work`, `haul`, `repair_cost`, `STORE_CAP`.
+- `logic/foes.py`, `logic/attacks.py`, `logic/seat.py`, `logic/market.py`,
+  `logic/structures.py`, `logic/cards.py`, `logic/enemies.py`, `logic/maps.py`: see
+  `logic/__init__.py`.
+- `client/board.js` (`BastionBoard`): the grid (terrain, roads, walls, blights, buildings with
+  merged borders, owner stripe, output/store/flag badges), mouse events, hover marks.
+- `client/game.js`: status bar, enemy cards (strike buttons), hover (ghost / outlines / tips),
+  inspector, market, team, chronicle, hand bar, deck window.
+- `tests/`: `helpers.py` (`FixtureCase` installs small fixture structures, cards and enemies,
+  parsed by the real loaders, into the shared registries per test; an 8x6 `MAP`; `new_match`,
+  `give`, `build`, `foe`), `test_board.py` (placement, rotation, near, links, raids),
+  `test_economy.py` (output, delivery, haul, who can work), `test_cards.py` (playing every kind
+  of card, market, done flag), `test_foes.py` (arrival, attacks, defeat ways, win/loss, leaving),
+  `test_lobby.py` (Sim, real content). Tests never check real content numbers.
 
 ## Pitfalls seen here
-- First balance pass was far too easy: replaying the same structure card made level-3 towers
-  before the first siege. Upgrades now cost +1 labor per current level (`UPGRADE_LABOR`); Master
-  Mason stays a flat 1-labor upgrade.
-- Enemies spawn on a road's first cell, so nothing may be built there (else a wall on it would
-  never block anything).
-- Blocking: an enemy stops `STOP` (0.55) cells before a blocker's cell and only blocks when it
-  *reaches* that point, so a squad respawning on a cell an enemy already passed doesn't trap it.
-- Replays must not auto-play right after a reload: game.js remembers the last battle id shown
-  per room and game number in sessionStorage.
-- The board is rebuilt on every state (cheap at 160 cells); hover highlights are toggled on the
-  existing cells, and a running replay re-hides its walls on the new cells (`replay.attach`).
-- `Match.public()` returns the cached catalog dicts; don't mutate the result.
+- The public state mixes the catalog and the board: the catalog's structure files are `kinds`,
+  because `structures` is the board's buildings (an early version clashed).
+- PatchState: no `None` in dicts. Catalog views drop None fields (`structures.public`,
+  `cards.public`); structure views use `""` / `false`.
+- Shapes whose rotations coincide (a domino turned twice) give identical target maps; harmless.
+- Numbers (costs, prices, outputs, enemy health, peaceful rounds) are a first pass reasoned from
+  the economy, not tuned by play. Rough budget: ~1 gold per player per round from Tax plus the
+  keep's 1; soldiers cost 1 food + 1 tool (2 wood) per 2 at a barracks; tier-1 enemies have
+  3-4 health x1.5 for 2 players.

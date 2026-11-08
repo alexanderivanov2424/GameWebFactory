@@ -16,7 +16,7 @@ things are, and its pitfalls. Read only the one closest to your game:
 - `smugglers`: the first `logic/`-module game; graph board as SVG, deck-building, `PatchState`.
 - `block-blast`: grid placement with rotations, hover ghost, swappable market (`Choice`/`MultiChoice`).
 - `marooned`: hidden role, secret votes, map built as it's explored.
-- `bastion`: co-op simultaneous turns, server-side simulation sent as a replay.
+- `bastion`: co-op simultaneous turns, polyomino buildings with adjacency bonuses from JSON, enemy cards.
 - `gilded-trail`: hex map from a seed as SVG, deck-building market, pending choices inside a turn.
 - `arena`: real-time (`RealtimeGame`); start from it for continuous movement.
 
@@ -53,6 +53,9 @@ Map the request onto the shared lobby model before writing code:
   start or going back to the lobby. Re-check `self.stage` in `fn`.
 - **Decks of cards** (draw, discard, reshuffle; deck-building): `gamekit.Deck` keeps card
   instances `{"uid", "card"}` in a draw and a discard pile; hands and tables are the game's.
+- **Shapes on a grid** (polyomino pieces, multi-cell buildings): `gamekit.shapes` parses rows of
+  `#`, turns them and lists the 4 rotations (never mirrored); precompute them at load and send
+  them in the game state so the client draws ghosts without geometry rules.
 - **Content that will grow** (cards, units, levels): one JSON file per item in a folder inside
   the game (next to `server.py`, e.g. `cards/`), loaded and validated at import with
   `gamekit.data.load_json_dir` (bad files are logged and skipped), in its own module

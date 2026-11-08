@@ -1,0 +1,24 @@
+{
+  "name": "Siege Ogre",
+  "icon": "👹",
+  "tier": 2,
+  "hp": 6,
+  "defeat": {
+    "soldiers": 1
+  },
+  "text": "Slow, huge and loud.",
+  "attacks": [
+    {
+      "name": "Smash",
+      "ruin": 2
+    },
+    {
+      "name": "Hurl Boulder",
+      "keep": 3,
+      "shield": true
+    },
+    {
+      "name": "Snore"
+    }
+  ]
+}

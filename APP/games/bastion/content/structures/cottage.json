@@ -1,0 +1,14 @@
+{
+  "name": "Cottage",
+  "icon": "🏠",
+  "shape": [
+    "#"
+  ],
+  "price": 2,
+  "cost": {
+    "wood": 1,
+    "stone": 1
+  },
+  "card": "villagers",
+  "text": "Homes for workers: adds a Villagers card to your deck. Markets and chapels like cottages nearby; workshops and smithies are too noisy for them."
+}

@@ -1,0 +1,38 @@
+{
+  "name": "Farm",
+  "icon": "🌾",
+  "shape": [
+    "##",
+    "##"
+  ],
+  "price": 2,
+  "cost": {
+    "wood": 2
+  },
+  "crew": "Farmhands",
+  "work": {
+    "makes": {
+      "food": 2
+    }
+  },
+  "bonuses": [
+    {
+      "near": "water",
+      "bonus": 1
+    },
+    {
+      "near": "empty",
+      "min": 4,
+      "bonus": 1
+    },
+    {
+      "near": "mine",
+      "bonus": -1
+    },
+    {
+      "near": "quarry",
+      "bonus": -1
+    }
+  ],
+  "text": "Grows food. Likes water and open fields; hates the dust of mines and quarries."
+}

@@ -1,0 +1,22 @@
+{
+  "name": "Goblin Raiders",
+  "icon": "👺",
+  "tier": 1,
+  "hp": 3,
+  "defeat": {
+    "soldiers": 1
+  },
+  "text": "Quick, greedy and cowardly.",
+  "attacks": [
+    {
+      "name": "Pillage",
+      "steal": {
+        "most": 2
+      }
+    },
+    {
+      "name": "Torch",
+      "ruin": 1
+    }
+  ]
+}

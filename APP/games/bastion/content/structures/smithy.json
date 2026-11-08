@@ -1,0 +1,37 @@
+{
+  "name": "Smithy",
+  "icon": "🔥",
+  "shape": [
+    "###"
+  ],
+  "price": 4,
+  "cost": {
+    "stone": 2,
+    "tools": 1
+  },
+  "crew": "Smiths",
+  "work": {
+    "uses": {
+      "ore": 1,
+      "wood": 1
+    },
+    "makes": {
+      "tools": 2
+    }
+  },
+  "bonuses": [
+    {
+      "near": "mine",
+      "bonus": 1
+    },
+    {
+      "near": "workshop",
+      "bonus": 1
+    },
+    {
+      "near": "cottage",
+      "bonus": -1
+    }
+  ],
+  "text": "Forges ore into tools, faster than a workshop."
+}

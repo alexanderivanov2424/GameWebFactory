@@ -10,6 +10,15 @@ which go through server/sessions.py (guests vs. logged-in players, rate limits).
     store.save(name, game_id, value)      # writes the account file
     store.fits(name, game_id, value) -> True if saving it would stay within MAX_DATA_BYTES
     store.display_name(name) / store.set_display_name(name, text)   # the player's display name
+    store.login_token(name) -> signed token that logs this account back in (see below)
+    store.check_login_token(token) -> lowercase account name, or None if it isn't valid
+
+Login tokens (so a tab stays logged in across reloads, long disconnects and server restarts):
+"<base64 of {"n": lowercase name, "c": account created time, "e": expiry}>.<HMAC-SHA256>", signed
+with a key kept in <folder>/LOGIN_KEY_FILE (made once, mode 600; tests without a folder use a
+random key per store). Nothing is stored per token: a token stops working when it expires
+(LOGIN_TOKEN_DAYS), when the key file is deleted (logs every tab out), or when its account is
+deleted (a new account with the same name has a different created time).
 
 One JSON file per account, <folder>/<lowercase name>.json, written atomically (temp file, then
 rename): {"name", "password": {"salt", "hash", "iterations"}, "created", "displayName",
@@ -28,6 +37,7 @@ Hard limits (breaking one turtles the site, see turtle.py):
   that would go over it, or an account file over it at startup.
 """
 
+import base64
 import hashlib
 import hmac
 import json
@@ -48,6 +58,9 @@ NAME = re.compile(r"^[A-Za-z0-9_-]{3,20}$")
 MAX_DISPLAY_NAME = 32  # same as the lobby and chat name limit
 MAX_PASSWORD = 128  # no minimum: players are told not to use a real password
 ITERATIONS = 200_000
+LOGIN_TOKEN_DAYS = 30
+LOGIN_KEY_FILE = ".login-key"  # not *.json, so it is never read as an account
+MAX_TOKEN = 512  # characters
 
 
 def accounts_dir():
@@ -109,6 +122,7 @@ class AccountStore:
         self.folder = Path(folder) if folder is not None else None
         self.accounts = {}  # lowercase name -> record
         self._unreadable = set()  # lowercase names whose file couldn't be read: still taken
+        self._login_key = None
         if self.folder is not None:
             self.folder.mkdir(parents=True, exist_ok=True)
             self._load_all()
@@ -177,6 +191,55 @@ class AccountStore:
             return
         self._write(name.lower(), {**record, "displayName": text})
         record["displayName"] = text
+
+    # --- Login tokens -------------------------------------------------------------------
+
+    def _key(self):
+        if self._login_key is None:
+            if self.folder is None:
+                self._login_key = secrets.token_bytes(32)
+            else:
+                path = self.folder / LOGIN_KEY_FILE
+                try:
+                    self._login_key = bytes.fromhex(path.read_text(encoding="ascii").strip())
+                except (OSError, ValueError):
+                    self._login_key = b""
+                if len(self._login_key) < 32:
+                    self._login_key = secrets.token_bytes(32)
+                    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+                    with os.fdopen(fd, "w", encoding="ascii") as file:
+                        file.write(self._login_key.hex())
+        return self._login_key
+
+    def _sign(self, body):
+        return hmac.new(self._key(), body.encode("ascii"), hashlib.sha256).hexdigest()
+
+    def login_token(self, name):
+        record = self.get(name)
+        if record is None:
+            return None
+        payload = {"n": record["name"].lower(), "c": record.get("created"),
+                   "e": int(time.time()) + LOGIN_TOKEN_DAYS * 86400}
+        body = base64.urlsafe_b64encode(json.dumps(payload, separators=(",", ":")).encode()).decode("ascii")
+        return f"{body}.{self._sign(body)}"
+
+    def check_login_token(self, token):
+        if not isinstance(token, str) or len(token) > MAX_TOKEN or token.count(".") != 1:
+            return None
+        body, signature = token.split(".")
+        try:
+            if not hmac.compare_digest(signature, self._sign(body)):
+                return None
+            payload = json.loads(base64.urlsafe_b64decode(body.encode("ascii")))
+            name, created, expiry = payload["n"], payload["c"], payload["e"]
+        except (ValueError, TypeError, KeyError, UnicodeError):
+            return None
+        record = self.get(name) if isinstance(name, str) else None
+        if record is None or record.get("created") != created:
+            return None
+        if not isinstance(expiry, int) or expiry < time.time():
+            return None
+        return name
 
     def has(self, name, game_id):
         record = self.get(name)

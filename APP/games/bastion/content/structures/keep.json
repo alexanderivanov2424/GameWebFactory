@@ -1,0 +1,12 @@
+{
+  "name": "Keep",
+  "icon": "🏰",
+  "shape": [
+    "#"
+  ],
+  "depot": true,
+  "income": {
+    "gold": 1
+  },
+  "text": "The heart of the city: makes 1 gold every round and takes in goods. If its health reaches 0, the city falls."
+}
