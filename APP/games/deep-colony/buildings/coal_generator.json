@@ -29,5 +29,6 @@
     "value": -15,
     "radius": 3
   },
-  "description": "Burns coal for power. Gives off CO2 and heat."
+  "description": "Burns coal for power. Gives off CO2 and heat.",
+  "rotatable": true
 }

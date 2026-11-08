@@ -22,5 +22,6 @@
     "value": -10,
     "radius": 2
   },
-  "description": "A colonist runs on a wheel to make power while the network needs it."
+  "description": "A colonist runs on a wheel to make power while the network needs it.",
+  "rotatable": true
 }

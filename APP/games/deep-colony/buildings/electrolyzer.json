@@ -32,5 +32,6 @@
     "value": -5,
     "radius": 1
   },
-  "description": "Splits piped water into oxygen and hydrogen. Needs power."
+  "description": "Splits piped water into oxygen and hydrogen. Needs power.",
+  "rotatable": true
 }

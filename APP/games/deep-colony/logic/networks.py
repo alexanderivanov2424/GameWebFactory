@@ -13,23 +13,34 @@ shortfall and take the surplus. When supply (plus stored charge) does not cover 
 powered in id order while the energy lasts. b.powered is set on every power user (False when not
 attached, inactive or short of energy).
 
+Pipes are segment by segment: every finished pipe cell (liquid layer "pipe", 10 kg; gas layer
+"gaspipe", 1 kg) holds at most one packet [el, kg, temp, germs]. Every PACKET_DT seconds each packet
+moves one segment toward the nearest consumer port (a building's pipeIn / gasIn cell, vents
+included): into a neighbouring segment with a smaller BFS distance that is empty or holds the same
+element with room. Producers put into the segment at their out port; consumers take from the segment
+at their in port (only a matching element: a different packet there blocks, like the original game).
+A segment that disappears (deconstructed, cancelled) hands its packet to world.release: never lost.
+
 API:
     step(dt)
     needs_power(b) -> bool        the network at b's powerPort has an active user left unpowered,
                                   or a battery below 95%
     power_summary() -> {nid: {"gen": W, "use": W, "stored": J, "cap": J}}  (ints, last step)
-    pipe_take(b, port, ids, kg) -> (el, kg, temp, germs)   port "pipeIn"/"pipeOut"; ids None = any
-                                  element; takes from one element; unattached: (None, 0, 0, 0)
+    pipe_take(b, port, ids, kg) -> (el, kg, temp, germs)   port "pipeIn"/"pipeOut" (liquid) or
+                                  "gasIn"/"gasOut" (gas); ids None = any element; takes from the
+                                  packet in the segment at that port; none: (None, 0, 0, 0)
     pipe_put(b, port, el, kg, temp, germs) -> kg accepted (germs = total for the kg offered)
-    pipe_has(b, port, el) -> kg of that element in the network
-    pipe_room(b, port) -> kg that still fits (capacity PIPE_CAP kg per pipe segment, all elements)
-    pipe_summary() -> {nid: {el: kg rounded to 0.1}}
-Rebuilding pipes keeps contents: each old buffer is shared among the new networks holding its old cells, by cell count
-(capped; any excess is dropped).
-Split: shared by old-cell count; merge: summed.
+    pipe_has(b, port, el) -> kg of that element in the port's segment
+    pipe_room(b, port, el=None) -> kg that still fits there (0 if another element sits there)
+    pipe_summary() / gas_summary() -> {"<cell index>": {"el", "kg"}} (kg rounded to 0.1 / 0.01)
 """
 
-PIPE_CAP = 10.0
+PIPE_CAP = 10.0   # kg per liquid pipe segment
+GAS_CAP = 1.0     # kg per gas pipe segment
+PACKET_DT = 0.2   # s per packet move
+PORT_KIND = {"pipeIn": "pipe", "pipeOut": "pipe", "gasIn": "gaspipe", "gasOut": "gaspipe"}
+CAP = {"pipe": PIPE_CAP, "gaspipe": GAS_CAP}
+SINKS = {"pipe": "pipeIn", "gaspipe": "gasIn"}
 MIN_KG = 1e-6
 
 
@@ -46,9 +57,11 @@ class Networks:
         self._members = {}   # power: nid -> [building]
         self._attached = {}  # building id -> power nid
         self._pinfo = {}     # nid -> {"gen", "use", "stored", "cap", "short", "low"}
-        self._ipcell = {}    # pipe: cell index -> nid
-        self._icount = {}    # pipe: nid -> segment count
-        self._buf = {}       # pipe: nid -> {el: [kg, temp, germs]}
+        self._pk = {"pipe": {}, "gaspipe": {}}    # kind -> {cell index: [el, kg, temp, germs]}
+        self._cells = {"pipe": set(), "gaspipe": set()}
+        self._order = {"pipe": [], "gaspipe": []}  # (distance, cell) nearest consumer first
+        self._dist = {"pipe": {}, "gaspipe": {}}
+        self._acc = 0.0
 
     # --- components -----------------------------------------------------------------------
 
@@ -82,8 +95,6 @@ class Networks:
         world = self.match.world
         self._pcell, _ = self._components("wire", "w")
         self._members, self._attached = {}, {}
-        old_pcell, old_buf = self._ipcell, self._buf
-        self._ipcell, self._icount = self._components("pipe", "p")
         for b in self.match.buildings:
             if not b.built or not b.d["power"]:
                 continue
@@ -94,46 +105,71 @@ class Networks:
                 self._attached[b.id] = nid
         for members in self._members.values():
             members.sort(key=_key)
-        # each old buffer is shared among the new networks holding its old cells, in proportion to
-        # how many of those cells each got (cells that no longer exist take their share with them)
-        old_size, got = {}, {}
-        for cell, onid in old_pcell.items():
-            old_size[onid] = old_size.get(onid, 0) + 1
-            nn = self._ipcell.get(cell)
-            if nn:
-                got.setdefault(onid, {})
-                got[onid][nn] = got[onid].get(nn, 0) + 1
-        self._buf = {}
-        for onid, content in old_buf.items():
-            for nn, n in got.get(onid, {}).items():
-                frac = n / old_size[onid]
-                target = self._buf.setdefault(nn, {})
-                for el, (kg, temp, germs) in content.items():
-                    self._add(target, el, kg * frac, temp, germs * frac)
-        for nid, content in self._buf.items():
-            total = sum(v[0] for v in content.values())
-            cap = self._icount[nid] * PIPE_CAP
-            if total > cap:
-                scale = cap / total
-                for v in content.values():
-                    v[0] *= scale
-                    v[2] *= scale
+        self._sync_pipes()
 
-    @staticmethod
-    def _add(content, el, kg, temp, germs):
-        cur = content.get(el)
-        if cur is None:
-            content[el] = [kg, temp, germs]
-        else:
-            total = cur[0] + kg
-            cur[1] = (cur[1] * cur[0] + temp * kg) / total if total > 0 else temp
-            cur[0] = total
-            cur[2] += germs
+    def _sync_pipes(self):
+        world = self.match.world
+        buildings = self.match.buildings
+        for kind in CAP:
+            cells = {i for i, bid in buildings.layers[kind].items()
+                     if bid in buildings.by_id and buildings.by_id[bid].built}
+            self._cells[kind] = cells
+            packets = self._pk[kind]
+            for i in [i for i in packets if i not in cells]:
+                el, kg, temp, germs = packets.pop(i)
+                world.release(*world.xy(i), el, kg, temp, germs)
+            frontier = []
+            for b in buildings:
+                pc = b.port_cell(SINKS[kind]) if b.built else None
+                i = world.idx(*pc) if pc and world.inside(*pc) else None
+                if i in cells and i not in frontier:
+                    frontier.append(i)
+            dist = {i: 0 for i in frontier}
+            while frontier:
+                nxt = []
+                for i in frontier:
+                    for j in world.nbrs[i]:
+                        if j in cells and j not in dist:
+                            dist[j] = dist[i] + 1
+                            nxt.append(j)
+                frontier = nxt
+            self._dist[kind] = dist
+            self._order[kind] = sorted((d, i) for i, d in dist.items())
+
+    def _move(self, kind):
+        """One packet move: nearest-to-consumer first, so a queue advances together."""
+        packets, dist, world, cap = self._pk[kind], self._dist[kind], self.match.world, CAP[kind]
+        for d, i in self._order[kind]:
+            pk = packets.get(i)
+            if pk is None or d == 0:
+                continue
+            for dj, j in sorted((dist[j], j) for j in world.nbrs[i] if dist.get(j, d) < d):
+                other = packets.get(j)
+                if other is None:
+                    packets[j] = packets.pop(i)
+                    break
+                if other[0] == pk[0] and other[1] < cap - MIN_KG:
+                    put = min(pk[1], cap - other[1])
+                    share = put / pk[1]
+                    total = other[1] + put
+                    other[2] = (other[2] * other[1] + pk[2] * put) / total
+                    other[3] += pk[3] * share
+                    other[1] = total
+                    pk[3] -= pk[3] * share
+                    pk[1] -= put
+                    if pk[1] <= MIN_KG:
+                        del packets[i]
+                    break
 
     # --- power ----------------------------------------------------------------------------
 
     def step(self, dt):
         self._sync()
+        self._acc = min(self._acc + dt, 5 * PACKET_DT)
+        while self._acc >= PACKET_DT:
+            self._acc -= PACKET_DT
+            for kind in CAP:
+                self._move(kind)
         users_seen = set()
         info = {}
         for nid, members in self._members.items():
@@ -203,65 +239,77 @@ class Networks:
 
     # --- pipes ----------------------------------------------------------------------------
 
-    def _net(self, b, port):
+    def _seg(self, b, port):
+        """(packets dict, cell index, cap) of the segment at b's port, or None."""
         self._sync()
+        kind = PORT_KIND[port]
         pc = b.port_cell(port)
         if pc is None or not b.built:
             return None
-        return self._ipcell.get(self.match.world.idx(*pc))
-
-    def _total(self, nid):
-        return sum(v[0] for v in self._buf.get(nid, {}).values())
+        i = self.match.world.idx(*pc)
+        return (self._pk[kind], i, CAP[kind]) if i in self._cells[kind] else None
 
     def pipe_take(self, b, port, ids, kg):
-        nid = self._net(b, port)
-        content = self._buf.get(nid) if nid else None
-        if not content or kg <= 0:
+        seg = self._seg(b, port)
+        pk = seg[0].get(seg[1]) if seg else None
+        if pk is None or kg <= 0 or (ids is not None and pk[0] not in ids):
             return None, 0.0, 0.0, 0.0
-        best = None
-        for el, v in content.items():
-            if (ids is None or el in ids) and v[0] > MIN_KG and (best is None or v[0] > content[best][0]):
-                best = el
-        if best is None:
-            return None, 0.0, 0.0, 0.0
-        v = content[best]
-        got = min(kg, v[0])
-        germs = v[2] * got / v[0]
-        temp = v[1]
-        v[0] -= got
-        v[2] -= germs
-        if v[0] <= MIN_KG:
-            del content[best]
-        return best, got, temp, germs
+        got = min(kg, pk[1])
+        germs = pk[3] * got / pk[1]
+        el, temp = pk[0], pk[2]
+        pk[1] -= got
+        pk[3] -= germs
+        if pk[1] <= MIN_KG:
+            del seg[0][seg[1]]
+        return el, got, temp, germs
 
     def pipe_put(self, b, port, el, kg, temp, germs):
-        nid = self._net(b, port)
-        if nid is None or kg <= 0:
+        seg = self._seg(b, port)
+        if seg is None or kg <= 0:
             return 0.0
-        room = self._icount[nid] * PIPE_CAP - self._total(nid)
-        put = min(kg, max(0.0, room))
+        packets, i, cap = seg
+        pk = packets.get(i)
+        if pk is None:
+            put = min(kg, cap)
+            packets[i] = [el, put, temp, germs * put / kg]
+            return put
+        if pk[0] != el:
+            return 0.0
+        put = min(kg, max(0.0, cap - pk[1]))
         if put <= 0:
             return 0.0
-        self._add(self._buf.setdefault(nid, {}), el, put, temp, germs * put / kg)
+        total = pk[1] + put
+        pk[2] = (pk[2] * pk[1] + temp * put) / total
+        pk[3] += germs * put / kg
+        pk[1] = total
         return put
 
     def pipe_has(self, b, port, el):
-        nid = self._net(b, port)
-        v = self._buf.get(nid, {}).get(el) if nid else None
-        return v[0] if v else 0.0
+        seg = self._seg(b, port)
+        pk = seg[0].get(seg[1]) if seg else None
+        return pk[1] if pk and pk[0] == el else 0.0
 
-    def pipe_room(self, b, port):
-        nid = self._net(b, port)
-        if nid is None:
+    def pipe_room(self, b, port, el=None):
+        seg = self._seg(b, port)
+        if seg is None:
             return 0.0
-        return max(0.0, self._icount[nid] * PIPE_CAP - self._total(nid))
+        pk = seg[0].get(seg[1])
+        if pk is None:
+            return seg[2]
+        if el is not None and pk[0] != el:
+            return 0.0
+        return max(0.0, seg[2] - pk[1])
 
-    def gas_summary(self):
-        return {}  # gas pipes: being implemented
-
-    def pipe_summary(self):
+    def _summary(self, kind, digits):
         self._sync()
         out = {}
-        for nid, content in self._buf.items():
-            out[nid] = {el: round(v[0], 1) for el, v in content.items() if v[0] >= 0.05}
+        for i, (el, kg, _, _) in self._pk[kind].items():
+            if round(kg, digits) > 0:
+                out[str(i)] = {"el": el, "kg": round(kg, digits)}
         return out
+
+    def pipe_summary(self):
+        return self._summary("pipe", 1)
+
+    def gas_summary(self):
+        return self._summary("gaspipe", 2)

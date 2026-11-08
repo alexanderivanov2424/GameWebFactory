@@ -24,5 +24,6 @@
     "value": -5,
     "radius": 1
   },
-  "description": "Heats its surroundings up to 30 C. Needs power."
+  "description": "Heats its surroundings up to 30 C. Needs power.",
+  "rotatable": true
 }

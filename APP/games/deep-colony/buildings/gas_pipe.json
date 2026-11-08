@@ -1,0 +1,18 @@
+{
+  "name": "Gas Pipe",
+  "category": "ventilation",
+  "w": 1,
+  "h": 1,
+  "cost": {
+    "raw": 50
+  },
+  "buildTime": 2,
+  "kind": "none",
+  "layer": "gaspipe",
+  "decor": {
+    "value": 0,
+    "radius": 0
+  },
+  "description": "Carries gas between ventilation buildings, one small packet per segment.",
+  "rotatable": false
+}

@@ -36,5 +36,6 @@
     "value": -10,
     "radius": 2
   },
-  "description": "Cleans piped polluted water into water using sand. Needs power."
+  "description": "Cleans piped polluted water into water using sand. Needs power.",
+  "rotatable": true
 }

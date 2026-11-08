@@ -27,7 +27,38 @@ def _top(b):
 
 
 def _bottom_left(b):
-    return b.x, b.y + b.d["h"] - 1
+    return b.bottom_cells()[0]
+
+
+def _emit(match, b, el, kg, temp, x, y, germs=0.0):
+    """Put output into the world; whatever doesn't fit waits in b.state["backlog"] (never lost)."""
+    if kg <= 0:
+        return 0.0
+    placed = match.world.emit(x, y, el, kg, temp, germs)
+    left = kg - placed
+    if left > 1e-9:
+        b.state.setdefault("backlog", []).append([el, left, temp, germs * left / kg])
+    return placed
+
+
+def _flush_backlog(match, b):
+    """Retry the backlog; True while something is still waiting."""
+    waiting, b.state["backlog"] = b.state.get("backlog", []), []
+    cells = b.cells()
+    for el, kg, temp, germs in waiting:
+        for x, y in cells:
+            placed = match.world.emit(x, y, el, kg, temp, germs)
+            if placed > 0:
+                germs *= (kg - placed) / kg
+                kg -= placed
+            if kg <= 1e-9:
+                break
+        if kg > 1e-9:
+            b.state["backlog"].append([el, kg, temp, germs])
+    if not b.state["backlog"]:
+        del b.state["backlog"]
+        return False
+    return True
 
 
 def _gas_full(match, x, y, limit):
@@ -60,7 +91,7 @@ def _dry(match, b, has, what):
 
 def oxygenator(match, b, dt):
     p = b.d["params"]
-    algae = b.store.get(p["input"], 0.0)
+    algae = b.stored(p["input"])
     _dry(match, b, algae > 0.001, "algae")
     if algae <= 0.001:
         b.state["active"] = False
@@ -74,8 +105,8 @@ def oxygenator(match, b, dt):
     if not _need_power(b, True):
         return
     used = min(p["inRate"] * dt, algae)
-    b.store[p["input"]] = algae - used
-    match.world.emit(x, y, p["output"], used * p["outRate"] / p["inRate"], p["outTemp"])
+    b.take(p["input"], used)
+    _emit(match, b, p["output"], used * p["outRate"] / p["inRate"], p["outTemp"], x, y)
 
 
 def electrolyzer(match, b, dt):
@@ -86,7 +117,7 @@ def electrolyzer(match, b, dt):
         b.status = "No water"
         return
     x, y = _top(b)
-    x2 = b.x + b.d["w"] - 1
+    x2 = b.x + b.w - 1
     if _gas_full(match, x, y, p["maxPressure"]) or _gas_full(match, x2, y, p["maxPressure"]):
         b.state["active"] = False
         b.status = "Full"
@@ -94,8 +125,8 @@ def electrolyzer(match, b, dt):
     if not _need_power(b, True):
         return
     _, kg, _, _ = nets.pipe_take(b, "pipeIn", ["water"], p["inRate"] * dt)
-    match.world.emit(x, y, "oxygen", kg * p["oxygen"], p["outTemp"])
-    match.world.emit(x2, y, "hydrogen", kg * p["hydrogen"], p["outTemp"])
+    _emit(match, b, "oxygen", kg * p["oxygen"], p["outTemp"], x, y)
+    _emit(match, b, "hydrogen", kg * p["hydrogen"], p["outTemp"], x2, y)
 
 
 def deodorizer(match, b, dt):
@@ -103,8 +134,8 @@ def deodorizer(match, b, dt):
     w = match.world
     sand = b.stored("sand")
     cells = []
-    for cy in range(b.y - p["radius"], b.y + b.d["h"] + p["radius"]):
-        for cx in range(b.x - p["radius"], b.x + b.d["w"] + p["radius"]):
+    for cy in range(b.y - p["radius"], b.y + b.h + p["radius"]):
+        for cx in range(b.x - p["radius"], b.x + b.w + p["radius"]):
             if w.inside(cx, cy) and w.element_id(w.idx(cx, cy)) == "polluted_oxygen":
                 cells.append(w.idx(cx, cy))
     if sand <= 0.001:
@@ -126,7 +157,7 @@ def deodorizer(match, b, dt):
         w.set_cell(i, "oxygen", mass, w.temp[i], 0.0)
         credit -= mass
         sand -= cost
-        b.store["sand"] = max(0.0, b.stored("sand") - cost)
+        b.take("sand", cost)
     b.state["credit"] = credit
 
 
@@ -140,7 +171,7 @@ def manual_generator(match, b, dt):
 
 def coal_generator(match, b, dt):
     p = b.d["params"]
-    coal = b.store.get("coal", 0.0)
+    coal = b.stored("coal")
     _dry(match, b, coal > 0.001, "coal")
     if coal <= 0.001:
         b.state["producing"] = False
@@ -152,9 +183,9 @@ def coal_generator(match, b, dt):
         b.status = "Idle"
         return
     b.status = "Burning"
-    b.store["coal"] = max(0.0, coal - p["coalRate"] * dt)
+    b.take("coal", p["coalRate"] * dt)
     x, y = _top(b)
-    match.world.emit(x, y, "carbon_dioxide", p["co2Rate"] * dt, p["co2Temp"])
+    _emit(match, b, "carbon_dioxide", p["co2Rate"] * dt, p["co2Temp"], x, y)
 
 
 def battery(match, b, dt):
@@ -223,7 +254,7 @@ def colony_food(match):
 def _press_ready(match, b):
     p = b.d["params"]
     return (b.enabled and b.stored("dirt") >= p["dirt"]
-            and match.networks.pipe_has(b, "pipeIn", "water") >= p["water"]
+            and match.networks.pipe_has(b, "pipeIn", "water") >= p["water"] - 1e-6
             and colony_food(match) < p["maxFood"])
 
 
@@ -233,22 +264,20 @@ def nutrient_press(match, b, dt):
     b.state["active"] = ready
     if not ready:
         b.status = "No dirt" if b.stored("dirt") < p["dirt"] else (
-            "No water" if match.networks.pipe_has(b, "pipeIn", "water") < p["water"] else "Enough food")
+            "No water" if match.networks.pipe_has(b, "pipeIn", "water") < p["water"] - 1e-6 else "Enough food")
         return
     b.status = "Needs colonist" if b.powered else "No power"
     if b.state.get("work", 0.0) < p["work"]:
         return
-    el, kg, _, _ = match.networks.pipe_take(b, "pipeIn", ["water"], p["water"])
+    el, kg, wtemp, wgerms = match.networks.pipe_take(b, "pipeIn", ["water"], p["water"])
     if kg < p["water"] - 1e-6:
         if kg:
-            match.networks.pipe_put(b, "pipeIn", el, kg, 20.0, 0.0)
+            match.networks.pipe_put(b, "pipeIn", el, kg, wtemp, wgerms)
         return
     left = p["dirt"]
     for key in list(b.store):
         if content.matches(key, "dirt"):
-            took = min(left, b.store[key])
-            b.store[key] -= took
-            left -= took
+            left -= b.take(key, left)[0]
     b.state["work"] = 0.0
     x, y = _bottom_left(b)
     match.items.add(p["product"], p["productKg"], x, y, 20.0)
@@ -287,27 +316,56 @@ def pump(match, b, dt):
     p = b.d["params"]
     w = match.world
     nets = match.networks
-    room = nets.pipe_room(b, "pipeOut")
     r = int(p.get("radius", 1))
-    cells = [w.idx(cx, cy) for cy in range(b.y + b.d["h"] - 1, b.y + b.d["h"] + r)
-             for cx in range(b.x - r, b.x + b.d["w"] + r) if w.inside(cx, cy)]
+    bottom = b.y + b.h - 1
+    cells = [w.idx(cx, cy) for cy in range(bottom, bottom + r + 1)
+             for cx in range(b.x - r, b.x + b.w + r) if w.inside(cx, cy)]
     liquid = [i for i in cells if w.is_liquid(i)]
-    if room <= 0.01 or not liquid:
+    ready = [i for i in liquid if nets.pipe_room(b, "pipeOut", w.element_id(i)) > 0.01]
+    if not ready:
         b.state["active"] = False
         b.status = "Pipe full" if liquid else "No liquid"
         return
     if not _need_power(b, True, "Pumping"):
         return
-    want = min(p["rate"] * dt, room)
-    for i in liquid:
+    want = p["rate"] * dt
+    for i in ready:
+        room = nets.pipe_room(b, "pipeOut", w.element_id(i))
         if want <= 0.0001:
             break
-        el, kg, temp, germs = w.take(i, [w.element_id(i)], want)
+        el, kg, temp, germs = w.take(i, [w.element_id(i)], min(want, room))
         if kg:
             put = nets.pipe_put(b, "pipeOut", el, kg, temp, germs)
             want -= kg
             if put < kg:
-                w.emit(*w.xy(i), el, kg - put, temp)
+                w.release(*w.xy(i), el, kg - put, temp, germs * (kg - put) / kg)
+
+
+def gas_pump(match, b, dt):
+    p = b.d["params"]
+    w = match.world
+    nets = match.networks
+    cells = [w.idx(cx, cy) for cy in range(b.y - 1, b.y + b.h + 1) for cx in range(b.x - 1, b.x + b.w + 1)
+             if w.inside(cx, cy)]
+    gas = [i for i in cells if w.is_gas(i)]
+    ready = [i for i in gas if nets.pipe_room(b, "gasOut", w.element_id(i)) > 0.001]
+    if not ready:
+        b.state["active"] = False
+        b.status = "Pipe full" if gas else "No gas"
+        return
+    if not _need_power(b, True, "Pumping"):
+        return
+    want = p["rate"] * dt
+    for i in ready:
+        room = nets.pipe_room(b, "gasOut", w.element_id(i))
+        if want <= 1e-7:
+            break
+        el, kg, temp, germs = w.take(i, [w.element_id(i)], min(want, room))
+        if kg:
+            put = nets.pipe_put(b, "gasOut", el, kg, temp, germs)
+            want -= kg
+            if put < kg:
+                w.release(*w.xy(i), el, kg - put, temp, germs * (kg - put) / kg)
 
 
 def vent(match, b, dt):
@@ -328,6 +386,40 @@ def vent(match, b, dt):
     b.status = "Venting"
 
 
+def gas_vent(match, b, dt):
+    p = b.d["params"]
+    w = match.world
+    x, y = _top(b)
+    i = w.idx(x, y)
+    if w.mass[i] >= p["maxPressure"] and w.is_gas(i):
+        b.status = "Pressure high"
+        return
+    el, kg, temp, germs = match.networks.pipe_take(b, "gasIn", None, p["rate"] * dt)
+    if not kg:
+        b.status = "Empty"
+        return
+    placed = w.emit(x, y, el, kg, temp, germs)
+    if placed < kg:
+        match.networks.pipe_put(b, "gasIn", el, kg - placed, temp, germs * (kg - placed) / kg)
+    b.status = "Venting"
+
+
+def hydrogen_generator(match, b, dt):
+    p = b.d["params"]
+    need = p["hydrogenRate"] * dt
+    if match.networks.pipe_has(b, "gasIn", "hydrogen") < need - 1e-9:
+        b.state["producing"] = False
+        b.status = "No hydrogen"
+        return
+    on = match.networks.needs_power(b)
+    b.state["producing"] = on
+    if not on:
+        b.status = "Idle"
+        return
+    b.status = "Burning"
+    match.networks.pipe_take(b, "gasIn", ["hydrogen"], need)
+
+
 def water_sieve(match, b, dt):
     p = b.d["params"]
     nets = match.networks
@@ -341,7 +433,7 @@ def water_sieve(match, b, dt):
         b.state["active"] = False
         b.status = "No sand"
         return
-    room = nets.pipe_room(b, "pipeOut")
+    room = nets.pipe_room(b, "pipeOut", "water")
     if room <= 0.01:
         b.state["active"] = False
         b.status = "Pipe full"
@@ -352,10 +444,10 @@ def water_sieve(match, b, dt):
     amount = min(p["rate"] * dt, room, has, sand / per_kg)
     _, kg, temp, _ = nets.pipe_take(b, "pipeIn", ["polluted_water"], amount)
     put = nets.pipe_put(b, "pipeOut", "water", kg, temp, 0.0)
-    b.store["sand"] = max(0.0, b.stored("sand") - put * per_kg)
-    for key in list(b.store):
-        if content.matches(key, "sand") and key != "sand":
-            b.store[key] = 0.0
+    left = put * per_kg
+    for key in sorted(b.store, key=lambda k: k != "sand"):
+        if content.matches(key, "sand") and left > 0:
+            left -= b.take(key, left)[0]
 
 
 # --- toilets and basins --------------------------------------------------------------------
@@ -375,7 +467,7 @@ def lavatory(match, b, dt):
     nets = match.networks
     if nets.pipe_has(b, "pipeIn", "water") < p["waterPerUse"]:
         b.status = "Needs water"
-    elif nets.pipe_room(b, "pipeOut") < p["outPerUse"]:
+    elif nets.pipe_room(b, "pipeOut", "polluted_water") < p["outPerUse"]:
         b.status = "Drain full"
     else:
         b.status = "Ready"
@@ -386,7 +478,7 @@ def wash_basin(match, b, dt):
     nets = match.networks
     if nets.pipe_has(b, "pipeIn", "water") < p["waterPerUse"]:
         b.status = "Needs water"
-    elif nets.pipe_room(b, "pipeOut") < p["waterPerUse"]:
+    elif nets.pipe_room(b, "pipeOut", "polluted_water") < p["waterPerUse"]:
         b.status = "Drain full"
     else:
         b.status = "Ready"
@@ -401,7 +493,7 @@ def toilet_usable(match, b):
         return b.stored("dirt") >= p["dirtPerUse"] and b.state.get("uses", 0) < p["uses"]
     if kind == "lavatory":
         return (match.networks.pipe_has(b, "pipeIn", "water") >= p["waterPerUse"]
-                and match.networks.pipe_room(b, "pipeOut") >= p["outPerUse"])
+                and match.networks.pipe_room(b, "pipeOut", "polluted_water") >= p["outPerUse"])
     return False
 
 
@@ -413,10 +505,8 @@ def use_toilet(match, b, dupe):
         left = p["dirtPerUse"]
         for key in list(b.store):
             if content.matches(key, "dirt") and left > 0:
-                took = min(left, b.store[key])
-                b.store[key] -= took
-                left -= took
-        b.store["polluted_dirt"] = b.store.get("polluted_dirt", 0.0) + p["dirtPerUse"]
+                left -= b.take(key, left)[0]
+        b.deliver("polluted_dirt", p["dirtPerUse"], 20.0, 0.0)
         b.state["uses"] = b.state.get("uses", 0) + 1
     else:
         _, kg, temp, _ = match.networks.pipe_take(b, "pipeIn", ["water"], p["waterPerUse"])
@@ -432,7 +522,7 @@ def basin_usable(match, b):
         return False
     p = b.d["params"]
     return (match.networks.pipe_has(b, "pipeIn", "water") >= p["waterPerUse"]
-            and match.networks.pipe_room(b, "pipeOut") >= p["waterPerUse"])
+            and match.networks.pipe_room(b, "pipeOut", "polluted_water") >= p["waterPerUse"])
 
 
 def wash(match, b, dupe):
@@ -453,7 +543,7 @@ def needs_emptying(b):
 def empty(match, b):
     p = b.d["params"]
     x, y = _bottom_left(b)
-    kg = b.store.pop("polluted_dirt", 0.0)
+    kg = b.take("polluted_dirt", b.stored("polluted_dirt"))[0]
     uses = b.state.get("uses", 0)
     if kg > 0:
         match.items.add("polluted_dirt", kg, x, y, match.world.temp[match.world.idx(x, y)],
@@ -480,6 +570,7 @@ KINDS = {
     "oxygenator": oxygenator, "electrolyzer": electrolyzer, "deodorizer": deodorizer,
     "manual_generator": manual_generator, "coal_generator": coal_generator, "battery": battery,
     "fungus_bed": fungus_bed, "nutrient_press": nutrient_press, "pump": pump, "vent": vent,
+    "gas_pump": gas_pump, "gas_vent": gas_vent, "hydrogen_generator": hydrogen_generator,
     "outhouse": outhouse, "lavatory": lavatory, "wash_basin": wash_basin, "water_sieve": water_sieve,
     "heater": heater, "storage": _nothing, "ration_box": _nothing,
     "research_station": lambda match, b, dt: research.step(match, b, dt),
@@ -498,6 +589,11 @@ def step(match, dt):
             continue
         fn = KINDS.get(kind)
         if fn is None:
+            continue
+        if b.state.get("backlog") and _flush_backlog(match, b):
+            b.state["active"] = False
+            b.state["producing"] = False
+            b.status = "Overpressure"
             continue
         fn(match, b, dt)
         heat = b.d["heat"]

@@ -20,5 +20,6 @@
     "value": 0,
     "radius": 0
   },
-  "description": "Releases liquid from its pipe into the room."
+  "description": "Releases liquid from its pipe into the room.",
+  "rotatable": true
 }

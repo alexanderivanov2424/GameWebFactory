@@ -28,5 +28,6 @@
     "value": -5,
     "radius": 1
   },
-  "description": "Pumps liquid around its bottom row into the pipe at its output. Needs power."
+  "description": "Pumps liquid around its bottom row into the pipe at its output. Needs power.",
+  "rotatable": true
 }

@@ -1,0 +1,32 @@
+{
+  "name": "Gas Pump",
+  "category": "ventilation",
+  "w": 2,
+  "h": 2,
+  "cost": {
+    "metal": 200
+  },
+  "buildTime": 20,
+  "kind": "gas_pump",
+  "power": {
+    "use": 240
+  },
+  "powerPort": [
+    1,
+    0
+  ],
+  "gasOut": [
+    0,
+    0
+  ],
+  "params": {
+    "rate": 0.5
+  },
+  "heat": 2.0,
+  "decor": {
+    "value": -5,
+    "radius": 1
+  },
+  "description": "Pumps gas from its cells and the cells around into the gas pipe at its output. Needs power.",
+  "rotatable": true
+}

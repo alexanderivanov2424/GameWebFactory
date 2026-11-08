@@ -24,5 +24,6 @@
     "value": 0,
     "radius": 0
   },
-  "description": "Colonists wash germs off here after using a toilet. Piped water in, polluted water out."
+  "description": "Colonists wash germs off here after using a toilet. Piped water in, polluted water out.",
+  "rotatable": true
 }

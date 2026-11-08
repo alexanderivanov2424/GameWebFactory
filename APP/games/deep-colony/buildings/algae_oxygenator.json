@@ -32,5 +32,6 @@
     "value": -5,
     "radius": 1
   },
-  "description": "Turns algae into oxygen. Needs power."
+  "description": "Turns algae into oxygen. Needs power.",
+  "rotatable": true
 }

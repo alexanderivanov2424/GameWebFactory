@@ -37,5 +37,6 @@
     "value": -5,
     "radius": 1
   },
-  "description": "A colonist presses dirt and piped water into nutrient bars (800 kcal). Needs power."
+  "description": "A colonist presses dirt and piped water into nutrient bars (800 kcal). Needs power.",
+  "rotatable": true
 }

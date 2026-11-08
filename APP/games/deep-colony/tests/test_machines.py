@@ -140,23 +140,40 @@ class AirTests(unittest.TestCase):
         self.assertLess(dz.store["sand"], 20)
 
 
+def total(m, el):
+    """kg of an element in the world cells, waiting in world.pending and travelling in pipes."""
+    w = m.world
+    n = sum(w.mass[i] for i in range(w.w * w.h) if w.element_id(i) == el)
+    n += sum(p[3] for p in w.pending if p[2] == el)
+    n += sum(pk[1] for kind in m.networks._pk.values() for pk in kind.values() if pk[0] == el)
+    return n
+
+
 class PipeTests(unittest.TestCase):
-    def test_pump_pipe_vent_moves_water(self):
+    def pump_line(self, m, pipe_kind="liquid_pipe", pump_kind="liquid_pump", vent_kind="liquid_vent"):
+        gen = put(m, "manual_generator", 6)  # port (7, 13)
+        pump = put(m, pump_kind, 2)          # power port (3, 13), out port (2, 13)
+        wires(m, [(3, 13), (4, 13), (5, 13), (6, 13), (7, 13), (7, 14)])
+        wires(m, [(2, 13), (2, 12), (2, 11), (2, 10), (2, 9)], pipe_kind)
+        vent = put(m, vent_kind, 2, 9)
+        return gen, pump, vent
+
+    def test_packet_travels_from_pump_to_vent(self):
         m = new_match()
         w = m.world
-        gen = put(m, "manual_generator", 6)  # port (7, 13)
-        pump = put(m, "liquid_pump", 2)      # power port (3, 13), pipe out (2, 13)
-        wires(m, [(3, 13), (4, 13), (5, 13), (6, 13), (7, 13), (7, 14)])
-        wires(m, [(2, 13), (2, 12), (2, 11), (2, 10), (2, 9)], "liquid_pipe")
-        vent = put(m, "liquid_vent", 2, 9)
+        gen, pump, vent = self.pump_line(m)
         pool = w.idx(2, 14)
         w.set_cell(pool, "water", 50, 20)
-        run(m, 30, operate=[gen])
-        self.assertLess(w.mass[pool] if w.is_liquid(pool) else 0, 50)
+        run(m, 4, operate=[gen])
+        self.assertTrue(m.networks.pipe_summary())  # something is in the pipe already
         vi = w.idx(2, 9)
+        self.assertNotEqual(w.element_id(vi), "water")  # but has not arrived yet
+        before = total(m, "water")
+        run(m, 40, operate=[gen])
         self.assertEqual(w.element_id(vi), "water")
         self.assertGreater(w.mass[vi], 1)
-        self.assertEqual(vent.status in ("Venting", "Empty", "Full"), True)
+        self.assertLess(w.mass[pool], 50)
+        self.assertAlmostEqual(total(m, "water"), before, places=3)
 
     def test_unattached_ports_do_nothing(self):
         m = new_match()
@@ -164,7 +181,7 @@ class PipeTests(unittest.TestCase):
         self.assertEqual(m.networks.pipe_take(vent, "pipeIn", None, 1), (None, 0, 0, 0))
         self.assertEqual(m.networks.pipe_put(vent, "pipeIn", "water", 1, 20, 0), 0)
 
-    def test_pipe_capacity_and_mixing(self):
+    def test_segment_holds_one_element_up_to_capacity(self):
         m = new_match()
         wires(m, [(2, 9), (3, 9)], "liquid_pipe")
         vent = put(m, "liquid_vent", 2, 9)
@@ -178,33 +195,108 @@ class PipeTests(unittest.TestCase):
         self.assertEqual((el, kg, temp), ("water", 1, 10))
         self.assertGreater(germs, 0)
         self.assertEqual(nets.pipe_take(vent, "pipeIn", ["oxygen"], 1)[1], 0)
+        self.assertEqual(nets.pipe_put(vent, "pipeIn", "oxygen", 1, 10, 0), 0)  # another element: blocked
+        self.assertEqual(nets.pipe_room(vent, "pipeIn", "oxygen"), 0)
 
-    def test_pipe_contents_survive_extending_the_network(self):
+    def test_wrong_element_at_a_consumer_blocks_it(self):
         m = new_match()
-        wires(m, [(2, 9), (3, 9)], "liquid_pipe")
+        pump = put(m, "liquid_pump", 2)   # out port (2, 13)
+        lav = put(m, "lavatory", 5)       # in port (5, 14)
+        route = [(2, 13), (2, 12), (3, 12), (4, 12), (4, 13), (4, 14), (5, 14)]
+        wires(m, route, "liquid_pipe")
+        nets = m.networks
+        nets.pipe_put(lav, "pipeIn", "polluted_water", 1, 20, 0)
+        nets.pipe_put(pump, "pipeOut", "water", 5, 20, 0)
+        run(m, 60)
+        self.assertEqual(nets.pipe_has(lav, "pipeIn", "water"), 0)
+        self.assertAlmostEqual(nets.pipe_has(lav, "pipeIn", "polluted_water"), 1, places=3)
+        stuck = m.networks.pipe_summary()[str(m.world.idx(4, 14))]
+        self.assertEqual(stuck["el"], "water")
+        self.assertFalse(machines.toilet_usable(m, lav))
+
+    def test_same_element_packets_merge_in_a_segment(self):
+        m = new_match()
+        pump = put(m, "liquid_pump", 2)
         vent = put(m, "liquid_vent", 2, 9)
-        m.networks.pipe_put(vent, "pipeIn", "water", 5, 20, 0)
-        wires(m, [(4, 9)], "liquid_pipe")
-        self.assertAlmostEqual(m.networks.pipe_has(vent, "pipeIn", "water"), 5, places=3)
+        wires(m, [(2, 13), (2, 12), (2, 11), (2, 10), (2, 9)], "liquid_pipe")
+        m.networks.pipe_put(pump, "pipeOut", "water", 3, 20, 0)
+        for _ in range(3):
+            run(m, 2)
+            m.networks.pipe_put(pump, "pipeOut", "water", 2, 20, 0)
+        run(m, 20)
+        self.assertEqual(len(m.networks.pipe_summary()), 0)  # all of it reached the vent
+        self.assertEqual(m.world.element_id(m.world.idx(2, 9)), "water")
 
-    def test_split_shares_contents_by_cell_count(self):
+    def test_gas_pump_pipe_vent_moves_gas(self):
         m = new_match()
-        wires(m, [(x, 9) for x in range(2, 7)], "liquid_pipe")
-        vent = put(m, "liquid_vent", 2, 9)
-        m.networks.pipe_put(vent, "pipeIn", "water", 20, 20, 0)
-        m.buildings.remove(m.buildings.by_id[m.buildings.layers["pipe"][m.world.idx(4, 9)]])
-        # 5 cells -> 2 left, 1 removed, 2 right: left keeps 2/5 of 20 kg
-        self.assertAlmostEqual(m.networks.pipe_has(vent, "pipeIn", "water"), 8, places=3)
+        w = m.world
+        gen, pump, vent = self.pump_line(m, "gas_pipe", "gas_pump", "gas_vent")
+        thin(m, 2, 9)
+        vi = w.idx(2, 9)
+        before, here = total(m, "oxygen"), w.mass[vi]
+        run(m, 4, operate=[gen])
+        self.assertTrue(m.networks.gas_summary())
+        self.assertEqual(m.networks.pipe_summary(), {})
+        run(m, 60, operate=[gen])
+        self.assertGreater(w.mass[vi], here + 0.3)
+        self.assertAlmostEqual(total(m, "oxygen"), before, places=3)
 
-    def test_merge_sums_contents(self):
+    def test_gas_vent_stops_at_max_pressure(self):
         m = new_match()
-        wires(m, [(2, 9), (4, 9)], "liquid_pipe")
-        a = put(m, "liquid_vent", 2, 9)
-        c = put(m, "liquid_vent", 4, 9)
-        m.networks.pipe_put(a, "pipeIn", "water", 3, 20, 0)
-        m.networks.pipe_put(c, "pipeIn", "water", 4, 20, 0)
-        wires(m, [(3, 9)], "liquid_pipe")
-        self.assertAlmostEqual(m.networks.pipe_has(a, "pipeIn", "water"), 7, places=3)
+        wires(m, [(2, 9), (2, 10)], "gas_pipe")
+        vent = put(m, "gas_vent", 2, 9)
+        m.world.mass[m.world.idx(2, 9)] = vent.d["params"]["maxPressure"] + 1
+        m.networks.pipe_put(vent, "gasIn", "oxygen", 0.5, 20, 0)
+        run(m, 10)
+        self.assertAlmostEqual(m.networks.pipe_has(vent, "gasIn", "oxygen"), 0.5, places=3)
+
+    def test_hydrogen_generator_powers_from_piped_hydrogen(self):
+        m = new_match()
+        gen = put(m, "hydrogen_generator", 2)  # gas in (2, 14), power port (3, 14)
+        user = put(m, "algae_oxygenator", 6)   # power port (6, 14)
+        user.store["algae"] = 50
+        thin(m, 6, 13)
+        wires(m, [(3, 14), (4, 14), (5, 14), (6, 14)])
+        wires(m, [(2, 14)], "gas_pipe")
+        run(m, 5)
+        self.assertFalse(user.powered)
+        self.assertEqual(gen.status, "No hydrogen")
+        m.networks.pipe_put(gen, "gasIn", "hydrogen", 1.0, 20, 0)
+        run(m, 10)
+        self.assertTrue(gen.state["producing"])
+        self.assertTrue(user.powered)
+        self.assertLess(m.networks.pipe_has(gen, "gasIn", "hydrogen"), 1.0)
+        self.assertLess(user.store["algae"], 50)
+
+    def test_removed_segment_releases_its_contents(self):
+        m = new_match()
+        wires(m, [(2, 9), (3, 9), (4, 9)], "liquid_pipe")
+        vent = put(m, "liquid_vent", 4, 9)
+        m.networks.pipe_put(vent, "pipeIn", "water", 5, 20, 40)
+        m.networks.step(0)
+        before = total(m, "water")
+        self.assertAlmostEqual(before, 5, places=3)
+        seg = m.buildings.at(4, 9, "pipe")
+        m.buildings.remove(seg)
+        m.networks.step(0)
+        self.assertEqual(m.networks.pipe_summary(), {})
+        self.assertAlmostEqual(total(m, "water"), before, places=3)
+        self.assertGreater(m.world.mass[m.world.idx(4, 9)], 4)
+
+    def test_rotated_pump_ports_and_operation(self):
+        m = new_match()
+        w = m.world
+        gen = put(m, "manual_generator", 6)
+        pump = m.buildings.place("liquid_pump", 2, 13, "p1", built=True, rot=1)
+        out, power = pump.port_cell("pipeOut"), pump.port_cell("powerPort")
+        self.assertNotEqual(out, content.BUILDINGS["liquid_pump"]["pipeOut"])
+        wires(m, [power, (3, 13), (4, 13), (5, 13), (6, 13), (7, 13), (7, 14)])
+        wires(m, [out], "liquid_pipe")
+        w.set_cell(w.idx(2, 14), "water", 50, 20)
+        run(m, 20, operate=[gen])
+        self.assertGreater(m.networks.pipe_has(pump, "pipeOut", "water"), 0)
+        self.assertIn(str(w.idx(*out)), m.networks.pipe_summary())
+        self.assertLess(w.mass[w.idx(2, 14)], 50)
 
 
 class FoodTests(unittest.TestCase):
@@ -233,8 +325,7 @@ class FoodTests(unittest.TestCase):
         press = put(m, "nutrient_press", 2)  # power (3, 13), pipe in (2, 14)
         p = press.d["params"]
         wires(m, [(3, 14), (4, 14), (5, 14), (6, 14), (7, 14)])
-        # a pipe network holds 10 kg per segment: build enough to hold the water for a pressing
-        wires(m, [(2, 14)] + [(1, y) for y in range(14, 3, -1)], "liquid_pipe")
+        wires(m, [(2, 14)], "liquid_pipe")
         press.store["dirt"] = p["dirt"] * 2
         m.networks.pipe_put(press, "pipeIn", "water", p["water"] * 2, 20, 0)
         run(m, 5, operate=[gen])
@@ -291,6 +382,41 @@ class ToiletTests(unittest.TestCase):
         self.assertEqual(d.germs, 0)
         self.assertFalse(d.needs_wash)
         self.assertGreater(m.networks.pipe_has(basin, "pipeOut", "polluted_water"), 0)
+
+
+class BacklogTests(unittest.TestCase):
+    def setUp(self):
+        self.m = new_match()
+        self.w = self.m.world
+        self.gen = put(self.m, "manual_generator", 2)
+        self.ox = put(self.m, "algae_oxygenator", 6)
+        self.ox.store["algae"] = 50
+        wires(self.m, [(3, 14), (4, 14), (5, 14), (6, 14)])
+        # a sealed pocket: two cells, each a different gas, so oxygen has nowhere to go
+        for i in range(self.w.w * self.w.h):
+            if self.w.is_gas(i):
+                self.w.set_cell(i, "sandstone", 1000, 20)
+        self.w.set_cell(self.w.idx(6, 13), "carbon_dioxide", 1.0, 20)
+        self.w.set_cell(self.w.idx(6, 14), "hydrogen", 1.0, 20)
+
+    def test_output_with_no_room_is_kept_and_placed_later(self):
+        run(self.m, 10, operate=[self.gen])
+        p = self.ox.d["params"]
+        backlog = self.ox.state["backlog"]
+        kept = sum(e[1] for e in backlog)
+        used = 50 - self.ox.store["algae"]
+        self.assertGreater(kept, 0)
+        self.assertAlmostEqual(kept, used * p["outRate"] / p["inRate"], places=6)
+        self.assertEqual(self.ox.status, "Overpressure")
+        self.assertEqual(total(self.m, "oxygen"), 0)
+        run(self.m, 10, operate=[self.gen])  # blocked: consumes nothing more
+        self.assertAlmostEqual(50 - self.ox.store["algae"], used, places=6)
+        self.w.set_cell(self.w.idx(6, 14), "vacuum", 0, 20)
+        run(self.m, 1, operate=[self.gen])
+        self.assertNotIn("backlog", self.ox.state)
+        self.assertGreaterEqual(total(self.m, "oxygen"), kept - 1e-6)
+        run(self.m, 10, operate=[self.gen])
+        self.assertLess(self.ox.store["algae"], 50 - used)
 
 
 class StorageTests(unittest.TestCase):
