@@ -77,5 +77,11 @@ ration box: food only).
   never starts (keep per-use amounts small or the pipe long).
 - Power reacts a step late (`active`/`producing` are set by machines after the network step).
 - Colonists build within 1 cell (Chebyshev) and dig up to 2 above: build ladders up from a floor.
+- Terrain changes outside buildings/digs (fluids freezing, tiles finishing) aren't in the nav
+  cache key, so the cache also refreshes once per game second; colonists caught inside solid
+  are moved out (`dupes.unstick`), and ones that lose their footing fall and re-path.
+- `networks.needs_power` must stay true while a generator feeds active users, or the operator
+  quits, power drops and the two chores flip back and forth forever.
+- Map starts are stamped (`mapgen._stamp_start`) so every size gets the basic resources nearby.
 - Real-time: state changes reach clients with the next tick (tests: `sim.tick(1)` before reading).
 - Never put None into the public state (Snapshots deletes the key); quantize floats.
