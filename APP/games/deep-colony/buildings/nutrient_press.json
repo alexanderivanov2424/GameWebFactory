@@ -25,8 +25,8 @@
     "dirt": 300
   },
   "params": {
-    "dirt": 75,
-    "water": 75,
+    "dirt": 10,
+    "water": 10,
     "work": 50,
     "product": "nutrient_bar",
     "productKg": 1.0,

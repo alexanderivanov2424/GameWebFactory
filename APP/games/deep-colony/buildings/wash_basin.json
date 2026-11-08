@@ -1,7 +1,7 @@
 {
   "name": "Wash Basin",
   "category": "plumbing",
-  "w": 1,
+  "w": 2,
   "h": 2,
   "cost": {
     "metal": 100
@@ -14,7 +14,7 @@
     1
   ],
   "pipeOut": [
-    0,
+    1,
     0
   ],
   "params": {
