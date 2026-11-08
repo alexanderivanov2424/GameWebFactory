@@ -18,6 +18,13 @@ Tests: `tests/` (`python3 -I tools/run_tests.py deep-colony`; one file alone:
   settles; decor when buildings/items change; then `networks.step`, `machines.step`,
   `chores.step`; dead colonists removed and logged; all dead → `result`.
 - `logic/view.py`: the public/private state (the client contract). `server.py`: lobby glue.
+- Colonists: `nav.py` (standable cells, BFS `distances`, `path`), `dupes.py` (needs, walking,
+  falling), `chores.py` (choose/run loop, `cancel_for`) with the chores themselves split into
+  `chore_common.py`, `chore_survival.py` (breathe, eat, toilet, wash), `chore_jobs.py` (operate,
+  build, dig, deconstruct, harvest, empty) and `chore_haul.py` (supply, haul). Each chore is a
+  generator with `try/finally`, so closing it releases reservations and drops a carried load.
+- Machines: `networks.py` (wire/pipe components rebuilt on `buildings.version`, power split,
+  pooled pipe buffers), `machines.py` (`KINDS` per building kind + the chore API).
 - `client/`: `game.js` (lobby wiring, layout), `grid.js` (row decoding), `render.js` (canvas),
   `tools.js` (mouse/keys → orders and input), `panels.js` (DOM side panels).
 
@@ -64,5 +71,11 @@ ration box: food only).
 **orders.py**: `match.digs`, `finish_dig/finish_build/finish_deconstruct`, `DIG_TIME`, `DECON_TIME`.
 
 ## Pitfalls seen here
+- Two pipe ports of one building must not be 4-adjacent: pipes on touching cells join into one
+  network, mixing input and output (lavatory/wash basin are 2x2 with diagonal ports).
+- A pipe network holds 10 kg per segment, so a machine needing more per use than its pipe holds
+  never starts (keep per-use amounts small or the pipe long).
+- Power reacts a step late (`active`/`producing` are set by machines after the network step).
+- Colonists build within 1 cell (Chebyshev) and dig up to 2 above: build ladders up from a floor.
 - Real-time: state changes reach clients with the next tick (tests: `sim.tick(1)` before reading).
 - Never put None into the public state (Snapshots deletes the key); quantize floats.

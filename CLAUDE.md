@@ -100,7 +100,7 @@ APP/
     sim.py              Sim: drives a game through the real lobby for tests (no network); also ticks and inputs
     tests/
   web/                  Static files, served at /
-    index.html          Home page: lists games from /games.json
+    index.html          Home page: lists games from /games.json (player-count badge top right)
     shared/             Site components on every page (served at /shared/)
       theme.js          Base page styles (CSS variables, zero specificity); load first, not deferred
       home.js           "GWF" home button (top left)
@@ -132,6 +132,8 @@ tools/
   jscheck.py            Rough JS syntax check (no Node allowed)
   new_game.py           Creates APP/games/<id>/ from the new-game skill's templates (agents use it)
   accounts.py           Account manager behind accounts.sh (list/find, select, show, delete)
+  games_list.py         Builds games.json for the home page (name, description, player-count badge
+                        from each Game's MIN_PLAYERS/MAX_PLAYERS); deploy.sh runs it
   tests/                Tests for the tools (run_tests.py runs them too: `run_tests.py tools`)
 deploy.sh               Runs the checks, then deploys everything; safe to re-run (--skip-tests to force);
                         installs the turtle units; refuses while turtled (--unturtle clears it);
@@ -205,6 +207,10 @@ Summary:
    or a random one) drawn as SVG, deck-building with a shared market and reserve (`Deck` per
    player), action cards that leave a pending choice inside the turn, and the server sending
    every legal step so the client holds no rules; `PatchState`.
+   `games/deep-colony/` (`RealtimeGame`, `logic/` modules): a co-op colony sim where players
+   never control a unit: shared orders tagged by player, shared pause/speed, live cursors as
+   realtime input, a cell simulation (gas, liquid, heat, germs, decor) sent as row strings over
+   `Snapshots`, power/pipe networks, and colonists choosing chores on their own.
 
 ## Lobby model (shared by all games)
 - Every connected tab is a **member**: a **spectator** until it joins, then a **player**. Players join and leave explicitly, and only in the lobby phase.
