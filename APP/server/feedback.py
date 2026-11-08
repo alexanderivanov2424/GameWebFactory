@@ -1,14 +1,15 @@
 """Feedback: players write free-text feedback in Settings -> Feedback (web/shared/settings.js)
 and it is saved as plain text files for the owner (and the `feedback` skill) to read.
 
-    <folder>/<game id or "site">/<client uuid>_<display name>.txt
+    <folder>/<game>/<client uuid>_<display name>.txt
+    game: a game id, "site" (about the site itself) or "new_game" (ideas for a game to add)
 
 Each submission is appended to that file under a "--- <date time>" line. The folder
 (feedback_dir()) is $FEEDBACK_DIRECTORY, else <state dir>/feedback (turtle.state_dir()); on the
 host deploy.sh sets it to Feedback/ next to APP (git-ignored).
 
 /ws/feedback?client=<uuid>   one request per connection; the server answers, then closes it
-    client -> server  {"type": "feedback", "game": game id or "site", "name": display name, "text"}
+    client -> server  {"type": "feedback", "game": game id, "site" or "new_game", "name", "text"}
     server -> client  {"type": "feedback", "ok": true}  or  {"type": "error", "message"}
 
 Hard limits (turtle.py shuts the site down; the page checks the size first, so only a
@@ -31,7 +32,8 @@ MAX_FOLDER_BYTES = 100 * 1024 * 1024
 WINDOW = 60.0  # seconds
 MAX_PER_TAB = 10
 MAX_TOTAL = 30
-SITE = "site"  # "game" for feedback sent from a page that isn't a game
+SITE = "site"  # "game" for feedback about the site itself
+NEW_GAME = "new_game"  # "game" for ideas for a game that doesn't exist yet
 
 CLOSE_INVALID = 1008
 
@@ -57,7 +59,7 @@ def file_name(client_id, name):
 class Feedback:
     def __init__(self, folder, games):
         self.folder = Path(folder)
-        self.topics = set(games) | {SITE}  # valid "game" values
+        self.topics = set(games) | {SITE, NEW_GAME}  # valid "game" values
         self.recent = {}  # client id -> deque of submission times
         self.all = deque()  # submission times, site-wide
 

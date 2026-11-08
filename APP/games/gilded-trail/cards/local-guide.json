@@ -1,0 +1,9 @@
+{
+  "name": "Local Guide",
+  "kind": "action",
+  "cost": 5,
+  "effect": {
+    "guide": true
+  },
+  "text": "Move one explorer to an adjacent space, ignoring its requirement (not across a blockade)."
+}

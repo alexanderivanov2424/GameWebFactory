@@ -1,0 +1,10 @@
+{
+  "name": "Star Chart",
+  "kind": "action",
+  "cost": 2,
+  "single": true,
+  "effect": {
+    "draw": 3
+  },
+  "text": "Draw 3 cards."
+}

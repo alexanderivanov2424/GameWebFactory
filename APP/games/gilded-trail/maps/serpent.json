@@ -1,0 +1,20 @@
+{
+  "name": "Serpent River",
+  "order": 1,
+  "text": "A winding route along a broad river. Paddles matter.",
+  "dirs": [
+    0,
+    1,
+    0,
+    1,
+    0
+  ],
+  "weights": {
+    "machete": 4,
+    "paddle": 3.5,
+    "coin": 1.8,
+    "mountain": 1.2
+  },
+  "hazards": 1,
+  "seed": 6
+}

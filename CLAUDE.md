@@ -24,7 +24,8 @@ a Python standard-library WebSocket server plus plain HTML/JS pages behind nginx
 - **Changing, fixing or testing an existing game or shared code:** use the `game-dev` skill.
   It maps where everything is documented so you don't need to read whole files.
 - **Adding a game:** use the `new-game` skill. It generates the folder with `tools/new_game.py`.
-- **Player feedback for a game:** use the `feedback` skill (implements `Feedback/<game>/`, then deletes it).
+- **Player feedback:** use the `feedback` skill (implements `Feedback/<game>/`, or builds one new game
+  from `Feedback/new_game/`, then deletes the feedback it used).
 - Every file starts with a header comment describing it. Each game's `server.py` docstring
   is its rules spec and message list, and its `NOTES.md` holds developer notes (patterns,
   map, pitfalls). Read headers before bodies.
@@ -132,13 +133,13 @@ deploy.sh               Runs the checks, then deploys everything; safe to re-run
                         creates Accounts/ and Feedback/ and runs app-server as the folder's owner
 Accounts/               Account files (created by deploy.sh; git-ignored, never deployed or edited by hand
                         while app-server runs)
-Feedback/               Player feedback, Feedback/<game or "site">/<uuid>_<name>.txt (created by deploy.sh;
-                        git-ignored, never deployed; the feedback skill deletes what it implements)
+Feedback/               Player feedback, Feedback/<game id, "site" or "new_game">/<uuid>_<name>.txt (created
+                        by deploy.sh; git-ignored, never deployed; the feedback skill deletes what it uses)
 stop.sh                 Stops app-server, nginx and any hand-started game server; ./deploy.sh restarts
 accounts.sh             Host account manager: find, select, show and delete accounts; deleting
                         restarts app-server (it keeps accounts in memory); no backup is kept
 .claude/skills/
-  feedback/             Implementing one game's player feedback from Feedback/, then deleting it
+  feedback/             Implementing one game's feedback, or one new game from Feedback/new_game/, then deleting it
   game-dev/             Working on existing games and shared code: where things are, testing, pitfalls
   new-game/             Adding a game: shared API rules, pitfalls, templates/ (mirror a game folder; filled in
                         by tools/new_game.py, whose tests build a game from them and run its tests)
@@ -191,6 +192,10 @@ Summary:
    secret objectives (JSON with a `check` key -> scoring function), hidden picks that only work
    like a physical game (secret die rolls you may under-report, a Secret Hitler style card
    hand-off between two players), a nightly secret vote with only the tally shown, `PatchState`.
+   `games/gilded-trail/` (`logic/` modules): a hex map generated from a seed (preset JSON maps
+   or a random one) drawn as SVG, deck-building with a shared market and reserve (`Deck` per
+   player), action cards that leave a pending choice inside the turn, and the server sending
+   every legal step so the client holds no rules; `PatchState`.
 
 ## Lobby model (shared by all games)
 - Every connected tab is a **member**: a **spectator** until it joins, then a **player**. Players join and leave explicitly, and only in the lobby phase.
@@ -233,4 +238,4 @@ Summary:
   test them with `assertRaises(Turtled)`.
 
 ## Settings and privacy
-- Settings stay in the browser (sessionStorage) and are never sent to the server. Exceptions: the display name (sent with chat messages and when joining a game, and saved to the account while logged in), the player UUID (sent when connecting to a game room or the account socket) the account name and password (sent only when pressing Log in / Create account) and feedback text with the display name and current game (sent only when pressing Submit in the Feedback tab). The site has no HTTPS yet, so passwords travel unencrypted; the Account tab says so.
+- Settings stay in the browser (sessionStorage) and are never sent to the server. Exceptions: the display name (sent with chat messages and when joining a game, and saved to the account while logged in), the player UUID (sent when connecting to a game room or the account socket), the account name and password (sent only when pressing Log in / Create account) and feedback text with the display name and chosen game (sent only when pressing Submit in the Feedback tab). The site has no HTTPS yet, so passwords travel unencrypted; the Account tab says so.

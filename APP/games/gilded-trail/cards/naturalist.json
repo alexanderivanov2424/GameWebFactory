@@ -1,0 +1,10 @@
+{
+  "name": "Naturalist",
+  "kind": "action",
+  "cost": 4,
+  "effect": {
+    "draw": 1,
+    "remove": 1
+  },
+  "text": "Draw 1 card, then you may remove 1 card in your hand from the game."
+}

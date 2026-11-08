@@ -1,0 +1,20 @@
+{
+  "name": "Highland Climb",
+  "order": 2,
+  "text": "A steep climb through mountain passes, with narrow ways and costly villages.",
+  "dirs": [
+    0,
+    5,
+    0,
+    5,
+    0
+  ],
+  "weights": {
+    "machete": 5,
+    "paddle": 1.2,
+    "coin": 2.4,
+    "mountain": 2.4
+  },
+  "hazards": 1,
+  "seed": 3
+}

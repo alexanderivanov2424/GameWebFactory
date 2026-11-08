@@ -26,8 +26,9 @@
  * current one).
  *
  * Feedback tab: a text box sent to the server (server/feedback.py), which saves it as a text file
- * per game and player. It shows the display name and the current game (from the page URL, or
- * "site" off a game page) it will be filed under.
+ * per game and player. It shows the display name and a game picker (starts on the page's game,
+ * or "Site" off a game page); the "New game" checkbox (ticked by default off a game page) files it
+ * under new_game instead.
  *
  * To add a setting, add a field to TABS. To add a tab, add an entry to TABS: either `fields`
  * (text inputs) or `render(panel)` (builds its own content).
@@ -328,14 +329,16 @@
 
   // --- Feedback ----------------------------------------------------------
   // One short-lived /ws/feedback socket per submission (server/feedback.py). The server turtles
-  // the site on text over its limit, so the size is checked here first.
+  // the site on text over its limit, so the size is checked here first. The game picker lists
+  // /games.json (as the home page does) and starts on the current page's game.
 
   const FEEDBACK_MAX_BYTES = 50 * 1024; // server/feedback.py MAX_BYTES
-  const [, section, gameId] = location.pathname.split("/"); // game pages: /games/<id>/
-  const onGamePage = section === "games" && !!gameId;
-  const feedbackGame = onGamePage ? gameId : "site";
+  const SITE = { id: "site", name: "Site (no game)" }; // server/feedback.py SITE
+  const NEW_GAME = "new_game"; // server/feedback.py NEW_GAME
+  const [, section, pageGame] = location.pathname.split("/"); // game pages: /games/<id>/
+  const currentGame = section === "games" && pageGame ? pageGame : SITE.id;
 
-  function sendFeedback(text, done) {
+  function sendFeedback(game, text, done) {
     let socket;
     let answer = null;
     try {
@@ -345,7 +348,7 @@
       return;
     }
     socket.addEventListener("open", () => {
-      socket.send(JSON.stringify({ type: "feedback", game: feedbackGame, name: values.username, text }));
+      socket.send(JSON.stringify({ type: "feedback", game, name: values.username, text }));
     });
     socket.addEventListener("message", (event) => {
       try {
@@ -357,17 +360,38 @@
   }
 
   function renderFeedback(panel) {
-    const from = make("p", { className: "status" });
+    const name = make("p", { className: "status" });
+    const gameSelect = make("select", { id: "feedback-game" });
+    const newGame = make("input", { type: "checkbox", checked: currentGame === SITE.id }); // off a game page
+    const newGameLabel = make("label", { className: "check" });
+    newGameLabel.append(newGame, "New game");
+    const pick = make("div", { className: "feedback-pick" });
+    pick.append(make("label", { htmlFor: "feedback-game" }, "Game"), gameSelect, newGameLabel);
     const text = make("textarea", { className: "feedback-text", spellcheck: true });
     const submit = make("button", { type: "button", className: "primary" }, "Submit");
     const result = make("p", { className: "hint" });
 
-    function drawFrom() {
-      const game = onGamePage ? `${document.title} (${feedbackGame})` : "none (site-wide)";
-      from.replaceChildren("Name: ", make("strong", {}, values.username), " \u00b7 Game: ", make("strong", {}, game));
+    const drawName = () => name.replaceChildren("Name: ", make("strong", {}, values.username));
+    AppSettings.onChange((key) => key === "username" && drawName());
+    drawName();
+
+    function setGames(games) {
+      const keep = gameSelect.value || currentGame;
+      gameSelect.replaceChildren(...[SITE, ...games].map((g) => make("option", { value: g.id }, g.name)));
+      gameSelect.value = keep;
+      if (!gameSelect.value) gameSelect.value = SITE.id;
     }
-    AppSettings.onChange((key) => key === "username" && drawFrom());
-    drawFrom();
+    setGames(currentGame === SITE.id ? [] : [{ id: currentGame, name: document.title }]);
+    fetch("/games.json", { cache: "no-cache" })
+      .then((response) => (response.ok ? response.json() : []))
+      .then((games) => {
+        if (!Array.isArray(games)) return;
+        setGames(games.filter((g) => g && typeof g.id === "string").map((g) => ({ id: g.id, name: String(g.name || g.id) })));
+      })
+      .catch(() => {}); // keeps the current game and Site
+
+    gameSelect.disabled = newGame.checked;
+    newGame.addEventListener("change", () => (gameSelect.disabled = newGame.checked));
 
     function show(message, isError) {
       result.textContent = message;
@@ -382,7 +406,7 @@
       }
       submit.disabled = true;
       show("Sending...");
-      sendFeedback(body, (error) => {
+      sendFeedback(newGame.checked ? NEW_GAME : gameSelect.value, body, (error) => {
         submit.disabled = false;
         if (error) return show(error, true);
         text.value = "";
@@ -390,7 +414,7 @@
       });
     });
 
-    panel.append(from, text, submit, result);
+    panel.append(name, pick, text, submit, result);
   }
 
   // --- UI ------------------------------------------------------------------
@@ -460,6 +484,13 @@
       display: block; width: 100%; height: 45vh; margin-bottom: 12px; padding: 8px 10px;
       font: inherit; resize: vertical; border: 1px solid #c8c8d4; border-radius: 6px;
     }
+    .feedback-pick { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
+    .feedback-pick label { margin: 0; }
+    .feedback-pick select {
+      font: inherit; min-width: 220px; padding: 6px 8px; border: 1px solid #c8c8d4; border-radius: 6px;
+    }
+    .feedback-pick .check { display: flex; align-items: center; gap: 6px; font-weight: normal; cursor: pointer; }
+    .feedback-pick .check input { width: auto; margin: 0; }
     .feedback-text:focus { outline: 2px solid #4a5cff; outline-offset: -1px; }
     .hint.warning { color: #c62828; font-weight: 600; }
 

@@ -1,0 +1,10 @@
+{
+  "name": "Courier",
+  "kind": "action",
+  "cost": 4,
+  "single": true,
+  "effect": {
+    "free": true
+  },
+  "text": "Take any card from the market or reserve for free."
+}
