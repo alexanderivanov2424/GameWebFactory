@@ -50,9 +50,18 @@ def _need_power(b, active, idle_status="Working"):
 
 # --- air -----------------------------------------------------------------------------------
 
+def _dry(match, b, has, what):
+    """Log once when a machine that had its input runs out; re-armed when refilled."""
+    if has:
+        b.state["had_input"] = True
+    elif b.state.pop("had_input", False):
+        match.log(f"{b.d['name']} is out of {what}.")
+
+
 def oxygenator(match, b, dt):
     p = b.d["params"]
     algae = b.store.get(p["input"], 0.0)
+    _dry(match, b, algae > 0.001, "algae")
     if algae <= 0.001:
         b.state["active"] = False
         b.status = "No algae"
@@ -132,6 +141,7 @@ def manual_generator(match, b, dt):
 def coal_generator(match, b, dt):
     p = b.d["params"]
     coal = b.store.get("coal", 0.0)
+    _dry(match, b, coal > 0.001, "coal")
     if coal <= 0.001:
         b.state["producing"] = False
         b.status = "No coal"

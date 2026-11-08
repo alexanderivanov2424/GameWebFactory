@@ -46,6 +46,7 @@ class Dupe:
         self.death = ""
         self.path = []
         self.stress_break = 0.0
+        self.warned = set()  # log warnings already given this episode
         self.germ_time = 0.0
         self.last_hurt = "suffocated"
 
@@ -84,6 +85,15 @@ def breathable_at(world, i, minimum=BREATH_MIN):
     e = world.el[i]
     return (content.PHASE[e] == "gas" and content.ELEMENTS[content.ELEMENT_IDS[e]]["breathable"]
             and world.mass[i] >= minimum)
+
+
+def _warn(match, d, kind, active, text):
+    """Log text once per episode of `kind`; the episode ends when `active` turns false."""
+    if not active:
+        d.warned.discard(kind)
+    elif kind not in d.warned:
+        d.warned.add(kind)
+        match.log(f"{d.name} {text}")
 
 
 def update_needs(match, d, dt):
@@ -149,6 +159,10 @@ def update_needs(match, d, dt):
             d.sick, d.germ_time = 600.0, 0.0
     if d.sick > 0:
         d.sick = max(0.0, d.sick - dt)
+    _warn(match, d, "breath", d.breath <= 0, "is suffocating!")
+    _warn(match, d, "hungry", d.kcal < 500, "is very hungry.")
+    _warn(match, d, "sick", d.sick > 0, "got sick.")
+    _warn(match, d, "stress", d.stress_break > 0, "is having a stress break.")
     # health
     if hurt:
         d.last_hurt = hurt[0]

@@ -159,7 +159,10 @@ def finish_dig(match, i):
 
 
 def finish_build(match, b):
+    first = not any(o.built and o.type == b.type for o in match.buildings)
     match.buildings.complete(b)  # b.delivered is kept: refunded on deconstruct
+    if first:
+        match.log(f"First {b.d['name']} built (planned by {match.names.get(b.by, b.by)}).")
 
 
 def finish_deconstruct(match, b):
