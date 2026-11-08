@@ -32,7 +32,7 @@ FLUID_DT = 0.5        # game seconds between grid updates
 SPEEDS = (1, 2, 3)
 LOG_KEEP = 30
 MAP_SIZES = {"small": (48, 32), "medium": (64, 40), "large": (80, 48)}
-START_STOCK = {"nutrient_bar": 4.0}   # in the Arrival Pod at the start
+START_STOCK = {"nutrient_bar": 8.0}   # in the Arrival Pod at the start
 
 
 class Match:
