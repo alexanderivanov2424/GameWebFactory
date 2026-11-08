@@ -170,6 +170,54 @@
     return out;
   }
 
+  // Network ids by flood fill over finished wire/pipe cells (cached per g.buildings object).
+  let netCache = null;
+  function netId(g, layer, x, y) {
+    if (!netCache || netCache.src !== g.buildings) {
+      const cells = { wire: new Set(), pipe: new Set() };
+      for (const b of Object.values(g.buildings)) {
+        const d = g.defs.buildings[b.t];
+        if (d && b.b === 1 && cells[d.layer]) cells[d.layer].add(b.y * g.w + b.x);
+      }
+      netCache = { src: g.buildings, cells, ids: { wire: new Map(), pipe: new Map() } };
+    }
+    const set = netCache.cells[layer], ids = netCache.ids[layer], start = y * g.w + x;
+    if (x < 0 || y < 0 || x >= g.w || y >= g.h || !set.has(start)) return null;
+    if (!ids.has(start)) {
+      const comp = [start], seen = new Set(comp);
+      for (let i = 0; i < comp.length; i++) {
+        const c = comp[i], cx = c % g.w;
+        for (const n of [cx > 0 ? c - 1 : -1, cx < g.w - 1 ? c + 1 : -1, c - g.w, c + g.w])
+          if (set.has(n) && !seen.has(n)) { seen.add(n); comp.push(n); }
+      }
+      const id = (layer === "wire" ? "w" : "p") + Math.min(...comp);
+      for (const c of comp) ids.set(c, id);
+    }
+    return ids.get(start);
+  }
+
+  function powerText(g, x, y) {
+    const id = netId(g, "wire", x, y), p = id && g.power && g.power[id];
+    return p ? `Power network: makes ${Math.round(p.gen)} W, uses ${Math.round(p.use)} W, battery ${Math.round(p.stored)}/${Math.round(p.cap)} J` : null;
+  }
+  function pipeText(g, x, y) {
+    const id = netId(g, "pipe", x, y), p = id && g.pipes && g.pipes[id];
+    if (!p) return null;
+    const items = Object.entries(p).filter(([, v]) => v > 0.05).map(([k, v]) => `${elName(g, k)} ${kgText(v)}`);
+    return "Pipe: " + (items.length ? items.join(", ") : "empty");
+  }
+  // Network lines for hovered cell (wire/pipe) and a building's ports.
+  function netLines(g, x, y, b, d) {
+    const out = [];
+    const add = (label, t) => { if (t) out.push(label ? `${label}: ${t}` : t); };
+    if (!b) { add("", powerText(g, x, y)); add("", pipeText(g, x, y)); return out; }
+    if (d.layer === "wire" || d.layer === "pipe") return out;
+    if (d.powerPort) add("Power port", powerText(g, b.x + d.powerPort[0], b.y + d.powerPort[1]));
+    if (d.pipeIn) add("Pipe in", pipeText(g, b.x + d.pipeIn[0], b.y + d.pipeIn[1]));
+    if (d.pipeOut) add("Pipe out", pipeText(g, b.x + d.pipeOut[0], b.y + d.pipeOut[1]));
+    return out;
+  }
+
   function hover(g, state) {
     const h = DC.view.hover || DC.view.last;
     const cell = state.private && state.private.cell;
@@ -180,9 +228,14 @@
     } else if (h) parts.push({ cell: [h[0], h[1]] });
     if (h) for (const [id, b, d] of buildingsAt(g, h[0], h[1])) parts.push({ id, b, d });
     const me = state.you;
-    fill("hover", [parts.map((p) => p.cell || [p.id, p.b]), me], () => {
+    if (h) {
+      parts.splice(1, 0, { net: netLines(g, h[0], h[1]) });
+      for (const p of parts) if (p.id) p.net = netLines(g, h[0], h[1], p.b, p.d);
+    }
+    fill("hover", [parts.map((p) => p.cell || (p.id ? [p.id, p.b] : 0)), parts.map((p) => p.net), me], () => {
       if (!h) return [el("div", { className: "muted" }, "Point at the map.")];
       return parts.map((p) => {
+        if (p.net && !p.id) return el("div", {}, ...p.net.map((t) => el("div", {}, t)));
         if (p.cell) {
           const c = p.cell;
           return el("div", {}, c.length < 3 ? `Cell ${c[0]}, ${c[1]}` :
@@ -197,6 +250,7 @@
         if (b.b && d.kind !== "none") rows.push(el("div", {}, b.on ? "On" : "Off"));
         if (g.players[b.by]) rows.push(el("div", { className: "muted" }, "Placed by " + g.players[b.by].name + ` (priority ${b.prio})`));
         if (b.dc) rows.push(el("div", {}, "Marked for deconstruction"));
+        for (const t of p.net || []) rows.push(el("div", {}, t));
         return el("div", { style: "margin-top:6px" }, ...rows);
       });
     });
