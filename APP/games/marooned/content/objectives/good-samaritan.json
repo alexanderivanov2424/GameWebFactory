@@ -1,0 +1,8 @@
+{
+  "title": "Good Samaritan",
+  "text": "Give 5 items to other players.",
+  "points": 3,
+  "role": "castaway",
+  "check": "given",
+  "param": 5
+}

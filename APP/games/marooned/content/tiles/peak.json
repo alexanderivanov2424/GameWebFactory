@@ -1,0 +1,12 @@
+{
+  "name": "Peak",
+  "icon": "\ud83d\uddfb",
+  "color": "#9a8f86",
+  "moveCost": 3,
+  "points": 2,
+  "count": {
+    "small": 1,
+    "large": 1
+  },
+  "text": "The island's summit. Worth extra to whoever finds it."
+}

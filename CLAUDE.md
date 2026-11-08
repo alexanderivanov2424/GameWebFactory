@@ -172,6 +172,11 @@ Summary:
    preview on a grid, a market whose type the host picks (`logic/market/`: a `Market` base class
    with swappable subclasses, settings built from their registry with `Choice`), card packs
    from JSON files the host ticks (`MultiChoice`).
+   `games/marooned/` (`logic/` modules): a hidden-role game (one secret Imposter), a grid map
+   built as it's explored (draw 2 tile cards, place 1), per-player stats feeding end scoring and
+   secret objectives (JSON with a `check` key -> scoring function), hidden picks that only work
+   like a physical game (secret die rolls you may under-report, a Secret Hitler style card
+   hand-off between two players), a nightly secret vote with only the tally shown, `PatchState`.
 
 ## Lobby model (shared by all games)
 - Every connected tab is a **member**: a **spectator** until it joins, then a **player**. Players join and leave explicitly, and only in the lobby phase.

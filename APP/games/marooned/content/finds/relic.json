@@ -1,0 +1,8 @@
+{
+  "name": "Relic",
+  "text": "An old idol. Worth points, if you can carry it home.",
+  "gives": {
+    "relic": 1
+  },
+  "count": 4
+}

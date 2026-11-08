@@ -1,0 +1,6 @@
+{
+  "name": "Snake!",
+  "text": "A snake bites you: lose 1 energy.",
+  "energy": -1,
+  "count": 2
+}

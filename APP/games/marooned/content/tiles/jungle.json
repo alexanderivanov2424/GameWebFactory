@@ -1,0 +1,16 @@
+{
+  "name": "Jungle",
+  "icon": "\ud83c\udf34",
+  "color": "#6fb36a",
+  "moveCost": 2,
+  "resources": {
+    "food": 3,
+    "fiber": 3
+  },
+  "searches": 1,
+  "count": {
+    "small": 8,
+    "large": 15
+  },
+  "text": "Fruit and vines; slow going."
+}

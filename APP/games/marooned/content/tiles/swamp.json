@@ -1,0 +1,15 @@
+{
+  "name": "Swamp",
+  "icon": "\ud83e\udeb7",
+  "color": "#7f9a6a",
+  "moveCost": 2,
+  "resources": {
+    "fiber": 2,
+    "herbs": 2
+  },
+  "count": {
+    "small": 5,
+    "large": 10
+  },
+  "text": "Reeds and healing herbs; very slow going."
+}

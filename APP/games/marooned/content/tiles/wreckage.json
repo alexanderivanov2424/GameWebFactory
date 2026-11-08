@@ -1,0 +1,16 @@
+{
+  "name": "Wreckage",
+  "icon": "\ud83d\udedf",
+  "color": "#c9b8a0",
+  "moveCost": 1,
+  "resources": {
+    "scrap": 3
+  },
+  "searches": 2,
+  "points": 2,
+  "count": {
+    "small": 4,
+    "large": 7
+  },
+  "text": "Canvas, rope and odds and ends from the wreck."
+}

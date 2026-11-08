@@ -1,0 +1,8 @@
+{
+  "title": "Well fed",
+  "text": "Never go above hunger 2.",
+  "points": 4,
+  "role": "castaway",
+  "check": "max_hunger",
+  "param": 2
+}

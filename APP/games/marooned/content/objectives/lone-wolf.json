@@ -1,0 +1,7 @@
+{
+  "title": "Lone wolf",
+  "text": "Never sleep in the camp shelter.",
+  "points": 4,
+  "role": "castaway",
+  "check": "never_camp_shelter"
+}

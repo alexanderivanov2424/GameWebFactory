@@ -1,0 +1,8 @@
+{
+  "title": "Hoarder",
+  "text": "End the game with 3 or more Food in your backpack.",
+  "points": 3,
+  "role": "castaway",
+  "check": "food_held",
+  "param": 3
+}

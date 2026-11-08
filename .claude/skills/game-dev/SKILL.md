@@ -47,6 +47,10 @@ Games at a glance (details in each `NOTES.md`):
   `cards/`) that place tiles (types with behaviours, `logic/tiles.py`) carrying symbols
   (`logic/symbols.py`, effects in `logic/effects.py`) as separate layers, row/column clears that pay gold or deal damage, a per-player `gamekit.Deck`, a
   market of swappable types (Conveyor / Cost, `logic/market/`, picked with a `Choice` setting) dealt from card packs the host ticks (`cards/packs/`, `MultiChoice`), a hover ghost on the board (class toggles only), aiming at a target.
+- **marooned**: `logic/` modules; hidden Imposter, grid island explored by drawing 2 tiles and
+  placing 1, energy/hunger survival, camp projects with a two-player build-check card hand-off,
+  secret gather rolls (announce a worse face, never better), nightly secret vote (tally only),
+  secret objectives scored from per-player stats. Content files: `content/README.md`.
 - **arena**: real-time demo (`RealtimeGame`): keyboard inputs as state, per-tick delta
   snapshots, canvas drawing with interpolation, ping shown above each player.
 

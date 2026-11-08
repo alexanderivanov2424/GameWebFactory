@@ -1,0 +1,15 @@
+{
+  "name": "Beach",
+  "icon": "\ud83c\udfd6\ufe0f",
+  "color": "#f1dfa6",
+  "moveCost": 1,
+  "resources": {
+    "food": 3,
+    "wood": 2
+  },
+  "count": {
+    "small": 9,
+    "large": 14
+  },
+  "text": "Fish in the shallows and driftwood on the sand."
+}

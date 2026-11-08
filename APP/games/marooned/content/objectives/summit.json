@@ -1,0 +1,8 @@
+{
+  "title": "Summit",
+  "text": "Stand on the Peak and on 2 different Hills.",
+  "points": 4,
+  "role": "castaway",
+  "check": "summit",
+  "param": 2
+}

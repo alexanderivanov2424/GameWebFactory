@@ -1,0 +1,8 @@
+{
+  "title": "Butterfingers",
+  "text": "Announce a worse gather roll than you really rolled 3 times.",
+  "points": 4,
+  "role": "imposter",
+  "check": "lies",
+  "param": 3
+}

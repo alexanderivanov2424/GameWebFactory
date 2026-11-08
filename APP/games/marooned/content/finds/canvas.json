@@ -1,0 +1,8 @@
+{
+  "name": "Canvas",
+  "text": "A scrap of sailcloth.",
+  "gives": {
+    "scrap": 1
+  },
+  "count": 3
+}

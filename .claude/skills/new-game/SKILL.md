@@ -30,6 +30,10 @@ the pitfalls hit while building it; read the one closest to your game):
   rotations, sent precomputed in the state so the client never rotates anything itself; a
   hover ghost with a "would clear" preview; one `gamekit.Deck` per player; a market whose
   slots stay empty until the end of the turn.
+- `APP/games/marooned/`: `logic/` modules; a hidden role (one secret Imposter), hidden choices
+  designed to work like a physical game (a secret die roll the roller may under-report, a
+  Secret Hitler style card hand-off), a secret nightly vote showing only the tally, per-player
+  stats feeding end scoring and JSON objectives, a map revealed by drawing tile cards.
 - `APP/games/arena/`: real-time (`RealtimeGame`): keyboard input as state, per-tick delta
   snapshots, canvas drawing with interpolation, showing ping. Start from it for continuous movement.
 

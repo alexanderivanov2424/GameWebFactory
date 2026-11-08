@@ -1,0 +1,8 @@
+{
+  "title": "Vigilante",
+  "text": "Wound the Imposter twice.",
+  "points": 5,
+  "role": "castaway",
+  "check": "wounded_imposter",
+  "param": 2
+}
