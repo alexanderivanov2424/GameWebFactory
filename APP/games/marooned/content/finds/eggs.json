@@ -1,0 +1,8 @@
+{
+  "name": "Bird eggs",
+  "text": "A nest full of eggs.",
+  "gives": {
+    "food": 2
+  },
+  "count": 3
+}

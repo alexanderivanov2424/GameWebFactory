@@ -1,0 +1,7 @@
+{
+  "title": "Master builder",
+  "text": "Put the most Wood into the raft (ties count).",
+  "points": 4,
+  "role": "castaway",
+  "check": "most_raft_wood"
+}

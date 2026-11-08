@@ -1,0 +1,8 @@
+{
+  "title": "Treasure hunter",
+  "text": "Escape with 2 or more relics.",
+  "points": 5,
+  "role": "castaway",
+  "check": "escaped_relics",
+  "param": 2
+}

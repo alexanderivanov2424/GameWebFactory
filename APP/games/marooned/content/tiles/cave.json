@@ -1,0 +1,14 @@
+{
+  "name": "Cave",
+  "icon": "\ud83d\udd73\ufe0f",
+  "color": "#7d7569",
+  "moveCost": 1,
+  "searches": 2,
+  "shelter": 1,
+  "points": 2,
+  "count": {
+    "small": 3,
+    "large": 5
+  },
+  "text": "One person can sleep here sheltered. Something may be hidden inside."
+}

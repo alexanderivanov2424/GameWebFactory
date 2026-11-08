@@ -1,0 +1,7 @@
+{
+  "title": "Pacifist",
+  "text": "Never attack anyone.",
+  "points": 3,
+  "role": "castaway",
+  "check": "never_attacked"
+}

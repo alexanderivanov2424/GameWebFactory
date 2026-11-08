@@ -1,0 +1,8 @@
+{
+  "name": "Herbs",
+  "text": "A bundle of healing herbs.",
+  "gives": {
+    "herbs": 1
+  },
+  "count": 2
+}

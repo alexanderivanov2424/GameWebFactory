@@ -1,0 +1,8 @@
+{
+  "title": "Wrecker",
+  "text": "2 build checks come up Snapped.",
+  "points": 4,
+  "role": "imposter",
+  "check": "snapped",
+  "param": 2
+}

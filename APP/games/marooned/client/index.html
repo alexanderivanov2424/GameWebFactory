@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Marooned</title>
+  <!-- Marooned game page: lobby, prompt box, island board and side panels (see game.js). -->
+
+  <script src="/shared/theme.js"></script>
+  <script src="/shared/home.js" defer></script>
+  <script src="/shared/settings.js" defer></script>
+  <script src="/shared/chat.js" defer></script>
+  <script src="/gamekit/dom.js" defer></script>
+  <script src="/gamekit/room.js" defer></script>
+  <script src="/gamekit/lobby.js" defer></script>
+  <script src="/gamekit/lobby-ui.js" defer></script>
+  <script src="board.js" defer></script>
+  <script src="prompts.js" defer></script>
+  <script src="game.js" defer></script>
+
+  <style>
+    :root { --gwf-main-width: 1280px; --gwf-bg: #eef3ef; --gwf-accent: #2f7d6d; --gwf-accent-hover: #24685a; --square: 64px; }
+    .status { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin-bottom: 12px; }
+    .role-badge { margin-left: auto; padding: 3px 12px; border-radius: 999px; font-weight: 700; font-size: 0.85rem; }
+    .role-badge.castaway { background: #dff3e6; color: #1a6a3a; }
+    .role-badge.imposter { background: #3a1f2b; color: #ffb3c7; }
+    .launch { color: #b45309; font-weight: 600; }
+    .role-line { font-weight: 600; }
+    .role-line.imposter { color: #a3123f; }
+
+    .layout { display: grid; grid-template-columns: auto 1fr; gap: 16px; align-items: start; }
+    .side { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; align-items: start; }
+    .side .card { margin: 0; }
+    #prompt-wrap { margin-bottom: 12px; }
+    #prompt { border: 2px solid var(--gwf-accent); }
+
+    .island { display: grid; gap: 3px; padding: 10px; background: #5aa6c9; border-radius: 14px; width: max-content; }
+    .square {
+      width: var(--square); height: var(--square); border-radius: 6px; position: relative; cursor: pointer;
+      display: flex; flex-direction: column; align-items: center; justify-content: center; overflow: hidden;
+      box-shadow: inset 0 0 0 1px rgba(0,0,0,0.12); user-select: none;
+    }
+    .square.fog { background: repeating-linear-gradient(45deg, #2f6f8f, #2f6f8f 6px, #34779a 6px, #34779a 12px); }
+    .square.camp { box-shadow: inset 0 0 0 3px #a0522d; }
+    .square.can-move { box-shadow: inset 0 0 0 3px #fff; }
+    .square.can-move:hover, .square.can-explore:hover { filter: brightness(1.15); }
+    .square.can-explore { box-shadow: inset 0 0 0 3px #ffe58a; }
+    .square.exploring { box-shadow: inset 0 0 0 3px #ffb000; animation: pulse 1s infinite alternate; }
+    .square.selected { outline: 3px solid #222; outline-offset: -1px; }
+    @keyframes pulse { from { filter: brightness(1); } to { filter: brightness(1.3); } }
+    .tile-icon { font-size: 1.3rem; line-height: 1; }
+    .tile-res { font-size: 0.6rem; white-space: nowrap; }
+    .tile-pile { position: absolute; top: 1px; left: 2px; font-size: 0.7rem; }
+    .cost { position: absolute; top: 1px; right: 3px; font-size: 0.65rem; font-weight: 700; color: #222; background: rgba(255,255,255,0.8); border-radius: 4px; padding: 0 2px; }
+    .tokens { position: absolute; bottom: 2px; left: 2px; right: 2px; display: flex; flex-wrap: wrap; gap: 1px; justify-content: center; }
+    .token { width: 17px; height: 17px; border-radius: 50%; color: #fff; font-size: 0.55rem; font-weight: 700; display: flex; align-items: center; justify-content: center; border: 1px solid rgba(0,0,0,0.4); }
+    .token.me { box-shadow: 0 0 0 2px #fff; }
+    .token.acting { outline: 2px solid #ffe100; }
+
+    .item-row { padding: 3px 0; border-bottom: 1px solid var(--gwf-line); }
+    .item-row:last-child { border-bottom: none; }
+    .item { flex: 1; }
+    .item-row select { font-size: 0.8rem; padding: 2px 4px; }
+    .health { font-size: 0.95rem; }
+    .objective { margin: 4px 0; }
+    .project { margin: 8px 0; padding: 8px; background: #f6f8f6; border-radius: 8px; }
+    .stage { font-size: 0.75rem; padding: 1px 8px; border-radius: 999px; background: #e3e7e4; color: #666; }
+    .stage.done { background: #cfeedd; color: #1a6a3a; }
+    .stage.current { background: #fff1c7; color: #8a5a00; font-weight: 600; }
+
+    .pick-row { display: flex; flex-wrap: wrap; gap: 10px; margin: 8px 0; }
+    .pick-card {
+      display: flex; flex-direction: column; gap: 4px; align-items: flex-start; text-align: left; width: 220px;
+      padding: 10px 12px; border-radius: 10px; border: 2px solid var(--gwf-line); background: #fff; color: var(--gwf-text); cursor: pointer;
+    }
+    .pick-card:hover:not(:disabled) { background: #f4faf7; border-color: var(--gwf-accent); }
+    .pick-card.chosen { border-color: var(--gwf-green); background: #e8f7ee; }
+    .tile-card { border-width: 4px; }
+    .big-icon { font-size: 2rem; }
+    .check-solid { border-color: #1a8a4a; }
+    .check-shaky { border-color: #d97706; }
+    .check-snapped { border-color: #e5484d; }
+
+    table.people { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+    table.people th, table.people td { text-align: left; padding: 4px 6px; border-bottom: 1px solid var(--gwf-line); }
+    table.people tr.me { background: #f1f8f4; }
+    table.people tr.left { opacity: 0.45; }
+    .dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; }
+    ul.log { list-style: none; margin: 0; padding: 0; max-height: 320px; overflow-y: auto; font-size: 0.85rem; }
+    ul.log li { padding: 3px 0; border-bottom: 1px solid var(--gwf-line); }
+
+    #result { border: 2px solid var(--gwf-accent); }
+    .scores { display: flex; flex-wrap: wrap; gap: 12px; }
+    .score-card { width: 260px; padding: 10px; border-radius: 10px; background: #f6f8f6; }
+    .score-card.imposter { background: #fbeef2; }
+    .score-card ul { margin: 4px 0; padding-left: 18px; font-size: 0.85rem; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Marooned</h1>
+    <p id="connection" class="muted">Connecting…</p>
+    <div id="error" hidden></div>
+
+    <section id="lobby" hidden>
+      <div class="card">
+        <div class="row" style="margin-bottom: 8px">
+          <h2 style="margin: 0">Players</h2>
+          <span class="spacer"></span>
+          <button id="join" class="green" hidden>Join game</button>
+          <button id="ready" class="green" hidden>Ready</button>
+          <button id="leave" class="red" hidden>Leave game</button>
+        </div>
+        <ul id="players"></ul>
+        <div id="start"></div>
+        <p id="spectators" class="muted"></p>
+      </div>
+      <div class="card">
+        <h2>Game settings</h2>
+        <div id="settings"></div>
+      </div>
+      <div class="card">
+        <h2>How to play</h2>
+        <p>You're shipwrecked. Explore the island, gather food and materials, build a shelter and then a
+          raft, and be at camp when it sails. One of you is secretly the <b>Imposter</b>, who scores when
+          the others don't get away. Everyone scores on their own: exploring, building, escaping, relics,
+          staying fed, guessing the Imposter in the nightly votes, and secret objectives.</p>
+        <p>Each day you spend your energy (5, +1 after a night in a shelter, less when hungry, wounded or sick). Gathering rolls a
+          die only you see; you may announce a worse roll than you got, never a better one. When a camp
+          stage is full, the builder picks a helper, draws 3 check cards, secretly discards 1 and passes
+          2; the helper reveals 1. Each night everyone votes on who they suspect (only the tally is
+          shown), gets hungrier, and sleeps in the shelter if there's room. Deal with suspects
+          yourselves: refuse to help them, or attack them.</p>
+      </div>
+    </section>
+
+    <section id="game" hidden>
+      <div id="result" class="card" hidden></div>
+      <div id="status" class="status"></div>
+      <div id="prompt-wrap"><div id="prompt" class="card" hidden></div></div>
+      <div class="layout">
+        <div>
+          <div id="board"></div>
+          <div id="log" class="card" style="margin-top: 12px"></div>
+        </div>
+        <div>
+          <div class="side">
+            <div id="you" class="card"></div>
+            <div id="square" class="card"></div>
+          </div>
+          <div id="camp" class="card" style="margin-top: 12px"></div>
+          <div id="people" class="card"></div>
+          <button id="back" hidden>Back to lobby</button>
+        </div>
+      </div>
+    </section>
+  </main>
+</body>
+</html>

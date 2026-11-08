@@ -1,0 +1,15 @@
+{
+  "name": "Hills",
+  "icon": "\u26f0\ufe0f",
+  "color": "#b9a487",
+  "moveCost": 2,
+  "resources": {
+    "stone": 6
+  },
+  "reveals": true,
+  "count": {
+    "small": 6,
+    "large": 8
+  },
+  "text": "Stone. Placing it also explores the squares around it."
+}

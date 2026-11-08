@@ -1,0 +1,8 @@
+{
+  "title": "Scapegoat",
+  "text": "Innocent players take 4 or more wounds in total.",
+  "points": 5,
+  "role": "imposter",
+  "check": "innocent_wounds",
+  "param": 4
+}

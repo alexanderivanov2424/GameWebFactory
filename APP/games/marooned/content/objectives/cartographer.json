@@ -1,0 +1,8 @@
+{
+  "title": "Cartographer",
+  "text": "Be the first to explore 6 squares.",
+  "points": 4,
+  "role": "castaway",
+  "check": "explored",
+  "param": 6
+}

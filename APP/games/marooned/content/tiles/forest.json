@@ -1,0 +1,14 @@
+{
+  "name": "Forest",
+  "icon": "\ud83c\udf32",
+  "color": "#3f8a4f",
+  "moveCost": 1,
+  "resources": {
+    "wood": 6
+  },
+  "count": {
+    "small": 9,
+    "large": 15
+  },
+  "text": "Plenty of timber."
+}

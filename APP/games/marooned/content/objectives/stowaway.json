@@ -1,0 +1,7 @@
+{
+  "title": "Stowaway",
+  "text": "Be on the raft when it leaves.",
+  "points": 5,
+  "role": "imposter",
+  "check": "escaped"
+}
