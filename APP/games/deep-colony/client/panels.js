@@ -228,13 +228,22 @@
     } else if (h) parts.push({ cell: [h[0], h[1]] });
     if (h) for (const [id, b, d] of buildingsAt(g, h[0], h[1])) parts.push({ id, b, d });
     const me = state.you;
+    const here = h ? Object.values(g.dupes).filter((d) => Math.round(d.x) === h[0] && Math.round(d.y) === h[1]) : [];
+    const R = Math.round;
+    const dsig = here.map((d) => [d.name, d.task, R(d.breath), R(d.kcal), R(d.bladder), R(d.stress), R(d.health), R(d.germs || 0), !!d.sick,
+      d.carry ? [d.carry.el, R(d.carry.kg)] : 0]);
     if (h) {
       parts.splice(1, 0, { net: netLines(g, h[0], h[1]) });
       for (const p of parts) if (p.id) p.net = netLines(g, h[0], h[1], p.b, p.d);
     }
-    fill("hover", [parts.map((p) => p.cell || (p.id ? [p.id, p.b] : 0)), parts.map((p) => p.net), me], () => {
+    fill("hover", [dsig, parts.map((p) => p.cell || (p.id ? [p.id, p.b] : 0)), parts.map((p) => p.net), me], () => {
       if (!h) return [el("div", { className: "muted" }, "Point at the map.")];
-      return parts.map((p) => {
+      const dl = here.map((d) => el("div", { style: "margin-bottom:6px" },
+        el("div", {}, el("b", {}, d.name), d.sick ? el("span", { className: "sick" }, " SICK") : ""),
+        el("div", { className: "muted" }, d.task || "idle"),
+        el("div", {}, `Breath ${R(d.breath)}, food ${R(d.kcal)} kcal, bladder ${R(d.bladder)}, stress ${R(d.stress)}, health ${R(d.health)}, germs ${R(d.germs || 0)}`),
+        d.carry ? el("div", {}, `Carrying ${elName(g, d.carry.el)} ${kgText(d.carry.kg)}`) : ""));
+      return dl.concat(parts.map((p) => {
         if (p.net && !p.id) return el("div", {}, ...p.net.map((t) => el("div", {}, t)));
         if (p.cell) {
           const c = p.cell;
@@ -252,7 +261,7 @@
         if (b.dc) rows.push(el("div", {}, "Marked for deconstruction"));
         for (const t of p.net || []) rows.push(el("div", {}, t));
         return el("div", { style: "margin-top:6px" }, ...rows);
-      });
+      }));
     });
     // The on/off button lives in its own box, rebuilt only when its target or label changes,
     // so a status text changing every tick can't swallow the click.

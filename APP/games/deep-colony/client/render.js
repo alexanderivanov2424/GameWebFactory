@@ -280,6 +280,10 @@
         ctx.fillStyle = e ? e.color : "#fff"; ctx.beginPath(); ctx.arc(px + 6, py - 6, 2.5, 0, 6.3); ctx.fill();
         ctx.stroke();
       }
+      const hv = DC.view.hover;
+      if (hv && Math.round(d.x) === hv[0] && Math.round(d.y) === hv[1]) {
+        ctx.lineWidth = 1; ctx.strokeStyle = "#fff"; ctx.beginPath(); ctx.arc(px, py - 6, 10, 0, 6.3); ctx.stroke();
+      }
       ctx.lineWidth = 3; ctx.strokeStyle = "rgba(0,0,0,0.85)"; ctx.strokeText(d.name, px, py - 17);
       ctx.fillStyle = "#fff"; ctx.fillText(d.name, px, py - 17);
     }
