@@ -1,0 +1,27 @@
+{
+  "name": "Knights' Hall",
+  "icon": "🛡️",
+  "kind": "barracks",
+  "labor": 4,
+  "cost": 9,
+  "unlock": 6,
+  "text": "Armored knights hold the nearest road cell and hit hard.",
+  "stats": {
+    "hp": [
+      90,
+      140,
+      200
+    ],
+    "damage": [
+      8,
+      12,
+      16
+    ],
+    "cooldown": 2,
+    "respawn": [
+      40,
+      34,
+      28
+    ]
+  }
+}

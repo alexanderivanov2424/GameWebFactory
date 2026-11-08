@@ -1,0 +1,12 @@
+{
+  "name": "Conscription",
+  "icon": "📯",
+  "kind": "order",
+  "labor": 0,
+  "cost": 6,
+  "unlock": 6,
+  "text": "+2 labor.",
+  "stats": {
+    "labor": 2
+  }
+}

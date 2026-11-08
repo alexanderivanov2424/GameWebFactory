@@ -1,0 +1,43 @@
+{
+  "name": "Siege Train",
+  "buildTurns": 2,
+  "reward": 9,
+  "text": "Rams and sappers come for your walls, with orcs behind them.",
+  "waves": [
+    {
+      "enemy": "sapper",
+      "count": 8,
+      "road": "main",
+      "start": 0,
+      "gap": 7
+    },
+    {
+      "enemy": "ram",
+      "count": 3,
+      "road": "main",
+      "start": 30,
+      "gap": 50
+    },
+    {
+      "enemy": "sapper",
+      "count": 6,
+      "road": "flank",
+      "start": 50,
+      "gap": 9
+    },
+    {
+      "enemy": "orc",
+      "count": 12,
+      "road": "flank",
+      "start": 70,
+      "gap": 8
+    },
+    {
+      "enemy": "ram",
+      "count": 2,
+      "road": "flank",
+      "start": 110,
+      "gap": 50
+    }
+  ]
+}

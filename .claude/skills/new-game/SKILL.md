@@ -5,37 +5,19 @@ description: Add a new multiplayer game to the GWF games site (APP/games/<id>/) 
 
 # Adding a multiplayer game
 
-Read `CLAUDE.md` first. It holds the project rules (HTML/JS/Python only, no Node, no package
-managers, no external libraries/CDNs), the layout (platform `server/` vs. the `gamekit`
-library games build on) and the lobby model.
+Read `CLAUDE.md` first, especially its **STRICT GLOBAL RULES**: no new dependencies of any
+kind, HTML/JS/Python only, and no bots or whole-game playthrough tests unless the user asks.
 
-Reference games (each has a `NOTES.md` saying what to learn from it, where things are, and
-the pitfalls hit while building it; read the one closest to your game):
-- `APP/games/tictactoe/`: the smallest full game; player options (a color), host settings
-  with a linked bound, round-robin turns.
-- `APP/games/tanks/`: hidden information (`private_state`), turn counters with costs, a setup
-  stage inside play, click-to-target modes with hover previews, walls between squares,
-  picking gaps/rows/directions, secret objects on the board, private notes on public log
-  entries, statuses lasting "until your next turn", private board marks.
-- `APP/games/peruvian-silver/`: simultaneous secret plays (`SecretChoices`), timed pauses
-  (`self.schedule`), a private hand with a fixed bottom bar, cards as JSON files loaded with
-  `gamekit.data` in its own `cards.py` module, interrupt stages, a resolve queue for effects
-  that wait on decisions, branching paths, per-copy card state, animations for new items only.
-- `APP/games/smugglers/`: the first game built with `logic/` modules (read it for the layout):
-  a graph board loaded from swappable JSON maps and drawn as SVG (`AppDom.svg`), asymmetric
-  roles, deck-building with `gamekit.Deck`, an interrupt that hands the action to another
-  player mid-turn (`actor()` vs `turn()`), a two-message action, `PatchState`, and the server
-  sending reachable spots/targets so the client holds no rules.
-- `APP/games/block-blast/`: `logic/` modules; shape cards (polyominoes) placed on a grid with
-  rotations, sent precomputed in the state so the client never rotates anything itself; a
-  hover ghost with a "would clear" preview; one `gamekit.Deck` per player; a market whose
-  slots stay empty until the end of the turn.
-- `APP/games/marooned/`: `logic/` modules; a hidden role (one secret Imposter), hidden choices
-  designed to work like a physical game (a secret die roll the roller may under-report, a
-  Secret Hitler style card hand-off), a secret nightly vote showing only the tally, per-player
-  stats feeding end scoring and JSON objectives, a map revealed by drawing tile cards.
-- `APP/games/arena/`: real-time (`RealtimeGame`): keyboard input as state, per-tick delta
-  snapshots, canvas drawing with interpolation, showing ping. Start from it for continuous movement.
+Reference games: each `APP/games/<id>/NOTES.md` says what to learn from that game, where
+things are, and its pitfalls. Read only the one closest to your game:
+- `tictactoe`: the smallest full game; start here to see the whole shape.
+- `tanks`: hidden information, turn counters with costs, click-to-target modes.
+- `peruvian-silver`: simultaneous secret plays, timed reveals, cards as JSON.
+- `smugglers`: the first `logic/`-module game; graph board as SVG, deck-building, `PatchState`.
+- `block-blast`: grid placement with rotations, hover ghost, swappable market (`Choice`/`MultiChoice`).
+- `marooned`: hidden role, secret votes, map built as it's explored.
+- `bastion`: co-op simultaneous turns, server-side simulation sent as a replay.
+- `arena`: real-time (`RealtimeGame`); start from it for continuous movement.
 
 ## 1. Pin down the design (ask only about what's genuinely unclear)
 Map the request onto the shared lobby model before writing code:
@@ -48,10 +30,16 @@ Map the request onto the shared lobby model before writing code:
 - **Hidden information:** anything only some players may see (cards, roles, positions) goes in
   `private_state(member)`, never in `game_state()`. Also check what *public* events leak, such
   as hits revealing positions, and whether errors leak anything: they're private, but the
-  rejection itself can be informative. For example, Tanks allows two tanks on one square
-  because refusing would reveal where someone is.
+  rejection itself can be informative (e.g. refusing a move onto an occupied square reveals
+  where a hidden piece is).
+- **Everyone at once** (co-op build phases, shopping): skip `TurnQueue`; give each seat a
+  `done` flag, let anyone act during the stage, and advance when all remaining seats are done
+  (re-check after a leave).
+- **Simulations** (battles, races that play out without input): run them at once on the server,
+  deterministically, and send a compact replay (per-tick frames + events) for the client to
+  animate, with `PatchState` so it goes out once.
 - **Turn order:** use `TurnQueue`. A cost of 1 per action with the default equal start gives
-  round-robin; other costs give counter-based turns like Tanks. Display offsets as `(T+X)`.
+  round-robin; other costs give counter-based turns. Display offsets as `(T+X)`.
   `staggered=True` (start at 1, 2, 3, ...) is only for counter games; with cost-1 round-robin
   it lets player 1 move twice in a row when there are 3+ players.
 - **Simultaneous secret choices** (everyone picks, then all revealed together): use
@@ -79,8 +67,7 @@ Map the request onto the shared lobby model before writing code:
   keep the default `FullState`. Games that send deltas (`PatchState`, `Snapshots`; see
   `APP/gamekit/sync.py`) must: key changing collections by id (dicts, not lists, since a changed
   list is resent whole), never put None inside dicts (null deletes the key), and round floats
-  with `quantize`. A growing log fits as a dict keyed by index plus a count
-  (see smugglers).
+  with `quantize`. A growing log fits as a dict keyed by index plus a count.
 - **Data kept between games** (stats, unlocks, progress): `self.load_data(member)` and
   `self.save_data(member, value)` (server only, one plain-JSON value per game per player). Works
   the same for guests (memory, until the tab closes) and logged-in players (disk). Save at
@@ -141,9 +128,8 @@ APP/games/<id>/
   and the `NOTES.md` map. Content files (JSON) stay in a folder next to `server.py`.
 - Never name a folder `server/` (it would shadow `server.py`) and don't import the site's
   `server` package from either; games import only `gamekit`.
-- The existing example games predate `logic/` (their rules sit in `server.py`, plus
-  peruvian-silver's `cards.py`; its ~1200-line `server.py` is the monolith to avoid); learn
-  their patterns, not their file layout, and put new rules in `logic/`.
+- Some older games predate `logic/` and keep their rules in `server.py`. Learn their
+  patterns, not their file layout, and put new rules in `logic/`.
 
 ## 3. Server (`server.py` + `logic/`): `class Game(LobbyGame)`
 Import from `gamekit` only (never from `server`). See the headers of `APP/gamekit/lobby.py`
@@ -153,14 +139,13 @@ and `settings.py`. Hooks below are on `Game` in `server.py`; most delegate to `s
   `settingsForm`. A bound may name an earlier setting (`high="boardSize"`). For other
   cross-setting rules override `clean_settings`, call `super()`, then adjust.
   `Choice("Label", default="a", options={"a": "Option A", "b": "Option B"})` is a drop-down
-  of fixed string values (block-blast builds one from a registry of market types);
-  `MultiChoice("Label", default=["a"], options={...}, low=1)` is a set of checkboxes whose value
-  is a list (block-blast's card packs).
+  of fixed string values; `MultiChoice("Label", default=["a"], options={...}, low=1)` is a set
+  of checkboxes whose value is a list.
 - `ACTIONS = {"move": "move"}`: game messages `{"action": "move", ...}` → `self.move(member, data)`.
   Override `on_game_message` only for checks shared by every action (whose turn, stage), then
   `await self.dispatch(member, data)`.
 - `default_options(member)` / `clean_options(member, options)`: per-player lobby choices.
-  Enforce uniqueness here (see the color check in tictactoe).
+  Enforce uniqueness here (e.g. no two players with the same color).
 - `start_check()`: return a reason string if the game can't start yet.
 - `start_game()`: create `self.match = Match(names, self.settings)` from `self.players`.
   Snapshot anything that must stay fixed during the game, such as names and colors, into it.
@@ -217,8 +202,7 @@ Rules and pitfalls:
   errors from `onError`), and for turn-based games `turnAlert(boardElement)` (call its update
   function on every render with a turn id or null).
 - Per-game client data (marks, drafts, which animations already played) is keyed by
-  `state.gameNumber` so it doesn't carry into the next game. Private notes (like Tanks' board
-  marks) live in sessionStorage keyed by room and `gameNumber`; never send them to the server,
+  `state.gameNumber` so it doesn't carry into the next game. Private notes (like board marks) live in sessionStorage keyed by room and `gameNumber`; never send them to the server,
   and don't fill them in automatically unless the user asks.
 - Animations: rendering rebuilds the DOM, so remember which items were already shown (keyed
   by `gameNumber` and a step counter from the server) and animate only new ones, never on the
@@ -238,7 +222,6 @@ Rules and pitfalls:
   rebuild it 20 times a second). Draw on a canvas in `AppRealtime.loop(draw)` using
   `rt.sample(pick)` for interpolated positions, and use `rt.controls(keyMap, {enabled})` for
   keys. See `games/arena/client/`.
-- Desktop PC browsers only (mouse and keyboard); hover interactions are fine.
 
 ## 5. Promote shared code (do this every time)
 Before finishing, look for anything the new game needed that another game would also need:
@@ -256,18 +239,19 @@ Before finishing, look for anything the new game needed that another game would 
 ## 6. Update the docs (do this every time)
 - The game's `server.py` docstring (rules, settings, messages), `logic/__init__.py`'s module
   list, and its `NOTES.md` (what it's a good example of, map, pitfalls you hit).
-- `CLAUDE.md`: the layout tree, the lobby model and the hook list if they changed.
-- **This skill and its templates:** new shared APIs, and general lessons. Game-specific
-  details belong in that game's `NOTES.md`, not here. After changing a template, run
+- `CLAUDE.md`: the layout tree and the lobby model if they changed.
+- **This skill and its templates:** new shared APIs and general lessons only. Game-specific
+  details belong in that game's `NOTES.md`, not here or in `CLAUDE.md` (add at most one line to
+  the reference list above). After changing a template, run
   `python3 -I tools/run_tests.py tools` (it builds a game from them and runs its tests).
 
 ## 7. Test and hand off
-`python3 -I tools/run_tests.py <id>` until it passes, then the whole suite. See the `game-dev`
-skill, section 3, for what the tests should cover and how to check the client by reading.
-Test rules on `Match` directly (`RulesTests` in the template: set up a position, act, check)
-and the lobby side with `Sim` (turn checks, what each player and spectator receives, leaving).
-Real-time games are never ticked by `Sim` on its own: tests call `sim.tick(n)`,
-`sim.input(i, {...})` and `sim.ping(i, rtt)`.
+`python3 -I tools/run_tests.py <id>` until it passes, then the whole suite. Write **unit tests
+of individual pieces**: test rules on `Match` directly (`RulesTests` in the template: set up a
+position, act, check), one test per rule, effect or scoring case. Test the lobby side with `Sim`
+(turn checks, what each player and spectator receives, leaving). Don't build bots or tests
+that play whole games. See the `game-dev` skill, section 3, for what to cover and how to
+check the client by reading.
 Then hand testing to the user:
 - `cd /home/sasha/Desktop/Dev && ./deploy.sh` (it runs the checks first; if the server fails
   to start, it prints its log).

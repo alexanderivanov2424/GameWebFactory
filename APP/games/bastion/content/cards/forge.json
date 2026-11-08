@@ -1,0 +1,16 @@
+{
+  "name": "Forge",
+  "icon": "⚒️",
+  "kind": "forge",
+  "labor": 2,
+  "cost": 6,
+  "unlock": 3,
+  "text": "Towers and barracks next to it deal more damage.",
+  "stats": {
+    "bonus": [
+      1,
+      2,
+      3
+    ]
+  }
+}

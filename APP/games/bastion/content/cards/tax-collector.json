@@ -1,0 +1,12 @@
+{
+  "name": "Tax Collector",
+  "icon": "💰",
+  "kind": "order",
+  "labor": 1,
+  "cost": 3,
+  "unlock": 1,
+  "text": "+3 gold.",
+  "stats": {
+    "gold": 3
+  }
+}

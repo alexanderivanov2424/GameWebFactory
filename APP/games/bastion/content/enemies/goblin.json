@@ -1,0 +1,10 @@
+{
+  "name": "Goblin",
+  "icon": "👺",
+  "hp": 26,
+  "speed": 0.25,
+  "keep": 1,
+  "attack": 2,
+  "attackEvery": 2,
+  "text": "Quick and weak."
+}

@@ -1,0 +1,18 @@
+{
+  "name": "Orc Warlord",
+  "icon": "👿",
+  "hp": 900,
+  "speed": 0.09,
+  "armor": 4,
+  "keep": 12,
+  "attack": 18,
+  "attackEvery": 2,
+  "siege": 2,
+  "boss": true,
+  "heal": {
+    "amount": 6,
+    "radius": 2,
+    "every": 8
+  },
+  "text": "Boss. Armor 4, rallies (heals) the orcs around him."
+}

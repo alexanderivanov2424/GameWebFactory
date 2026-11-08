@@ -1,0 +1,57 @@
+{
+  "name": "Dragon's Fury",
+  "buildTurns": 3,
+  "reward": 0,
+  "text": "The Orc Warlord marches with his horde while the Red Dragon burns the sky. Hold, and the realm is saved.",
+  "waves": [
+    {
+      "enemy": "orc",
+      "count": 10,
+      "road": "main",
+      "start": 0,
+      "gap": 8
+    },
+    {
+      "enemy": "knight",
+      "count": 6,
+      "road": "flank",
+      "start": 10,
+      "gap": 12
+    },
+    {
+      "enemy": "warlord",
+      "count": 1,
+      "road": "main",
+      "start": 60,
+      "gap": 6
+    },
+    {
+      "enemy": "shaman",
+      "count": 3,
+      "road": "main",
+      "start": 70,
+      "gap": 12
+    },
+    {
+      "enemy": "dragon",
+      "count": 1,
+      "road": "flank",
+      "start": 90,
+      "gap": 6
+    },
+    {
+      "enemy": "wyvern",
+      "count": 4,
+      "road": "main",
+      "start": 120,
+      "gap": 12
+    },
+    {
+      "enemy": "troll",
+      "count": 3,
+      "road": "flank",
+      "start": 140,
+      "gap": 25
+    }
+  ]
+}

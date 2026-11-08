@@ -1,0 +1,25 @@
+{
+  "name": "Ballista",
+  "icon": "🎯",
+  "kind": "tower",
+  "labor": 3,
+  "cost": 7,
+  "unlock": 3,
+  "shot": "bolt",
+  "text": "Slow, heavy bolts that ignore armor. Long range, hits flyers.",
+  "stats": {
+    "damage": [
+      12,
+      18,
+      26
+    ],
+    "range": [
+      3.5,
+      3.5,
+      4
+    ],
+    "cooldown": 8,
+    "air": true,
+    "pierce": true
+  }
+}

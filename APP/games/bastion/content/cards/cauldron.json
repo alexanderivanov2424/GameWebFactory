@@ -1,0 +1,20 @@
+{
+  "name": "Boiling Oil",
+  "icon": "🔥",
+  "kind": "tower",
+  "labor": 2,
+  "cost": 4,
+  "unlock": 1,
+  "shot": "oil",
+  "text": "Pours oil on every ground enemy next to it. Best beside a wall.",
+  "stats": {
+    "damage": [
+      4,
+      6,
+      9
+    ],
+    "range": 1.5,
+    "cooldown": 5,
+    "area": true
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "name": "Fortify the Keep",
+  "icon": "🏰",
+  "kind": "order",
+  "labor": 1,
+  "cost": 5,
+  "unlock": 5,
+  "text": "The keep +6 health.",
+  "stats": {
+    "keep": 6
+  }
+}

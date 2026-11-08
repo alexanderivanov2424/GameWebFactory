@@ -1,0 +1,10 @@
+{
+  "name": "Orc Warrior",
+  "icon": "👹",
+  "hp": 80,
+  "speed": 0.17,
+  "keep": 2,
+  "attack": 5,
+  "attackEvery": 2,
+  "text": "Tough and strong."
+}

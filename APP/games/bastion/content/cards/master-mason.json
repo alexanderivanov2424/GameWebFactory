@@ -1,0 +1,12 @@
+{
+  "name": "Master Mason",
+  "icon": "📐",
+  "kind": "order",
+  "labor": 1,
+  "cost": 5,
+  "unlock": 2,
+  "text": "Upgrade any structure one level.",
+  "stats": {
+    "upgrade": true
+  }
+}

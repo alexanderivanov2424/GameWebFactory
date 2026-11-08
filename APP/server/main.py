@@ -1,4 +1,5 @@
-"""App server: site-wide chat at /ws/chat, accounts at /ws/account and game rooms at /ws/game/<game-id>.
+"""App server: site-wide chat at /ws/chat, accounts at /ws/account, feedback at /ws/feedback
+and game rooms at /ws/game/<game-id>.
 
 Run from the APP folder (the folder holding server/, gamekit/ and games/):
 
@@ -11,7 +12,7 @@ is logged and skipped; run tools/run_tests.py to catch that before deploying.
 
 Startup refuses to run while the site is turtled (server/turtle.py). Accounts are read from
 accounts_dir() (server/accounts.py); sessions (server/sessions.py) are shared by the
-account socket and every game room.
+account socket and every game room. Feedback (server/feedback.py) is saved to feedback_dir().
 """
 
 import asyncio
@@ -24,6 +25,7 @@ from pathlib import Path
 
 from server import chat, turtle, websocket
 from server.accounts import AccountStore, accounts_dir
+from server.feedback import Feedback, feedback_dir
 from server.rooms import Rooms
 from server.sessions import Sessions
 
@@ -66,12 +68,15 @@ async def main():
     rooms = Rooms(games, sessions)
     sessions.is_playing = rooms.is_playing
     log.info("Loaded games: %s", ", ".join(games) or "none")
+    feedback = Feedback(feedback_dir(), games)
 
     def route(path):
         if path == "/ws/chat":
             return chat.handle
         if path == "/ws/account":
             return sessions.handle
+        if path == "/ws/feedback":
+            return feedback.handle
         match = GAME_PATH.match(path)
         if match and match.group(1) in games:
             return partial(rooms.handle, game_id=match.group(1))

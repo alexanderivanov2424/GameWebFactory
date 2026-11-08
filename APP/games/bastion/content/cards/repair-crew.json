@@ -1,0 +1,13 @@
+{
+  "name": "Repair Crew",
+  "icon": "🔨",
+  "kind": "order",
+  "labor": 1,
+  "cost": 3,
+  "unlock": 1,
+  "text": "Every wall regains 40 health; the keep +2.",
+  "stats": {
+    "repair": 40,
+    "keep": 2
+  }
+}

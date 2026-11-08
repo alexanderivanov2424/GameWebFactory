@@ -1,0 +1,10 @@
+{
+  "name": "Wolf Rider",
+  "icon": "🐺",
+  "hp": 34,
+  "speed": 0.42,
+  "keep": 1,
+  "attack": 3,
+  "attackEvery": 2,
+  "text": "Very fast."
+}
