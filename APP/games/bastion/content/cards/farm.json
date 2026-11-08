@@ -1,0 +1,16 @@
+{
+  "name": "Farm",
+  "icon": "🌾",
+  "kind": "farm",
+  "labor": 1,
+  "cost": 4,
+  "unlock": 1,
+  "text": "+1 gold per level for its builder at the start of every build turn. Feeds barracks next to it.",
+  "stats": {
+    "gold": [
+      1,
+      2,
+      3
+    ]
+  }
+}

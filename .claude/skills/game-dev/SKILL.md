@@ -51,6 +51,10 @@ Games at a glance (details in each `NOTES.md`):
   placing 1, energy/hunger survival, camp projects with a two-player build-check card hand-off,
   secret gather rolls (announce a worse face, never better), nightly secret vote (tally only),
   secret objectives scored from per-player stats. Content files: `content/README.md`.
+- **bastion**: `logic/` modules; co-op tower defense deck-builder: simultaneous build turns,
+  structures on a shared JSON map, a server-simulated siege sent as a replay (`logic/battle.py`,
+  animated by `client/replay.js`), market between 10 JSON levels. Content files:
+  `content/README.md`; balance notes in `NOTES.md`.
 - **arena**: real-time demo (`RealtimeGame`): keyboard inputs as state, per-tick delta
   snapshots, canvas drawing with interpolation, ping shown above each player.
 

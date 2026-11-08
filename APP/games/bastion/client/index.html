@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Bastion</title>
+  <!--
+    Bastion's page: lobby (players, settings, rules), and the game: status bar (level, stage, keep),
+    the board (board.js draws it, replay.js animates sieges on its overlay), the side panel
+    (team, next siege, inspector, log), the fixed bottom bar (hand while building, market between
+    levels) and windows (<dialog>): your deck, help. game.js renders everything from the state.
+  -->
+
+  <!-- Shared components: keep these, in this order. theme.js isn't deferred (no unstyled flash). -->
+  <script src="/shared/theme.js"></script>
+  <script src="/shared/home.js" defer></script>
+  <script src="/shared/settings.js" defer></script>
+  <script src="/shared/chat.js" defer></script>
+  <script src="/gamekit/dom.js" defer></script>
+  <script src="/gamekit/room.js" defer></script>
+  <script src="/gamekit/lobby.js" defer></script>
+  <script src="/gamekit/lobby-ui.js" defer></script>
+  <script src="board.js" defer></script>
+  <script src="replay.js" defer></script>
+  <script src="game.js" defer></script>
+
+  <style>
+    :root {
+      --gwf-main-width: 1220px;
+      --gwf-bg: #efe7d6;
+      --gwf-surface: #fbf7ee;
+      --gwf-line: #dccfb4;
+      --gwf-accent: #8a5a2b;
+      --gwf-accent-hover: #6f4620;
+      --gwf-soft: #f1e5cd;
+      --gwf-soft-hover: #e7d6b4;
+      --cell: 46px;
+      --grass: #9bc472;
+      --grass-dark: #8ab662;
+      --road: #d9bf8c;
+      --road-edge: #c4a46b;
+      --water: #5f9fd1;
+      --rocks: #9a958c;
+      --forest: #5d8f45;
+    }
+    main.with-bar { padding-bottom: 210px; }
+    h1 { font-family: Georgia, "Times New Roman", serif; letter-spacing: 0.02em; }
+    .lead { font-size: 0.95rem; line-height: 1.45; }
+
+    /* Status bar */
+    #status { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 18px; margin-bottom: 12px; }
+    #status .level { font-family: Georgia, serif; font-size: 1.25rem; font-weight: 700; }
+    #status .pill { background: var(--gwf-surface); border: 1px solid var(--gwf-line); border-radius: 999px; padding: 4px 12px; }
+    #keep-bar { display: inline-flex; align-items: center; gap: 8px; }
+    .meter { width: 140px; height: 12px; border-radius: 6px; background: #d8cbb0; overflow: hidden; }
+    .meter > span { display: block; height: 100%; background: linear-gradient(90deg, #c0392b, #e67e22); }
+    #levels { display: inline-flex; gap: 3px; }
+    #levels span { width: 22px; height: 22px; border-radius: 4px; font-size: 0.7rem; display: grid; place-items: center;
+      background: #e3d7bd; color: #8a7a5c; cursor: help; }
+    #levels span.done { background: #7aa35a; color: #fff; }
+    #levels span.now { background: var(--gwf-accent); color: #fff; font-weight: 700; }
+
+    #game-area { display: flex; gap: 16px; align-items: flex-start; }
+    #board-wrap { flex: none; position: relative; }
+    #side { flex: 1; min-width: 260px; }
+    #side .card { padding: 12px 14px; margin-bottom: 12px; }
+
+    /* Board */
+    #board { position: relative; display: grid; grid-template-columns: repeat(var(--w), var(--cell));
+      grid-template-rows: repeat(var(--h), var(--cell)); border: 3px solid #6b4f2e; border-radius: 6px;
+      background: var(--grass); user-select: none; }
+    .cell { position: relative; width: var(--cell); height: var(--cell); display: grid; place-items: center;
+      font-size: 26px; line-height: 1; }
+    .cell.grass { background: var(--grass); }
+    .cell.grass.alt { background: var(--grass-dark); }
+    .cell.rocks { background: var(--rocks); }
+    .cell.water { background: var(--water); }
+    .cell.forest { background: var(--forest); }
+    .cell.road { background: var(--road); box-shadow: inset 0 0 0 1px var(--road-edge); }
+    .cell.road.bridge { background: repeating-linear-gradient(90deg, #a87a4a 0 7px, #8d6238 7px 9px); }
+    .cell.road.unused { background: #cdbf9f; }
+    .cell .terrain { opacity: 0.85; font-size: 22px; }
+    .cell.keep { background: #b8a27a; font-size: 34px; }
+    .cell .entry { position: absolute; top: 1px; left: 2px; font-size: 10px; font-weight: 700; color: #6b4f2e; }
+    .cell.entrance { box-shadow: inset 0 0 0 2px #a33; }
+    .structure { position: absolute; inset: 3px; border-radius: 7px; display: grid; place-items: center;
+      background: rgba(255, 250, 235, 0.72); border: 2px solid var(--owner, #777); font-size: 24px; }
+    .structure.road-kind { background: rgba(255, 245, 220, 0.5); }
+    .structure .lvl { position: absolute; bottom: -1px; right: 1px; font-size: 9px; color: #6b4f2e; letter-spacing: -1px; }
+    .hpbar { position: absolute; left: 4px; right: 4px; bottom: 2px; height: 4px; background: rgba(0, 0, 0, 0.25); border-radius: 2px; }
+    .hpbar > span { display: block; height: 100%; background: #3fb34f; border-radius: 2px; }
+    .hpbar.low > span { background: #e0532f; }
+    .cell.ghost-ok::after, .cell.ghost-bad::after, .cell.hot::after { content: ""; position: absolute; inset: 0; pointer-events: none; }
+    .cell.ghost-ok::after { background: rgba(80, 220, 120, 0.35); box-shadow: inset 0 0 0 2px #2d9d5a; }
+    .cell.ghost-bad::after { background: rgba(230, 70, 60, 0.3); }
+    .cell.target::before { content: ""; position: absolute; inset: 14px; border-radius: 50%; background: rgba(255, 255, 255, 0.55); pointer-events: none; }
+    .cell.hot::after { box-shadow: inset 0 0 0 2px #fff; }
+    .ghost-icon { position: absolute; inset: 0; display: grid; place-items: center; opacity: 0.7; pointer-events: none; font-size: 24px; }
+    .ghost-cost { position: absolute; top: 1px; right: 3px; font-size: 10px; font-weight: 700; color: #fff;
+      background: #6b4f2e; border-radius: 6px; padding: 0 4px; pointer-events: none; }
+    #overlay { position: absolute; inset: 3px; pointer-events: none; overflow: hidden; }
+    #overlay svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+    .range { fill: rgba(255, 255, 255, 0.18); stroke: rgba(255, 255, 255, 0.9); stroke-width: 2; stroke-dasharray: 5 4; }
+    .rally-mark { fill: none; stroke: #fff; stroke-width: 2; }
+
+    /* Siege replay */
+    .enemy { position: absolute; left: 0; top: 0; width: 30px; height: 30px; margin: -15px 0 0 -15px; display: grid; place-items: center;
+      font-size: 22px; filter: drop-shadow(0 2px 1px rgba(0, 0, 0, 0.4)); will-change: transform; }
+    .enemy.boss { width: 44px; height: 44px; margin: -22px 0 0 -22px; font-size: 36px; }
+    .enemy.flying { filter: drop-shadow(0 8px 3px rgba(0, 0, 0, 0.35)); }
+    .enemy .hpbar { left: 3px; right: 3px; bottom: -4px; height: 3px; }
+    .squad { position: absolute; width: 30px; height: 30px; margin: -15px 0 0 -15px; display: grid; place-items: center; font-size: 20px;
+      background: rgba(40, 80, 200, 0.35); border-radius: 50%; }
+    .squad .hpbar { bottom: -5px; }
+    .wall-live { position: absolute; width: var(--cell); height: var(--cell); display: grid; place-items: center; font-size: 24px; }
+    .poof { position: absolute; margin: -12px 0 0 -12px; font-size: 20px; animation: poof 0.6s ease-out forwards; }
+    .float { position: absolute; margin: -10px 0 0 -12px; font-weight: 800; color: #b00; text-shadow: 0 0 3px #fff;
+      animation: rise 1s ease-out forwards; }
+    @keyframes poof { from { opacity: 1; transform: scale(0.6); } to { opacity: 0; transform: scale(1.6); } }
+    @keyframes rise { from { opacity: 1; transform: translateY(0); } to { opacity: 0; transform: translateY(-26px); } }
+    .shot { stroke-width: 2; stroke-linecap: round; animation: fade 0.35s linear forwards; }
+    .shot.arrow { stroke: #fff6c8; }
+    .shot.bolt { stroke: #9fd4ff; stroke-width: 3; }
+    .shot.rock { stroke: #5b4a35; stroke-width: 4; stroke-dasharray: 3 9; }
+    .shot.oil { stroke: #ff9b2f; stroke-width: 5; }
+    .blast { fill: rgba(255, 150, 40, 0.35); stroke: #ff7b00; animation: fade 0.6s linear forwards; }
+    @keyframes fade { from { opacity: 1; } to { opacity: 0; } }
+    .cell.stunned .structure { filter: grayscale(1) brightness(0.7); }
+    #replay-bar { position: absolute; top: 6px; left: 50%; transform: translateX(-50%); z-index: 4; display: flex; gap: 6px; align-items: center;
+      background: rgba(40, 28, 15, 0.85); color: #fff; padding: 5px 10px; border-radius: 999px; font-size: 0.85rem; white-space: nowrap; }
+    #replay-bar button { padding: 2px 9px; font-size: 0.8rem; }
+    #replay-bar button.on { background: #e8b04a; color: #222; }
+    #replay-banner { position: absolute; left: 50%; top: 42%; transform: translate(-50%, -50%); z-index: 4; text-align: center;
+      background: rgba(40, 28, 15, 0.88); color: #fff; padding: 14px 24px; border-radius: 12px; font-size: 1.05rem; }
+    #replay-banner b { display: block; font-family: Georgia, serif; font-size: 1.5rem; margin-bottom: 4px; }
+    .keep-hit { animation: keephit 0.4s; }
+    @keyframes keephit { 50% { background: #e04a2f; } }
+
+    /* Side panel */
+    .team { list-style: none; margin: 0; padding: 0; }
+    .team li { display: flex; align-items: center; gap: 8px; padding: 5px 0; border-bottom: 1px solid var(--gwf-line); font-size: 0.9rem; }
+    .team li:last-child { border-bottom: none; }
+    .swatch { width: 12px; height: 12px; border-radius: 3px; flex: none; }
+    .team .stats { color: var(--gwf-muted); font-size: 0.8rem; white-space: nowrap; }
+    .team .done { color: var(--gwf-green); font-weight: 700; }
+    .foes { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0; }
+    .foe { display: inline-flex; align-items: center; gap: 3px; background: var(--gwf-soft); border-radius: 6px; padding: 2px 7px; cursor: help; font-size: 0.9rem; }
+    .foe .ic { font-size: 1.2rem; }
+    .roads { font-size: 0.8rem; }
+    .road-tag { display: inline-block; padding: 0 6px; border-radius: 4px; background: #e9d9b8; margin-right: 4px; }
+    .road-tag.new { background: #d9482b; color: #fff; }
+    #inspector { min-height: 74px; font-size: 0.85rem; }
+    #inspector .title { font-weight: 700; font-size: 0.95rem; }
+    #log { max-height: 230px; overflow-y: auto; font-size: 0.82rem; }
+    #log div { padding: 2px 0; border-bottom: 1px dotted var(--gwf-line); }
+    #result { padding: 14px 18px; border-radius: 10px; margin-bottom: 12px; font-size: 1.05rem; }
+    #result.win { background: #dff3d8; border: 1px solid #8cc47a; }
+    #result.loss { background: #f6dcd6; border: 1px solid #d99484; }
+    #result b { font-family: Georgia, serif; font-size: 1.3rem; }
+
+    /* Bottom bar: hand or market */
+    #bar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 20; background: #3b2a18; color: #f5ead2;
+      padding: 10px 110px 12px 16px; box-shadow: 0 -4px 14px rgba(0, 0, 0, 0.25); }
+    #bar .inner { max-width: var(--gwf-main-width); margin: 0 auto; display: flex; gap: 14px; align-items: stretch; }
+    #bar .info { flex: none; width: 170px; display: flex; flex-direction: column; gap: 6px; font-size: 0.85rem; }
+    #bar .info .big { font-size: 1.05rem; font-weight: 700; }
+    #bar .info button { width: 100%; }
+    #cards { flex: 1; display: flex; gap: 10px; overflow-x: auto; overflow-y: hidden; padding: 12px 4px 6px; }
+    #bar .hint { font-size: 0.8rem; color: #d9c7a3; }
+    .pcard { position: relative; flex: none; width: 128px; min-height: 150px; border-radius: 10px; padding: 7px 8px; background: #fbf4e2; color: #2b2116;
+      border: 2px solid #c9b089; display: flex; flex-direction: column; gap: 3px; cursor: pointer; transition: transform 0.12s; font-size: 0.75rem; }
+    .pcard:hover { transform: translateY(-4px); }
+    .pcard.selected { border-color: #2d9d5a; box-shadow: 0 0 0 3px #7bd39b; transform: translateY(-8px); }
+    .pcard.disabled { opacity: 0.55; cursor: default; }
+    .pcard.disabled:hover { transform: none; }
+    .pcard .top { display: flex; align-items: center; gap: 4px; }
+    .pcard .icon { font-size: 26px; }
+    .pcard .name { font-weight: 700; font-size: 0.8rem; line-height: 1.1; }
+    .pcard .kind { font-size: 0.65rem; text-transform: uppercase; color: #8a7a5c; letter-spacing: 0.04em; }
+    .pcard .text { color: #4a3b28; line-height: 1.25; flex: 1; display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; }
+    .pcard .stats { color: #6b5a40; font-size: 0.7rem; }
+    .pcard .cost { position: absolute; top: 5px; right: 6px; background: #6b4f2e; color: #fff; border-radius: 8px; padding: 1px 6px; font-weight: 700; font-size: 0.75rem; }
+    .pcard .cost.gold { background: #b8860b; }
+    .pcard .buy { margin-top: 4px; }
+    .pcard.order { background: #f3ecfb; border-color: #b9a3d6; }
+
+    dialog.window { border: none; border-radius: 12px; padding: 0; width: min(860px, 92vw); max-height: 85vh; background: var(--gwf-surface); }
+    dialog.window::backdrop { background: rgba(30, 20, 10, 0.5); }
+    dialog .head { display: flex; align-items: center; gap: 10px; padding: 12px 16px; border-bottom: 1px solid var(--gwf-line); }
+    dialog .head h2 { margin: 0; }
+    dialog .body { padding: 14px 16px; overflow-y: auto; max-height: calc(85vh - 60px); font-size: 0.9rem; line-height: 1.45; }
+    #deck-cards { display: flex; flex-wrap: wrap; gap: 10px; }
+    #help-button { position: fixed; right: 16px; bottom: 140px; z-index: 21; width: 40px; height: 40px; border-radius: 50%; padding: 0; font-size: 1.2rem; }
+  </style>
+</head>
+<body>
+  <main id="main">
+    <h1>🏰 Bastion</h1>
+    <p id="connection" class="muted">Connecting…</p>
+    <div id="error" hidden></div>
+
+    <section id="lobby" hidden>
+      <div class="card">
+        <div class="row" style="margin-bottom: 8px">
+          <h2 style="margin: 0">Defenders</h2>
+          <span class="spacer"></span>
+          <button id="join" class="green" hidden>Join game</button>
+          <button id="ready" class="green" hidden>Ready</button>
+          <button id="leave" class="red" hidden>Leave game</button>
+        </div>
+        <ul id="players"></ul>
+        <div id="start"></div>
+        <p id="spectators" class="muted"></p>
+      </div>
+      <div class="card">
+        <h2>Game settings</h2>
+        <div id="settings"></div>
+      </div>
+      <div class="card lead">
+        <h2>How to play</h2>
+        <p>Work together to hold the keep through <b>10 sieges</b>. Each level gives you a few <b>build turns</b>:
+          everyone plays at the same time, spending <b>labor</b> (3 per turn) to play cards from their own hand —
+          towers, walls, traps, barracks, farms and orders. Play a structure card on the same structure to
+          <b>upgrade</b> it. When everyone has ended the turn, the next one starts, and after the last one the
+          enemy marches down the road. You always see which enemies come next.</p>
+        <p>Enemies that reach the keep damage it; at 0 the realm is lost. After each siege held, everyone earns gold
+          and visits the <b>market</b> to add cards to their own deck. Up to 4 players (or solo); enemies grow
+          tougher with more defenders.</p>
+      </div>
+    </section>
+
+    <section id="game" hidden>
+      <div id="result" hidden></div>
+      <div id="status"></div>
+      <div id="game-area">
+        <div id="board-wrap">
+          <div id="board"></div>
+          <div id="overlay"></div>
+          <div id="replay-bar" hidden></div>
+          <div id="replay-banner" hidden></div>
+        </div>
+        <div id="side">
+          <div class="card"><h3>Defenders</h3><ul id="team" class="team"></ul></div>
+          <div class="card" id="next"></div>
+          <div class="card" id="inspector"></div>
+          <div class="card"><h3>Chronicle</h3><div id="log"></div></div>
+          <div class="row"><button id="back" hidden>Back to lobby</button></div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <div id="bar" hidden><div class="inner">
+    <div class="info" id="bar-info"></div>
+    <div id="cards"></div>
+  </div></div>
+  <button id="help-button" class="plain" title="How to play" hidden>?</button>
+
+  <dialog id="deck-window" class="window" aria-labelledby="deck-title">
+    <div class="head"><h2 id="deck-title">Your deck</h2><span class="spacer"></span><span id="deck-note" class="muted small"></span>
+      <button class="plain small" data-close>Close</button></div>
+    <div class="body"><div id="deck-cards"></div></div>
+  </dialog>
+
+  <dialog id="help-window" class="window" aria-labelledby="help-title">
+    <div class="head"><h2 id="help-title">How to play</h2><span class="spacer"></span><button class="plain small" data-close>Close</button></div>
+    <div class="body">
+      <p><b>Goal:</b> hold the keep 🏰 through all 10 levels together. Enemies walk the road to the keep; each one that
+        arrives takes its damage off the keep's health. At 0 the game is lost.</p>
+      <p><b>Build turns</b> (everyone at once): each turn you discard your hand, draw 5 cards and get 3 labor ⚒
+        (+ your quarries) and gold 💰 from your farms. Click a card, then a highlighted cell. Walls, spike pits and tar pits
+        go on the road; everything else on grass; barracks next to the road. Orders take effect when clicked
+        (Master Mason: click it, then a structure). Play a structure card on the same structure to <b>upgrade</b> it
+        (costs +1 labor per level it already has; it's also fully repaired). Right-click or Esc cancels. When you're
+        done, click <b>End turn</b> (you can take it back until everyone is done).</p>
+      <p><b>Siege:</b> after the last build turn the enemy attacks. Towers fire at the enemy nearest the keep;
+        walls and soldiers block ground enemies, who stop to smash them; flyers 🦇 ignore walls, soldiers and traps,
+        and only towers that hit flyers can shoot them. Armor reduces every hit (ballistas, wizards and spikes ignore it).
+        Forges ⚒️ add damage and watchtowers 🗼 add range to the towers next to them; a farm next to barracks makes
+        soldiers return twice as fast. Damaged walls stay damaged; destroyed walls are gone.</p>
+      <p><b>Market</b> (after each siege held): everyone gets the level's gold. Buy as many cards as you can afford —
+        they go into your own deck — and retire one card from your deck for 1 gold. New cards unlock as the levels go on.
+        Click <b>Done</b> when finished.</p>
+      <p><b>Tips:</b> stop enemies with a wall right where several towers reach; boiling oil 🔥 beside a wall is brutal;
+        farms early pay for the market later; watch the next siege's enemies and roads, the flank road opens at level 6.</p>
+    </div>
+  </dialog>
+</body>
+</html>

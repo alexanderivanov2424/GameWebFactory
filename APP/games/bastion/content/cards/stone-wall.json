@@ -1,0 +1,16 @@
+{
+  "name": "Stone Wall",
+  "icon": "🧱",
+  "kind": "wall",
+  "labor": 2,
+  "cost": 5,
+  "unlock": 3,
+  "text": "A thick wall on the road. Holds a long time.",
+  "stats": {
+    "hp": [
+      70,
+      120,
+      180
+    ]
+  }
+}

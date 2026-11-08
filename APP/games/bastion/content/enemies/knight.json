@@ -1,0 +1,11 @@
+{
+  "name": "Black Knight",
+  "icon": "♞",
+  "hp": 80,
+  "speed": 0.14,
+  "armor": 3,
+  "keep": 3,
+  "attack": 6,
+  "attackEvery": 2,
+  "text": "Armor 3: every hit does 3 less (at least 1). Ballistas and spikes ignore armor."
+}

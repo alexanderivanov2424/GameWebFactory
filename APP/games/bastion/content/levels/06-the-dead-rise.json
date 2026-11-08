@@ -1,0 +1,36 @@
+{
+  "name": "The Dead Rise",
+  "buildTurns": 3,
+  "reward": 8,
+  "text": "The flank road opens! Necromancers lead the dead down both roads.",
+  "waves": [
+    {
+      "enemy": "skeleton",
+      "count": 18,
+      "road": "main",
+      "start": 0,
+      "gap": 4
+    },
+    {
+      "enemy": "skeleton",
+      "count": 16,
+      "road": "flank",
+      "start": 20,
+      "gap": 4
+    },
+    {
+      "enemy": "necromancer",
+      "count": 2,
+      "road": "main",
+      "start": 40,
+      "gap": 40
+    },
+    {
+      "enemy": "necromancer",
+      "count": 2,
+      "road": "flank",
+      "start": 60,
+      "gap": 40
+    }
+  ]
+}

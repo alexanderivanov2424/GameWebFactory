@@ -1,0 +1,16 @@
+{
+  "name": "Quarry",
+  "icon": "⛏️",
+  "kind": "quarry",
+  "labor": 2,
+  "cost": 7,
+  "unlock": 4,
+  "maxLevel": 2,
+  "text": "+1 labor per level for its builder every build turn.",
+  "stats": {
+    "labor": [
+      1,
+      2
+    ]
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "name": "Royal Treasury",
+  "icon": "🏦",
+  "kind": "order",
+  "labor": 1,
+  "cost": 6,
+  "unlock": 5,
+  "text": "+2 gold for you and +2 for everyone else.",
+  "stats": {
+    "gold": 2,
+    "teamGold": 2
+  }
+}

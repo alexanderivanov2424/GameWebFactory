@@ -1,0 +1,10 @@
+{
+  "name": "Wyvern",
+  "icon": "🦅",
+  "hp": 120,
+  "speed": 0.2,
+  "armor": 1,
+  "keep": 3,
+  "flying": true,
+  "text": "A tough flyer."
+}

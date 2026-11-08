@@ -1,0 +1,50 @@
+{
+  "name": "Shadow Host",
+  "buildTurns": 2,
+  "reward": 10,
+  "text": "Everything at once: knights, wyverns, bats and dark sorcery.",
+  "waves": [
+    {
+      "enemy": "bat",
+      "count": 12,
+      "road": "flank",
+      "start": 0,
+      "gap": 4
+    },
+    {
+      "enemy": "knight",
+      "count": 10,
+      "road": "main",
+      "start": 0,
+      "gap": 10
+    },
+    {
+      "enemy": "wyvern",
+      "count": 8,
+      "road": "main",
+      "start": 40,
+      "gap": 14
+    },
+    {
+      "enemy": "shaman",
+      "count": 3,
+      "road": "main",
+      "start": 50,
+      "gap": 25
+    },
+    {
+      "enemy": "necromancer",
+      "count": 2,
+      "road": "flank",
+      "start": 60,
+      "gap": 40
+    },
+    {
+      "enemy": "wolf",
+      "count": 10,
+      "road": "flank",
+      "start": 100,
+      "gap": 5
+    }
+  ]
+}

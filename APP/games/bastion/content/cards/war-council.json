@@ -1,0 +1,13 @@
+{
+  "name": "War Council",
+  "icon": "📜",
+  "kind": "order",
+  "labor": 0,
+  "cost": 5,
+  "unlock": 3,
+  "text": "Draw 2 cards; everyone else draws 1.",
+  "stats": {
+    "draw": 2,
+    "teamDraw": 1
+  }
+}

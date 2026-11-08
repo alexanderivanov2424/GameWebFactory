@@ -1,0 +1,16 @@
+{
+  "name": "Necromancer",
+  "icon": "🧙",
+  "hp": 100,
+  "speed": 0.12,
+  "armor": 1,
+  "keep": 3,
+  "attack": 2,
+  "attackEvery": 3,
+  "summon": {
+    "enemy": "skeleton",
+    "every": 12,
+    "max": 8
+  },
+  "text": "Raises skeletons as it walks."
+}

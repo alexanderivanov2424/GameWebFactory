@@ -1,0 +1,16 @@
+{
+  "name": "Palisade",
+  "icon": "🪵",
+  "kind": "wall",
+  "labor": 1,
+  "cost": 2,
+  "unlock": 1,
+  "text": "A wooden wall on the road. Ground enemies stop to break it.",
+  "stats": {
+    "hp": [
+      25,
+      45,
+      70
+    ]
+  }
+}

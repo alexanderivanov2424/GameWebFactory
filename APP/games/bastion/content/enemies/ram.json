@@ -1,0 +1,12 @@
+{
+  "name": "Battering Ram",
+  "icon": "🐏",
+  "hp": 380,
+  "speed": 0.08,
+  "armor": 3,
+  "keep": 8,
+  "attack": 12,
+  "attackEvery": 3,
+  "siege": 3,
+  "text": "Smashes walls (triple damage to walls). Armor 3."
+}

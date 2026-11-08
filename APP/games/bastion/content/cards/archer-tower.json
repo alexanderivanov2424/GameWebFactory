@@ -1,0 +1,24 @@
+{
+  "name": "Archer Tower",
+  "icon": "🏹",
+  "kind": "tower",
+  "labor": 2,
+  "cost": 3,
+  "unlock": 1,
+  "shot": "arrow",
+  "text": "Shoots the enemy nearest the keep. Hits flyers.",
+  "stats": {
+    "damage": [
+      3,
+      4,
+      6
+    ],
+    "range": [
+      2.5,
+      2.5,
+      3
+    ],
+    "cooldown": 4,
+    "air": true
+  }
+}

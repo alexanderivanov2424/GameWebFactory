@@ -1,0 +1,29 @@
+{
+  "name": "Iron Legion",
+  "buildTurns": 2,
+  "reward": 8,
+  "text": "Armored knights shrug off arrows. Bring ballistas, spikes or forges.",
+  "waves": [
+    {
+      "enemy": "orc",
+      "count": 6,
+      "road": "main",
+      "start": 0,
+      "gap": 10
+    },
+    {
+      "enemy": "knight",
+      "count": 6,
+      "road": "main",
+      "start": 25,
+      "gap": 12
+    },
+    {
+      "enemy": "shaman",
+      "count": 2,
+      "road": "main",
+      "start": 50,
+      "gap": 30
+    }
+  ]
+}

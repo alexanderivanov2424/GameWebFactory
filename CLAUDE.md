@@ -177,6 +177,12 @@ Summary:
    secret objectives (JSON with a `check` key -> scoring function), hidden picks that only work
    like a physical game (secret die rolls you may under-report, a Secret Hitler style card
    hand-off between two players), a nightly secret vote with only the tally shown, `PatchState`.
+   `games/bastion/` (`logic/` modules): co-op (1-4 players, no turn order: everyone acts at once
+   and the stage moves on when all are done), a tower-defense siege simulated on the server and
+   sent once as a compact replay the client animates (`PatchState`), structures placed on a shared
+   map from JSON (terrain + waypoint roads), server-sent placement targets for the hover ghost,
+   per-level card stats, upgrades by replaying a card, a shared market with unlimited copies,
+   enemies/levels/maps as JSON, numbers tuned with a scratch bot.
 
 ## Lobby model (shared by all games)
 - Every connected tab is a **member**: a **spectator** until it joins, then a **player**. Players join and leave explicitly, and only in the lobby phase.

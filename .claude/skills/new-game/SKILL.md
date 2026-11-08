@@ -34,6 +34,10 @@ the pitfalls hit while building it; read the one closest to your game):
   designed to work like a physical game (a secret die roll the roller may under-report, a
   Secret Hitler style card hand-off), a secret nightly vote showing only the tally, per-player
   stats feeding end scoring and JSON objectives, a map revealed by drawing tile cards.
+- `APP/games/bastion/`: `logic/` modules; co-op with simultaneous turns (per-seat `done` flags,
+  no `TurnQueue`), a deterministic server-side simulation (a tower-defense siege) sent once as a
+  compact replay (frames + events) that the client interpolates, placement targets computed by
+  the server for the hover ghost, a shared map from JSON with waypoint roads, per-level stats.
 - `APP/games/arena/`: real-time (`RealtimeGame`): keyboard input as state, per-tick delta
   snapshots, canvas drawing with interpolation, showing ping. Start from it for continuous movement.
 
@@ -50,6 +54,12 @@ Map the request onto the shared lobby model before writing code:
   as hits revealing positions, and whether errors leak anything: they're private, but the
   rejection itself can be informative. For example, Tanks allows two tanks on one square
   because refusing would reveal where someone is.
+- **Everyone at once** (co-op build phases, shopping): skip `TurnQueue`; give each seat a
+  `done` flag, let anyone act during the stage, and advance when all remaining seats are done
+  (re-check after a leave). See bastion's `Match.check_all_done`.
+- **Simulations** (battles, races that play out without input): run them at once on the server,
+  deterministically, and send a compact replay (per-tick frames + events) for the client to
+  animate, with `PatchState` so it goes out once. See bastion's `logic/battle.py`.
 - **Turn order:** use `TurnQueue`. A cost of 1 per action with the default equal start gives
   round-robin; other costs give counter-based turns like Tanks. Display offsets as `(T+X)`.
   `staggered=True` (start at 1, 2, 3, ...) is only for counter games; with cost-1 round-robin

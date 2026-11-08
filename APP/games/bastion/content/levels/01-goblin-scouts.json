@@ -1,0 +1,15 @@
+{
+  "name": "Goblin Scouts",
+  "buildTurns": 3,
+  "reward": 6,
+  "text": "A band of goblins probes the main road. Get some archers up.",
+  "waves": [
+    {
+      "enemy": "goblin",
+      "count": 10,
+      "road": "main",
+      "start": 0,
+      "gap": 8
+    }
+  ]
+}

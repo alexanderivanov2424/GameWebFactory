@@ -1,0 +1,9 @@
+{
+  "name": "Goblin Sapper",
+  "icon": "💣",
+  "hp": 30,
+  "speed": 0.24,
+  "keep": 3,
+  "explode": 60,
+  "text": "Blows up the first wall or squad in its way."
+}

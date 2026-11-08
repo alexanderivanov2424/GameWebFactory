@@ -1,0 +1,13 @@
+{
+  "name": "Peasant Levy",
+  "icon": "👨‍🌾",
+  "kind": "order",
+  "labor": 0,
+  "cost": 3,
+  "unlock": 1,
+  "text": "+1 labor, draw a card.",
+  "stats": {
+    "labor": 1,
+    "draw": 1
+  }
+}
