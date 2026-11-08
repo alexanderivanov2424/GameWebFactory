@@ -13,7 +13,11 @@ are public ids ("p1"). Modules, one topic each:
     machines.py   behaviour of each building kind (power, oxygen, food, plumbing, heat...)
     nav.py        where colonists can walk/climb, distance maps, paths
     dupes.py      colonists: spawning, needs, health, death, movement along a path
-    chores.py     what each colonist does next and doing it (survival, orders, supply, haul)
+    chores.py     what each colonist does next and doing it: choosing, running, cancelling
+    chore_common.py    chore plumbing shared below (Chore, cache, goals, machines adapter)
+    chore_survival.py  air, food, toilet/floor, washing chores
+    chore_jobs.py      operate, build, dig, deconstruct, harvest, empty chores
+    chore_haul.py      supply (materials to sites/machines) and haul (debris to storage) chores
     orders.py     player orders (dig, build, deconstruct, cancel, priority, toggle)
     view.py       public/private state for clients (the wire contract)
     match.py      Match: one colony; clock, pause/speed, step order, log
