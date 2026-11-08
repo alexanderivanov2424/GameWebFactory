@@ -5,7 +5,7 @@
 """
 
 from . import content, machines, orders
-from .chore_common import (Chore, best_goal, claim_live, dig_goals, failing, reach_goals, speed, timed)
+from .chore_common import (Chore, best_goal, claim_live, dig_goals, failing, reach_goals, speed, timed, touch)
 
 
 def add_candidates(match, d, c, dist, out):
@@ -71,6 +71,7 @@ def _build(match, d, b):
     def work(dt):
         if b.id not in match.buildings.by_id or b.built or not b.materials_ready():
             return True
+        touch(match, d, b, dt)
         b.progress += dt * speed(d) / max(1.0, b.d["buildTime"])
         if b.progress >= 1:
             orders.finish_build(match, b)
@@ -86,6 +87,7 @@ def _decon(match, d, b):
     def work(dt):
         if b.id not in match.buildings.by_id or not b.deconstruct:
             return True
+        touch(match, d, b, dt)
         b.progress += dt * speed(d) / total
         if b.progress >= 1:
             orders.finish_deconstruct(match, b)
@@ -101,6 +103,7 @@ def _operate(match, d, b, goals):
         if b.id not in match.buildings.by_id or not b.built or not b.enabled \
                 or not machines.wants_operator(match, b):
             return True
+        touch(match, d, b, dt)
         machines.operate(match, b, d, dt)
         return False
     yield ("work", work, f"Operating {_name(b)}")
@@ -108,7 +111,12 @@ def _operate(match, d, b, goals):
 
 def _simple(match, d, b, seconds, what):
     yield ("goto", reach_goals(match.world, b), f"{what.capitalize()} {_name(b)}")
-    yield ("work", timed(d, seconds), f"{what.capitalize()} {_name(b)}")
+    work = timed(d, seconds)
+
+    def fn(dt):
+        touch(match, d, b, dt)
+        return work(dt)
+    yield ("work", fn, f"{what.capitalize()} {_name(b)}")
     if b.id in match.buildings.by_id:
         (machines.empty if what == "empty" else machines.harvest)(match, b)
 

@@ -19,9 +19,10 @@ the chore ends, fails or is cancelled. A carried load that is left over becomes 
     STORAGE_KINDS, store_free(b, el), storage_room(b, el)
     speed(d) / timed(d, seconds)                work speed (0.5 when sick), a fixed-length work fn
     take_carry(d, el, kg, temp, germs)
+    touch(match, d, b, dt)                      germs.touch when germs.py has it
 """
 
-from . import content, machines, nav
+from . import content, germs, machines, nav
 
 STORAGE_KINDS = ("storage", "ration_box")
 FAIL_MEMORY = 5.0     # s a failed chore isn't retried
@@ -114,6 +115,12 @@ def timed(d, seconds):
         left[0] -= dt * speed(d)
         return left[0] <= 0
     return work
+
+
+def touch(match, d, b, dt):
+    fn = getattr(germs, "touch", None)
+    if fn is not None:
+        fn(match, d, b, dt)
 
 
 def take_carry(d, el, kg, temp, germs):

@@ -1,12 +1,18 @@
-"""Survival chores: air, food, toilet (or the floor), washing. Chosen before any job.
+"""Survival chores: air, food, toilet (or the floor), washing, and sleep. Chosen before any job.
 
-    urgent(match, d) -> bool             a survival need is pressing (jobs get interrupted)
+    urgent(match, d) -> bool             a survival need is pressing (jobs and sleep get interrupted)
     pick(match, d, dist) -> Chore|None   the chore for the most pressing need that can be met
+    rests(match, d) -> bool              not a work block, or out of stamina: jobs stop
+    pick_sleep(match, d, dist) -> Chore|None
+        sleep: in a sleep block go to the nearest free reachable bed (building with d["bed"], one per
+        colonist) and sleep there (stamina +100 per 0.25 cycle, stress down); with none, sleep where
+        standing at half the rate with stress rising. Stamina 0 at any time: sleep on the spot until 30.
+        The chore ends when the block stops being "s" (a forced sleep also needs stamina 30).
 """
 
-from . import content, dupes, machines
-from .chore_common import (Chore, STORAGE_KINDS, best_goal, failing, is_food, reach_goals,
-                           store_free, timed)
+from . import content, dupes, machines, nav
+from .chore_common import (Chore, STORAGE_KINDS, best_goal, claim_live, ctx, failing, is_food,
+                           reach_goals, store_free, timed, touch)
 
 KCAL_MAX = dupes.KCAL_MAX
 
@@ -53,6 +59,57 @@ def pick(match, d, dist):
         if best:
             return Chore("wash", ("wash",), [("building", best[1].id)], _wash(match, d, best[1]))
     return None
+
+
+def rests(match, d):
+    return match.schedules.block_for(d) != "w" or d.stamina <= 0
+
+
+def pick_sleep(match, d, dist):
+    block = match.schedules.block_for(d)
+    forced = d.stamina <= 0
+    if block != "s" and not forced:
+        return None
+    world = match.world
+    if not forced:
+        c = ctx(match)
+        best = None
+        for b in match.buildings:
+            if not (b.built and b.d["bed"]) or b.deconstruct or failing(match, ("sleep", b.id)):
+                continue
+            owner = c.claims.get(("bed", b.id))
+            if owner and owner != d.id and claim_live(match, owner):
+                continue
+            goals = {world.idx(x, y) for x, y in b.cells() if nav.standable(world, x, y)} \
+                or reach_goals(world, b)
+            g = best_goal(dist, goals)
+            if g and (best is None or g[0] < best[0]):
+                best = (g[0], b, goals)
+        if best:
+            b = best[1]
+            return Chore("sleep", ("sleep", b.id), [("building", b.id)], _sleep(match, d, best[2], True, False),
+                         [("bed", b.id)])
+    if failing(match, ("sleep", "floor")):
+        return None
+    return Chore("sleep", ("sleep", "floor"), (), _sleep(match, d, None, False, forced))
+
+
+def _sleep(match, d, goals, bed, forced):
+    if goals:
+        yield ("goto", goals, "Going to bed")
+    rate = 100.0 / (0.25 * match.cycle_length) * (1.0 if bed else 0.5)
+
+    def work(dt):
+        if match.schedules.block_for(d) != "s" and (not forced or d.stamina >= 30):
+            return True
+        d.asleep = True
+        d.stamina = min(100.0, d.stamina + rate * dt)
+        d.stress = max(0.0, min(100.0, d.stress + (-0.03 if bed else 0.1) * dt))
+        return False
+    try:
+        yield ("work", work, "Sleeping")
+    finally:
+        d.asleep = False
 
 
 def _air(cell):
@@ -111,12 +168,7 @@ def _eat(match, d, src):
         else:
             if obj.id not in match.buildings.by_id:
                 return
-            kg = min(want, obj.store.get(el, 0.0))
-            left = obj.store.get(el, 0.0) - kg
-            if left > 0.001:
-                obj.store[el] = left
-            else:
-                obj.store.pop(el, None)
+            kg, _, germs = obj.take(el, want)
         d.kcal = min(KCAL_MAX, d.kcal + kg * per)
         d.germs += germs
     finally:
@@ -133,6 +185,7 @@ def _toilet(match, d, b):
         if b.id not in match.buildings.by_id or not machines.toilet_usable(match, b):
             return True
         if work(dt):
+            touch(match, d, b, 1.0)
             machines.use_toilet(match, b, d)
             used.append(1)
             return True
@@ -153,6 +206,7 @@ def _wash(match, d, b):
     yield ("goto", reach_goals(match.world, b), "Washing")
     yield ("work", timed(d, 5), "Washing")
     if b.id in match.buildings.by_id and machines.basin_usable(match, b):
+        touch(match, d, b, 1.0)
         machines.wash(match, b, d)
     else:
         yield ("fail",)

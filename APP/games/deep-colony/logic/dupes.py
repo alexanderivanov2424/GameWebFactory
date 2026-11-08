@@ -3,7 +3,8 @@ decides to do is in chores.py.
 
 Dupe fields others read or write: id ("d1"), name, x, y (floats in cell units; the standing cell is
 (round(x), round(y)), see cx/cy), breath 0-100, kcal 0-4000, bladder 0-100, stress 0-100,
-health 0-100, germs (float), sick (seconds left, 0 = healthy), needs_wash, carry (None or
+health 0-100, stamina 0-100 (falls while awake, rises asleep), asleep (bool), schedule ("1"-"3"),
+germs (float), sick (seconds left, 0 = healthy), needs_wash, carry (None or
 {"el", "kg", "temp", "germs"}), task (short text), dead, death ("suffocated", "starved",
 "overheated", "froze").
 Internal: path (cell indexes still to walk), stress_break (seconds of break left), germ_time.
@@ -30,6 +31,7 @@ BREATH_MIN = 0.05      # kg in the cell to breathe it
 EXHALE = 0.002         # kg carbon dioxide per s
 GERMS_SICK = 15000
 KCAL_MAX = 4000
+STAMINA_CYCLES = 1.2   # cycles of being awake from full stamina to 0
 
 
 class Dupe:
@@ -38,6 +40,7 @@ class Dupe:
         self.x, self.y = float(x), float(y)
         self.breath, self.kcal, self.bladder = 100.0, 3000.0, bladder
         self.stress, self.health, self.germs = 0.0, 100.0, 0.0
+        self.stamina, self.asleep, self.schedule = 100.0, False, "1"
         self.sick = 0.0
         self.needs_wash = False
         self.carry = None
@@ -112,12 +115,14 @@ def update_needs(match, d, dt):
         if eid == "polluted_oxygen":
             d.germs += germs
         d.breath = min(100.0, d.breath + 25.0 * dt)
-        world.emit(d.cx, d.cy, "carbon_dioxide", EXHALE * dt, 37.0)
+        world.release(d.cx, d.cy, "carbon_dioxide", EXHALE * dt, 37.0)
     else:
         d.breath = max(0.0, d.breath - dt)
         if d.breath <= 0:
             d.health -= 10.0 * dt
             hurt.append("suffocated")
+    if not d.asleep:
+        d.stamina = max(0.0, d.stamina - 100.0 / (STAMINA_CYCLES * match.cycle_length) * dt)
     # food and bladder
     d.kcal -= 1000.0 / 600.0 * dt * (1.5 if sick else 1.0)
     if d.kcal <= 0:
@@ -144,6 +149,8 @@ def update_needs(match, d, dt):
         delta += 0.03
     if cold_or_hot:
         delta += 0.02
+    if match.schedules.block_for(d) == "d":
+        delta -= 0.02       # downtime: stress recovers faster
     d.stress = max(0.0, min(100.0, d.stress + delta * dt))
     if d.stress_break > 0:
         d.stress_break -= dt

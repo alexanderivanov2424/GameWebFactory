@@ -2,7 +2,7 @@
 (dupes.update_needs), choose a chore if it has none, run it.
 
 Choosing (chore_survival.py first, then jobs): breath, food, bladder (toilet, else the floor),
-washing; then jobs ranked by priority (higher first, haul = 3) and then walking distance:
+washing; then sleep (sleep blocks, stamina 0); then, in work blocks only, jobs ranked by priority (higher first, haul = 3) and then walking distance:
 operate, build, dig, deconstruct, harvest, empty (chore_jobs.py), supply and haul (chore_haul.py).
 One BFS per colonist per choose (cached while buildings/digs are unchanged), at most one choose per
 0.5 s for an idle colonist. Survival needs interrupt a job (checked every second).
@@ -18,7 +18,7 @@ from . import chore_haul, chore_jobs, chore_survival, dupes, nav
 from .chore_common import FAIL_MEMORY, best_goal, ctx, navmap
 
 CHOOSE_EVERY = 0.5
-SURVIVAL_KINDS = ("air", "eat", "toilet", "pee", "wash")
+SURVIVAL_KINDS = ("air", "eat", "toilet", "pee", "wash")   # "sleep" is its own kind
 
 
 def step(match, dt):
@@ -41,6 +41,10 @@ def step(match, dt):
             _end(match, ch, False)
             d.task = "Stress break"
             continue
+        if ch is not None and ch.kind not in SURVIVAL_KINDS and ch.kind != "sleep" \
+                and chore_survival.rests(match, d):
+            _end(match, ch, False)      # downtime/sleep hours or out of stamina: jobs stop
+            ch = None
         if ch is not None and ch.kind not in SURVIVAL_KINDS and match.time - c.last_check.get(d.id, 0) >= 1.0:
             c.last_check[d.id] = match.time
             if c.nosurv.get(d.id, 0) <= match.time and chore_survival.urgent(match, d):
@@ -102,6 +106,8 @@ def _choose(match, d, c):
     if ch is None:
         if chore_survival.urgent(match, d):
             c.nosurv[d.id] = match.time + 10.0
+        ch = chore_survival.pick_sleep(match, d, dist)
+    if ch is None and match.schedules.block_for(d) == "w":
         out = []
         chore_jobs.add_candidates(match, d, c, dist, out)
         chore_haul.add_candidates(match, d, c, dist, out)
