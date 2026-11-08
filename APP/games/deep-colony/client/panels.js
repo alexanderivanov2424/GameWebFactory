@@ -92,7 +92,7 @@
           onmouseenter: () => showInfo(id), onmouseleave: () => showInfo(T.state.building),
         }, `${d.name} (${d.w}x${d.h})`, el("span", { className: "cost" }, costText(g, d.cost))), "building", id)))));
     $("overlays").replaceChildren(...DC.render.OVERLAYS.map((o) => data(el("button", {
-      className: "t", textContent: o === "none" ? "None" : o[0].toUpperCase() + o.slice(1),
+      className: "t", textContent: ({ none: "None", temp: "Temperature", germ: "Germs", vent: "Ventilation" })[o] || o[0].toUpperCase() + o.slice(1),
       onclick: () => { DC.view.overlay = o; DC.panels.refresh(); },
     }), "overlay", o)), el("div", { id: "ovlegend", className: "muted", style: "font-size:0.7rem;margin-top:4px" }));
     const help = $("howto");
@@ -288,7 +288,8 @@
     const texts = { none: "", gas: "Gas overlay: colour = gas, brightness = amount.", temp: "Temperature: blue (cold) to red (hot).",
       germ: "Germs: darker to brighter green = more.", decor: "Decor: red (ugly) to green (pretty).",
       power: "Power: wires and power buildings (yellow dots = power ports).",
-      plumbing: "Plumbing: pipes and ports (blue = in, orange = out)." };
+      plumbing: "Plumbing: pipes, ports and what each pipe segment carries.",
+      vent: "Ventilation: gas pipes, gas ports and what each segment carries." };
     const box = $("ovlegend");
     if (box && box.textContent !== texts[o]) box.textContent = texts[o];
   }

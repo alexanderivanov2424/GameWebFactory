@@ -1,7 +1,8 @@
 /*
  * Tools: current tool / building / priority, mouse on the canvas, hotkeys, and the messages they send.
- *   DC.tools.state {tool, building, prio}   tool: inspect|dig|cancel|deconstruct|priority|build
+ *   DC.tools.state {tool, building, prio}   tool: inspect|dig|cancel|deconstruct|priority|sweep|build
  *   DC.tools.setTool(name) / setBuilding(id) (also selects the build tool) / setPrio(n)
+ *   DC.tools.rot (0-3, quarter turns clockwise) / rotate() (R key; rotatable buildings only; reset when picking a non-rotatable one)
  *   DC.tools.onChange(fn)    called when the tool, building or priority changes
  *   DC.tools.preview()       what render.js draws for your own tool: {rect, color} | {cells, building} | null
  * DC.view {overlay, hover [x, y] | null, drag {x0, y0, x1, y1} | null} is shared with render/panels.
@@ -9,9 +10,10 @@
  */
 (() => {
   const DC = (window.DC = window.DC || {});
-  const AREA = ["dig", "cancel", "deconstruct", "priority"];
-  const TOOL_COLORS = { dig: "#ffd54f", cancel: "#ffffff", deconstruct: "#ff5252", priority: "#4fc3f7", inspect: "#ffffff" };
+  const AREA = ["dig", "cancel", "deconstruct", "priority", "sweep"];
+  const TOOL_COLORS = { dig: "#ffd54f", cancel: "#ffffff", deconstruct: "#ff5252", priority: "#4fc3f7", sweep: "#a5d6a7", inspect: "#ffffff" };
   const state = { tool: "inspect", building: null, prio: 5 };
+  let rot = 0;
   const view = (DC.view = { overlay: "none", hover: null, last: null, drag: null });
   const listeners = [];
   let lastInput = "";
@@ -39,14 +41,24 @@
     view.drag = null;
     notify();
   }
-  function setBuilding(id) { state.building = id; state.tool = "build"; view.drag = null; notify(); }
+  function setBuilding(id) {
+    state.building = id; state.tool = "build"; view.drag = null;
+    if (!def(id) || !def(id).rotatable) rot = 0;
+    notify();
+  }
+  // R: quarter turn clockwise (rotatable buildings only).
+  function rotate() {
+    const d = def(state.building);
+    rot = d && d.rotatable ? (rot + 1) % 4 : 0;
+    notify();
+  }
   function setPrio(n) { state.prio = n; notify(); }
 
   // Cells of a 1x1 build drag: pipes/wires along an L path, others fill the rectangle.
   function dragCells(d, drag) {
     const { x0, y0, x1, y1 } = drag;
     const cells = [];
-    if (d.layer === "pipe" || d.layer === "wire") {
+    if (d.layer === "pipe" || d.layer === "gaspipe" || d.layer === "wire") {
       const sx = x1 >= x0 ? 1 : -1, sy = y1 >= y0 ? 1 : -1;
       for (let x = x0; x !== x1 + sx; x += sx) cells.push([x, y0]);
       for (let y = y0 + sy; y !== y1 + sy; y += sy) cells.push([x1, y]);
@@ -62,8 +74,8 @@
     if (state.tool === "build") {
       const d = def(state.building);
       if (!d) return null;
-      if (view.drag && d.w === 1 && d.h === 1) return { cells: dragCells(d, view.drag), building: state.building };
-      return h ? { cells: [h], building: state.building } : null;
+      if (view.drag && d.w === 1 && d.h === 1) return { cells: dragCells(d, view.drag), building: state.building, rot };
+      return h ? { cells: [h], building: state.building, rot } : null;
     }
     if (AREA.includes(state.tool)) {
       const color = TOOL_COLORS[state.tool];
@@ -90,11 +102,11 @@
     if (!d) return;
     if (AREA.includes(state.tool)) {
       const msg = { action: state.tool, rect: [d.x0, d.y0, d.x1, d.y1] };
-      if (state.tool === "dig" || state.tool === "priority") msg.prio = state.prio;
+      if (state.tool === "dig" || state.tool === "priority" || state.tool === "sweep") msg.prio = state.prio;
       send(msg);
     } else if (state.tool === "build") {
       const bd = def(state.building);
-      if (bd) send({ action: "build", building: state.building, cells: dragCells(bd, d), prio: state.prio });
+      if (bd) send({ action: "build", building: state.building, cells: dragCells(bd, d), prio: state.prio, rot });
     }
     notify();
   }
@@ -127,7 +139,7 @@
       const d = def(state.building);
       if (!d) return;
       if (d.w === 1 && d.h === 1) { view.drag = { x0: c[0], y0: c[1], x1: c[0], y1: c[1] }; sendInput(); }
-      else send({ action: "build", building: state.building, cells: [c], prio: state.prio });
+      else send({ action: "build", building: state.building, cells: [c], prio: state.prio, rot });
     }
   });
   window.addEventListener("mouseup", (ev) => { if (ev.button === 0) finishDrag(); });
@@ -136,7 +148,7 @@
   document.addEventListener("keyup", (ev) => {
     if (ev.code === "Space" && ev.target && ev.target.tagName === "BUTTON" && playing()) ev.preventDefault();
   });
-  const KEYS = { KeyG: "dig", KeyC: "cancel", KeyX: "deconstruct", KeyP: "priority", KeyI: "inspect" };
+  const KEYS = { KeyG: "dig", KeyC: "cancel", KeyX: "deconstruct", KeyP: "priority", KeyW: "sweep", KeyI: "inspect" };
   document.addEventListener("keydown", (ev) => {
     const t = ev.target;
     if (t && (/^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName) || t.isContentEditable)) return;
@@ -152,9 +164,10 @@
       if (g) send({ action: "pause", paused: !g.clock.paused });
     } else if (ev.code === "Digit1" || ev.code === "Digit2" || ev.code === "Digit3") {
       send({ action: "speed", speed: Number(ev.code.slice(5)) });
-    } else if (KEYS[ev.code]) setTool(KEYS[ev.code]);
+    } else if (ev.code === "KeyR") rotate();
+    else if (KEYS[ev.code]) setTool(KEYS[ev.code]);
   });
 
-  DC.tools = { state, setTool, setBuilding, setPrio, preview, send, onChange: (fn) => listeners.push(fn),
+  DC.tools = { get rot() { return rot; }, rotate, state, setTool, setBuilding, setPrio, preview, send, onChange: (fn) => listeners.push(fn),
     resetInput: () => { lastInput = ""; }, sendInput, TOOL_COLORS };
 })();

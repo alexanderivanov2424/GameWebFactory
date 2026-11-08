@@ -1,5 +1,5 @@
 /*
- * Canvas drawing (TILE = current zoom, 10-24 px per cell, default 16). Needs grid.js; reads DC.lobby / DC.rt (set by game.js),
+ * Canvas drawing (TILE = current zoom, 10-24 px per cell, default 16). Needs grid.js and render2.js (helpers: occupancy, placement hint, lines, ports, pipe contents); reads DC.lobby / DC.rt (set by game.js),
  * DC.view {overlay, hover, drag} and DC.tools (preview) from tools.js.
  * The static cell layer is redrawn into an offscreen canvas only when the grid rows or the
  * overlay change; every frame blits it and draws buildings, orders (with non-default priority numbers), items, colonists, cursors.
@@ -10,9 +10,9 @@
   const ZOOMS = [10, 13, 16, 20, 24];
   let TILE = 16;
   try { const z = Number(sessionStorage.getItem("dc-zoom")); if (ZOOMS.includes(z)) TILE = z; } catch (e) { /* no storage */ }
-  const OVERLAYS = ["none", "gas", "temp", "germ", "decor", "power", "plumbing"];
+  const OVERLAYS = ["none", "gas", "temp", "germ", "decor", "power", "plumbing", "vent"];
   const CAT_COLORS = { base: "#8a7f6a", oxygen: "#4cc6d8", power: "#e0b030", food: "#8cc152",
-    plumbing: "#4a8fe0", climate: "#e8734a", decor: "#c47ad8" };
+    plumbing: "#4a8fe0", climate: "#e8734a", decor: "#c47ad8", ventilation: "#9aa4b0", research: "#5bc0be" };
   const catColor = (c) => CAT_COLORS[c] || "#999999";
   const canvas = document.getElementById("map");
   const ctx = canvas.getContext("2d");
@@ -20,7 +20,7 @@
   const bctx = base.getContext("2d");
   const rgbCache = {};
   let baseKey = "";
-  let occ = null, occFor = null; // {layer: Map(cell index -> building id)}
+  const R2 = () => DC.render2;
 
   const rgb = (hex) => (rgbCache[hex] ||= [parseInt(hex.slice(1, 3), 16) || 0, parseInt(hex.slice(3, 5), 16) || 0,
     parseInt(hex.slice(5, 7), 16) || 0]);
@@ -60,7 +60,7 @@
     if (full) { base.width = w * TILE; base.height = h * TILE; }
     const grid = DC.grid, defs = grid.defs;
     const rows = full ? null : grid.dirty;
-    const dark = overlay === "power" || overlay === "plumbing";
+    const dark = overlay === "power" || overlay === "plumbing" || overlay === "vent";
     for (let y = 0; y < h; y++) {
       if (rows && !rows.has(y)) continue;
       if (!full) bctx.clearRect(0, y * TILE, w * TILE, TILE);
@@ -96,87 +96,10 @@
     grid.dirty.clear();
   }
 
-  function occupancy(game) {
-    if (occFor === game.buildings) return occ;
-    occFor = game.buildings;
-    occ = { main: new Map(), pipe: new Map(), wire: new Map() };
-    const w = DC.grid.w;
-    for (const [id, b] of Object.entries(game.buildings)) {
-      const d = game.defs.buildings[b.t];
-      if (!d || !b.b) continue; // unfinished sites are ghosts (drawBuilding), not connected lines
-      const map = occ[d.layer || "main"] || occ.main;
-      for (let dy = 0; dy < d.h; dy++) for (let dx = 0; dx < d.w; dx++) map.set((b.y + dy) * w + b.x + dx, id);
-    }
-    return occ;
-  }
-
-  // Placement hint (server decides): occupancy including sites, plus finished solid tiles.
-  let pOccFor = null, pOcc = null;
-  function placeOcc(game) {
-    if (pOccFor === game.buildings) return pOcc;
-    pOccFor = game.buildings;
-    pOcc = { main: new Set(), pipe: new Set(), wire: new Set(), solid: new Set() };
-    const w = DC.grid.w;
-    for (const b of Object.values(game.buildings)) {
-      const d = game.defs.buildings[b.t];
-      if (!d) continue;
-      const set = pOcc[d.layer || "main"] || pOcc.main;
-      for (let dy = 0; dy < d.h; dy++) for (let dx = 0; dx < d.w; dx++) {
-        const i = (b.y + dy) * w + b.x + dx;
-        set.add(i);
-        if (b.b && d.solid && (d.layer || "main") === "main") pOcc.solid.add(i);
-      }
-    }
-    return pOcc;
-  }
-
-  function canPlaceHint(game, type, d, x, y) {
-    const { w, h } = DC.grid, o = placeOcc(game);
-    const layer = d.layer || "main";
-    for (let dy = 0; dy < d.h; dy++) for (let dx = 0; dx < d.w; dx++) {
-      const cx = x + dx, cy = y + dy;
-      if (cx <= 0 || cy <= 0 || cx >= w - 1 || cy >= h - 1) return false;
-      const e = DC.grid.elementAt(cx, cy);
-      if (!e || e.phase === "solid") return false;
-      const i = cy * w + cx;
-      if ((o[layer] || o.main).has(i)) return false;
-      if (layer === "main" && d.solid && o.solid.has(i)) return false;
-    }
-    if (d.floor) {
-      for (let dx = 0; dx < d.w; dx++) {
-        const cx = x + dx, cy = y + d.h;
-        if (cx >= w || cy >= h) return false;
-        const e = DC.grid.elementAt(cx, cy);
-        if (!((e && e.phase === "solid") || o.solid.has(cy * w + cx))) return false;
-      }
-    }
-    return true;
-  }
-
-  function relevant(overlay, d) {
-    if (overlay === "power") return d.layer === "wire" || Boolean(Object.keys(d.power || {}).length || d.powerPort);
-    if (overlay === "plumbing") return d.layer === "pipe" || Boolean(d.pipeIn || d.pipeOut);
-    return true;
-  }
-
-  function drawLines(game, layer, color) {
-    const o = occupancy(game)[layer];
-    const w = DC.grid.w;
-    ctx.strokeStyle = color; ctx.lineWidth = 3; ctx.lineCap = "round";
-    ctx.beginPath();
-    for (const i of o.keys()) {
-      const x = i % w, y = (i / w) | 0;
-      const cx = x * TILE + TILE / 2, cy = y * TILE + TILE / 2;
-      ctx.moveTo(cx, cy); ctx.lineTo(cx + 0.1, cy);
-      if (o.has(i + 1) && x + 1 < w) { ctx.moveTo(cx, cy); ctx.lineTo(cx + TILE, cy); }
-      if (o.has(i + w)) { ctx.moveTo(cx, cy); ctx.lineTo(cx, cy + TILE); }
-    }
-    ctx.stroke();
-  }
-
   function drawBuilding(game, id, b, d, overlay, players) {
-    const px = b.x * TILE, py = b.y * TILE, pw = d.w * TILE, ph = d.h * TILE;
-    const dim = !relevant(overlay, d);
+    const fp = DC.grid.footprint(d, b.r);
+    const px = b.x * TILE, py = b.y * TILE, pw = fp.w * TILE, ph = fp.h * TILE;
+    const dim = !R2().relevant(overlay, d);
     ctx.globalAlpha = dim ? 0.25 : 1;
     if (!b.b) {
       const color = players[b.by]?.color || "#ffffff";
@@ -191,14 +114,14 @@
     } else if (d.ladder) {
       ctx.strokeStyle = "#c9a56a"; ctx.lineWidth = 2;
       ctx.beginPath();
-      for (let dy = 0; dy < d.h; dy++) {
+      for (let dy = 0; dy < fp.h; dy++) {
         const y0 = py + dy * TILE;
         ctx.moveTo(px + 3, y0); ctx.lineTo(px + 3, y0 + TILE);
         ctx.moveTo(px + TILE - 3, y0); ctx.lineTo(px + TILE - 3, y0 + TILE);
         for (const r of [3, TILE / 2, TILE - 3]) { ctx.moveTo(px + 3, y0 + r); ctx.lineTo(px + TILE - 3, y0 + r); }
       }
       ctx.stroke();
-    } else if (d.layer === "pipe" || d.layer === "wire") {
+    } else if (d.layer === "pipe" || d.layer === "gaspipe" || d.layer === "wire") {
       // drawn as connected lines by drawLines
     } else if (d.solid && d.w === 1 && d.h === 1 && d.category === "base" && d.kind === "none") {
       ctx.fillStyle = d.insulated ? "#b9a24a" : "#a9a398"; ctx.fillRect(px, py, TILE, TILE);
@@ -206,7 +129,7 @@
     } else {
       ctx.fillStyle = catColor(d.category); ctx.fillRect(px + 1, py + 1, pw - 2, ph - 2);
       ctx.strokeStyle = "rgba(0,0,0,0.6)"; ctx.lineWidth = 1; ctx.strokeRect(px + 1.5, py + 1.5, pw - 3, ph - 3);
-      ctx.fillStyle = "#101418"; ctx.font = `bold ${d.w * d.h > 1 ? 10 : 7}px sans-serif`;
+      ctx.fillStyle = "#101418"; ctx.font = `bold ${fp.w * fp.h > 1 ? 10 : 7}px sans-serif`;
       ctx.textAlign = "center"; ctx.textBaseline = "middle";
       ctx.fillText(abbrev(d.name), px + pw / 2, py + ph / 2);
       if (b.on === 0) { ctx.fillStyle = "rgba(0,0,0,0.55)"; ctx.fillRect(px + 1, py + 1, pw - 2, ph - 2); }
@@ -218,13 +141,9 @@
       ctx.moveTo(px + 2, py + 2); ctx.lineTo(px + pw - 2, py + ph - 2);
       ctx.moveTo(px + pw - 2, py + 2); ctx.lineTo(px + 2, py + ph - 2); ctx.stroke();
     }
-    if (overlay === "power" || overlay === "plumbing") {
-      const ports = overlay === "power" ? [[d.powerPort, "#ffd54f"]] : [[d.pipeIn, "#4fc3f7"], [d.pipeOut, "#ff8a65"]];
-      for (const [p, color] of ports) {
-        if (!p) continue;
-        ctx.fillStyle = color; ctx.beginPath();
-        ctx.arc(px + p[0] * TILE + TILE / 2, py + p[1] * TILE + TILE / 2, 3, 0, 6.3); ctx.fill();
-      }
+    if (overlay === "power" || overlay === "plumbing" || overlay === "vent") {
+      const kinds = overlay === "power" ? ["powerPort"] : overlay === "plumbing" ? ["pipeIn", "pipeOut"] : ["gasIn", "gasOut"];
+      R2().drawPorts(ctx, TILE, d, b.r || 0, px, py, kinds);
     }
   }
 
@@ -262,6 +181,10 @@
       const sx = cx * TILE + 1 + (n % 3) * 5, sy = cy * TILE + TILE - 5 - Math.min(2, (n / 3) | 0) * 4;
       ctx.fillRect(sx, sy, 4, 4);
       ctx.strokeStyle = "rgba(0,0,0,0.6)"; ctx.lineWidth = 1; ctx.strokeRect(sx + 0.5, sy + 0.5, 3, 3);
+      const sp = it.sw && game.players[it.sw];
+      if (sp) { // marked for sweeping: small flag in the player's colour
+        ctx.fillStyle = sp.color; ctx.fillRect(sx, sy - 4, 1, 4); ctx.fillRect(sx + 1, sy - 4, 3, 2);
+      }
     }
   }
 
@@ -275,6 +198,11 @@
       ctx.fillStyle = d.sick ? "#e57373" : "#f1c9a5";
       ctx.beginPath(); ctx.arc(px, py - 11, 3.5, 0, 6.3); ctx.fill();
       ctx.strokeStyle = "rgba(0,0,0,0.7)"; ctx.lineWidth = 1; ctx.strokeRect(px - 3.5, py - 7.5, 7, 7);
+      if (d.asleep) {
+        ctx.font = "bold 10px sans-serif"; ctx.lineWidth = 3; ctx.strokeStyle = "rgba(0,0,0,0.85)";
+        ctx.strokeText("z", px + 6, py - 20); ctx.fillStyle = "#cfe8ff"; ctx.fillText("z", px + 6, py - 20);
+        ctx.font = "9px sans-serif"; ctx.lineWidth = 1;
+      }
       if (d.carry) {
         const e = game.defs.elements[d.carry.el];
         ctx.fillStyle = e ? e.color : "#fff"; ctx.beginPath(); ctx.arc(px + 6, py - 6, 2.5, 0, 6.3); ctx.fill();
@@ -323,13 +251,14 @@
       ctx.fillStyle = pv.color; ctx.globalAlpha = 0.2; ctx.fillRect(x, y, w, h);
       ctx.globalAlpha = 1; ctx.strokeStyle = pv.color; ctx.lineWidth = 2; ctx.strokeRect(x + 1, y + 1, w - 2, h - 2);
     } else if (pv.cells) {
-      const d = game.defs.buildings[pv.building];
+      const d = game.defs.buildings[pv.building], rot = pv.rot || 0, fp = DC.grid.footprint(d, rot);
       for (const [cx, cy] of pv.cells) {
-        const bad = !canPlaceHint(game, pv.building, d, cx, cy);
+        const bad = !R2().canPlaceHint(game, d, rot, cx, cy);
         ctx.fillStyle = bad ? "#ff4040" : "#40ff70"; ctx.globalAlpha = 0.4;
-        ctx.fillRect(cx * TILE, cy * TILE, d.w * TILE, d.h * TILE);
+        ctx.fillRect(cx * TILE, cy * TILE, fp.w * TILE, fp.h * TILE);
         ctx.globalAlpha = 1; ctx.strokeStyle = bad ? "#ff4040" : "#40ff70"; ctx.lineWidth = 1.5;
-        ctx.strokeRect(cx * TILE + 1, cy * TILE + 1, d.w * TILE - 2, d.h * TILE - 2);
+        ctx.strokeRect(cx * TILE + 1, cy * TILE + 1, fp.w * TILE - 2, fp.h * TILE - 2);
+        R2().drawPorts(ctx, TILE, d, rot, cx * TILE, cy * TILE);
       }
     }
   }
@@ -353,11 +282,13 @@
     const players = game.players;
     const dupes = rt.sample((g) => g.dupes) || game.dupes;
     drawDigs(game, players);
-    ctx.globalAlpha = relevant(overlay, { layer: "pipe" }) ? 1 : 0.25;
-    drawLines(game, "pipe", overlay === "plumbing" ? "#7fd6ff" : "#3a82b8");
-    ctx.globalAlpha = relevant(overlay, { layer: "wire" }) ? 1 : 0.25;
-    drawLines(game, "wire", overlay === "power" ? "#ffe066" : "#b8902a");
+    for (const [layer, color, hot] of [["pipe", "#3a82b8", "#7fd6ff"], ["gaspipe", "#8d98a4", "#eef3f7"], ["wire", "#b8902a", "#ffe066"]]) {
+      const on = { pipe: "plumbing", gaspipe: "vent", wire: "power" }[layer];
+      ctx.globalAlpha = R2().relevant(overlay, { layer }) ? 1 : 0.25;
+      R2().drawLines(ctx, TILE, game, layer, overlay === on ? hot : color);
+    }
     ctx.globalAlpha = 1;
+    R2().drawPackets(ctx, TILE, game, overlay);
     for (const [id, b] of Object.entries(game.buildings)) {
       const d = game.defs.buildings[b.t];
       if (d) drawBuilding(game, id, b, d, overlay, players);

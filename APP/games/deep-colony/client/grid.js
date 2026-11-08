@@ -7,6 +7,8 @@
  *   DC.grid.mass/germ[y]  levels 0-9;  temp[y]: raw index (value*4-40 C), 255 = vacuum
  *   DC.grid.tempAt(x,y)   degrees C or null (vacuum);  decorAt(x,y) decor number
  *   DC.grid.elementAt(x,y) element def {id, name, phase, color,...}
+ *   DC.grid.footprint(d, rot) -> {w, h} of the rotated footprint (mirrors logic/buildings.py footprint)
+ *   DC.grid.rotOffset(d, rot, [dx, dy]) -> [dx, dy] of an unrotated offset (port) after rot quarter turns clockwise
  * Shared global: window.DC (other modules add their own parts).
  */
 (() => {
@@ -70,5 +72,11 @@
   grid.decorAt = (x, y) => (inside(x, y) && grid.decor[y] ? grid.decor[y][x] - 30 : 0);
   grid.massAt = (x, y) => (inside(x, y) && grid.mass[y] ? grid.mass[y][x] : 0);
   grid.germAt = (x, y) => (inside(x, y) && grid.germ[y] ? grid.germ[y][x] : 0);
+  grid.footprint = (d, rot) => ((rot || 0) % 2 ? { w: d.h, h: d.w } : { w: d.w, h: d.h });
+  grid.rotOffset = (d, rot, off) => {
+    let [dx, dy] = off, h = d.h;
+    for (let i = 0; i < (rot || 0) % 4; i++) { [dx, dy] = [h - 1 - dy, dx]; h = i % 2 ? d.h : d.w; }
+    return [dx, dy];
+  };
   DC.grid = grid;
 })();
