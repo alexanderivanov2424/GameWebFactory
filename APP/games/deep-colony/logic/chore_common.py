@@ -10,6 +10,7 @@ the chore ends, fails or is cancelled. A carried load that is left over becomes 
     Chore(kind, key, targets, gen, claims=())   key = failure-memory key, targets = set of
                                                 ("building", id) / ("dig", i) / ("dupe", id) it aims at
     ctx(match) -> Ctx                           per-match state (chores, failures, claims, nav cache)
+    claim_live(match, did)                      a claim's colonist is alive and has a chore
     failing(match, key) -> bool                 gave up on this recently
     navmap(match, cell) -> (dist, parent)       cached BFS from a cell
     best_goal(dist, goals) -> (distance, goal) or None
@@ -56,13 +57,19 @@ def ctx(match):
     return c
 
 
+def claim_live(match, did):
+    """The colonist holding a claim is still alive and busy (else the claim is stale)."""
+    d = match.dupes.get(did)
+    return d is not None and not d.dead and did in ctx(match).chores
+
+
 def failing(match, key):
     return ctx(match).fail.get(key, 0.0) > match.time
 
 
 def navmap(match, cell):
     c = ctx(match)
-    key = (match.buildings.version, len(match.digs))
+    key = (match.buildings.version, len(match.digs), int(match.time))   # terrain changes: refresh each second
     if c.nav_key != key:
         c.nav_key, c.nav = key, {}
     got = c.nav.get(cell)

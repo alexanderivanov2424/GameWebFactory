@@ -237,5 +237,112 @@ class ColonistTests(unittest.TestCase):
         self.assertAlmostEqual(d.stress, 60, delta=1)
 
 
+class EdgeCaseTests(unittest.TestCase):
+    def test_colonist_inside_a_new_tile_is_moved_out(self):
+        m = floor_world()
+        d = dupes.spawn(m, 1, 5, 7)[0]
+        m.world.tile[m.world.idx(5, 7)] = True
+        chores.step(m, 0.1)
+        self.assertTrue(nav.walkable(m.world, d.cell(m.world)))
+        self.assertTrue(nav.standable(m.world, d.cx, d.cy))
+
+    def test_colonist_inside_solid_goes_to_nearest_open_cell(self):
+        m = floor_world()
+        d = dupes.spawn(m, 1, 5, 8)[0]
+        chores.step(m, 0.1)
+        self.assertEqual((d.cx, d.cy), (5, 7))
+
+    def test_colonist_in_liquid_seeks_air_and_unreachable_air_is_survivable(self):
+        m = floor_world()
+        w = m.world
+        for x in range(W):
+            w.set_cell(w.idx(x, 7), "water", 1000, 20)
+        d = dupes.spawn(m, 1, 5, 7)[0]
+        d.breath = 50
+        chores.step(m, 0.1)
+        self.assertEqual(d.task, "Idle")          # no air anywhere: no crash, no chore
+        rock(m, 8, 7)                              # a ledge with air above it
+        self.assertTrue(run(m, 8, until=lambda: d.cy < 7 or d.breath > 55))
+
+    def test_ladder_removed_mid_walk_makes_colonist_fall(self):
+        m = floor_world()
+        w = m.world
+        for y in range(3, 8):
+            w.ladder[w.idx(5, y)] = True
+        d = dupes.spawn(m, 1, 5, 4)[0]
+        d.path = [w.idx(5, 3), w.idx(5, 2)]       # climbing on
+        d.x, d.y = 5.0, 3.0
+        for y in range(3, 8):
+            w.ladder[w.idx(5, y)] = False
+        self.assertFalse(dupes.advance(m, d, 0.1))
+        d.path = []
+        run(m, 3)
+        self.assertEqual((d.cx, d.cy), (5, 7))
+
+    def test_digging_below_a_colonist_drops_them_safely(self):
+        m = floor_world()
+        d = dupes.spawn(m, 1, 5, 7)[0]
+        m.world.dig(m.world.idx(5, 8))
+        run(m, 2)
+        self.assertEqual((d.cx, d.cy), (5, 8))
+        self.assertFalse(d.dead)
+
+    def test_load_dropped_and_reservation_released_when_target_removed(self):
+        m = floor_world()
+        d = dupes.spawn(m, 1, 5, 7)[0]
+        item = m.items.add("sandstone", 100, 5, 7)
+        m.buildings.place("storage_bin", 12, 7, "p1", built=True)
+        chores.step(m, 0.1)
+        chores.step(m, 0.3)
+        self.assertIsNotNone(d.carry)
+        chores.cancel_for(m, ("building", m.buildings.at(12, 7).id))
+        self.assertEqual(item.reserved, 0)
+        self.assertAlmostEqual(m.items.totals()["sandstone"], 100, delta=0.5)
+
+    def test_reservation_released_when_target_cancelled_before_pickup(self):
+        m = floor_world()
+        dupes.spawn(m, 1, 3, 7)
+        item = m.items.add("sandstone", 100, 12, 7)
+        b = m.buildings.place("ladder", 6, 7, "p1")
+        chores.step(m, 0.1)
+        self.assertGreater(item.reserved, 0)
+        chores.cancel_for(m, ("building", b.id))
+        self.assertEqual(item.reserved, 0)
+
+    def test_one_dig_is_never_claimed_by_two_colonists(self):
+        m = floor_world()
+        rock(m, 8, 7)
+        a, b = dupes.spawn(m, 2, 6, 7)
+        orders.dig(m, "p1", [(8, 7)])
+        chores.step(m, 0.1)
+        i = m.world.idx(8, 7)
+        self.assertEqual(sum(1 for x in (a, b) if x.task.startswith("Digging")), 1)
+        self.assertIn(m.digs[i]["claimed"], (a.id, b.id))
+
+    def test_dig_claimed_by_a_dead_colonist_is_taken_over(self):
+        m = floor_world()
+        rock(m, 8, 7)
+        a, b = dupes.spawn(m, 2, 6, 7)
+        orders.dig(m, "p1", [(8, 7)])
+        i = m.world.idx(8, 7)
+        m.digs[i]["claimed"] = "d99"              # a colonist that no longer exists
+        chores.step(m, 0.1)
+        self.assertIn(m.digs[i]["claimed"], (a.id, b.id))
+        owner = m.dupes[m.digs[i]["claimed"]]
+        owner.dead = True
+        chores.step(m, 0.1)
+        self.assertEqual(m.digs[i]["claimed"], "")
+
+    def test_idle_colonist_does_not_search_every_step(self):
+        m = floor_world()
+        dupes.spawn(m, 1, 5, 7)
+        calls = []
+        real = nav.distances
+        with mock.patch.object(nav, "distances", lambda *a, **k: calls.append(1) or real(*a, **k)):
+            for _ in range(100):
+                chores.step(m, 0.1)
+        self.assertLessEqual(len(calls), 21)
+
+
 if __name__ == "__main__":
     unittest.main()

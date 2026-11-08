@@ -12,6 +12,8 @@ Internal: path (cell indexes still to walk), stress_break (seconds of break left
     update_needs(match, d, dt)       breath, food, bladder, temperature, stress, germs, health, death
     advance(match, d, dt) -> bool    walk along d.path; False when the next cell is no longer walkable
     fall(match, d, dt)               gravity for a colonist that stands in mid-air with no path
+    unstick(match, d) -> bool        a colonist inside solid/tile moves to the nearest open cell
+    supported(match, d) -> bool      not centred in mid-air (a standable cell, or between cells)
 """
 
 import math
@@ -161,7 +163,7 @@ def advance(match, d, dt):
     world = match.world
     while d.path and dt > 1e-9:
         j = d.path[0]
-        if not nav.walkable(world, j):
+        if not nav.walkable(world, j) or not _footing(world, d, j):
             return False
         tx, ty = j % world.w, j // world.w
         here = d.cell(world)
@@ -191,3 +193,50 @@ def fall(match, d, dt):
     i = d.cell(world)
     if not nav._standable(world, i, d.cy) and d.cy + 1 < world.h and nav.walkable(world, i + world.w):
         d.y = min(d.y + FALL_SPEED * dt, float(d.cy + 1))
+
+
+def _footing(world, d, j):
+    """False when the colonist hangs in mid-air (its ladder or floor is gone) and the next path
+    cell isn't a fall or a step up from it: the path is stale."""
+    if not d.centered() or not world.inside(d.cx, d.cy):
+        return True
+    here = d.cell(world)
+    if nav._standable(world, here, d.cy):
+        return True
+    if j == here + world.w:
+        return True
+    return j // world.w == d.cy and nav._standable(world, j, d.cy) \
+        and nav._standable(world, here + world.w, d.cy + 1)
+
+
+def supported(match, d):
+    world = match.world
+    if not world.inside(d.cx, d.cy):
+        return True
+    return not d.centered() or nav._standable(world, d.cell(world), d.cy)
+
+
+def unstick(match, d):
+    """Move a colonist that is inside solid rock or a tile to the nearest open cell."""
+    world = match.world
+    if not world.inside(d.cx, d.cy):
+        return False
+    start = d.cell(world)
+    if nav.walkable(world, start):
+        return False
+    seen, level = {start}, [start]
+    while level:
+        found = [i for i in level if nav.walkable(world, i)]
+        if found:
+            found.sort(key=lambda i: (not nav._standable(world, i, i // world.w), i))
+            d.x, d.y = float(found[0] % world.w), float(found[0] // world.w)
+            d.path = []
+            return True
+        nxt = []
+        for i in level:
+            for j in world.nbrs[i]:
+                if j not in seen:
+                    seen.add(j)
+                    nxt.append(j)
+        level = nxt
+    return False

@@ -24,10 +24,14 @@ SURVIVAL_KINDS = ("air", "eat", "toilet", "pee", "wash")
 def step(match, dt):
     c = ctx(match)
     world = match.world
+    for did in [k for k in c.chores if k not in match.dupes]:
+        _end(match, c.chores[did], False)       # colonist removed: release its claims
     for d in list(match.dupes.values()):
         if d.dead:
             _end(match, c.chores.get(d.id), False)
             continue
+        if dupes.unstick(match, d):
+            _end(match, c.chores.get(d.id), False)
         dupes.update_needs(match, d, dt)
         ch = c.chores.get(d.id)
         if d.dead:
@@ -50,6 +54,9 @@ def step(match, dt):
                     d.task = "Idle"
         if ch is None:
             dupes.fall(match, d, dt)
+            continue
+        if not d.path and not dupes.supported(match, d):
+            dupes.fall(match, d, dt)            # its footing is gone: fall before going on
             continue
         result = _run(match, d, ch, dt)
         if result:

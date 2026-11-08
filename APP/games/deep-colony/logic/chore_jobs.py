@@ -5,7 +5,7 @@
 """
 
 from . import content, machines, orders
-from .chore_common import (Chore, best_goal, dig_goals, failing, reach_goals, speed, timed)
+from .chore_common import (Chore, best_goal, claim_live, dig_goals, failing, reach_goals, speed, timed)
 
 
 def add_candidates(match, d, c, dist, out):
@@ -53,7 +53,8 @@ def add_candidates(match, d, c, dist, out):
         if not world.is_solid(i):
             del match.digs[i]
             continue
-        if order["claimed"] and order["claimed"] != d.id or failing(match, ("dig", i)):
+        if order["claimed"] and order["claimed"] != d.id and claim_live(match, order["claimed"]) \
+                or failing(match, ("dig", i)):
             continue
         g = best_goal(dist, dig_goals(world, i))
         if g:
@@ -115,7 +116,8 @@ def _simple(match, d, b, seconds, what):
 def _dig(match, d, i):
     world = match.world
     order = match.digs.get(i)
-    if order is None or (order["claimed"] and order["claimed"] != d.id):
+    if order is None or (order["claimed"] and order["claimed"] != d.id
+                         and claim_live(match, order["claimed"])):
         return
     order["claimed"] = d.id
     try:
