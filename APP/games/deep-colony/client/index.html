@@ -53,6 +53,8 @@
     #buildmenu button.t { font-size: 0.75rem; padding: 3px 6px; }
     #buildmenu .cost { display: block; color: var(--dc-muted); font-size: 0.68rem; }
     #buildinfo { font-size: 0.72rem; color: var(--dc-muted); margin-top: 4px; }
+    .zoombar { margin-bottom: 4px; font-size: 0.8rem; color: var(--dc-muted); }
+    .zoombar button { padding: 0 8px; }
     #canvasbox { overflow: auto; height: 680px; background: #05070a; border: 1px solid var(--dc-line); border-radius: 6px; }
     #map { display: block; cursor: crosshair; }
     #side { display: flex; flex-direction: column; gap: 8px; max-height: 700px; overflow-y: auto; font-size: 0.8rem; }
@@ -135,6 +137,7 @@
           <div id="overlays"></div>
         </div>
         <div>
+          <div class="zoombar"><button id="zoomOut" title="Zoom out (Ctrl+wheel)">&minus;</button> <span id="zoomLabel">16px</span> <button id="zoomIn" title="Zoom in (Ctrl+wheel)">+</button></div>
           <div id="canvasbox"><canvas id="map" width="100" height="100"></canvas></div>
           <div id="toolhint"></div>
         </div>

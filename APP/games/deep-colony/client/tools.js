@@ -9,7 +9,6 @@
  */
 (() => {
   const DC = (window.DC = window.DC || {});
-  const TILE = 16;
   const AREA = ["dig", "cancel", "deconstruct", "priority"];
   const TOOL_COLORS = { dig: "#ffd54f", cancel: "#ffffff", deconstruct: "#ff5252", priority: "#4fc3f7", inspect: "#ffffff" };
   const state = { tool: "inspect", building: null, prio: 5 };
@@ -75,7 +74,7 @@
   }
 
   function cellAt(ev) {
-    const g = DC.grid, r = canvas.getBoundingClientRect();
+    const g = DC.grid, r = canvas.getBoundingClientRect(), TILE = DC.render.tile();
     if (!g.w) return null;
     const x = Math.floor((ev.clientX - r.left) * (canvas.width / r.width) / TILE);
     const y = Math.floor((ev.clientY - r.top) * (canvas.height / r.height) / TILE);

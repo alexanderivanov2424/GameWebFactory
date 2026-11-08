@@ -1,5 +1,5 @@
 /*
- * Canvas drawing (TILE = 16 px per cell). Needs grid.js; reads DC.lobby / DC.rt (set by game.js),
+ * Canvas drawing (TILE = current zoom, 10-24 px per cell, default 16). Needs grid.js; reads DC.lobby / DC.rt (set by game.js),
  * DC.view {overlay, hover, drag} and DC.tools (preview) from tools.js.
  * The static cell layer is redrawn into an offscreen canvas only when the grid rows or the
  * overlay change; every frame blits it and draws buildings, orders (with non-default priority numbers), items, colonists, cursors.
@@ -7,7 +7,9 @@
  */
 (() => {
   const DC = (window.DC = window.DC || {});
-  const TILE = 16;
+  const ZOOMS = [10, 13, 16, 20, 24];
+  let TILE = 16;
+  try { const z = Number(sessionStorage.getItem("dc-zoom")); if (ZOOMS.includes(z)) TILE = z; } catch (e) { /* no storage */ }
   const OVERLAYS = ["none", "gas", "temp", "germ", "decor", "power", "plumbing"];
   const CAT_COLORS = { base: "#8a7f6a", oxygen: "#4cc6d8", power: "#e0b030", food: "#8cc152",
     plumbing: "#4a8fe0", climate: "#e8734a", decor: "#c47ad8" };
@@ -193,7 +195,7 @@
         const y0 = py + dy * TILE;
         ctx.moveTo(px + 3, y0); ctx.lineTo(px + 3, y0 + TILE);
         ctx.moveTo(px + TILE - 3, y0); ctx.lineTo(px + TILE - 3, y0 + TILE);
-        for (const r of [3, 8, 13]) { ctx.moveTo(px + 3, y0 + r); ctx.lineTo(px + TILE - 3, y0 + r); }
+        for (const r of [3, TILE / 2, TILE - 3]) { ctx.moveTo(px + 3, y0 + r); ctx.lineTo(px + TILE - 3, y0 + r); }
       }
       ctx.stroke();
     } else if (d.layer === "pipe" || d.layer === "wire") {
@@ -339,7 +341,7 @@
     if (!DC.grid.el || !DC.grid.el[0]) return;
     if (canvas.width !== w * TILE) canvas.width = w * TILE;
     if (canvas.height !== h * TILE) canvas.height = h * TILE;
-    const key = `${DC.grid.resets}|${DC.view.overlay}|${w}x${h}`;
+    const key = `${TILE}|${DC.grid.resets}|${DC.view.overlay}|${w}x${h}`;
     if (key !== baseKey) { baseKey = key; drawBase(game, true); }
     else if (DC.grid.dirty.size) drawBase(game, false);
     ctx.drawImage(base, 0, 0);
@@ -362,6 +364,35 @@
     drawPreview(game);
   }
 
-  DC.render = { TILE, OVERLAYS, catColor, abbrev, frame };
+  // Zoom: tile size from ZOOMS; `anchor` = client point whose cell stays under the mouse (wheel zoom).
+  function setZoom(z, anchor) {
+    if (!ZOOMS.includes(z) || z === TILE) return;
+    const box = canvas.parentElement, r = canvas.getBoundingClientRect(), br = box.getBoundingClientRect();
+    const ax = anchor ? anchor.x - br.left : box.clientWidth / 2, ay = anchor ? anchor.y - br.top : box.clientHeight / 2;
+    const fx = (ax + box.scrollLeft) / TILE, fy = (ay + box.scrollTop) / TILE;
+    TILE = z;
+    try { sessionStorage.setItem("dc-zoom", String(z)); } catch (e) { /* no storage */ }
+    const { w, h } = DC.grid;
+    if (w) { canvas.width = w * TILE; canvas.height = h * TILE; }
+    box.scrollLeft = fx * TILE - ax; box.scrollTop = fy * TILE - ay;
+    baseKey = ""; // full redraw of the cached cell layer
+    const lab = document.getElementById("zoomLabel");
+    if (lab) lab.textContent = `${TILE}px`;
+  }
+  const stepZoom = (dir, anchor) => {
+    const i = ZOOMS.indexOf(TILE) + dir;
+    if (i >= 0 && i < ZOOMS.length) setZoom(ZOOMS[i], anchor);
+  };
+  canvas.addEventListener("wheel", (ev) => {
+    if (!ev.ctrlKey) return;
+    ev.preventDefault();
+    stepZoom(ev.deltaY < 0 ? 1 : -1, { x: ev.clientX, y: ev.clientY });
+  }, { passive: false });
+  const zin = document.getElementById("zoomIn"), zout = document.getElementById("zoomOut"), zlab = document.getElementById("zoomLabel");
+  if (zin) zin.onclick = () => stepZoom(1);
+  if (zout) zout.onclick = () => stepZoom(-1);
+  if (zlab) zlab.textContent = `${TILE}px`;
+
+  DC.render = { get TILE() { return TILE; }, tile: () => TILE, setZoom, OVERLAYS, catColor, abbrev, frame };
   AppRealtime.loop(frame);
 })();
