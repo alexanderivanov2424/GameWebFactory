@@ -12,6 +12,67 @@ from .grid import World
 ROOM_W, ROOM_H = 14, 6
 
 
+NEAR = 12  # guaranteed start resources lie within this many cells (Chebyshev) of the room
+
+
+def _stamp_start(world, put, rng, cx, cy):
+    """Stamp guaranteed start resources and two sealed air caves around the room (after random blobs)."""
+    w, h = world.w, world.h
+    keep = (cx - 1, cy - 1, cx + ROOM_W, cy + ROOM_H + 1)  # room, walls and floor row: never touched
+    taken = []
+
+    def fits(x0, y0, bw, bh):
+        if x0 < 2 or y0 < 2 or x0 + bw > w - 2 or y0 + bh > h - 2:
+            return False
+        if x0 < cx - NEAR or x0 + bw - 1 > cx + ROOM_W - 1 + NEAR:
+            return False
+        if y0 < cy - NEAR or y0 + bh - 1 > cy + ROOM_H - 1 + NEAR:
+            return False
+        for (a, b, c, d) in [keep] + taken:
+            if x0 <= c and x0 + bw - 1 >= a and y0 <= d and y0 + bh - 1 >= b:
+                return False
+        return True
+
+    def spot(bw, bh):
+        for _ in range(300):
+            x0 = rng.randint(cx - NEAR, cx + ROOM_W + NEAR)
+            y0 = rng.randint(cy - NEAR, cy + ROOM_H + NEAR)
+            if fits(x0, y0, bw, bh):
+                break
+        else:
+            cands = [(x, y) for y in range(2, h - 2) for x in range(2, w - 2) if fits(x, y, bw, bh)]
+            if not cands:
+                return None
+            x0, y0 = cands[rng.randrange(len(cands))]
+        taken.append((x0, y0, x0 + bw - 1, y0 + bh - 1))
+        return x0, y0
+
+    def fill(x0, y0, bw, bh, el):
+        for y in range(y0, y0 + bh):
+            for x in range(x0, x0 + bw):
+                put(y * w + x, el)
+
+    # sealed oxygen caves just outside the room's side walls (a 1-cell wall between)
+    for side in (-1, 1):
+        x0 = cx - 1 - 4 if side < 0 else cx + ROOM_W + 1
+        y0 = cy + rng.randint(0, 2)
+        fill(x0 - 1, y0 - 1, 6, 5, "granite")
+        fill(x0, y0, 4, 3, "oxygen")
+        taken.append((x0 - 1, y0 - 1, x0 + 4, y0 + 3))
+        wx = cx - 1 if side < 0 else cx + ROOM_W
+        fill(wx, y0 - 1, 1, 5, "sandstone")
+    # compact 3x3 patches of rock-embedded resources
+    for el in ("algae", "copper_ore", "sand", "dirt"):
+        sp = spot(3, 3)
+        if sp:
+            fill(sp[0], sp[1], 3, 3, el)
+    # water pool: 3x2 water inside a solid rock shell so it stays put
+    sp = spot(5, 4)
+    if sp:
+        fill(sp[0], sp[1], 5, 4, "granite")
+        fill(sp[0] + 1, sp[1] + 1, 3, 2, "water")
+
+
 def generate(w, h, rng):
     world = World(w, h, "granite")
 
@@ -93,6 +154,7 @@ def generate(w, h, rng):
     for y in range(cy, cy + ROOM_H):
         for x in range(cx, cx + ROOM_W):
             world.set_cell(y * w + x, "oxygen", 1.8, 22.0)
+    _stamp_start(world, put, rng, cx, cy)
     for x in range(cx, cx + ROOM_W):
         world.set_cell((cy + ROOM_H) * w + x, "sandstone", ELEMENTS["sandstone"]["defaultMass"], 22.0)
     return world, (cx + 5, cy + ROOM_H - 3)

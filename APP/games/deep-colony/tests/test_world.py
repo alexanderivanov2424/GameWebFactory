@@ -142,6 +142,27 @@ class MapgenTests(unittest.TestCase):
         for x in range(px, px + 3):
             self.assertTrue(world.is_solid(world.idx(x, py + 3)))
 
+    def test_start_resources_guaranteed(self):
+        R = mapgen.ROOM_W, mapgen.ROOM_H
+        for size, (w, h) in match_mod.MAP_SIZES.items():
+            for seed in range(6):
+                world, (px, py) = mapgen.generate(w, h, random.Random(seed))
+                cx, cy = w // 2 - R[0] // 2, h // 2 - R[1] // 2
+                counts = {}
+                for y in range(h):
+                    for x in range(w):
+                        el = world.element_id(y * w + x)
+                        near = cx - 12 <= x <= cx + R[0] + 11 and cy - 12 <= y <= cy + R[1] + 12
+                        if near:
+                            counts[el] = counts.get(el, 0) + 1
+                for el, n in (("algae", 6), ("copper_ore", 6), ("sand", 6), ("dirt", 6), ("water", 4)):
+                    self.assertGreaterEqual(counts.get(el, 0), n, (size, seed, el))
+                for y in range(py, py + 3):
+                    for x in range(px, px + 3):
+                        self.assertFalse(world.is_solid(y * w + x))
+                for x in range(px, px + 3):
+                    self.assertTrue(world.is_solid((py + 3) * w + x))
+
     def test_deterministic(self):
         a, pa = mapgen.generate(60, 40, random.Random(9))
         b, pb = mapgen.generate(60, 40, random.Random(9))
