@@ -9,7 +9,7 @@ are public ids ("p1"). Modules, one topic each:
     germs.py      germ die-off, off-gassing, and the decor field
     buildings.py  Building (sites and finished buildings), placement rules, cell layers
     items.py      loose debris piles
-    networks.py   power (wires) and liquid pipe networks
+    networks.py   power (wires); liquid and gas pipes, packet by packet per segment
     machines.py   behaviour of each building kind (power, oxygen, food, plumbing, heat...)
     nav.py        where colonists can walk/climb, distance maps, paths
     dupes.py      colonists: spawning, needs, health, death, movement along a path
@@ -18,7 +18,9 @@ are public ids ("p1"). Modules, one topic each:
     chore_survival.py  air, food, toilet/floor, washing chores
     chore_jobs.py      operate, build, dig, deconstruct, harvest, empty chores
     chore_haul.py      supply (materials to sites/machines) and haul (debris to storage) chores
-    orders.py     player orders (dig, build, deconstruct, cancel, priority, toggle)
+    research.py   tech tree (research/*.json) unlocking buildings; Research Station behaviour
+    schedule.py   three shared 24-hour schedules (work / downtime / sleep)
+    orders.py     player orders (dig, build, sweep, deconstruct, cancel, priority, toggle, filter)
     view.py       public/private state for clients (the wire contract)
     match.py      Match: one colony; clock, pause/speed, step order, log
 """

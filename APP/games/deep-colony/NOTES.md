@@ -23,8 +23,12 @@ Tests: `tests/` (`python3 -I tools/run_tests.py deep-colony`; one file alone:
   `chore_common.py`, `chore_survival.py` (breathe, eat, toilet, wash), `chore_jobs.py` (operate,
   build, dig, deconstruct, harvest, empty) and `chore_haul.py` (supply, haul). Each chore is a
   generator with `try/finally`, so closing it releases reservations and drops a carried load.
-- Machines: `networks.py` (wire/pipe components rebuilt on `buildings.version`, power split,
-  pooled pipe buffers), `machines.py` (`KINDS` per building kind + the chore API).
+- Machines: `networks.py` (wire components and power split; liquid/gas pipes as one packet per
+  segment that steps toward the nearest intake port every 0.2 s; rebuilt on `buildings.version`),
+  `machines.py` (`KINDS` per building kind + the chore API; outputs that can't be placed wait in
+  `b.state["backlog"]` and the machine shows "Overpressure").
+- Research: `research.py` (+ `research/*.json`); schedules and sleep: `schedule.py`,
+  `chore_survival.py` (sleep chore, beds claimed per colonist), `chores.py` (block gating).
 - `client/`: `game.js` (lobby wiring, layout), `grid.js` (row decoding), `render.js` (canvas),
   `tools.js` (mouse/keys → orders and input), `panels.js` (DOM side panels).
 
@@ -72,11 +76,13 @@ drop chores aimed at it and release their reservations (`Item.reserved`, `Buildi
 
 **Networks (`networks.py`)**: `Networks(match)`; `.step(dt)` rebuilds components when
 `buildings.version` changed, then distributes power and sets `b.powered` on every power user;
-`.pipe_take(b, port, ids, kg) -> (el, kg, temp, germs)` (`port` = "pipeIn"/"pipeOut", `ids`
-None = any liquid), `.pipe_put(b, port, el, kg, temp, germs) -> kg accepted`,
-`.pipe_has(b, port, el) -> kg`, `.pipe_room(b, port) -> kg`, `.needs_power(b) -> bool`
+`.pipe_take(b, port, ids, kg) -> (el, kg, temp, germs)` (`port` = pipeIn/pipeOut/gasIn/gasOut,
+`ids` None = any element; works on the one segment at that port), `.pipe_put(b, port, el, kg,
+temp, germs) -> kg accepted`, `.pipe_has(b, port, el) -> kg`, `.pipe_room(b, port, el=None) -> kg`
+(0 if another element sits there), `.needs_power(b) -> bool`
 (the network at b's power port wants more: unpowered active users or batteries not full),
-`.power_summary() -> {nid: {"gen", "use", "stored", "cap"}}`, `.pipe_summary() -> {nid: {el: kg}}`.
+`.power_summary() -> {nid: {"gen", "use", "stored", "cap"}}`, `.pipe_summary()` /
+`.gas_summary() -> {"<cell index>": {"el", "kg"}}` per non-empty segment.
 Machines mark `b.state["active"]` (wants power this step) and `b.state["producing"]` (generator on).
 
 **machines.py** (used by chores): `step(match, dt)`; `wants_operator(match, b)`;
@@ -92,8 +98,11 @@ ration box: food only).
 ## Pitfalls seen here
 - Two pipe ports of one building must not be 4-adjacent: pipes on touching cells join into one
   network, mixing input and output (lavatory/wash basin are 2x2 with diagonal ports).
-- A pipe network holds 10 kg per segment, so a machine needing more per use than its pipe holds
-  never starts (keep per-use amounts small or the pipe long).
+- A pipe segment holds one element, 10 kg (liquid) or 1 kg (gas): a machine needing more per use
+  than one segment holds never starts, and a wrong element at an intake blocks it.
+- A removed pipe segment releases its packet into the world at the next network sync.
+- The hydrogen generator burns its hydrogen (the one place mass leaves the world on purpose,
+  besides eating, breathing and digging's 50% yield).
 - Power reacts a step late (`active`/`producing` are set by machines after the network step).
 - Colonists build within 1 cell (Chebyshev) and dig up to 2 above: build ladders up from a floor.
 - Terrain changes outside buildings/digs (fluids freezing, tiles finishing) aren't in the nav

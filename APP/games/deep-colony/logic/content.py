@@ -22,7 +22,7 @@ Building file:
     solid (blocks gas/liquid, can be stood on), insulated, ladder, door (solid but walkable),
     floor (bottom row needs solid ground or tiles under it), buildable (default true),
     deconstructable (default true), operated (a colonist must work at it),
-    toilet (colonists relieve themselves here),
+    toilet (colonists relieve themselves here), bed (colonists sleep here),
     decor {"value", "radius"}, power {"use": W} | {"gen": W} | {"capacity": J},
     powerPort / pipeIn / pipeOut / gasIn / gasOut [dx, dy] (cell offsets from the top-left of the
     unrotated footprint; Building.port_cell applies the rotation),

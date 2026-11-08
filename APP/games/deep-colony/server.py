@@ -7,9 +7,13 @@ priority, machine on/off) that go into one shared queue, and every player sees e
 orders, cursor and drag box live, in that player's colour. Any player can pause the game or
 set its speed (1x, 2x, 3x), so the colony can be planned together paused or live. The world
 simulates gases (oxygen, CO2, polluted oxygen, hydrogen, steam), liquids (water, polluted
-water), heat (conduction, freezing, boiling), germs and decor; buildings cover oxygen, power
-(wires, generators, batteries), food, plumbing (pipes, pumps, toilets, sinks), heating and
-decor. Endless: the game ends when every colonist has died or the host ends it.
+water), heat (conduction, freezing, boiling), germs and decor; gas and liquid are placed by pressure, so no mass is lost. Buildings cover oxygen, power
+(wires, generators, batteries), food, plumbing and ventilation (liquid/gas pipes that carry one
+packet per segment, pumps, vents, toilets, sinks), heating, decor, cots and research; most can be
+rotated. A shared tech tree unlocks buildings (any player picks the research). Three shared
+schedules split each cycle into work, downtime and sleep hours. Debris is hauled only when swept;
+storage can filter what it accepts, and stores keep temperature (mass-averaged) and germs (on the
+structure, passed to whatever comes out). Endless: the game ends when every colonist has died or the host ends it.
 Rules and numbers: logic/ (see logic/__init__.py) and the JSON in elements/ and buildings/.
 
 Player options:  none
