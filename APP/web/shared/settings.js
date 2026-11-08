@@ -25,6 +25,10 @@
  * (debounced), and logging in switches to the name saved there (a new account takes the
  * current one).
  *
+ * Feedback tab: a text box sent to the server (server/feedback.py), which saves it as a text file
+ * per game and player. It shows the display name and the current game (from the page URL, or
+ * "site" off a game page) it will be filed under.
+ *
  * To add a setting, add a field to TABS. To add a tab, add an entry to TABS: either `fields`
  * (text inputs) or `render(panel)` (builds its own content).
  */
@@ -55,6 +59,11 @@
       id: "account",
       label: "Account",
       render: (panel) => renderAccount(panel),
+    },
+    {
+      id: "feedback",
+      label: "Feedback",
+      render: (panel) => renderFeedback(panel),
     },
   ];
 
@@ -134,6 +143,17 @@
     },
   };
 
+  function socketUrl(path) {
+    const protocol = location.protocol === "https:" ? "wss:" : "ws:";
+    return `${protocol}//${location.host}${path}?client=${encodeURIComponent(clientId)}`;
+  }
+
+  function make(tag, props = {}, text) {
+    const node = Object.assign(document.createElement(tag), props);
+    if (text !== undefined) node.textContent = text;
+    return node;
+  }
+
   // --- Account -------------------------------------------------------------
   // The server decides who this tab is (guest or account); this only mirrors it.
 
@@ -173,11 +193,9 @@
   }
 
   function connectAccount() {
-    const protocol = location.protocol === "https:" ? "wss:" : "ws:";
-    const url = `${protocol}//${location.host}/ws/account?client=${encodeURIComponent(clientId)}`;
     let socket;
     try {
-      socket = new WebSocket(url);
+      socket = new WebSocket(socketUrl("/ws/account"));
     } catch {
       return;
     }
@@ -240,12 +258,6 @@
   connectAccount();
 
   function renderAccount(panel) {
-    const make = (tag, props = {}, text) => {
-      const node = Object.assign(document.createElement(tag), props);
-      if (text !== undefined) node.textContent = text;
-      return node;
-    };
-
     const status = make("p", { className: "status" });
 
     const form = make("form", { className: "account-form" });
@@ -314,6 +326,73 @@
     panel.append(status, form, logoutBtn, error, hint);
   }
 
+  // --- Feedback ----------------------------------------------------------
+  // One short-lived /ws/feedback socket per submission (server/feedback.py). The server turtles
+  // the site on text over its limit, so the size is checked here first.
+
+  const FEEDBACK_MAX_BYTES = 50 * 1024; // server/feedback.py MAX_BYTES
+  const [, section, gameId] = location.pathname.split("/"); // game pages: /games/<id>/
+  const onGamePage = section === "games" && !!gameId;
+  const feedbackGame = onGamePage ? gameId : "site";
+
+  function sendFeedback(text, done) {
+    let socket;
+    let answer = null;
+    try {
+      socket = new WebSocket(socketUrl("/ws/feedback"));
+    } catch {
+      done("Couldn't reach the server.");
+      return;
+    }
+    socket.addEventListener("open", () => {
+      socket.send(JSON.stringify({ type: "feedback", game: feedbackGame, name: values.username, text }));
+    });
+    socket.addEventListener("message", (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        answer = data.ok ? "" : String(data.message || "Feedback refused.");
+      } catch {}
+    });
+    socket.addEventListener("close", () => done(answer ?? "Couldn't reach the server."));
+  }
+
+  function renderFeedback(panel) {
+    const from = make("p", { className: "status" });
+    const text = make("textarea", { className: "feedback-text", spellcheck: true });
+    const submit = make("button", { type: "button", className: "primary" }, "Submit");
+    const result = make("p", { className: "hint" });
+
+    function drawFrom() {
+      const game = onGamePage ? `${document.title} (${feedbackGame})` : "none (site-wide)";
+      from.replaceChildren("Name: ", make("strong", {}, values.username), " \u00b7 Game: ", make("strong", {}, game));
+    }
+    AppSettings.onChange((key) => key === "username" && drawFrom());
+    drawFrom();
+
+    function show(message, isError) {
+      result.textContent = message;
+      result.className = isError ? "error" : "hint";
+    }
+
+    submit.addEventListener("click", () => {
+      const body = text.value.trim();
+      if (!body) return show("Write something first.", true);
+      if (new TextEncoder().encode(body).length > FEEDBACK_MAX_BYTES) {
+        return show("That's too long (50 KB at most).", true);
+      }
+      submit.disabled = true;
+      show("Sending...");
+      sendFeedback(body, (error) => {
+        submit.disabled = false;
+        if (error) return show(error, true);
+        text.value = "";
+        show("Thanks! Your feedback was sent.");
+      });
+    });
+
+    panel.append(from, text, submit, result);
+  }
+
   // --- UI ------------------------------------------------------------------
 
   const STYLE = `
@@ -377,6 +456,11 @@
     button:disabled { opacity: 0.55; cursor: default; }
     .error { color: #b00020; margin: 0 0 16px; }
     .disclaimer { max-width: 480px; }
+    .feedback-text {
+      display: block; width: 100%; height: 45vh; margin-bottom: 12px; padding: 8px 10px;
+      font: inherit; resize: vertical; border: 1px solid #c8c8d4; border-radius: 6px;
+    }
+    .feedback-text:focus { outline: 2px solid #4a5cff; outline-offset: -1px; }
     .hint.warning { color: #c62828; font-weight: 600; }
 
     @media (max-width: 600px) {
@@ -436,6 +520,14 @@
       document.addEventListener("keydown", (e) => {
         if (e.key === "Escape" && !this.backdrop.hidden) this.close();
       });
+      // Keys typed in the dialog stay in it: game pages listen on document/window, and the shadow
+      // root hides that the key came from a text box (spaces and arrows would be swallowed).
+      ["keydown", "keyup", "keypress"].forEach((type) =>
+        this.backdrop.addEventListener(type, (e) => {
+          if (type === "keydown" && e.key === "Escape") this.close();
+          e.stopPropagation();
+        })
+      );
     }
 
     buildTabs(tabList, panelContainer) {
