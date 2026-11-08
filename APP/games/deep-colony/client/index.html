@@ -1,11 +1,16 @@
 <!DOCTYPE html>
+<!--
+  Deep Colony page: lobby section (players, settings, rules) and game section (top bar, left
+  toolbar, canvas in a scrollable box, right panel). Scripts: shared components, gamekit, then
+  grid.js (row decoding), render.js (canvas), tools.js (mouse/keys -> orders), panels.js (DOM
+  panels), game.js (lobby wiring). All share the small global window.DC.
+-->
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Deep Colony</title>
 
-  <!-- Shared components: keep these, in this order. theme.js isn't deferred (no unstyled flash). -->
   <script src="/shared/theme.js"></script>
   <script src="/shared/home.js" defer></script>
   <script src="/shared/settings.js" defer></script>
@@ -14,14 +19,54 @@
   <script src="/gamekit/room.js" defer></script>
   <script src="/gamekit/lobby.js" defer></script>
   <script src="/gamekit/lobby-ui.js" defer></script>
+  <script src="/gamekit/realtime.js" defer></script>
+  <script src="grid.js" defer></script>
+  <script src="render.js" defer></script>
+  <script src="tools.js" defer></script>
+  <script src="panels.js" defer></script>
   <script src="game.js" defer></script>
 
   <style>
-    /* Base styles (body, main with 72px top padding, .card, .row, buttons, inputs) come from
-       /shared/theme.js; player list and error banner from /gamekit/lobby-ui.js.
-       Restyle with variables, e.g. :root { --gwf-bg: #efe8da; --gwf-accent: #5d6873; } */
-    :root { --gwf-main-width: 640px; }
-    /* TODO game styles */
+    :root { --gwf-main-width: 1500px; }
+    #game { --dc-bg: #14181f; --dc-panel: #1d232d; --dc-line: #333c4a; --dc-text: #dde3ec;
+            --dc-muted: #8d98a8; --dc-accent: #4aa3ff; color: var(--dc-text); }
+    #game .layout { display: grid; grid-template-columns: 170px minmax(0, 1fr) 300px; gap: 8px; align-items: start; }
+    #game .box { background: var(--dc-panel); border: 1px solid var(--dc-line); border-radius: 6px; padding: 8px; }
+    #game .muted { color: var(--dc-muted); }
+    #topbar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-bottom: 8px; }
+    #topbar .cycle { font-weight: bold; }
+    #daybar { width: 140px; height: 10px; background: #0d1015; border-radius: 5px; overflow: hidden; border: 1px solid var(--dc-line); }
+    #daybar > div { height: 100%; background: #ffd54f; width: 0; }
+    #res { display: flex; flex-wrap: wrap; gap: 4px 10px; margin-left: auto; font-size: 0.85rem; }
+    #res .r { display: inline-flex; align-items: center; gap: 4px; }
+    .sw { display: inline-block; width: 10px; height: 10px; border-radius: 2px; border: 1px solid rgba(255,255,255,0.3); }
+    #game button.t { background: #2b3342; color: var(--dc-text); border: 1px solid var(--dc-line); border-radius: 4px;
+                     padding: 4px 8px; font-size: 0.8rem; cursor: pointer; }
+    #game button.t:hover:not(:disabled) { background: #3a4558; }
+    #game button.t.on { background: var(--dc-accent); color: #fff; border-color: #fff; }
+    #toolbar button.t { display: block; width: 100%; text-align: left; margin-bottom: 4px; }
+    #toolbar h4, #side h4 { margin: 8px 0 4px; font-size: 0.75rem; text-transform: uppercase; color: var(--dc-muted); }
+    #prios { display: flex; gap: 2px; }
+    #prios button.t { padding: 3px 0; width: 100%; margin: 0; text-align: center; }
+    #buildmenu details { margin-bottom: 2px; }
+    #buildmenu summary { cursor: pointer; font-size: 0.8rem; color: var(--dc-muted); text-transform: capitalize; }
+    #buildmenu button.t { font-size: 0.75rem; padding: 3px 6px; }
+    #buildmenu .cost { display: block; color: var(--dc-muted); font-size: 0.68rem; }
+    #buildinfo { font-size: 0.72rem; color: var(--dc-muted); margin-top: 4px; }
+    #canvasbox { overflow: auto; height: 680px; background: #05070a; border: 1px solid var(--dc-line); border-radius: 6px; }
+    #map { display: block; cursor: crosshair; }
+    #side { display: flex; flex-direction: column; gap: 8px; max-height: 700px; overflow-y: auto; font-size: 0.8rem; }
+    #side h4 { margin-top: 0; }
+    .dupe { margin-bottom: 6px; padding-bottom: 6px; border-bottom: 1px solid var(--dc-line); }
+    .dupe .nm { font-weight: bold; }
+    .dupe .sick { color: #ff6b6b; font-weight: bold; }
+    .bars { display: grid; grid-template-columns: repeat(5, 1fr); gap: 3px; margin: 3px 0; }
+    .bar { height: 7px; background: #0d1015; border-radius: 3px; overflow: hidden; }
+    .bar > div { height: 100%; }
+    #hover div { margin: 1px 0; }
+    #log div { margin: 2px 0; color: var(--dc-muted); }
+    #log div:first-child { color: var(--dc-text); }
+    #result { padding: 8px; margin-bottom: 8px; border-radius: 6px; background: #5a1f24; color: #fff; }
   </style>
 </head>
 <body>
@@ -43,19 +88,49 @@
         <div id="start"></div>
         <p id="spectators" class="muted"></p>
       </div>
-      <!-- TODO player options (e.g. a color picker) -->
       <div class="card">
         <h2>Game settings</h2>
         <div id="settings"></div>
-        <!-- TODO a short rules paragraph players read before starting -->
+        <p>Run a colony together. Colonists dig, haul, build and look after themselves; you give the orders
+          (dig, build, deconstruct, priority) and everyone sees everyone's cursor and orders live.
+          Any player can pause or change the speed. Keep your colonists breathing, fed and clean. Hotkeys:
+          Space pause, 1/2/3 speed, G dig, C cancel, X deconstruct, P priority, I inspect, Esc/right-click cancel.</p>
       </div>
     </section>
 
     <section id="game" hidden>
       <div id="result" hidden></div>
-      <div id="board"></div>
-      <!-- TODO game UI -->
-      <button id="back" hidden>Back to lobby</button>
+      <div id="topbar" class="box">
+        <span class="cycle" id="cycle">Cycle 1</span>
+        <div id="daybar"><div></div></div>
+        <button id="pause" class="t">Pause</button>
+        <span id="speeds"></span>
+        <div id="res"></div>
+      </div>
+      <div class="layout">
+        <div id="toolbar" class="box">
+          <h4 style="margin-top:0">Tools</h4>
+          <div id="tools"></div>
+          <h4>Priority</h4>
+          <div id="prios"></div>
+          <h4>Build</h4>
+          <div id="buildmenu"></div>
+          <div id="buildinfo"></div>
+          <h4>Overlay</h4>
+          <div id="overlays"></div>
+        </div>
+        <div id="canvasbox"><canvas id="map" width="100" height="100"></canvas></div>
+        <div id="side">
+          <div class="box"><h4>Players</h4><div id="plist"></div></div>
+          <div class="box"><h4>Colonists</h4><div id="dupes"></div></div>
+          <div class="box"><h4>Hover</h4><div id="hover" class="muted">Point at the map.</div></div>
+          <div class="box"><h4>Colony log</h4><div id="log"></div></div>
+          <div class="row">
+            <button id="end" class="red" hidden>End colony</button>
+            <button id="back" hidden>Back to lobby</button>
+          </div>
+        </div>
+      </div>
     </section>
   </main>
 </body>
