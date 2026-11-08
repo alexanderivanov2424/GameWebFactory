@@ -11,5 +11,6 @@
   "defaultMass": 900,
   "decor": -10,
   "meltAt": 1,
-  "meltTo": "water"
+  "meltTo": "water",
+  "meltLatent": 35
 }

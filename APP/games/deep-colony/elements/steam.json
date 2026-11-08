@@ -7,5 +7,6 @@
   "density": 2,
   "defaultMass": 1.0,
   "condenseAt": 95,
-  "condenseTo": "water"
+  "condenseTo": "water",
+  "condenseLatent": 200
 }

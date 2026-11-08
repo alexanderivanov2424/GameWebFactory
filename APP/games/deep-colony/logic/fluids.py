@@ -5,7 +5,9 @@
 Gas: same gas evens out with its neighbours, spills into vacuum, a denser gas above a lighter one
 swaps down, a gas with over twice the mass swaps sideways into a different gas. Liquid: falls
 through gas, pours into liquid below (cap LIQUID_CAP), spreads sideways (piles under
-SPREAD_MIN kg stay put). Different liquids never mix. Each cell swaps at most once per step
+SPREAD_MIN kg stay put); a liquid cell over LIQUID_CAP (pressurised) also pushes up. Nothing
+bigger than rounding is deleted: gas pushed out by liquid goes through world.release.
+Different liquids never mix. Each cell swaps at most once per step
 (`moved` flags) and the scan direction alternates every step so nothing drifts.
 """
 
@@ -55,6 +57,7 @@ def _move_liquid(world, i, j, dm):
     mass, temp, germs, el = world.mass, world.temp, world.germs, world.el
     share = dm / mass[i]
     g = germs[i] * share
+    pushed = None
     if el[j] == el[i]:
         total = mass[j] + dm
         temp[j] = (temp[j] * mass[j] + temp[i] * dm) / total
@@ -64,16 +67,20 @@ def _move_liquid(world, i, j, dm):
         old_gas = (content.ELEMENT_IDS[el[j]], mass[j], temp[j], germs[j]) if el[j] != VACUUM else None
         el[j] = el[i]
         mass[j], temp[j], germs[j] = dm, temp[i], g
+        world.latent[j] = 0.0
         if old_gas:
-            x, y = j % world.w, j // world.w
-            world.emit(x, y - 1, old_gas[0], old_gas[1], old_gas[2], old_gas[3])
+            pushed = old_gas
     mass[i] -= dm
     germs[i] -= g
     if mass[i] < LIQUID_MIN:
         el[i], mass[i], germs[i] = VACUUM, 0.0, 0.0
+    if pushed:  # the displaced gas is never deleted: placed by pressure or kept pending
+        world.release(j % world.w, j // world.w, *pushed)
 
 
 def step(world, dt):
+    if world.pending:
+        world.drain_pending()
     w, h = world.w, world.h
     el, mass, tile = world.el, world.mass, world.tile
     nbrs = world.nbrs
@@ -154,6 +161,12 @@ def _liquid_cell(world, i, e, x, y, moved, w, h):
                 _move_liquid(world, i, j, dm)
                 moved[j] = 1
         elif ej == e:
+            diff = mass[i] - mass[j]
+            if diff > 1.0:
+                _move_liquid(world, i, j, diff * LIQUID_SHARE)
+    if y > 0 and mass[i] > LIQUID_CAP and el[i] == e:
+        j = i - w
+        if not tile[j] and el[j] == e and not moved[j]:
             diff = mass[i] - mass[j]
             if diff > 1.0:
                 _move_liquid(world, i, j, diff * LIQUID_SHARE)

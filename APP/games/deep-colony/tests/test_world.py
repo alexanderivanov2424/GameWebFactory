@@ -11,6 +11,7 @@ heat = import_module("games.deep-colony.logic.heat")
 germs = import_module("games.deep-colony.logic.germs")
 mapgen = import_module("games.deep-colony.logic.mapgen")
 grid = import_module("games.deep-colony.logic.grid")
+content = import_module("games.deep-colony.logic.content")
 match_mod = import_module("games.deep-colony.logic.match")
 items_mod = import_module("games.deep-colony.logic.items")
 
@@ -71,6 +72,65 @@ class FluidTests(unittest.TestCase):
         self.assertTrue(w.is_vacuum(1))
 
 
+class PressureTests(unittest.TestCase):
+    def test_emit_into_full_region_raises_pressure(self):
+        w = World(3, 1, "oxygen")
+        for i in range(3):
+            w.set_cell(i, "oxygen", 1.0, 20)
+        got = w.emit(0, 0, "oxygen", 2.0, 20)
+        self.assertEqual(got, 2.0)
+        self.assertAlmostEqual(total(w, "oxygen"), 5.0)
+        fluids.step(w, 0.5)
+        self.assertAlmostEqual(total(w, "oxygen"), 5.0)
+
+    def test_emit_displaces_another_gas_into_its_own_kind(self):
+        w = World(4, 1, "vacuum")
+        w.set_cell(0, "oxygen", 1.0, 20)
+        w.set_cell(1, "oxygen", 1.0, 20)
+        w.set_cell(2, "carbon_dioxide", 1.0, 20)
+        w.set_cell(3, "carbon_dioxide", 1.0, 20)
+        got = w.emit(0, 0, "hydrogen", 0.5, 20)
+        self.assertEqual(got, 0.5)
+        self.assertAlmostEqual(total(w, "hydrogen"), 0.5)
+        self.assertAlmostEqual(total(w, "oxygen"), 2.0)
+        self.assertAlmostEqual(total(w, "carbon_dioxide"), 2.0)
+
+    def test_emit_into_sealed_other_element_places_nothing(self):
+        w = World(1, 1, "vacuum")
+        w.set_cell(0, "oxygen", 1.0, 20)
+        self.assertEqual(w.emit(0, 0, "hydrogen", 1.0, 20), 0.0)
+
+    def test_liquid_entering_gas_cell_keeps_the_gas(self):
+        w = World(3, 1, "vacuum")
+        w.set_cell(0, "water", 100, 20)
+        w.set_cell(1, "oxygen", 1.5, 20)
+        w.set_cell(2, "oxygen", 1.5, 20)
+        for _ in range(5):
+            fluids.step(w, 0.5)
+        self.assertAlmostEqual(total(w, "oxygen") + sum(p[3] for p in w.pending if p[2] == "oxygen"), 3.0, places=3)
+        self.assertAlmostEqual(total(w, "water"), 100, places=3)
+
+    def test_liquid_emitted_into_gas_pushes_gas_out_without_loss(self):
+        w = World(3, 1, "vacuum")
+        for i in range(3):
+            w.set_cell(i, "oxygen", 1.0, 20)
+        self.assertEqual(w.emit(1, 0, "water", 10, 20), 10)
+        self.assertAlmostEqual(total(w, "oxygen"), 3.0)
+        self.assertAlmostEqual(total(w, "water"), 10)
+
+    def test_release_into_sealed_cell_waits_until_it_opens(self):
+        w = World(2, 1, "vacuum")
+        w.set_cell(0, "oxygen", 1.0, 20)
+        w.set_cell(1, "granite", 100, 20)
+        w.release(0, 0, "hydrogen", 0.7, 20)
+        self.assertEqual(len(w.pending), 1)
+        self.assertAlmostEqual(w.pending[0][3], 0.7)
+        w.dig(1)
+        fluids.step(w, 0.5)
+        self.assertEqual(w.pending, [])
+        self.assertAlmostEqual(total(w, "hydrogen"), 0.7)
+
+
 class HeatTests(unittest.TestCase):
     def test_heat_flows_hot_to_cold(self):
         w = World(2, 1, "oxygen")
@@ -90,12 +150,49 @@ class HeatTests(unittest.TestCase):
             return w.temp[2]
         self.assertLess(run(True) - 20.0, (run(False) - 20.0) / 10)
 
-    def test_water_freezes(self):
+    def test_water_freezes_once_latent_heat_is_paid(self):
+        E = content.ELEMENTS
         w = World(1, 1, "vacuum")
-        w.set_cell(0, "water", 100, -5)
+        w.set_cell(0, "water", 100, E["water"]["freezeAt"] - 5)
+        heat.step(w, 0.5)
+        self.assertEqual(w.element_id(0), "water")
+        self.assertAlmostEqual(w.temp[0], E["water"]["freezeAt"])
+        self.assertLess(w.latent[0], 0)
+        # a lighter cell needs less: pay it all at once with a big deficit
+        w.set_cell(0, "water", 1, E["water"]["freezeAt"] - 5000)
         heat.step(w, 0.5)
         self.assertEqual(w.element_id(0), "ice")
-        self.assertAlmostEqual(w.mass[0], 100)
+        self.assertAlmostEqual(w.mass[0], 1)
+        self.assertLess(w.temp[0], E["water"]["freezeAt"])  # leftover cooling
+
+    def test_water_at_boiling_point_needs_latent_heat(self):
+        E = content.ELEMENTS["water"]
+        w = World(1, 1, "vacuum")
+        w.set_cell(0, "water", 10, E["boilAt"] + 10)
+        heat.step(w, 0.5)
+        self.assertEqual(w.element_id(0), "water")
+        self.assertAlmostEqual(w.temp[0], E["boilAt"])
+        self.assertGreater(w.latent[0], 0)
+        need = E["boilLatent"] * 10
+        w.add_heat(0, need)  # pays the rest
+        heat.step(w, 0.5)
+        self.assertEqual(w.element_id(0), "steam")
+        self.assertAlmostEqual(w.mass[0], 10)
+        self.assertEqual(w.latent[0], 0)
+
+    def test_cooling_below_threshold_returns_buffered_heat(self):
+        E = content.ELEMENTS["water"]
+        w = World(1, 1, "vacuum")
+        w.set_cell(0, "water", 10, E["boilAt"] + 5)
+        heat.step(w, 0.5)
+        buffered = w.latent[0]
+        self.assertGreater(buffered, 0)
+        w.temp[0] = E["boilAt"] - 20
+        heat.step(w, 0.5)
+        self.assertEqual(w.element_id(0), "water")
+        self.assertGreater(w.temp[0], E["boilAt"] - 20)
+        self.assertLess(w.latent[0], buffered)
+        self.assertAlmostEqual((w.temp[0] - (E["boilAt"] - 20)) * 10 * E["shc"] + w.latent[0], buffered)
 
 
 class GermTests(unittest.TestCase):

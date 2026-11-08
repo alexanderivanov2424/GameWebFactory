@@ -9,5 +9,7 @@
   "freezeAt": 0,
   "freezeTo": "ice",
   "boilAt": 100,
-  "boilTo": "steam"
+  "boilTo": "steam",
+  "freezeLatent": 35,
+  "boilLatent": 200
 }

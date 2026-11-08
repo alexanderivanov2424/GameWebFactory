@@ -14,5 +14,7 @@
   "offgas": {
     "element": "polluted_oxygen",
     "rate": 0.002
-  }
+  },
+  "freezeLatent": 35,
+  "boilLatent": 200
 }

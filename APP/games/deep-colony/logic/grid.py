@@ -34,6 +34,7 @@ from .content import DENSITY, INDEX, PHASE, SHC, VACUUM
 
 GAS_MIN = 0.001      # kg: less than this is vacuum
 LIQUID_MIN = 0.05    # kg: less than this disappears
+EMIT_REGION = 400   # cells emit searches through the connected open region
 HEAT_MASS_MIN = 0.5  # kg: add_heat treats a lighter cell as this heavy (no absurd spikes)
 
 
@@ -51,6 +52,8 @@ class World:
         self.ladder = [False] * n
         self.insul = [False] * n
         self.decor = [0.0] * n
+        self.latent = [0.0] * n     # heat buffered in a phase change (kJ; + absorbed, - released)
+        self.latent_el = [0] * n    # element the buffer belongs to (stale buffers are dropped)
         self.pending = []  # [x, y, element_id, kg, temp, germs] waiting for room (release)
         self.nbrs = [self._neighbours(i) for i in range(n)]
 
@@ -107,7 +110,9 @@ class World:
         phase = PHASE[e]
         if phase == "vacuum" or (phase == "gas" and mass < GAS_MIN) or (phase == "liquid" and mass < LIQUID_MIN):
             self.el[i], self.mass[i], self.germs[i] = VACUUM, 0.0, 0.0
+            self.latent[i] = 0.0
             return
+        self.latent[i] = 0.0
         self.el[i], self.mass[i], self.temp[i], self.germs[i] = e, float(mass), float(temp), float(germs)
 
     def add_mass(self, i, kg, temp, germs=0.0):
@@ -120,37 +125,74 @@ class World:
         self.mass[i] = total
         self.germs[i] += germs
 
-    def emit(self, x, y, element_id, kg, temp, germs=0.0):
-        """Put kg of a gas or liquid into the world at (x, y). Returns the kg placed.
+    def _put(self, i, e, element_id, kg, temp, germs):
+        if self.el[i] == e:
+            self.add_mass(i, kg, temp, germs)
+        else:
+            self.set_cell(i, element_id, kg, temp, germs)
+        return kg
 
-        Goes into the cell if it holds the same element or vacuum; otherwise into the nearest
-        cell (within 2 steps, open cells only) that does; otherwise a liquid displaces the gas
-        in the cell (the gas is lost) and a gas is dropped (returns 0). Never into solids/tiles.
+    def emit(self, x, y, element_id, kg, temp, germs=0.0):
+        """Put kg of a gas or liquid into the world at (x, y) by pressure. Returns the kg placed.
+
+        Searches the connected open region (not blocks_fluid, nearest first, EMIT_REGION cells).
+        Gas: into the nearest cell holding the same gas (pressure rises, no cap) or vacuum. If there
+        is none, the nearest cell whose gas also exists in another cell of the region is displaced:
+        its contents merge into the nearest other cell of that gas and the new gas takes the cell.
+        Liquid: the nearest same-liquid/vacuum cell within 3 steps; else it pushes the gas of the
+        nearest gas cell out (released again elsewhere); else any same-liquid/vacuum cell of the
+        region (a full cell is pressurised beyond its normal mass). Returns 0 only when the
+        region has no option (e.g. a sealed cell holding another element, or a solid).
         """
         if kg <= 0 or not self.inside(x, y):
             return 0.0
         e = INDEX[element_id]
         start = self.idx(x, y)
-        frontier, seen = [start], {start}
-        for _ in range(3):
-            nxt = []
-            for i in frontier:
-                if self.blocks_fluid(i):
-                    continue
-                if self.el[i] == e:
-                    self.add_mass(i, kg, temp, germs)
-                    return kg
-                if self.el[i] == VACUUM:
-                    self.set_cell(i, element_id, kg, temp, germs)
-                    return kg if self.el[i] == e else 0.0
-                for j in self.nbrs[i]:
-                    if j not in seen:
-                        seen.add(j)
-                        nxt.append(j)
-            frontier = nxt
-        if PHASE[e] == "liquid" and not self.blocks_fluid(start) and PHASE[self.el[start]] == "gas":
-            self.set_cell(start, element_id, kg, temp, germs)
-            return kg
+        if self.blocks_fluid(start):
+            return 0.0
+        liquid = PHASE[e] == "liquid"
+        el, nbrs = self.el, self.nbrs
+        order, depth = [start], {start: 0}
+        gas_cells = {}
+        first_gas = far = None
+        k = 0
+        while k < len(order) and len(order) < EMIT_REGION:
+            i = order[k]
+            k += 1
+            ei = el[i]
+            if ei == e or ei == VACUUM:
+                if not liquid or depth[i] <= 3:
+                    return self._put(i, e, element_id, kg, temp, germs)
+                far = i
+                break
+            if PHASE[ei] == "gas":
+                gas_cells.setdefault(ei, []).append(i)
+                if first_gas is None:
+                    first_gas = i
+            d = depth[i] + 1
+            for j in nbrs[i]:
+                if j not in depth and not self.blocks_fluid(j):
+                    depth[j] = d
+                    order.append(j)
+        if liquid:
+            if first_gas is not None:
+                i = first_gas
+                gid, gm, gt, gg = content.ELEMENT_IDS[el[i]], self.mass[i], self.temp[i], self.germs[i]
+                self.set_cell(i, element_id, kg, temp, germs)
+                self.release(i % self.w, i // self.w, gid, gm, gt, gg)
+                return kg
+            if far is not None:
+                return self._put(far, e, element_id, kg, temp, germs)
+            return 0.0
+        for i in order:
+            cells = gas_cells.get(el[i])
+            if cells and len(cells) > 1:
+                ix, iy = i % self.w, i // self.w
+                target = min((j for j in cells if j != i),
+                             key=lambda j: abs(j % self.w - ix) + abs(j // self.w - iy))
+                self.add_mass(target, self.mass[i], self.temp[i], self.germs[i])
+                self.set_cell(i, element_id, kg, temp, germs)
+                return kg
         return 0.0
 
     def release(self, x, y, element_id, kg, temp, germs=0.0):
@@ -181,12 +223,14 @@ class World:
         self.germs[i] -= germs
         if self.mass[i] < (GAS_MIN if PHASE[e] == "gas" else LIQUID_MIN):
             self.el[i], self.mass[i], self.germs[i] = VACUUM, 0.0, 0.0
+            self.latent[i] = 0.0
         return eid, got, temp, germs
 
     def dig(self, i):
         """Remove a solid cell; returns what was there (id, kg, temp, germs) and leaves vacuum."""
         out = (content.ELEMENT_IDS[self.el[i]], self.mass[i], self.temp[i], self.germs[i])
         self.el[i], self.mass[i], self.germs[i] = VACUUM, 0.0, 0.0
+        self.latent[i] = 0.0
         return out
 
     def heavier(self, a, b):
