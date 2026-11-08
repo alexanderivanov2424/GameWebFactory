@@ -1,5 +1,6 @@
 /*
  * Grid decoding: turns state.game.rows (one string per row and layer) into typed arrays.
+ *   grid.dirty: Set of row indexes changed since the renderer last cleared it; grid.resets counts defs/size changes (full redraw)
  *   DC.grid.update(game)  decode changed rows (cached per row string); returns true if anything changed
  *   DC.grid.w, .h         size;  DC.grid.elId(i) element id of cell i
  *   DC.grid.el[y]         Uint8Array of element indexes (into defs.order) per row
@@ -12,7 +13,7 @@
   const DC = (window.DC = window.DC || {});
   const ROW_CHARS = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
   const LAYERS = ["el", "mass", "temp", "germ", "decor"];
-  const grid = { w: 0, h: 0, defs: null, version: 0 };
+  const grid = { w: 0, h: 0, defs: null, version: 0, resets: 0, dirty: new Set() };
   const rowsSeen = {}; // layer -> [string per row]
   let charToIndex = {};
 
@@ -34,10 +35,12 @@
       charToIndex = {};
       for (let i = 0; i < game.defs.chars.length; i++) charToIndex[game.defs.chars[i]] = i;
       for (const l of LAYERS) { grid[l] = []; rowsSeen[l] = []; }
+      grid.resets++; grid.dirty.clear();
     }
     if (grid.w !== game.w || grid.h !== game.h) {
       grid.w = game.w; grid.h = game.h;
       for (const l of LAYERS) { grid[l] = []; rowsSeen[l] = []; }
+      grid.resets++; grid.dirty.clear();
     }
     let changed = false;
     for (const l of LAYERS) {
@@ -48,6 +51,7 @@
         rowsSeen[l][y] = s;
         grid[l][y] = decodeRow(l, s);
         changed = true;
+        grid.dirty.add(y); // any layer: a row repaint reads all layers
       }
     }
     if (changed) grid.version++;

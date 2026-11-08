@@ -52,12 +52,16 @@
     return null;
   }
 
-  function drawBase(game) {
+  function drawBase(game, full) {
     const { w, h } = DC.grid;
     const overlay = DC.view.overlay;
-    base.width = w * TILE; base.height = h * TILE;
+    if (full) { base.width = w * TILE; base.height = h * TILE; }
     const grid = DC.grid, defs = grid.defs;
+    const rows = full ? null : grid.dirty;
+    const dark = overlay === "power" || overlay === "plumbing";
     for (let y = 0; y < h; y++) {
+      if (rows && !rows.has(y)) continue;
+      if (!full) bctx.clearRect(0, y * TILE, w * TILE, TILE);
       const els = grid.el[y];
       if (!els) continue;
       for (let x = 0; x < w; x++) {
@@ -85,10 +89,9 @@
           bctx.fillRect(px, py, TILE, TILE);
         }
       }
+      if (dark) { bctx.fillStyle = "rgba(0,0,0,0.6)"; bctx.fillRect(0, y * TILE, w * TILE, TILE); }
     }
-    if (overlay === "power" || overlay === "plumbing") {
-      bctx.fillStyle = "rgba(0,0,0,0.6)"; bctx.fillRect(0, 0, w * TILE, h * TILE);
-    }
+    grid.dirty.clear();
   }
 
   function occupancy(game) {
@@ -336,8 +339,9 @@
     if (!DC.grid.el || !DC.grid.el[0]) return;
     if (canvas.width !== w * TILE) canvas.width = w * TILE;
     if (canvas.height !== h * TILE) canvas.height = h * TILE;
-    const key = `${DC.grid.version}|${DC.view.overlay}|${w}x${h}`;
-    if (key !== baseKey) { baseKey = key; drawBase(game); }
+    const key = `${DC.grid.resets}|${DC.view.overlay}|${w}x${h}`;
+    if (key !== baseKey) { baseKey = key; drawBase(game, true); }
+    else if (DC.grid.dirty.size) drawBase(game, false);
     ctx.drawImage(base, 0, 0);
     const overlay = DC.view.overlay;
     const players = game.players;
