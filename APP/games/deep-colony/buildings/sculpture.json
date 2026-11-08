@@ -1,0 +1,17 @@
+{
+  "name": "Sculpture",
+  "category": "decor",
+  "w": 1,
+  "h": 2,
+  "cost": {
+    "raw": 400
+  },
+  "buildTime": 30,
+  "kind": "none",
+  "floor": true,
+  "decor": {
+    "value": 15,
+    "radius": 4
+  },
+  "description": "Makes the area nicer to be in."
+}

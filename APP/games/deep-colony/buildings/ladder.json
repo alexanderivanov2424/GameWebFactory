@@ -1,0 +1,17 @@
+{
+  "name": "Ladder",
+  "category": "base",
+  "w": 1,
+  "h": 1,
+  "cost": {
+    "raw": 50
+  },
+  "buildTime": 3,
+  "kind": "none",
+  "ladder": true,
+  "decor": {
+    "value": 0,
+    "radius": 0
+  },
+  "description": "Lets colonists climb up and down."
+}

@@ -1,0 +1,24 @@
+{
+  "name": "Liquid Vent",
+  "category": "plumbing",
+  "w": 1,
+  "h": 1,
+  "cost": {
+    "metal": 100
+  },
+  "buildTime": 8,
+  "kind": "vent",
+  "pipeIn": [
+    0,
+    0
+  ],
+  "params": {
+    "rate": 10.0,
+    "maxMass": 1000
+  },
+  "decor": {
+    "value": 0,
+    "radius": 0
+  },
+  "description": "Releases liquid from its pipe into the room."
+}

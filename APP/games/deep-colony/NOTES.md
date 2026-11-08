@@ -1,0 +1,68 @@
+# Deep Colony: developer notes
+
+Rules and the message list: the docstring at the top of `server.py`. Modules: `logic/__init__.py`.
+Tests: `tests/` (`python3 -I tools/run_tests.py deep-colony`; one file alone:
+`cd APP && python3 -B -m unittest discover -s games/deep-colony/tests -p test_fluids.py`).
+
+## Read this game to learn
+- A `RealtimeGame` whose players never control a unit: shared orders, shared pause/speed
+  (the tick runs `speed` steps, or none while paused), live cursors/drag boxes as realtime
+  *input* (held state), exact hover info in `private_state` from that input.
+- A big grid over `Snapshots`: grid layers sent as one string per row keyed by row index,
+  rebuilt at most every half game second, so a delta only carries rows that changed.
+- A cell simulation (one element per cell with mass/temperature/germs) in flat lists.
+
+## Map
+- `elements/*.json`, `buildings/*.json`: content (schema in `logic/content.py`'s docstring).
+- `logic/match.py`: `Match.step(dt)` order: every `FLUID_DT` fluids → heat → germs → debris
+  settles; decor when buildings/items change; then `networks.step`, `machines.step`,
+  `chores.step`; dead colonists removed and logged; all dead → `result`.
+- `logic/view.py`: the public/private state (the client contract). `server.py`: lobby glue.
+- `client/`: `game.js` (lobby wiring, layout), `grid.js` (row decoding), `render.js` (canvas),
+  `tools.js` (mouse/keys → orders and input), `panels.js` (DOM side panels).
+
+## Contracts between modules
+Coordinates: x right, y down; cell index `i = y * w + x`. Building x, y = top-left cell.
+Game time in seconds; a cycle is `match.CYCLE` (600 s). Mass kg, temperature °C, heat kJ.
+
+**World (`grid.py`)**: flat lists `el, mass, temp, germs, tile, door, ladder, insul, decor`;
+`blocks_fluid(i)`, `is_gas/is_liquid/is_solid/is_vacuum(i)`, `set_cell`, `add_mass`,
+`emit(x, y, el, kg, temp, germs)`, `take(i, ids, kg)`, `dig(i)`, `add_heat(i, kj)`, `nbrs[i]`.
+`content.PHASE/SHC/COND/DENSITY[el index]` for hot loops.
+
+**fluids / heat / germs / mapgen**: `fluids.step(world, dt)`, `heat.step(world, dt)`,
+`germs.step(world, items, dt)`, `germs.update_decor(world, buildings, items)` (fills
+`world.decor`), `mapgen.generate(w, h, rng) -> (World, (pod_x, pod_y))`.
+
+**Dupe (`dupes.py`)** fields others read/write: `id` ("d1"), `name`, `x`, `y` (floats in cell
+units; standing cell = `(round(x), round(y))`), `breath` 0-100, `kcal` 0-4000, `bladder`
+0-100, `stress` 0-100, `health` 0-100, `germs` (float), `sick` (s left, 0 = healthy),
+`needs_wash` (bool, set by toilets), `carry` (None or `{"el", "kg", "temp", "germs"}`),
+`task` (short text), `dead`, `death` (cause text). `dupes.spawn(match, count, x, y) -> [Dupe]`.
+
+**chores.py**: `step(match, dt)` (needs, choosing, moving, working for every colonist),
+`cancel_for(match, target)` with target `("building", bid)`, `("dig", i)` or `("dupe", did)`:
+drop chores aimed at it and release their reservations (`Item.reserved`, `Building.reserved`).
+
+**Networks (`networks.py`)**: `Networks(match)`; `.step(dt)` rebuilds components when
+`buildings.version` changed, then distributes power and sets `b.powered` on every power user;
+`.pipe_take(b, port, ids, kg) -> (el, kg, temp, germs)` (`port` = "pipeIn"/"pipeOut", `ids`
+None = any liquid), `.pipe_put(b, port, el, kg, temp, germs) -> kg accepted`,
+`.pipe_has(b, port, el) -> kg`, `.pipe_room(b, port) -> kg`, `.needs_power(b) -> bool`
+(the network at b's power port wants more: unpowered active users or batteries not full),
+`.power_summary() -> {nid: {"gen", "use", "stored", "cap"}}`, `.pipe_summary() -> {nid: {el: kg}}`.
+Machines mark `b.state["active"]` (wants power this step) and `b.state["producing"]` (generator on).
+
+**machines.py** (used by chores): `step(match, dt)`; `wants_operator(match, b)`;
+`operate(match, b, dupe, dt)` (called every step a colonist works at an operated building);
+`toilet_usable(match, b)`, `use_toilet(match, b, dupe)` (bladder 0, adds germs, sets
+`needs_wash`); `basin_usable(match, b)`, `wash(match, b, dupe)` (germs 0, `needs_wash` False);
+`harvest_ready(b)`, `harvest(match, b)` (drops the crop as debris); `needs_emptying(b)`,
+`empty(match, b)` (drops contents as debris); `storage_room(b, el) -> kg` (storage: anything;
+ration box: food only).
+
+**orders.py**: `match.digs`, `finish_dig/finish_build/finish_deconstruct`, `DIG_TIME`, `DECON_TIME`.
+
+## Pitfalls seen here
+- Real-time: state changes reach clients with the next tick (tests: `sim.tick(1)` before reading).
+- Never put None into the public state (Snapshots deletes the key); quantize floats.

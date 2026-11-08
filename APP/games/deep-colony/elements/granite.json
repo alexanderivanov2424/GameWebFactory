@@ -1,0 +1,13 @@
+{
+  "name": "Granite",
+  "phase": "solid",
+  "color": "#8a7f86",
+  "classes": [
+    "raw"
+  ],
+  "shc": 0.79,
+  "conductivity": 3.4,
+  "hardness": 2,
+  "defaultMass": 1400,
+  "decor": -10
+}

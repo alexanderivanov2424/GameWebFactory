@@ -1,0 +1,7 @@
+{
+  "name": "Nutrient Bar",
+  "phase": "food",
+  "color": "#d8c26a",
+  "kcal": 800,
+  "decor": -5
+}

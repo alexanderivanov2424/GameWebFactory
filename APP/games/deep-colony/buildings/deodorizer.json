@@ -1,0 +1,25 @@
+{
+  "name": "Deodorizer",
+  "category": "oxygen",
+  "w": 1,
+  "h": 2,
+  "cost": {
+    "raw": 100
+  },
+  "buildTime": 10,
+  "kind": "deodorizer",
+  "floor": true,
+  "accepts": {
+    "sand": 300
+  },
+  "params": {
+    "rate": 0.13,
+    "sandRate": 0.143,
+    "radius": 2
+  },
+  "decor": {
+    "value": 0,
+    "radius": 0
+  },
+  "description": "Filters polluted oxygen around it into clean oxygen. Uses sand."
+}

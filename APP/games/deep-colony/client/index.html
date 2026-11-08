@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Deep Colony</title>
+
+  <!-- Shared components: keep these, in this order. theme.js isn't deferred (no unstyled flash). -->
+  <script src="/shared/theme.js"></script>
+  <script src="/shared/home.js" defer></script>
+  <script src="/shared/settings.js" defer></script>
+  <script src="/shared/chat.js" defer></script>
+  <script src="/gamekit/dom.js" defer></script>
+  <script src="/gamekit/room.js" defer></script>
+  <script src="/gamekit/lobby.js" defer></script>
+  <script src="/gamekit/lobby-ui.js" defer></script>
+  <script src="game.js" defer></script>
+
+  <style>
+    /* Base styles (body, main with 72px top padding, .card, .row, buttons, inputs) come from
+       /shared/theme.js; player list and error banner from /gamekit/lobby-ui.js.
+       Restyle with variables, e.g. :root { --gwf-bg: #efe8da; --gwf-accent: #5d6873; } */
+    :root { --gwf-main-width: 640px; }
+    /* TODO game styles */
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Deep Colony</h1>
+    <p id="connection" class="muted">Connecting…</p>
+    <div id="error" hidden></div>
+
+    <section id="lobby" hidden>
+      <div class="card">
+        <div class="row" style="margin-bottom: 8px">
+          <h2 style="margin: 0">Players</h2>
+          <span class="spacer"></span>
+          <button id="join" class="green" hidden>Join game</button>
+          <button id="ready" class="green" hidden>Ready</button>
+          <button id="leave" class="red" hidden>Leave game</button>
+        </div>
+        <ul id="players"></ul>
+        <div id="start"></div>
+        <p id="spectators" class="muted"></p>
+      </div>
+      <!-- TODO player options (e.g. a color picker) -->
+      <div class="card">
+        <h2>Game settings</h2>
+        <div id="settings"></div>
+        <!-- TODO a short rules paragraph players read before starting -->
+      </div>
+    </section>
+
+    <section id="game" hidden>
+      <div id="result" hidden></div>
+      <div id="board"></div>
+      <!-- TODO game UI -->
+      <button id="back" hidden>Back to lobby</button>
+    </section>
+  </main>
+</body>
+</html>

@@ -1,0 +1,17 @@
+{
+  "name": "Wire",
+  "category": "power",
+  "w": 1,
+  "h": 1,
+  "cost": {
+    "metal": 25
+  },
+  "buildTime": 2,
+  "kind": "none",
+  "layer": "wire",
+  "decor": {
+    "value": -1,
+    "radius": 1
+  },
+  "description": "Connects power buildings."
+}

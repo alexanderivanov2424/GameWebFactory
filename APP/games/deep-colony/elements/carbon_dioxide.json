@@ -1,0 +1,9 @@
+{
+  "name": "Carbon Dioxide",
+  "phase": "gas",
+  "color": "#5d6470",
+  "shc": 0.85,
+  "conductivity": 0.05,
+  "density": 5,
+  "defaultMass": 1.5
+}

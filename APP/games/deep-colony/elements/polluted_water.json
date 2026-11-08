@@ -1,0 +1,18 @@
+{
+  "name": "Polluted Water",
+  "phase": "liquid",
+  "color": "#6b7a2a",
+  "shc": 4.0,
+  "conductivity": 0.58,
+  "density": 2,
+  "defaultMass": 900,
+  "germs": 20000,
+  "freezeAt": -20,
+  "freezeTo": "ice",
+  "boilAt": 120,
+  "boilTo": "steam",
+  "offgas": {
+    "element": "polluted_oxygen",
+    "rate": 0.002
+  }
+}

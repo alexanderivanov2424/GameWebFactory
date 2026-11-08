@@ -1,0 +1,14 @@
+{
+  "name": "Dirt",
+  "phase": "solid",
+  "color": "#7a5233",
+  "classes": [
+    "raw",
+    "soil"
+  ],
+  "shc": 1.48,
+  "conductivity": 2.0,
+  "hardness": 1,
+  "defaultMass": 1000,
+  "decor": -10
+}

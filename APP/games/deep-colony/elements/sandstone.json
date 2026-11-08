@@ -1,0 +1,13 @@
+{
+  "name": "Sandstone",
+  "phase": "solid",
+  "color": "#c9a46b",
+  "classes": [
+    "raw"
+  ],
+  "shc": 0.8,
+  "conductivity": 2.9,
+  "hardness": 1,
+  "defaultMass": 1200,
+  "decor": -10
+}

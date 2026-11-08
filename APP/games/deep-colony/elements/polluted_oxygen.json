@@ -1,0 +1,11 @@
+{
+  "name": "Polluted Oxygen",
+  "phase": "gas",
+  "color": "#b8c97a",
+  "shc": 1.0,
+  "conductivity": 0.1,
+  "density": 4,
+  "breathable": true,
+  "defaultMass": 1.5,
+  "germs": 2000
+}

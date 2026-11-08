@@ -1,0 +1,13 @@
+{
+  "name": "Water",
+  "phase": "liquid",
+  "color": "#2f6fd6",
+  "shc": 4.18,
+  "conductivity": 0.6,
+  "density": 1,
+  "defaultMass": 900,
+  "freezeAt": 0,
+  "freezeTo": "ice",
+  "boilAt": 100,
+  "boilTo": "steam"
+}

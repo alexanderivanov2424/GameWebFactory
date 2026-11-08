@@ -1,0 +1,26 @@
+{
+  "name": "Outhouse",
+  "category": "plumbing",
+  "w": 1,
+  "h": 2,
+  "cost": {
+    "raw": 200
+  },
+  "buildTime": 10,
+  "kind": "outhouse",
+  "floor": true,
+  "toilet": true,
+  "accepts": {
+    "dirt": 200
+  },
+  "params": {
+    "dirtPerUse": 13,
+    "uses": 15,
+    "germs": 20000
+  },
+  "decor": {
+    "value": -20,
+    "radius": 3
+  },
+  "description": "A toilet without plumbing. Uses dirt, fills with polluted dirt that must be emptied. Germy."
+}

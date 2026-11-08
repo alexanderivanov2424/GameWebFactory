@@ -1,0 +1,17 @@
+{
+  "name": "Tile",
+  "category": "base",
+  "w": 1,
+  "h": 1,
+  "cost": {
+    "raw": 100
+  },
+  "buildTime": 4,
+  "kind": "none",
+  "solid": true,
+  "decor": {
+    "value": 0,
+    "radius": 0
+  },
+  "description": "A solid floor/wall block. Blocks gas and liquid."
+}

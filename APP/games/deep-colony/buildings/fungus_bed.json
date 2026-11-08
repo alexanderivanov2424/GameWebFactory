@@ -1,0 +1,23 @@
+{
+  "name": "Fungus Bed",
+  "category": "food",
+  "w": 1,
+  "h": 1,
+  "cost": {
+    "raw": 100
+  },
+  "buildTime": 8,
+  "kind": "fungus_bed",
+  "floor": true,
+  "params": {
+    "growTime": 1800,
+    "yield": 1.0,
+    "minTemp": 10,
+    "maxTemp": 30
+  },
+  "decor": {
+    "value": 5,
+    "radius": 1
+  },
+  "description": "Grows fungus (600 kcal) in 3 cycles between 10 and 30 C. Harvested by colonists."
+}

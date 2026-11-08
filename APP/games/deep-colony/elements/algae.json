@@ -1,0 +1,13 @@
+{
+  "name": "Algae",
+  "phase": "solid",
+  "color": "#3f9a4e",
+  "classes": [
+    "organic"
+  ],
+  "shc": 0.2,
+  "conductivity": 2.0,
+  "hardness": 1,
+  "defaultMass": 600,
+  "decor": -10
+}

@@ -1,0 +1,40 @@
+{
+  "name": "Water Sieve",
+  "category": "plumbing",
+  "w": 2,
+  "h": 2,
+  "cost": {
+    "metal": 200
+  },
+  "buildTime": 20,
+  "kind": "water_sieve",
+  "floor": true,
+  "power": {
+    "use": 120
+  },
+  "powerPort": [
+    1,
+    1
+  ],
+  "pipeIn": [
+    0,
+    1
+  ],
+  "pipeOut": [
+    1,
+    0
+  ],
+  "accepts": {
+    "sand": 500
+  },
+  "params": {
+    "rate": 5.0,
+    "sandRate": 1.0
+  },
+  "heat": 4.0,
+  "decor": {
+    "value": -10,
+    "radius": 2
+  },
+  "description": "Cleans piped polluted water into water using sand. Needs power."
+}

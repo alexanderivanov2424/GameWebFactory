@@ -1,0 +1,13 @@
+{
+  "name": "Coal",
+  "phase": "solid",
+  "color": "#2b2b2b",
+  "classes": [
+    "fuel"
+  ],
+  "shc": 0.71,
+  "conductivity": 1.25,
+  "hardness": 1,
+  "defaultMass": 800,
+  "decor": -10
+}

@@ -1,0 +1,18 @@
+{
+  "name": "Insulated Tile",
+  "category": "climate",
+  "w": 1,
+  "h": 1,
+  "cost": {
+    "raw": 400
+  },
+  "buildTime": 8,
+  "kind": "none",
+  "solid": true,
+  "insulated": true,
+  "decor": {
+    "value": 0,
+    "radius": 0
+  },
+  "description": "A tile that barely conducts heat."
+}

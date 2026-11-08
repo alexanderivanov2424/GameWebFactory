@@ -1,0 +1,11 @@
+{
+  "name": "Steam",
+  "phase": "gas",
+  "color": "#e8eef2",
+  "shc": 4.18,
+  "conductivity": 0.18,
+  "density": 2,
+  "defaultMass": 1.0,
+  "condenseAt": 95,
+  "condenseTo": "water"
+}

@@ -1,0 +1,18 @@
+{
+  "name": "Arrival Pod",
+  "category": "base",
+  "w": 3,
+  "h": 3,
+  "cost": {},
+  "buildTime": 0,
+  "kind": "storage",
+  "floor": true,
+  "capacity": 2000,
+  "buildable": false,
+  "deconstructable": false,
+  "decor": {
+    "value": 10,
+    "radius": 4
+  },
+  "description": "Where the colony began. Stores a little of anything."
+}

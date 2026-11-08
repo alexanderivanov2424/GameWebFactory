@@ -1,0 +1,31 @@
+{
+  "name": "Lavatory",
+  "category": "plumbing",
+  "w": 1,
+  "h": 2,
+  "cost": {
+    "metal": 300
+  },
+  "buildTime": 15,
+  "kind": "lavatory",
+  "floor": true,
+  "toilet": true,
+  "pipeIn": [
+    0,
+    1
+  ],
+  "pipeOut": [
+    0,
+    0
+  ],
+  "params": {
+    "waterPerUse": 5,
+    "outPerUse": 6.7,
+    "germs": 20000
+  },
+  "decor": {
+    "value": -10,
+    "radius": 2
+  },
+  "description": "A plumbed toilet: piped water in, polluted water out."
+}

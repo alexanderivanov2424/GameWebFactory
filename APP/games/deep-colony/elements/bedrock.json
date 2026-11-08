@@ -1,0 +1,10 @@
+{
+  "name": "Bedrock",
+  "phase": "solid",
+  "color": "#3b2f4a",
+  "shc": 4.0,
+  "conductivity": 0.0001,
+  "hardness": 99,
+  "diggable": false,
+  "defaultMass": 5000
+}

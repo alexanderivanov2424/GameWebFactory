@@ -1,0 +1,36 @@
+{
+  "name": "Algae Oxygenator",
+  "category": "oxygen",
+  "w": 1,
+  "h": 2,
+  "cost": {
+    "metal": 200
+  },
+  "buildTime": 15,
+  "kind": "oxygenator",
+  "floor": true,
+  "power": {
+    "use": 120
+  },
+  "powerPort": [
+    0,
+    1
+  ],
+  "accepts": {
+    "algae": 330
+  },
+  "params": {
+    "input": "algae",
+    "inRate": 0.55,
+    "output": "oxygen",
+    "outRate": 0.5,
+    "outTemp": 30,
+    "maxPressure": 1.8
+  },
+  "heat": 1.5,
+  "decor": {
+    "value": -5,
+    "radius": 1
+  },
+  "description": "Turns algae into oxygen. Needs power."
+}

@@ -1,0 +1,9 @@
+{
+  "name": "Hydrogen",
+  "phase": "gas",
+  "color": "#f2b8e6",
+  "shc": 2.4,
+  "conductivity": 0.17,
+  "density": 1,
+  "defaultMass": 0.5
+}

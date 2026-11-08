@@ -1,0 +1,32 @@
+{
+  "name": "Liquid Pump",
+  "category": "plumbing",
+  "w": 2,
+  "h": 2,
+  "cost": {
+    "metal": 400
+  },
+  "buildTime": 20,
+  "kind": "pump",
+  "power": {
+    "use": 240
+  },
+  "powerPort": [
+    1,
+    0
+  ],
+  "pipeOut": [
+    0,
+    0
+  ],
+  "params": {
+    "rate": 10.0,
+    "radius": 1
+  },
+  "heat": 2.0,
+  "decor": {
+    "value": -5,
+    "radius": 1
+  },
+  "description": "Pumps liquid around its bottom row into the pipe at its output. Needs power."
+}
