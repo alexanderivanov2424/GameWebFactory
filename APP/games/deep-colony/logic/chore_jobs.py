@@ -4,8 +4,8 @@
                                              colonist could take; make() builds the Chore
 """
 
-from . import content, orders
-from .chore_common import (Chore, best_goal, dig_goals, failing, mach, reach_goals, speed, timed)
+from . import content, machines, orders
+from .chore_common import (Chore, best_goal, dig_goals, failing, reach_goals, speed, timed)
 
 
 def add_candidates(match, d, c, dist, out):
@@ -32,19 +32,19 @@ def add_candidates(match, d, c, dist, out):
         if not b.enabled:
             continue
         if b.d["operated"] and ("op", b.id) not in c.claims and not failing(match, ("op", b.id)) \
-                and mach("wants_operator", match, b, default=False):
+                and machines.wants_operator(match, b):
             cells = {world.idx(x, y) for x, y in b.cells()}
             g = best_goal(dist, cells) or best_goal(dist, reach_goals(world, b))
             if g:
                 add(b.prio, g[0], lambda b=b, goals=cells | reach_goals(world, b):
                     Chore("operate", ("op", b.id), [("building", b.id)], _operate(match, d, b, goals),
                           [("op", b.id)]))
-        if mach("harvest_ready", b, default=False) and not failing(match, ("harvest", b.id)):
+        if machines.harvest_ready(b) and not failing(match, ("harvest", b.id)):
             g = best_goal(dist, reach_goals(world, b))
             if g:
                 add(b.prio, g[0], lambda b=b: Chore("harvest", ("harvest", b.id), [("building", b.id)],
                                                    _simple(match, d, b, 5, "harvest")))
-        if mach("needs_emptying", b, default=False) and not failing(match, ("empty", b.id)):
+        if machines.needs_emptying(b) and not failing(match, ("empty", b.id)):
             g = best_goal(dist, reach_goals(world, b))
             if g:
                 add(b.prio, g[0], lambda b=b: Chore("empty", ("empty", b.id), [("building", b.id)],
@@ -98,9 +98,9 @@ def _operate(match, d, b, goals):
 
     def work(dt):
         if b.id not in match.buildings.by_id or not b.built or not b.enabled \
-                or not mach("wants_operator", match, b, default=False):
+                or not machines.wants_operator(match, b):
             return True
-        mach("operate", match, b, d, dt)
+        machines.operate(match, b, d, dt)
         return False
     yield ("work", work, f"Operating {_name(b)}")
 
@@ -109,7 +109,7 @@ def _simple(match, d, b, seconds, what):
     yield ("goto", reach_goals(match.world, b), f"{what.capitalize()} {_name(b)}")
     yield ("work", timed(d, seconds), f"{what.capitalize()} {_name(b)}")
     if b.id in match.buildings.by_id:
-        mach(what if what == "empty" else "harvest", match, b)
+        (machines.empty if what == "empty" else machines.harvest)(match, b)
 
 
 def _dig(match, d, i):

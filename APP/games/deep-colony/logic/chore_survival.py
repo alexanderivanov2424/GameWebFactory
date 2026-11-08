@@ -4,8 +4,8 @@
     pick(match, d, dist) -> Chore|None   the chore for the most pressing need that can be met
 """
 
-from . import content, dupes
-from .chore_common import (Chore, STORAGE_KINDS, best_goal, failing, is_food, mach, reach_goals,
+from . import content, dupes, machines
+from .chore_common import (Chore, STORAGE_KINDS, best_goal, failing, is_food, reach_goals,
                            store_free, timed)
 
 KCAL_MAX = dupes.KCAL_MAX
@@ -36,7 +36,7 @@ def pick(match, d, dist):
     if d.bladder >= 100 and not failing(match, ("toilet",)):
         best = None
         for b in match.buildings:
-            if b.built and b.d["toilet"] and mach("toilet_usable", match, b, default=False):
+            if b.built and b.d["toilet"] and machines.toilet_usable(match, b):
                 g = best_goal(dist, reach_goals(world, b))
                 if g and (best is None or g[0] < best[0]):
                     best = (g[0], b)
@@ -46,7 +46,7 @@ def pick(match, d, dist):
     if d.needs_wash and not failing(match, ("wash",)):
         best = None
         for b in match.buildings.of_kind("wash_basin"):
-            if mach("basin_usable", match, b, default=False):
+            if machines.basin_usable(match, b):
                 g = best_goal(dist, reach_goals(world, b))
                 if g and (best is None or g[0] < best[0]):
                     best = (g[0], b)
@@ -130,10 +130,10 @@ def _toilet(match, d, b):
     used = []
 
     def fn(dt):
-        if b.id not in match.buildings.by_id or not mach("toilet_usable", match, b, default=False):
+        if b.id not in match.buildings.by_id or not machines.toilet_usable(match, b):
             return True
         if work(dt):
-            mach("use_toilet", match, b, d)
+            machines.use_toilet(match, b, d)
             used.append(1)
             return True
         return False
@@ -152,7 +152,7 @@ def _pee(match, d):
 def _wash(match, d, b):
     yield ("goto", reach_goals(match.world, b), "Washing")
     yield ("work", timed(d, 5), "Washing")
-    if b.id in match.buildings.by_id and mach("basin_usable", match, b, default=False):
-        mach("wash", match, b, d)
+    if b.id in match.buildings.by_id and machines.basin_usable(match, b):
+        machines.wash(match, b, d)
     else:
         yield ("fail",)

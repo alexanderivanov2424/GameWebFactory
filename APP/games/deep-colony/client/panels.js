@@ -134,7 +134,7 @@
   }
 
   function hover(g, state) {
-    const h = DC.view.hover;
+    const h = DC.view.hover || DC.view.last;
     const cell = state.private && state.private.cell;
     const parts = [];
     if (h && cell && cell.x === h[0] && cell.y === h[1]) {
@@ -160,12 +160,15 @@
         if (b.b && d.kind !== "none") rows.push(el("div", {}, b.on ? "On" : "Off"));
         if (g.players[b.by]) rows.push(el("div", { className: "muted" }, "Placed by " + g.players[b.by].name + ` (priority ${b.prio})`));
         if (b.dc) rows.push(el("div", {}, "Marked for deconstruction"));
-        if (b.b && d.kind !== "none" && isPlayer()) rows.push(el("button", { className: "t",
-          textContent: b.on ? "Turn off" : "Turn on",
-          onclick: () => DC.tools.send({ action: "toggle", building: id }) }));
         return el("div", { style: "margin-top:6px" }, ...rows);
       });
     });
+    // The on/off button lives in its own box, rebuilt only when its target or label changes,
+    // so a status text changing every tick can't swallow the click.
+    const sw = parts.find((p) => p.b && p.b.b && p.d.kind !== "none");
+    fill("hoverActions", sw && isPlayer() ? [sw.id, sw.b.on] : null, () => !(sw && isPlayer()) ? [] :
+      [el("button", { className: "t", textContent: sw.b.on ? "Turn off" : "Turn on",
+        onclick: () => DC.tools.send({ action: "toggle", building: sw.id }) })]);
   }
 
   function legend() {

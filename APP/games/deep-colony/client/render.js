@@ -106,7 +106,7 @@
   }
 
   function relevant(overlay, d) {
-    if (overlay === "power") return d.layer === "wire" || Boolean(d.power || d.powerPort);
+    if (overlay === "power") return d.layer === "wire" || Boolean(Object.keys(d.power || {}).length || d.powerPort);
     if (overlay === "plumbing") return d.layer === "pipe" || Boolean(d.pipeIn || d.pipeOut);
     return true;
   }

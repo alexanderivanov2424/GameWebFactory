@@ -49,6 +49,7 @@
     if (state.gameNumber !== lastGameNumber) {
       lastGameNumber = state.gameNumber;
       DC.view.drag = null;
+      DC.view.last = null;
       DC.tools.resetInput();
       DC.tools.setTool("inspect");
     }

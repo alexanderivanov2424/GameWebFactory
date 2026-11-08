@@ -13,7 +13,7 @@
   const AREA = ["dig", "cancel", "deconstruct", "priority"];
   const TOOL_COLORS = { dig: "#ffd54f", cancel: "#ffffff", deconstruct: "#ff5252", priority: "#4fc3f7", inspect: "#ffffff" };
   const state = { tool: "inspect", building: null, prio: 5 };
-  const view = (DC.view = { overlay: "none", hover: null, drag: null });
+  const view = (DC.view = { overlay: "none", hover: null, last: null, drag: null });
   const listeners = [];
   let lastInput = "";
 
@@ -107,7 +107,11 @@
     if (view.drag && c) { view.drag.x1 = c[0]; view.drag.y1 = c[1]; }
     if (JSON.stringify(prev) !== JSON.stringify(c) || view.drag) sendInput();
   });
-  canvas.addEventListener("mouseleave", () => { view.hover = null; sendInput(); });
+  canvas.addEventListener("mouseleave", () => {
+    if (view.hover) view.last = view.hover; // the hover panel keeps showing it (so its buttons can be clicked)
+    view.hover = null;
+    sendInput();
+  });
   canvas.addEventListener("contextmenu", (ev) => ev.preventDefault());
   canvas.addEventListener("mousedown", (ev) => {
     const c = cellAt(ev);
@@ -129,6 +133,10 @@
   });
   window.addEventListener("mouseup", (ev) => { if (ev.button === 0) finishDrag(); });
 
+  // Space on a focused button would also click it on key release (double pause toggle).
+  document.addEventListener("keyup", (ev) => {
+    if (ev.code === "Space" && ev.target && ev.target.tagName === "BUTTON" && playing()) ev.preventDefault();
+  });
   const KEYS = { KeyG: "dig", KeyC: "cancel", KeyX: "deconstruct", KeyP: "priority", KeyI: "inspect" };
   document.addEventListener("keydown", (ev) => {
     const t = ev.target;

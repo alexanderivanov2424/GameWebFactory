@@ -190,7 +190,9 @@ class Networks:
         self._sync()
         nid = self._attached.get(b.id)
         info = self._pinfo.get(nid)
-        return bool(info and (info["short"] or info["low"]))
+        # a running generator keeps being needed while something draws from it (else the operator
+        # would quit the moment the shortage is fixed and power would flicker)
+        return bool(info and (info["short"] or info["low"] or (info["gen"] > 0 and info["use"] > 0)))
 
     def power_summary(self):
         return {nid: {"gen": int(i["gen"]), "use": int(i["use"]), "stored": int(i["stored"]), "cap": int(i["cap"])}

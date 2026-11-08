@@ -16,7 +16,6 @@ the chore ends, fails or is cancelled. A carried load that is left over becomes 
     reach_goals(world, b)                       standable cells within 1 (Chebyshev) of a building cell
     dig_goals(world, i)                         standing cells from which cell i can be dug
     STORAGE_KINDS, store_free(b, el), storage_room(b, el)
-    mach(name, *args, default=None)             call a machines.py function (default if missing)
     speed(d) / timed(d, seconds)                work speed (0.5 when sick), a fixed-length work fn
     take_carry(d, el, kg, temp, germs)
 """
@@ -97,11 +96,6 @@ def dig_goals(world, i):
             if nav.standable(world, sx, sy)}
 
 
-def mach(name, *args, default=None):
-    f = getattr(machines, name, None)
-    return default if f is None else f(*args)
-
-
 def speed(d):
     return 0.5 if d.sick > 0 else 1.0
 
@@ -125,12 +119,7 @@ def store_free(b, el):
 
 
 def storage_room(b, el):
-    room = mach("storage_room", b, el)
-    if room is not None:
-        return room
-    if b.d["kind"] == "ration_box" and not is_food(el):
-        return 0.0
-    return max(0.0, b.d["capacity"] - b.stored())
+    return machines.storage_room(b, el)
 
 
 def is_food(el):
