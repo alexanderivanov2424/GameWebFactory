@@ -26,7 +26,7 @@ from gamekit import LobbyError
 
 from . import content
 
-MAX_CELLS = 600
+MAX_CELLS = 1600  # a full 40x40 area (server.MAX_RECT)
 DIG_YIELD = 0.5      # share of a dug cell's mass that drops as debris
 DIG_TIME = 4.0       # s of work per hardness point
 DECON_TIME = 0.5     # share of build time it takes to deconstruct
