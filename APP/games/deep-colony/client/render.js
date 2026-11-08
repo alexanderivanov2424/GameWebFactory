@@ -98,7 +98,7 @@
     const w = DC.grid.w;
     for (const [id, b] of Object.entries(game.buildings)) {
       const d = game.defs.buildings[b.t];
-      if (!d) continue;
+      if (!d || !b.b) continue; // unfinished sites are ghosts (drawBuilding), not connected lines
       const map = occ[d.layer || "main"] || occ.main;
       for (let dy = 0; dy < d.h; dy++) for (let dx = 0; dx < d.w; dx++) map.set((b.y + dy) * w + b.x + dx, id);
     }
