@@ -105,6 +105,49 @@
     return occ;
   }
 
+  // Placement hint (server decides): occupancy including sites, plus finished solid tiles.
+  let pOccFor = null, pOcc = null;
+  function placeOcc(game) {
+    if (pOccFor === game.buildings) return pOcc;
+    pOccFor = game.buildings;
+    pOcc = { main: new Set(), pipe: new Set(), wire: new Set(), solid: new Set() };
+    const w = DC.grid.w;
+    for (const b of Object.values(game.buildings)) {
+      const d = game.defs.buildings[b.t];
+      if (!d) continue;
+      const set = pOcc[d.layer || "main"] || pOcc.main;
+      for (let dy = 0; dy < d.h; dy++) for (let dx = 0; dx < d.w; dx++) {
+        const i = (b.y + dy) * w + b.x + dx;
+        set.add(i);
+        if (b.b && d.solid && (d.layer || "main") === "main") pOcc.solid.add(i);
+      }
+    }
+    return pOcc;
+  }
+
+  function canPlaceHint(game, type, d, x, y) {
+    const { w, h } = DC.grid, o = placeOcc(game);
+    const layer = d.layer || "main";
+    for (let dy = 0; dy < d.h; dy++) for (let dx = 0; dx < d.w; dx++) {
+      const cx = x + dx, cy = y + dy;
+      if (cx <= 0 || cy <= 0 || cx >= w - 1 || cy >= h - 1) return false;
+      const e = DC.grid.elementAt(cx, cy);
+      if (!e || e.phase === "solid") return false;
+      const i = cy * w + cx;
+      if ((o[layer] || o.main).has(i)) return false;
+      if (layer === "main" && d.solid && o.solid.has(i)) return false;
+    }
+    if (d.floor) {
+      for (let dx = 0; dx < d.w; dx++) {
+        const cx = x + dx, cy = y + d.h;
+        if (cx >= w || cy >= h) return false;
+        const e = DC.grid.elementAt(cx, cy);
+        if (!((e && e.phase === "solid") || o.solid.has(cy * w + cx))) return false;
+      }
+    }
+    return true;
+  }
+
   function relevant(overlay, d) {
     if (overlay === "power") return d.layer === "wire" || Boolean(Object.keys(d.power || {}).length || d.powerPort);
     if (overlay === "plumbing") return d.layer === "pipe" || Boolean(d.pipeIn || d.pipeOut);
@@ -273,11 +316,7 @@
     } else if (pv.cells) {
       const d = game.defs.buildings[pv.building];
       for (const [cx, cy] of pv.cells) {
-        let bad = false;
-        for (let dy = 0; dy < d.h && !bad; dy++) for (let dx = 0; dx < d.w; dx++) {
-          const e = DC.grid.elementAt(cx + dx, cy + dy);
-          if (!e || e.phase === "solid") { bad = true; break; }
-        }
+        const bad = !canPlaceHint(game, pv.building, d, cx, cy);
         ctx.fillStyle = bad ? "#ff4040" : "#40ff70"; ctx.globalAlpha = 0.4;
         ctx.fillRect(cx * TILE, cy * TILE, d.w * TILE, d.h * TILE);
         ctx.globalAlpha = 1; ctx.strokeStyle = bad ? "#ff4040" : "#40ff70"; ctx.lineWidth = 1.5;
