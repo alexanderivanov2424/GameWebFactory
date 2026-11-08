@@ -148,6 +148,50 @@ accounts.sh             Host account manager: find, select, show and delete acco
 - Dependencies point one way: games -> gamekit -> server. Games never import `server`, and
   `server` never imports a game except through `main.load_game`.
 
+## Adding a game
+Use the `new-game` skill (`.claude/skills/new-game/`). Each time a game is added or changed:
+- **Promote shared code:** anything another game would also need goes into gamekit
+  (`APP/gamekit/` for the server, `APP/web/gamekit/` for the client; site-wide page pieces in
+  `APP/web/shared/`), with tests in `APP/gamekit/tests/`, and existing games are updated to use it.
+- **Keep the docs true:** the game's `server.py` docstring, `logic/__init__.py` module list and `NOTES.md`, this file, and the
+  skills and their templates (including anything learned along the way).
+
+Summary:
+1. Generate the folder: `python3 -I tools/new_game.py <game-id> --name "Name" --description "..."`
+   (id: lowercase letters, digits, `-`, `_`). It creates `game.json`, `server.py`, `logic/`,
+   `client/index.html` + `client/game.js`, `tests/` and `NOTES.md`, already passing the tests.
+2. Put the rules in `logic/` (`Match` in `logic/match.py`, more modules as needed; players are
+   public ids, no lobby code) and keep `server.py` as the thin lobby side.
+3. `server.py` defines `class Game(LobbyGame)` (from `gamekit`), declares `SETTINGS` (host settings)
+   and `ACTIONS` (game messages), and overrides only the hooks it needs:
+   `default_options`, `clean_options`, `start_check`, `start_game`, `on_game_message`
+   (to add checks before `self.dispatch`), `on_player_removed`, `game_state`, `private_state`, `reset_game`.
+   Raise `LobbyError("...")` to reject a request; the message is shown to that player.
+   To keep data per player across games, use `self.load_data(member)` / `self.save_data(member, value)`.
+4. In the client, include `/shared/theme.js` (not deferred), then `/shared/home.js`, `/shared/settings.js`,
+   `/shared/chat.js`, `/gamekit/dom.js`, `/gamekit/room.js`, `/gamekit/lobby.js`, `/gamekit/lobby-ui.js`
+   (deferred, in that order), then call `AppLobby.connect("<game-id>", {...})` and render from the
+   `state` it delivers. theme.js's `main` leaves 72px free at the top for the fixed buttons.
+   Real-time games also load `/gamekit/realtime.js` after `lobby-ui.js`.
+5. Write tests in `tests/`, run `python3 -I tools/run_tests.py <game-id>`, then `./deploy.sh`.
+   Examples: `games/tictactoe/` (smallest full game), `games/tanks/` (hidden information, turn
+   counters, secret mines, building walls), `games/peruvian-silver/` (simultaneous secret plays,
+   timed reveals, cards defined as JSON files, game split into modules). Each has a `NOTES.md`.
+   `games/arena/` is the real-time example (tick loop, inputs, delta snapshots, interpolation).
+   `games/smugglers/` is the first game built with `logic/` modules: a graph board from JSON
+   map files drawn as SVG, asymmetric roles, deck-building (`Deck`), an interrupt inside a
+   turn, and `PatchState`.
+   `games/block-blast/` (`logic/` modules): a personal deck per player (`Deck`), polyomino
+   cards from JSON placed with rotations (never mirrored), a hover ghost with a "would clear"
+   preview on a grid, a market whose type the host picks (`logic/market/`: a `Market` base class
+   with swappable subclasses, settings built from their registry with `Choice`), card packs
+   from JSON files the host ticks (`MultiChoice`).
+   `games/marooned/` (`logic/` modules): a hidden-role game (one secret Imposter), a grid map
+   built as it's explored (draw 2 tile cards, place 1), per-player stats feeding end scoring and
+   secret objectives (JSON with a `check` key -> scoring function), hidden picks that only work
+   like a physical game (secret die rolls you may under-report, a Secret Hitler style card
+   hand-off between two players), a nightly secret vote with only the tally shown, `PatchState`.
+
 ## Lobby model (shared by all games)
 - Every connected tab is a **member**: a **spectator** until it joins, then a **player**. Players join and leave explicitly, and only in the lobby phase.
 - Phases: `lobby` (before the game) → `playing` → `finished` → host returns everyone to `lobby`.

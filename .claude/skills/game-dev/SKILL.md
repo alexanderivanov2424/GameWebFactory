@@ -35,6 +35,26 @@ bodies only for what you change.
 | Saved player data, guests vs. accounts, login, limits | "Saved player data" in the header of `APP/gamekit/lobby.py`; headers of `APP/server/sessions.py`, `accounts.py` |
 | Turtle (emergency site shutdown) and its triggers | Header of `APP/server/turtle.py`; CLAUDE.md "Turtle" |
 
+Games at a glance (details in each `NOTES.md`):
+- **tictactoe**: the smallest full game; read it to see the whole shape of a game.
+- **tanks**: hidden locations and mines, turn counters with per-action costs, click-to-target
+  modes on a board with walls, private notes on public log entries.
+- **peruvian-silver**: the biggest; stages inside `playing`, simultaneous secret plays,
+  timed reveals, cards as JSON files (loaded in `cards.py`), forks/branches.
+- **smugglers**: built with `logic/` modules; graph board from JSON maps (SVG), Interpol vs.
+  smugglers, deck-building (`gamekit.Deck`), inspections that interrupt a turn, `PatchState`.
+  Content files: `content/README.md`.
+- **block-blast**: `logic/` modules; 9x9 boards filled with rotatable shape cards (JSON in
+  `cards/`) that place tiles (types with behaviours, `logic/tiles.py`) carrying symbols
+  (`logic/symbols.py`, effects in `logic/effects.py`) as separate layers, row/column clears that pay gold or deal damage, a per-player `gamekit.Deck`, a
+  market of swappable types (Conveyor / Cost, `logic/market/`, picked with a `Choice` setting) dealt from card packs the host ticks (`cards/packs/`, `MultiChoice`), a hover ghost on the board (class toggles only), aiming at a target.
+- **marooned**: `logic/` modules; hidden Imposter, grid island explored by drawing 2 tiles and
+  placing 1, energy/hunger survival, camp projects with a two-player build-check card hand-off,
+  secret gather rolls (announce a worse face, never better), nightly secret vote (tally only),
+  secret objectives scored from per-player stats. Content files: `content/README.md`.
+- **arena**: real-time demo (`RealtimeGame`): keyboard inputs as state, per-tick delta
+  snapshots, canvas drawing with interpolation, ping shown above each player.
+
 ## 2. Make the change
 - Server and client both: the server validates everything; the client only renders state.
 - Constants the user specified go in the server code (`logic/` for games that have it,
