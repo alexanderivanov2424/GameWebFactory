@@ -30,6 +30,7 @@ from .content import DENSITY, INDEX, PHASE, SHC, VACUUM
 
 GAS_MIN = 0.001      # kg: less than this is vacuum
 LIQUID_MIN = 0.05    # kg: less than this disappears
+HEAT_MASS_MIN = 0.5  # kg: add_heat treats a lighter cell as this heavy (no absurd spikes)
 
 
 class World:
@@ -177,7 +178,7 @@ class World:
         """Add heat (kJ) to cell i; vacuum and tiles pass it to the first neighbour holding matter."""
         for j in [i] + self.nbrs[i]:
             if self.el[j] != VACUUM and not self.tile[j] and self.mass[j] > 0:
-                self.temp[j] += kj / (self.mass[j] * SHC[self.el[j]])
+                self.temp[j] += kj / (max(self.mass[j], HEAT_MASS_MIN) * SHC[self.el[j]])
                 if self.temp[j] < -273:
                     self.temp[j] = -273.0
                 return

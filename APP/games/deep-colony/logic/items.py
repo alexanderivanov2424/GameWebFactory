@@ -100,6 +100,5 @@ class Items:
                         other.temp = (other.temp * other.kg + it.temp * it.kg) / (other.kg + it.kg)
                         other.kg += it.kg
                         other.germs += it.germs
-                        other.reserved += it.reserved
                         self.remove(it)
                         break
