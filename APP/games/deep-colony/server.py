@@ -174,6 +174,14 @@ class Game(RealtimeGame):
             raise LobbyError("Only the host can end the colony.")
         self.finish({"reason": f"{member.name} ended the colony on cycle {self.match.cycle}."})
 
+    def admin_info(self):
+        info = super().admin_info()
+        if self.match is not None:
+            m = self.match
+            info["colony"] = {"cycle": m.cycle, "colonists": len(m.dupes), "paused": m.paused,
+                              "speed": m.speed, "buildings": len(m.buildings.by_id)}
+        return info
+
     # --- leaving --------------------------------------------------------------------------
 
     def on_player_removed(self, member):
