@@ -24,6 +24,7 @@
   <script src="render.js" defer></script>
   <script src="tools.js" defer></script>
   <script src="panels.js" defer></script>
+  <script src="panels2.js" defer></script>
   <script src="game.js" defer></script>
 
   <style>
@@ -71,6 +72,13 @@
     #hover div { margin: 1px 0; }
     #log div { margin: 2px 0; color: var(--dc-muted); }
     #log div:first-child { color: var(--dc-text); }
+    #game details.box > summary { cursor: pointer; font-weight: bold; font-size: 0.75rem; text-transform: uppercase; color: var(--dc-muted); }
+    .tech { padding: 4px; margin: 4px 0; border: 1px solid var(--dc-line); border-radius: 4px; }
+    .tech.cur { border-color: var(--dc-accent); background: #243247; }
+    .sched { display: flex; gap: 1px; }
+    .blk { flex: 1; height: 16px; cursor: pointer; box-sizing: border-box; }
+    .blk.now { outline: 2px solid #fff; outline-offset: -2px; }
+    .filt { max-height: 140px; overflow-y: auto; } .filt label { display: block; }
     #result { padding: 8px; margin-bottom: 8px; border-radius: 6px; background: #5a1f24; color: #fff; }
   </style>
 </head>
@@ -131,6 +139,7 @@
           <h4>Priority</h4>
           <div id="prios"></div>
           <h4>Build</h4>
+          <div id="rotbar" style="margin-bottom:4px"></div>
           <div id="buildmenu"></div>
           <div id="buildinfo"></div>
           <h4>Overlay</h4>
@@ -143,6 +152,8 @@
         </div>
         <div id="side">
           <div class="box"><h4>Players</h4><div id="plist"></div></div>
+          <details class="box" id="researchBox"><summary>Research</summary><div id="research"></div></details>
+          <details class="box" id="schedBox"><summary>Schedules</summary><div id="schedules"></div></details>
           <div class="box"><h4>Colonists</h4><div id="dupes"></div></div>
           <div class="box"><h4>Hover</h4><div id="hover" class="muted">Point at the map.</div><div id="hoverActions"></div></div>
           <div class="box"><h4>Colony log</h4><div id="log"></div></div>

@@ -49,6 +49,7 @@
     const g = game(), d = g && building && g.defs.buildings[building];
     const hints = { inspect: "Inspect: point at things to see details", dig: "Dig: drag over rock",
       cancel: "Cancel: drag over orders to remove them", deconstruct: "Deconstruct: drag over buildings",
+      sweep: "Sweep: drag over debris to have it hauled to storage",
       priority: `Priority: drag over orders to set priority ${prio}` };
     let t = tool === "build" ? (d ? `Build ${d.name}: click` + (d.layer === "pipe" || d.layer === "wire" ? " or drag a line" : d.w * d.h === 1 ? " or drag" : "") : "Build: pick a building") : hints[tool] || "";
     if (tool !== "inspect") t += ` (priority ${prio}). Right-click / Esc to cancel`;
@@ -63,6 +64,7 @@
       toolButton("Inspect (I)", "inspect", "Look at things; no orders"),
       toolButton("Dig (G)", "dig", "Drag a rectangle to mark cells for digging"),
       toolButton("Cancel (C)", "cancel", "Drag a rectangle to cancel orders there"),
+      toolButton("Sweep (W)", "sweep", "Drag a rectangle to haul loose debris to storage"),
       toolButton("Deconstruct (X)", "deconstruct", "Drag a rectangle to take buildings apart"),
       toolButton("Priority (P)", "priority", "Drag a rectangle to set its priority"),
     );
@@ -86,7 +88,7 @@
         ...list.map(([id, d]) => data(el("button", {
           className: "t", title: `${d.description || ""} (cost: ${costText(g, d.cost)})${techText(d)}`,
           style: "display:block;width:100%;text-align:left;margin:2px 0",
-          onclick: () => T.setBuilding(id),
+          onclick: () => { if (!DC.panels2.lockedBy(g, id)) T.setBuilding(id); },
           onmouseenter: () => showInfo(id), onmouseleave: () => showInfo(T.state.building),
         }, `${d.name} (${d.w}x${d.h})`, el("span", { className: "cost" }, costText(g, d.cost))), "building", id)))));
     $("overlays").replaceChildren(...DC.render.OVERLAYS.map((o) => data(el("button", {
@@ -154,6 +156,8 @@
         el("div", { className: "bars", title: "Breath, food, bladder, stress, health" },
           bar(d.breath, 100, true), bar(d.kcal, 4000, true), bar(d.bladder, 100, false),
           bar(d.stress, 100, false), bar(d.health, 100, true)),
+        el("div", { className: "muted", title: "Stamina" }, "Stamina", bar(d.stamina == null ? 100 : d.stamina, 100, true)),
+        el("div", { className: "muted" }, `Schedule ${d.schedule || "1"}`, d.asleep ? el("b", {}, " \u00b7 Asleep") : ""),
         el("div", { className: "muted" }, d.task || "idle",
           d.carry ? ` · carrying ${kgText(d.carry.kg)} ${elName(g, d.carry.el)}` : ""))));
     const keys = Object.keys(g.log).map(Number).sort((a, b) => b - a);
@@ -230,20 +234,21 @@
     const me = state.you;
     const here = h ? Object.values(g.dupes).filter((d) => Math.round(d.x) === h[0] && Math.round(d.y) === h[1]) : [];
     const R = Math.round;
-    const dsig = here.map((d) => [d.name, d.task, R(d.breath), R(d.kcal), R(d.bladder), R(d.stress), R(d.health), R(d.germs || 0), !!d.sick,
+    const items = h ? DC.panels2.itemLines(g, h[0], h[1]) : [];
+    const dsig = here.map((d) => [d.stamina, d.asleep, d.name, d.task, R(d.breath), R(d.kcal), R(d.bladder), R(d.stress), R(d.health), R(d.germs || 0), !!d.sick,
       d.carry ? [d.carry.el, R(d.carry.kg)] : 0]);
     if (h) {
       parts.splice(1, 0, { net: netLines(g, h[0], h[1]) });
       for (const p of parts) if (p.id) p.net = netLines(g, h[0], h[1], p.b, p.d);
     }
-    fill("hover", [dsig, parts.map((p) => p.cell || (p.id ? [p.id, p.b] : 0)), parts.map((p) => p.net), me], () => {
+    fill("hover", [dsig, parts.map((p) => p.cell || (p.id ? [p.id, p.b] : 0)), parts.map((p) => p.net), me, items.map((e) => e.textContent), isPlayer()], () => {
       if (!h) return [el("div", { className: "muted" }, "Point at the map.")];
       const dl = here.map((d) => el("div", { style: "margin-bottom:6px" },
         el("div", {}, el("b", {}, d.name), d.sick ? el("span", { className: "sick" }, " SICK") : ""),
         el("div", { className: "muted" }, d.task || "idle"),
         el("div", {}, `Breath ${R(d.breath)}, food ${R(d.kcal)} kcal, bladder ${R(d.bladder)}, stress ${R(d.stress)}, health ${R(d.health)}, germs ${R(d.germs || 0)}`),
         d.carry ? el("div", {}, `Carrying ${elName(g, d.carry.el)} ${kgText(d.carry.kg)}`) : ""));
-      return dl.concat(parts.map((p) => {
+      return dl.concat(items).concat(parts.map((p) => {
         if (p.net && !p.id) return el("div", {}, ...p.net.map((t) => el("div", {}, t)));
         if (p.cell) {
           const c = p.cell;
@@ -259,6 +264,8 @@
         if (b.b && d.kind !== "none") rows.push(el("div", {}, b.on ? "On" : "Off"));
         if (g.players[b.by]) rows.push(el("div", { className: "muted" }, "Placed by " + g.players[b.by].name + ` (priority ${b.prio})`));
         if (b.dc) rows.push(el("div", {}, "Marked for deconstruction"));
+        if (b.b && b.germs) rows.push(el("div", {}, `Germs on structure: ${b.germs}`));
+        if (d.rotatable) rows.push(el("div", {}, `Rotation: ${(b.r || 0) * 90}\u00b0`));
         for (const t of p.net || []) rows.push(el("div", {}, t));
         return el("div", { style: "margin-top:6px" }, ...rows);
       }));
@@ -266,9 +273,14 @@
     // The on/off button lives in its own box, rebuilt only when its target or label changes,
     // so a status text changing every tick can't swallow the click.
     const sw = parts.find((p) => p.b && p.b.b && p.d.kind !== "none");
-    fill("hoverActions", sw && isPlayer() ? [sw.id, sw.b.on] : null, () => !(sw && isPlayer()) ? [] :
-      [el("button", { className: "t", textContent: sw.b.on ? "Turn off" : "Turn on",
-        onclick: () => DC.tools.send({ action: "toggle", building: sw.id }) })]);
+    const fe = parts.find((p) => p.b && p.b.b && p.d.filterable);
+    fill("hoverActions", [sw && isPlayer() ? [sw.id, sw.b.on] : 0, fe ? [fe.id, fe.b.filter || null] : 0, isPlayer()], () => {
+      const out = [];
+      if (sw && isPlayer()) out.push(el("button", { className: "t", textContent: sw.b.on ? "Turn off" : "Turn on",
+        onclick: () => DC.tools.send({ action: "toggle", building: sw.id }) }));
+      if (fe) out.push(DC.panels2.filterEditor(g, fe.id, fe.b, fe.d, isPlayer()));
+      return out;
+    });
   }
 
   function legend() {
@@ -289,6 +301,7 @@
     topbar(g);
     sidePanels(g, state);
     toolHint();
+    DC.panels2.refresh(g);
     mark($("tools"), "tool", DC.tools.state.tool);
     mark($("prios"), "prio", DC.tools.state.prio);
     mark($("buildmenu"), "building", DC.tools.state.tool === "build" ? DC.tools.state.building : "");
