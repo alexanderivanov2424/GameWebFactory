@@ -1,0 +1,12 @@
+{
+  "name": "Coin Snake",
+  "cost": 4,
+  "tiles": [
+    ".##",
+    "##."
+  ],
+  "symbols": [
+    "..C",
+    "A.."
+  ]
+}

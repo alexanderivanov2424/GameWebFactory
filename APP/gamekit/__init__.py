@@ -2,7 +2,7 @@
 
 Games import everything they need from here; they never import the site server (`server`).
 
-    from gamekit import LobbyGame, LobbyError, PLAYING, FINISHED, Int, TurnQueue, SecretChoices
+    from gamekit import LobbyGame, LobbyError, PLAYING, FINISHED, Int, Choice, MultiChoice, TurnQueue, SecretChoices
     from gamekit import Deck                            # draw/discard piles of card instances
     from gamekit import RealtimeGame                    # real-time games (tick loop)
     from gamekit import FullState, PatchState, Snapshots  # SYNC choices
@@ -17,7 +17,7 @@ Modules (each header documents its API):
     lobby.py     LobbyGame: members, host, ready/start, phases, state sync, timers, ACTIONS
     realtime.py  RealtimeGame: LobbyGame on a fixed tick, buffered inputs, ping
     sync.py      FullState / PatchState / Snapshots: how state reaches clients (SYNC = ...)
-    settings.py  Int(...): host settings declared once (server validation + client inputs)
+    settings.py  Int(...), Choice(...), MultiChoice(...): host settings declared once (server validation + client inputs)
     validate.py  LobbyError and validators for what players send
     turns.py     TurnQueue: turn order by counters (cost 1 per action = round-robin)
     choices.py   SecretChoices: hidden simultaneous picks, revealed together
@@ -32,11 +32,11 @@ from gamekit.choices import SecretChoices
 from gamekit.deck import Deck
 from gamekit.lobby import FINISHED, LOBBY, PLAYING, LobbyGame
 from gamekit.realtime import RealtimeGame
-from gamekit.settings import Int
+from gamekit.settings import Choice, Int, MultiChoice
 from gamekit.sync import FullState, PatchState, Snapshots
 from gamekit.turns import TurnQueue
 from gamekit.validate import LobbyError
 from server.turtle import turtle  # emergency shutdown for safety checks (server/turtle.py)
 
-__all__ = ["Deck", "FINISHED", "LOBBY", "PLAYING", "FullState", "Int", "LobbyError", "LobbyGame", "PatchState",
+__all__ = ["Choice", "Deck", "FINISHED", "LOBBY", "PLAYING", "FullState", "Int", "LobbyError", "LobbyGame", "MultiChoice", "PatchState",
            "RealtimeGame", "SecretChoices", "Snapshots", "TurnQueue", "turtle"]

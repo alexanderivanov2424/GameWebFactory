@@ -1,0 +1,12 @@
+{
+  "name": "Goblin cards",
+  "description": "Purple goblins you place on an opponent's board to spoil their lines. Leave your deck once played.",
+  "cards": {
+    "goblin-pair": 1,
+    "goblin-ambush": 1,
+    "goblin-wedge": 1,
+    "goblin-siege": 1,
+    "goblin-gap": 1,
+    "goblin-sprawl": 1
+  }
+}

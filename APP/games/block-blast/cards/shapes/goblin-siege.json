@@ -1,0 +1,17 @@
+{
+  "name": "Goblin Siege",
+  "cost": 3,
+  "tile": "goblin",
+  "playOn": "opponent",
+  "exile": true,
+  "tiles": [
+    "#.#",
+    "...",
+    "#.#"
+  ],
+  "symbols": [
+    "G.G",
+    "...",
+    "G.G"
+  ]
+}

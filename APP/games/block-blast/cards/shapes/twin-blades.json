@@ -1,0 +1,12 @@
+{
+  "name": "Twin Blades",
+  "cost": 4,
+  "tiles": [
+    "##",
+    "##"
+  ],
+  "symbols": [
+    "A.",
+    ".A"
+  ]
+}

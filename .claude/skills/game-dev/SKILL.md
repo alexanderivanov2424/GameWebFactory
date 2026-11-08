@@ -43,6 +43,10 @@ Games at a glance (details in each `NOTES.md`):
 - **smugglers**: built with `logic/` modules; graph board from JSON maps (SVG), Interpol vs.
   smugglers, deck-building (`gamekit.Deck`), inspections that interrupt a turn, `PatchState`.
   Content files: `content/README.md`.
+- **block-blast**: `logic/` modules; 9x9 boards filled with rotatable shape cards (JSON in
+  `cards/`) that place tiles (types with behaviours, `logic/tiles.py`) carrying symbols
+  (`logic/symbols.py`, effects in `logic/effects.py`) as separate layers, row/column clears that pay gold or deal damage, a per-player `gamekit.Deck`, a
+  market of swappable types (Conveyor / Cost, `logic/market/`, picked with a `Choice` setting) dealt from card packs the host ticks (`cards/packs/`, `MultiChoice`), a hover ghost on the board (class toggles only), aiming at a target.
 - **arena**: real-time demo (`RealtimeGame`): keyboard inputs as state, per-tick delta
   snapshots, canvas drawing with interpolation, ping shown above each player.
 
@@ -84,6 +88,9 @@ Games at a glance (details in each `NOTES.md`):
    Cover the new rules, rejections, hidden-info leaks (check other players' and spectators'
    `state(i)`), game end (win, draw, last player destroyed by their own action) and a
    player leaving mid-game. Make them deterministic (set internals or seed `random`).
+   Split tests by topic (`test_rules.py`, `test_lobby.py`, ...); fixtures several files share go
+   in `tests/helpers.py` (not collected: only `test_*.py` are), imported with
+   `importlib.import_module("games.<id>.tests.helpers")` (see block-blast).
    Real-time games: `Sim` never ticks on its own, so drive them with `sim.tick(n)`,
    `sim.input(i, {...})` and `sim.ping(i, rtt)`.
    Shared code gets tests in `APP/gamekit/tests/` (a tiny Game class passed to `Sim(MyGame)`).

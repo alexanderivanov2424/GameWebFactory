@@ -1,0 +1,9 @@
+{
+  "name": "Siege cards",
+  "description": "Grey siege engines: clear 3 siege symbols for +1 strength. Leave your deck once played.",
+  "cards": {
+    "trebuchet": 1,
+    "battering-ram": 1,
+    "catapult": 1
+  }
+}

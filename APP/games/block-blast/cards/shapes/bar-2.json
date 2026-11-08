@@ -1,0 +1,10 @@
+{
+  "name": "Bar of Two",
+  "cost": 1,
+  "tiles": [
+    "##"
+  ],
+  "symbols": [
+    "C."
+  ]
+}

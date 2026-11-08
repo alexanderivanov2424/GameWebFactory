@@ -26,6 +26,10 @@ the pitfalls hit while building it; read the one closest to your game):
   roles, deck-building with `gamekit.Deck`, an interrupt that hands the action to another
   player mid-turn (`actor()` vs `turn()`), a two-message action, `PatchState`, and the server
   sending reachable spots/targets so the client holds no rules.
+- `APP/games/block-blast/`: `logic/` modules; shape cards (polyominoes) placed on a grid with
+  rotations, sent precomputed in the state so the client never rotates anything itself; a
+  hover ghost with a "would clear" preview; one `gamekit.Deck` per player; a market whose
+  slots stay empty until the end of the turn.
 - `APP/games/arena/`: real-time (`RealtimeGame`): keyboard input as state, per-tick delta
   snapshots, canvas drawing with interpolation, showing ping. Start from it for continuous movement.
 
@@ -144,6 +148,10 @@ and `settings.py`. Hooks below are on `Game` in `server.py`; most delegate to `s
   validated (non-integers rejected, out-of-range clamped) and drawn on the client by
   `settingsForm`. A bound may name an earlier setting (`high="boardSize"`). For other
   cross-setting rules override `clean_settings`, call `super()`, then adjust.
+  `Choice("Label", default="a", options={"a": "Option A", "b": "Option B"})` is a drop-down
+  of fixed string values (block-blast builds one from a registry of market types);
+  `MultiChoice("Label", default=["a"], options={...}, low=1)` is a set of checkboxes whose value
+  is a list (block-blast's card packs).
 - `ACTIONS = {"move": "move"}`: game messages `{"action": "move", ...}` → `self.move(member, data)`.
   Override `on_game_message` only for checks shared by every action (whose turn, stage), then
   `await self.dispatch(member, data)`.

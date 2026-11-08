@@ -69,14 +69,14 @@ APP/
     utils.py            Platform helpers (clean_text, CLIENT_ID)
     tests/              Protocol, rooms/reconnects, accounts/sessions, turtle, game loading
   gamekit/              Shared game library, server side (Python package `gamekit`). Games import only this.
-    __init__.py         Re-exports: LobbyGame, LobbyError, PLAYING/FINISHED/LOBBY, Int, TurnQueue, SecretChoices,
+    __init__.py         Re-exports: LobbyGame, LobbyError, PLAYING/FINISHED/LOBBY, Int, Choice, MultiChoice, TurnQueue, SecretChoices,
                         Deck, RealtimeGame, FullState, PatchState, Snapshots, turtle
     lobby.py            LobbyGame: spectators/players, host, ready, phases, public + private state sync,
                         SETTINGS, ACTIONS dispatch, game_number, schedule() timers, SYNC,
                         saved player data (load_data / save_data / account_name)
     realtime.py         RealtimeGame: LobbyGame on a fixed tick (tick(dt)), buffered inputs, ping
     sync.py             FullState / PatchState / Snapshots: how state reaches clients (SYNC), merge patches
-    settings.py         Int(...): host settings declared once (server validation + client inputs)
+    settings.py         Int(...), Choice(...), MultiChoice(...): host settings declared once (server validation + client inputs)
     validate.py         LobbyError and validators for player input (whole_number, one_of, cell, clean_text)
     turns.py            TurnQueue: turn counters (cost 1 per action = round-robin)
     choices.py          SecretChoices: hidden simultaneous picks (required + optional choosers), revealed all at once
@@ -167,6 +167,11 @@ Summary:
    `games/smugglers/` is the first game built with `logic/` modules: a graph board from JSON
    map files drawn as SVG, asymmetric roles, deck-building (`Deck`), an interrupt inside a
    turn, and `PatchState`.
+   `games/block-blast/` (`logic/` modules): a personal deck per player (`Deck`), polyomino
+   cards from JSON placed with rotations (never mirrored), a hover ghost with a "would clear"
+   preview on a grid, a market whose type the host picks (`logic/market/`: a `Market` base class
+   with swappable subclasses, settings built from their registry with `Choice`), card packs
+   from JSON files the host ticks (`MultiChoice`).
 
 ## Lobby model (shared by all games)
 - Every connected tab is a **member**: a **spectator** until it joins, then a **player**. Players join and leave explicitly, and only in the lobby phase.

@@ -1,0 +1,13 @@
+{
+  "name": "Goblin Sprawl",
+  "cost": 1,
+  "tile": "goblin",
+  "playOn": "opponent",
+  "exile": true,
+  "tiles": [
+    "#...#"
+  ],
+  "symbols": [
+    "G...G"
+  ]
+}

@@ -1,0 +1,10 @@
+{
+  "name": "Buckler",
+  "cost": 1,
+  "tiles": [
+    "##"
+  ],
+  "symbols": [
+    "S."
+  ]
+}

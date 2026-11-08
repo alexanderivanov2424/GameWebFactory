@@ -1,0 +1,10 @@
+{
+  "name": "Pair",
+  "cost": 5,
+  "tiles": [
+    "##"
+  ],
+  "symbols": [
+    "CA"
+  ]
+}
