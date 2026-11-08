@@ -1,6 +1,6 @@
 {
   "name": "Corner",
-  "cost": 3,
+  "cost": 2,
   "tile": "grey",
   "tiles": [
     "##",

@@ -31,7 +31,8 @@ The file name (lowercase letters, digits, `-`, `_`) is the card id.
 - `name`: shown on the card (up to 30 characters).
 - `cost`: gold to buy the card in the Cost Market (0 to 30; required). Set by hand per card;
   the current values start from the number of tiles, +1 if the card has an attack, and +2 (+3
-  with no blank tile) for small cards with more symbols than blank tiles. The Conveyor Market
+  with no blank tile) for small cards with more symbols than blank tiles, then -1 for every
+  card (at least 1). The Conveyor Market
   ignores it (price = slot position).
 - `tiles`: rows of equal length, at most 5×5. `.` is no tile, `#` is a tile of the card's
   `tile` type, and a tile code (`b`, `g`, `x`) is a tile of that type (for cards that mix types).

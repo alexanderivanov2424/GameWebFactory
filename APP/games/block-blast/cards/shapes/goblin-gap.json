@@ -1,6 +1,6 @@
 {
   "name": "Goblin Gap",
-  "cost": 2,
+  "cost": 1,
   "tile": "goblin",
   "playOn": "opponent",
   "exile": true,

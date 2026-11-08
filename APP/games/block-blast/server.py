@@ -15,7 +15,8 @@ help window's legend reads tileTypes[code].help and game.symbolHelp (symbol name
 
 Setup: turn order is random. Everyone's deck is the starting deck (Square: a 2x2 with a shield
 in one corner, Hook: an L with an attack in its corner, Tee: a T with a coin on its left arm,
-a bar of 4 with a shield, and bars of 3 and 2), shuffled; everyone draws 3. Starting gold
+a bar of 4 with a shield, a bar of 3 with an attack at one end and a bar of 2 with a coin
+at one end), shuffled; everyone draws 3. Starting gold
 follows turn order: 1 for the first player, 2 for the second, and so on.
 
 Card packs: the host picks which packs of bonus cards make up the market's pool, the bonus deck
