@@ -18,11 +18,18 @@ Input messages:  {"type": "input", "cursor"?: [x, y], "tool"?: str (<= 24 chars)
                   "drag"?: [x0, y0, x1, y1]}   held state: where you point, shown to everyone
 Game messages (any player, paused or not; spectators can't):
                  {"action": "dig", "rect": [x0, y0, x1, y1], "prio"?: 1-9}
-                 {"action": "build", "building": id, "cells": [[x, y], ...], "prio"?: 1-9}
-                     (1x1 buildings: every cell of a drag; bigger ones: one at cells[0], top-left)
+                 {"action": "build", "building": id, "cells": [[x, y], ...], "prio"?: 1-9, "rot"?: 0-3}
+                     (1x1 buildings: every cell of a drag; bigger ones: one at cells[0], the
+                     top-left of the footprint turned rot quarter turns clockwise; locked until
+                     researched)
+                 {"action": "sweep", "rect": [...], "prio"?: 1-9}  haul the debris there to storage
                  {"action": "deconstruct", "rect": [...]}   {"action": "cancel", "rect": [...]}
                  {"action": "priority", "rect": [...], "prio": 1-9}
                  {"action": "toggle", "building": id}       machine on/off
+                 {"action": "filter", "building": id, "elements": [element ids] | null}  storage filter
+                 {"action": "research", "tech": id}          what the colony researches next
+                 {"action": "schedule", "schedule": "1"-"3", "blocks": 24 chars of w/d/s}
+                 {"action": "assign", "colonist": id, "schedule": "1"-"3"}
                  {"action": "pause", "paused": bool}         {"action": "speed", "speed": 1-3}
                  {"action": "end"}                            host only: end the colony
 Public state:    logic/view.py (grid rows, buildings, digs, items, colonists, networks,
@@ -74,7 +81,8 @@ class Game(RealtimeGame):
     ACTIONS = {
         "dig": "dig", "build": "build", "deconstruct": "deconstruct", "cancel": "cancel",
         "priority": "priority", "toggle": "toggle", "pause": "pause", "speed": "speed",
-        "end": "end_colony",
+        "end": "end_colony", "sweep": "sweep", "filter": "set_filter", "research": "research",
+        "schedule": "set_schedule", "assign": "assign",
     }
 
     def __init__(self, room):
@@ -140,7 +148,37 @@ class Game(RealtimeGame):
         if not isinstance(cells, list) or not 1 <= len(cells) <= orders.MAX_CELLS:
             raise LobbyError("Bad cells.")
         cells = [tuple(_int_list(c, 2, "cell")) for c in cells]
-        orders.build(self.match, member.id, building, cells, _prio(data))
+        rot = data.get("rot", 0)
+        if type(rot) is not int or not 0 <= rot <= 3:
+            raise LobbyError("Bad rotation.")
+        orders.build(self.match, member.id, building, cells, _prio(data), rot)
+
+    def sweep(self, member, data):
+        orders.sweep(self.match, member.id, _rect_cells(data), _prio(data))
+
+    def set_filter(self, member, data):
+        building = data.get("building")
+        if not isinstance(building, str):
+            raise LobbyError("Pick a building.")
+        orders.set_filter(self.match, member.id, building, data.get("elements"))
+
+    def research(self, member, data):
+        tech = data.get("tech")
+        if not isinstance(tech, str):
+            raise LobbyError("Pick a research.")
+        self.match.research.select(member.id, tech)
+
+    def set_schedule(self, member, data):
+        sid = data.get("schedule")
+        if not isinstance(sid, str):
+            raise LobbyError("Unknown schedule.")
+        self.match.schedules.set_blocks(member.id, sid, data.get("blocks"))
+
+    def assign(self, member, data):
+        dupe, sid = data.get("colonist"), data.get("schedule")
+        if not isinstance(dupe, str) or not isinstance(sid, str):
+            raise LobbyError("Pick a colonist and a schedule.")
+        self.match.schedules.assign(member.id, dupe, sid)
 
     def deconstruct(self, member, data):
         orders.deconstruct(self.match, member.id, _rect_cells(data))

@@ -11,17 +11,22 @@ Element file (all optional except name/phase):
     decor (decor of loose debris of it), density (layering rank: gases/liquids, higher sinks),
     breathable (gases), germs (germs per kg when generated),
     freezeAt/freezeTo, meltAt/meltTo, boilAt/boilTo, condenseAt/condenseTo (°C, element id),
+    freezeLatent/meltLatent/boilLatent/condenseLatent (kJ per kg absorbed or released by that
+    phase change; heat.py holds the cell at the threshold until it's paid),
     offgas {"element", "rate": kg/s per exposed cell or debris pile}, kcal (food, per kg).
 Building file:
     name, category, description, w, h (cells; x, y of a building = its top-left cell),
     cost {material class or element id: kg}, buildTime (s of colonist work),
-    kind (behaviour key, machines.KINDS; "none" for passive), layer ("main" | "pipe" | "wire"),
+    kind (behaviour key, machines.KINDS; "none" for passive),
+    layer ("main" | "pipe" (liquid) | "gaspipe" | "wire"), rotatable (players may turn it),
     solid (blocks gas/liquid, can be stood on), insulated, ladder, door (solid but walkable),
     floor (bottom row needs solid ground or tiles under it), buildable (default true),
     deconstructable (default true), operated (a colonist must work at it),
     toilet (colonists relieve themselves here),
     decor {"value", "radius"}, power {"use": W} | {"gen": W} | {"capacity": J},
-    powerPort / pipeIn / pipeOut [dx, dy] (cell offsets from the top-left),
+    powerPort / pipeIn / pipeOut / gasIn / gasOut [dx, dy] (cell offsets from the top-left of the
+    unrotated footprint; Building.port_cell applies the rotation),
+    storage kinds: filterable (players pick which elements it accepts),
     accepts {element id: kg capacity} (colonists keep it supplied), capacity (storage kg),
     heat (kW given off while working), params {kind-specific numbers}.
 
@@ -38,8 +43,9 @@ log = logging.getLogger("deep-colony")
 
 ROOT = Path(__file__).resolve().parent.parent
 PHASES = ("solid", "liquid", "gas", "vacuum", "food")
-LAYERS = ("main", "pipe", "wire")
-CATEGORIES = ("base", "oxygen", "power", "food", "plumbing", "climate", "decor")
+LAYERS = ("main", "pipe", "gaspipe", "wire")
+CATEGORIES = ("base", "oxygen", "power", "food", "plumbing", "ventilation", "climate", "decor", "research")
+PORTS = ("powerPort", "pipeIn", "pipeOut", "gasIn", "gasOut")
 ROW_CHARS = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
 
 
@@ -84,6 +90,7 @@ def parse_element(element_id, data):
         if f"{key}At" in data:
             out[f"{key}At"] = _num(data, f"{key}At", 0)
             out[f"{key}To"] = str(data.get(f"{key}To", ""))
+            out[f"{key}Latent"] = _num(data, f"{key}Latent", 0, 0, 1e5)
     if isinstance(data.get("offgas"), dict):
         out["offgas"] = {"element": str(data["offgas"].get("element", "")),
                          "rate": _num(data["offgas"], "rate", 0, 0, 100)}
@@ -118,13 +125,13 @@ def parse_building(building_id, data):
         "buildTime": _num(data, "buildTime", 5, 0, 600), "kind": str(data.get("kind", "none")),
         "layer": layer,
         **{flag: data.get(flag) is True for flag in
-           ("solid", "insulated", "ladder", "door", "floor", "operated", "toilet")},
+           ("solid", "insulated", "ladder", "door", "floor", "operated", "toilet", "rotatable",
+            "filterable", "bed")},
         "buildable": data.get("buildable", True) is not False,
         "deconstructable": data.get("deconstructable", True) is not False,
         "decor": {"value": _num(decor, "value", 0, -100, 100), "radius": int(_num(decor, "radius", 0, 0, 10))},
         "power": {k: float(v) for k, v in power.items()},
-        "powerPort": _offset(data, "powerPort", w, h), "pipeIn": _offset(data, "pipeIn", w, h),
-        "pipeOut": _offset(data, "pipeOut", w, h),
+        **{port: _offset(data, port, w, h) for port in PORTS},
         "accepts": {str(k): float(v) for k, v in accepts.items()},
         "capacity": _num(data, "capacity", 0, 0, 1e6), "heat": _num(data, "heat", 0, 0, 1000),
         "params": dict(data.get("params", {})) if isinstance(data.get("params"), dict) else {},

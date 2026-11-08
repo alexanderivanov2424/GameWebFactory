@@ -14,5 +14,6 @@
     "value": 0,
     "radius": 0
   },
-  "description": "Colonists store food here and eat from it."
+  "description": "Colonists store food here and eat from it.",
+  "filterable": true
 }

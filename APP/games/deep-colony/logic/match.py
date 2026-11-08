@@ -10,8 +10,8 @@
     match.result              # None while playing; then {"reason": ...} (all colonists dead)
 
 State it holds: world (grid.World), items (items.Items), buildings (buildings.Buildings),
-digs (orders.py), dupes {id: dupes.Dupe}, networks (networks.Networks), time (game seconds),
-paused, speed, log.
+digs (orders.py), dupes {id: dupes.Dupe}, networks (networks.Networks), research
+(research.Research), schedules (schedule.Schedules), time (game seconds), paused, speed, log.
 
 One step: every FLUID_DT of game time the grid updates (fluids, heat, germs, debris falling,
 decor when buildings/debris changed); every step: power networks, machines, colonists (chores).
@@ -26,6 +26,8 @@ from .buildings import Buildings
 from .grid import World
 from .items import Items
 from .networks import Networks
+from .research import Research
+from .schedule import Schedules
 
 CYCLE = 600.0         # game seconds per cycle (day)
 FLUID_DT = 0.5        # game seconds between grid updates
@@ -51,6 +53,8 @@ class Match:
         self.digs = {}
         self.dupes = {}
         self.networks = Networks(self)
+        self.research = Research(self)
+        self.schedules = Schedules(self)
         self.time = 0.0
         self.cycle_length = CYCLE
         self.paused = False

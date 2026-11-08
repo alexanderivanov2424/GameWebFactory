@@ -15,14 +15,21 @@ public(match, cursors) = {
       "decor" ROW_CHARS[decor + 30] clamped (-30..+31)
     rebuilt at most every half game second (or when buildings change), so a row is resent
     only when something in it changed.
-  "buildings": {id: {"t" type, "x", "y", "b" (1 built / 0 site), "p" (progress %), "by", "prio",
+  "buildings": {id: {"t" type, "x", "y" (top-left of the rotated footprint), "r" (0-3 quarter
+      turns clockwise), "b" (1 built / 0 site), "p" (progress %), "by", "prio",
       "on" (0/1), "pw" (0/1 powered), "st"? status text, "store"? {el: kg}, "need"? {cost key:
-      kg still missing}, "dc"? 1 marked for deconstruction, "dcBy"?}},
+      kg still missing}, "dc"? 1 marked for deconstruction, "dcBy"?, "germs" (on the structure),
+      "filter"? [element ids] (storage kinds with a filter set; absent = accepts everything)}},
   "digs": {"<cell index>": {"by", "prio", "p" (progress %)}},
-  "items": {id: {"el", "kg", "x", "y"}},
+  "items": {id: {"el", "kg", "x", "y", "sw"? player id who marked it for sweeping}},
   "dupes": {id: {"name", "x", "y" (cells, 0.05), "task", "breath", "kcal", "bladder", "stress",
-      "health", "germs", "sick" (0/1), "carry"? {"el", "kg"}}},
-  "power": networks.power_summary(), "pipes": networks.pipe_summary(),
+      "health", "stamina", "germs", "sick" (0/1), "asleep" (0/1), "schedule" ("1"-"3"),
+      "carry"? {"el", "kg"}}},
+  "power": networks.power_summary(),
+  "pipes": networks.pipe_summary()   {"<cell index>": {"el", "kg"}} liquid in each pipe segment,
+  "gaspipes": networks.gas_summary() {"<cell index>": {"el", "kg"}} gas in each gas pipe segment,
+  "research": research.public() (techs with progress/done, "current"?),
+  "schedules": {"1"-"3": {"name", "blocks" (24 chars: w work, d downtime, s sleep)}}, "hour" (0-23),
   "colony": {el: kg} (debris + everything in storage),
   "players": {pid: {"name", "color", "cursor"? [x, y], "tool"?, "drag"? [x0, y0, x1, y1]}},
   "log": {"<n>": text} (last 30), "logCount",
@@ -87,8 +94,11 @@ def _kg(v):
 
 
 def _building(b):
-    out = {"t": b.type, "x": b.x, "y": b.y, "b": 1 if b.built else 0, "p": int(b.progress * 100),
-           "by": b.by, "prio": b.prio, "on": 1 if b.enabled else 0, "pw": 1 if b.powered else 0}
+    out = {"t": b.type, "x": b.x, "y": b.y, "r": b.rot, "b": 1 if b.built else 0, "p": int(b.progress * 100),
+           "by": b.by, "prio": b.prio, "on": 1 if b.enabled else 0, "pw": 1 if b.powered else 0,
+           "germs": int(b.germs)}
+    if b.filter is not None:
+        out["filter"] = list(b.filter)
     if b.status:
         out["st"] = b.status
     if b.store:
@@ -107,11 +117,19 @@ def _building(b):
     return out
 
 
+def _item(it):
+    out = {"el": it.el, "kg": _kg(it.kg), "x": it.x, "y": it.y}
+    if it.sweep:
+        out["sw"] = it.sweep["by"]
+    return out
+
+
 def _dupe(d):
     out = {"name": d.name, "x": quantize(d.x, 0.05), "y": quantize(d.y, 0.05), "task": d.task,
            "breath": int(d.breath), "kcal": int(d.kcal), "bladder": int(d.bladder),
            "stress": int(d.stress), "health": int(d.health), "germs": int(d.germs),
-           "sick": 1 if d.sick > 0 else 0}
+           "sick": 1 if d.sick > 0 else 0, "stamina": int(getattr(d, "stamina", 100)),
+           "asleep": 1 if getattr(d, "asleep", False) else 0, "schedule": getattr(d, "schedule", "1")}
     if d.carry:
         out["carry"] = {"el": d.carry["el"], "kg": _kg(d.carry["kg"])}
     return out
@@ -145,10 +163,14 @@ def public(match, cursors):
         "buildings": {b.id: _building(b) for b in match.buildings},
         "digs": {str(i): {"by": o["by"], "prio": o["prio"], "p": int(o["progress"] * 100)}
                  for i, o in match.digs.items()},
-        "items": {it.id: {"el": it.el, "kg": _kg(it.kg), "x": it.x, "y": it.y} for it in match.items},
+        "items": {it.id: _item(it) for it in match.items},
         "dupes": {d.id: _dupe(d) for d in match.dupes.values()},
         "power": match.networks.power_summary(),
         "pipes": match.networks.pipe_summary(),
+        "gaspipes": match.networks.gas_summary(),
+        "research": match.research.public(),
+        "schedules": match.schedules.public(),
+        "hour": match.schedules.hour(),
         "colony": colony_totals(match),
         "players": _players(match, cursors),
         "log": {str(n): text for n, text in match.log_entries.items()},

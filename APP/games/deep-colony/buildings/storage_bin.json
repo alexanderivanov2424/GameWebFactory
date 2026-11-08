@@ -14,5 +14,6 @@
     "value": -5,
     "radius": 1
   },
-  "description": "Colonists haul loose materials here."
+  "description": "Colonists haul loose materials here.",
+  "filterable": true
 }

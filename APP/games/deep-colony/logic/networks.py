@@ -256,6 +256,9 @@ class Networks:
             return 0.0
         return max(0.0, self._icount[nid] * PIPE_CAP - self._total(nid))
 
+    def gas_summary(self):
+        return {}  # gas pipes: being implemented
+
     def pipe_summary(self):
         self._sync()
         out = {}

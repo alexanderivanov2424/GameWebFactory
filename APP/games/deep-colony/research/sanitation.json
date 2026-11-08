@@ -1,0 +1,12 @@
+{
+  "name": "Sanitation",
+  "cost": 20,
+  "requires": [
+    "plumbing"
+  ],
+  "unlocks": [
+    "water_sieve",
+    "deodorizer"
+  ],
+  "description": "Clean polluted water and polluted oxygen."
+}

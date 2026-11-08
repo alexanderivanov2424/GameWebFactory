@@ -1,0 +1,11 @@
+{
+  "name": "Ventilation",
+  "cost": 20,
+  "requires": [],
+  "unlocks": [
+    "gas_pipe",
+    "gas_pump",
+    "gas_vent"
+  ],
+  "description": "Move gases through pipes."
+}

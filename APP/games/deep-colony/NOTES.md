@@ -37,6 +37,25 @@ Game time in seconds; a cycle is `match.CYCLE` (600 s). Mass kg, temperature °C
 `emit(x, y, el, kg, temp, germs)`, `take(i, ids, kg)`, `dig(i)`, `add_heat(i, kj)`, `nbrs[i]`.
 `content.PHASE/SHC/COND/DENSITY[el index]` for hot loops.
 
+**Rotation**: `b.rot` 0-3, `b.w`/`b.h` rotated size; always use `b.cells()`, `b.bottom_cells()`,
+`b.port_cell(key)` (ports: powerPort, pipeIn, pipeOut, gasIn, gasOut), never `b.d["w"]`.
+**Never lose mass**: `world.release(x, y, el, kg, temp, germs)` = emit, and whatever doesn't fit
+waits in `world.pending` (retried by `world.drain_pending()` each fluid step). Machines don't
+release blindly: when their output can't be placed they keep it in `b.state` and block
+("Overpressure").
+**Stores**: `b.deliver(el, kg, temp, germs)` (temperature averaged by mass in `b.store_temp`,
+germs onto the structure `b.germs`), `b.take(el, kg) -> (kg, temp, germs)` (a share of the
+structure's germs leaves with it). Never write `b.store[...]` directly outside buildings.py.
+`b.filter` (None = all) / `b.accepts_element(el)` for storage kinds with `filterable`.
+**Germs on things**: `germs.touch(match, dupe, b, dt)` exchanges germs between a colonist and a
+structure they work at or use (call it from chores); structures' and debris germs die off.
+**Sweep**: `item.sweep` ({"by", "prio"} or None); only swept debris is hauled to storage
+(supply and eating still take any debris).
+**Research** (`research.py`): `match.research.is_unlocked(btype)`, `select`, `add_points`;
+Research Station behaviour is in research.py (machines delegates).
+**Schedules** (`schedule.py`): `match.schedules.block_for(dupe)` -> "w"/"d"/"s"; `Dupe.schedule`
+("1"-"3"), `Dupe.stamina` 0-100, `Dupe.asleep`; beds are buildings with `d["bed"]`.
+
 **fluids / heat / germs / mapgen**: `fluids.step(world, dt)`, `heat.step(world, dt)`,
 `germs.step(world, items, dt)`, `germs.update_decor(world, buildings, items)` (fills
 `world.decor`), `mapgen.generate(w, h, rng) -> (World, (pod_x, pod_y))`.

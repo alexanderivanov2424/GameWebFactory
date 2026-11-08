@@ -4,13 +4,17 @@ Any player may give any order at any time (paused or not); every order records w
 ("by", a public id) so everyone sees whose plan it is. Orders are shared by the whole colony.
 
     dig(match, pid, cells, prio)          mark diggable solid cells (match.digs)
-    build(match, pid, btype, cells, prio) place sites: one per cell for 1x1 pipe/wire/ladder/tile
-                                          drags, else one site at cells[0] (its top-left)
+    build(match, pid, btype, cells, prio, rot=0)
+                                          place sites: one per cell for 1x1 pipe/wire/ladder/tile
+                                          drags, else one site at cells[0] (top-left of the rotated
+                                          footprint); refused until research unlocks the building
+    sweep(match, pid, cells, prio)        mark debris piles there for hauling to storage
     deconstruct(match, pid, cells)        mark buildings/sites touching the cells for removal
                                           (sites that haven't started are removed at once)
-    cancel(match, pid, cells)             remove dig marks, unstarted sites, deconstruct marks
+    cancel(match, pid, cells)             remove dig marks, sweep marks, unstarted sites, deconstruct marks
     set_priority(match, pid, cells, prio) re-prioritize dig marks and buildings there
     toggle(match, pid, bid)               switch a finished machine on/off
+    set_filter(match, pid, bid, elements) storage filter: list of element ids, or None for all
 
 match.digs: {cell index: {"by", "prio", "progress" (0..1), "claimed" (colonist id or "")}}.
 Work done by colonists (chores.py) ends in:
@@ -62,25 +66,60 @@ def dig(match, pid, cells, prio=5):
         raise LobbyError("Nothing to dig there.")
 
 
-def build(match, pid, btype, cells, prio=5):
+def build(match, pid, btype, cells, prio=5, rot=0):
     _check_cells(match, cells)
     _prio(prio)
     d = content.BUILDINGS.get(btype)
     if d is None or not d["buildable"]:
         raise LobbyError("Unknown building.")
+    if type(rot) is not int or not 0 <= rot <= 3:
+        raise LobbyError("Bad rotation.")
+    if not match.research.is_unlocked(btype):
+        raise LobbyError("Research it first.")
     multi = d["w"] == 1 and d["h"] == 1
     targets = cells if multi else cells[:1]
     placed, reason = 0, None
     for x, y in targets:
-        reason = match.buildings.can_place(btype, x, y)
+        reason = match.buildings.can_place(btype, x, y, rot)
         if reason:
             if not multi:
                 raise LobbyError(reason)
             continue
-        match.buildings.place(btype, x, y, pid, prio)
+        match.buildings.place(btype, x, y, pid, prio, rot=rot)
         placed += 1
     if not placed:
         raise LobbyError(reason or "Can't build there.")
+
+
+def sweep(match, pid, cells, prio=5):
+    _check_cells(match, cells)
+    _prio(prio)
+    wanted = set(cells)
+    marked = 0
+    for it in match.items:
+        if (it.x, it.y) in wanted:
+            it.sweep = {"by": pid, "prio": prio}
+            marked += 1
+    if not marked:
+        raise LobbyError("No debris there.")
+
+
+def set_filter(match, pid, bid, elements):
+    b = match.buildings.get(bid)
+    if b is None or not b.built or not b.d["filterable"]:
+        raise LobbyError("That building has no filter.")
+    if elements is None:
+        b.filter = None
+        return
+    if not isinstance(elements, list) or len(elements) > len(content.ELEMENT_IDS):
+        raise LobbyError("Bad filter.")
+    clean = []
+    for el in elements:
+        if not isinstance(el, str) or el not in content.ELEMENTS:
+            raise LobbyError("Bad filter.")
+        if el not in clean:
+            clean.append(el)
+    b.filter = clean
 
 
 def _buildings_at(match, cells):
@@ -122,6 +161,10 @@ def cancel(match, pid, cells):
         if i in match.digs:
             match.release_dig(i)
             del match.digs[i]
+    wanted = set(cells)
+    for it in match.items:
+        if it.sweep and (it.x, it.y) in wanted:
+            it.sweep = None
     for b in _buildings_at(match, cells):
         if not b.built:
             _drop_site(match, b)
@@ -137,6 +180,10 @@ def set_priority(match, pid, cells, prio):
         order = match.digs.get(world.idx(x, y))
         if order:
             order["prio"] = prio
+    wanted = set(cells)
+    for it in match.items:
+        if it.sweep and (it.x, it.y) in wanted:
+            it.sweep["prio"] = prio
     for b in _buildings_at(match, cells):
         b.prio = prio
 

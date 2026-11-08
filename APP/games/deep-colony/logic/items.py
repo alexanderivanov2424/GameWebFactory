@@ -1,7 +1,9 @@
 """Items: loose debris on the floor (dug rock, harvested food, dropped loads).
 
 Item fields: id ("i5"), el (element id), kg, x, y (cell), temp, germs, reserved (kg a colonist
-has claimed to pick up). Items of the same element on the same cell merge.
+has claimed to pick up), sweep (None, or {"by": player id, "prio": 1-9} once a player marked it
+with a sweep order: only swept piles are hauled to storage). Items of the same element on the
+same cell merge (a sweep mark survives the merge).
 
 Items (the manager, match.items):
     add(el, kg, x, y, temp=20, germs=0) -> Item   (merges into an existing pile)
@@ -18,11 +20,12 @@ ITEM_MIN = 0.01
 
 
 class Item:
-    __slots__ = ("id", "el", "kg", "x", "y", "temp", "germs", "reserved")
+    __slots__ = ("id", "el", "kg", "x", "y", "temp", "germs", "reserved", "sweep")
 
     def __init__(self, iid, el, kg, x, y, temp, germs):
         self.id, self.el, self.kg, self.x, self.y = iid, el, kg, x, y
         self.temp, self.germs, self.reserved = temp, germs, 0.0
+        self.sweep = None
 
 
 class Items:
@@ -100,5 +103,6 @@ class Items:
                         other.temp = (other.temp * other.kg + it.temp * it.kg) / (other.kg + it.kg)
                         other.kg += it.kg
                         other.germs += it.germs
+                        other.sweep = other.sweep or it.sweep
                         self.remove(it)
                         break

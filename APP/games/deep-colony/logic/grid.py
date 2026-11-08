@@ -19,6 +19,10 @@ Helpers:
     world.is_gas(i) / is_liquid(i) / is_solid(i) (element only) / is_open(i) (not solid, not tile)
     world.set_cell(i, element_id, mass, temp, germs=0)
     world.emit(x, y, element_id, kg, temp, germs=0) -> kg placed (see its docstring)
+    world.release(x, y, element_id, kg, temp, germs=0)  like emit, but never loses mass: whatever
+                            emit can't place waits in world.pending and is retried every
+                            fluid step (drain_pending)
+    world.drain_pending()   retry pending releases (fluids.step calls it)
     world.take(i, element_ids, kg) -> (element_id, kg, temp, germs) taken from cell i
     world.dig(i) -> (element_id, kg, temp, germs) and leaves vacuum
     world.add_heat(i, kj)  heat (kJ, negative cools) into cell i (or its first non-vacuum neighbour)
@@ -47,6 +51,7 @@ class World:
         self.ladder = [False] * n
         self.insul = [False] * n
         self.decor = [0.0] * n
+        self.pending = []  # [x, y, element_id, kg, temp, germs] waiting for room (release)
         self.nbrs = [self._neighbours(i) for i in range(n)]
 
     # --- geometry -------------------------------------------------------------------------
@@ -147,6 +152,20 @@ class World:
             self.set_cell(start, element_id, kg, temp, germs)
             return kg
         return 0.0
+
+    def release(self, x, y, element_id, kg, temp, germs=0.0):
+        """Put a gas or liquid into the world without ever losing it (see the module docstring)."""
+        placed = self.emit(x, y, element_id, kg, temp, germs)
+        left = kg - placed
+        if left > 1e-9:
+            share = left / kg if kg else 0.0
+            self.pending.append([x, y, element_id, left, temp, germs * share])
+
+    def drain_pending(self):
+        """Retry everything waiting in pending (keeps what still doesn't fit)."""
+        waiting, self.pending = self.pending, []
+        for x, y, element_id, kg, temp, germs in waiting:
+            self.release(x, y, element_id, kg, temp, germs)
 
     def take(self, i, element_ids, kg):
         """Take up to kg from cell i if it holds one of element_ids. Returns (id, kg, temp, germs)."""

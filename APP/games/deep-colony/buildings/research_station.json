@@ -1,0 +1,33 @@
+{
+  "name": "Research Station",
+  "category": "research",
+  "w": 2,
+  "h": 2,
+  "cost": {
+    "raw": 400
+  },
+  "buildTime": 20,
+  "kind": "research_station",
+  "floor": true,
+  "operated": true,
+  "power": {
+    "use": 60
+  },
+  "powerPort": [
+    1,
+    1
+  ],
+  "accepts": {
+    "dirt": 100
+  },
+  "params": {
+    "workPerPoint": 20,
+    "dirtPerPoint": 10
+  },
+  "heat": 0.5,
+  "decor": {
+    "value": -5,
+    "radius": 1
+  },
+  "description": "A colonist studies here to earn research points (uses dirt and power). Pick the research in the Research panel."
+}

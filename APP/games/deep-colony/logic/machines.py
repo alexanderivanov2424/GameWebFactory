@@ -16,7 +16,7 @@ Chore API (called by chores.py):
     storage_room(b, el) -> kg     storage: anything; ration box: food only; others 0
 """
 
-from . import content
+from . import content, research
 
 NO_TIME = -1e9
 OPERATE_WINDOW = 0.5
@@ -260,6 +260,8 @@ def wants_operator(match, b):
     if not b.built or not b.enabled:
         return False
     kind = b.d["kind"]
+    if kind == "research_station":
+        return research.wants_operator(match, b)
     if kind == "manual_generator":
         return match.networks.needs_power(b)
     if kind == "nutrient_press":
@@ -271,7 +273,9 @@ def wants_operator(match, b):
 
 def operate(match, b, dupe, dt):
     kind = b.d["kind"]
-    if kind == "manual_generator":
+    if kind == "research_station":
+        research.operate(match, b, dupe, dt)
+    elif kind == "manual_generator":
         b.state["operated_at"] = match.time
     elif kind == "nutrient_press" and b.powered:
         b.state["work"] = b.state.get("work", 0.0) + dt
@@ -478,6 +482,7 @@ KINDS = {
     "fungus_bed": fungus_bed, "nutrient_press": nutrient_press, "pump": pump, "vent": vent,
     "outhouse": outhouse, "lavatory": lavatory, "wash_basin": wash_basin, "water_sieve": water_sieve,
     "heater": heater, "storage": _nothing, "ration_box": _nothing,
+    "research_station": lambda match, b, dt: research.step(match, b, dt),
 }
 
 
