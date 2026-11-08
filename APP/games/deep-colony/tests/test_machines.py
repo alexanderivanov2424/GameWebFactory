@@ -187,6 +187,25 @@ class PipeTests(unittest.TestCase):
         wires(m, [(4, 9)], "liquid_pipe")
         self.assertAlmostEqual(m.networks.pipe_has(vent, "pipeIn", "water"), 5, places=3)
 
+    def test_split_shares_contents_by_cell_count(self):
+        m = new_match()
+        wires(m, [(x, 9) for x in range(2, 7)], "liquid_pipe")
+        vent = put(m, "liquid_vent", 2, 9)
+        m.networks.pipe_put(vent, "pipeIn", "water", 20, 20, 0)
+        m.buildings.remove(m.buildings.by_id[m.buildings.layers["pipe"][m.world.idx(4, 9)]])
+        # 5 cells -> 2 left, 1 removed, 2 right: left keeps 2/5 of 20 kg
+        self.assertAlmostEqual(m.networks.pipe_has(vent, "pipeIn", "water"), 8, places=3)
+
+    def test_merge_sums_contents(self):
+        m = new_match()
+        wires(m, [(2, 9), (4, 9)], "liquid_pipe")
+        a = put(m, "liquid_vent", 2, 9)
+        c = put(m, "liquid_vent", 4, 9)
+        m.networks.pipe_put(a, "pipeIn", "water", 3, 20, 0)
+        m.networks.pipe_put(c, "pipeIn", "water", 4, 20, 0)
+        wires(m, [(3, 9)], "liquid_pipe")
+        self.assertAlmostEqual(m.networks.pipe_has(a, "pipeIn", "water"), 7, places=3)
+
 
 class FoodTests(unittest.TestCase):
     def test_fungus_grows_only_in_range_and_can_be_harvested(self):

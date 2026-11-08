@@ -24,8 +24,9 @@ API:
     pipe_has(b, port, el) -> kg of that element in the network
     pipe_room(b, port) -> kg that still fits (capacity PIPE_CAP kg per pipe segment, all elements)
     pipe_summary() -> {nid: {el: kg rounded to 0.1}}
-Rebuilding pipes keeps contents: each old buffer moves to the new network holding its old cells
+Rebuilding pipes keeps contents: each old buffer is shared among the new networks holding its old cells, by cell count
 (capped; any excess is dropped).
+Split: shared by old-cell count; merge: summed.
 """
 
 PIPE_CAP = 10.0
@@ -93,20 +94,22 @@ class Networks:
                 self._attached[b.id] = nid
         for members in self._members.values():
             members.sort(key=_key)
-        # pipe contents move to the network that now holds their old cells
-        remap = {}
+        # each old buffer is shared among the new networks holding its old cells, in proportion to
+        # how many of those cells each got (cells that no longer exist take their share with them)
+        old_size, got = {}, {}
         for cell, onid in old_pcell.items():
+            old_size[onid] = old_size.get(onid, 0) + 1
             nn = self._ipcell.get(cell)
-            if nn and onid not in remap:
-                remap[onid] = nn
+            if nn:
+                got.setdefault(onid, {})
+                got[onid][nn] = got[onid].get(nn, 0) + 1
         self._buf = {}
         for onid, content in old_buf.items():
-            nn = remap.get(onid)
-            if nn is None:
-                continue
-            target = self._buf.setdefault(nn, {})
-            for el, (kg, temp, germs) in content.items():
-                self._add(target, el, kg, temp, germs)
+            for nn, n in got.get(onid, {}).items():
+                frac = n / old_size[onid]
+                target = self._buf.setdefault(nn, {})
+                for el, (kg, temp, germs) in content.items():
+                    self._add(target, el, kg * frac, temp, germs * frac)
         for nid, content in self._buf.items():
             total = sum(v[0] for v in content.values())
             cap = self._icount[nid] * PIPE_CAP
