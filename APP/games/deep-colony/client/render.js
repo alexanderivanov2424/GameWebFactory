@@ -2,7 +2,7 @@
  * Canvas drawing (TILE = 16 px per cell). Needs grid.js; reads DC.lobby / DC.rt (set by game.js),
  * DC.view {overlay, hover, drag} and DC.tools (preview) from tools.js.
  * The static cell layer is redrawn into an offscreen canvas only when the grid rows or the
- * overlay change; every frame blits it and draws buildings, orders, items, colonists, cursors.
+ * overlay change; every frame blits it and draws buildings, orders (with non-default priority numbers), items, colonists, cursors.
  *   DC.render.TILE, DC.render.OVERLAYS (list), DC.render.catColor(category)
  */
 (() => {
@@ -139,6 +139,7 @@
       ctx.strokeRect(px + 1, py + 1, pw - 2, ph - 2); ctx.setLineDash([]);
       ctx.fillStyle = "rgba(0,0,0,0.7)"; ctx.fillRect(px + 1, py + ph - 5, pw - 2, 4);
       ctx.fillStyle = color; ctx.fillRect(px + 1, py + ph - 5, (pw - 2) * (b.p || 0) / 100, 4);
+      if (b.prio && b.prio !== 5) prioLabel(px + 1, py + 1, b.prio);
     } else if (d.ladder) {
       ctx.strokeStyle = "#c9a56a"; ctx.lineWidth = 2;
       ctx.beginPath();
@@ -179,6 +180,13 @@
     }
   }
 
+  // Tiny priority number in a cell's top-left corner (only drawn when it isn't the default 5).
+  function prioLabel(x, y, n) {
+    ctx.globalAlpha = 1; ctx.font = "bold 8px sans-serif"; ctx.textAlign = "left"; ctx.textBaseline = "top";
+    ctx.fillStyle = "rgba(0,0,0,0.75)"; ctx.fillRect(x, y, 6, 9);
+    ctx.fillStyle = "#fff"; ctx.fillText(String(n), x + 1, y);
+  }
+
   function drawDigs(game, players) {
     const w = DC.grid.w;
     for (const [key, o] of Object.entries(game.digs)) {
@@ -190,6 +198,7 @@
       ctx.moveTo(px, py + TILE); ctx.lineTo(px + TILE, py);
       ctx.moveTo(px + TILE / 2, py + TILE); ctx.lineTo(px + TILE, py + TILE / 2);
       ctx.stroke(); ctx.globalAlpha = 1;
+      if (o.prio && o.prio !== 5) prioLabel(px, py, o.prio);
       if (o.p > 0) { ctx.fillStyle = "rgba(0,0,0,0.7)"; ctx.fillRect(px + 1, py + TILE - 4, TILE - 2, 3);
         ctx.fillStyle = color; ctx.fillRect(px + 1, py + TILE - 4, (TILE - 2) * o.p / 100, 3); }
     }

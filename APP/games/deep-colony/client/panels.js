@@ -1,6 +1,6 @@
 /*
  * DOM panels: top bar (cycle, day bar, pause/speed, colony resources), left toolbar (tools,
- * priority, build menu, overlays), right panel (players, colonists, hover info, log).
+ * priority, build menu with power/port hover info, tool hint, overlays), right panel (players, colonists, hover info, log).
  *   DC.panels.build(game)    builds the toolbar once (needs state.game.defs); safe to call again
  *   DC.panels.refresh()      updates everything from DC.lobby.state (game.js calls it at ~4 Hz)
  * Only AppDom.el / textContent: player names never go through innerHTML.
@@ -32,6 +32,29 @@
       onclick: () => DC.tools.setTool(key) }), "tool", key);
   }
 
+  // Power use/generation and pipe ports, for the build menu hover title.
+  function techText(d) {
+    const p = d.power || {}, bits = [];
+    if (p.use) bits.push(`uses ${p.use} W`);
+    if (p.gen) bits.push(`makes ${p.gen} W`);
+    if (p.capacity) bits.push(`stores ${p.capacity} J`);
+    if (d.powerPort) bits.push("power port");
+    if (d.pipeIn) bits.push("pipe in");
+    if (d.pipeOut) bits.push("pipe out");
+    return bits.length ? ` [${bits.join(", ")}]` : "";
+  }
+
+  function toolHint() {
+    const { tool, building, prio } = DC.tools.state;
+    const g = game(), d = g && building && g.defs.buildings[building];
+    const hints = { inspect: "Inspect: point at things to see details", dig: "Dig: drag over rock",
+      cancel: "Cancel: drag over orders to remove them", deconstruct: "Deconstruct: drag over buildings",
+      priority: `Priority: drag over orders to set priority ${prio}` };
+    let t = tool === "build" ? (d ? `Build ${d.name}: click` + (d.layer === "pipe" || d.layer === "wire" ? " or drag a line" : d.w * d.h === 1 ? " or drag" : "") : "Build: pick a building") : hints[tool] || "";
+    if (tool !== "inspect") t += ` (priority ${prio}). Right-click / Esc to cancel`;
+    $("toolhint").textContent = t;
+  }
+
   function build(g) {
     if (built || !g || !g.defs) return;
     built = true;
@@ -61,7 +84,7 @@
       el("details", { open: cat === "base" },
         el("summary", {}, cat),
         ...list.map(([id, d]) => data(el("button", {
-          className: "t", title: `${d.description || ""} (cost: ${costText(g, d.cost)})`,
+          className: "t", title: `${d.description || ""} (cost: ${costText(g, d.cost)})${techText(d)}`,
           style: "display:block;width:100%;text-align:left;margin:2px 0",
           onclick: () => T.setBuilding(id),
           onmouseenter: () => showInfo(id), onmouseleave: () => showInfo(T.state.building),
@@ -70,6 +93,9 @@
       className: "t", textContent: o === "none" ? "None" : o[0].toUpperCase() + o.slice(1),
       onclick: () => { DC.view.overlay = o; DC.panels.refresh(); },
     }), "overlay", o)), el("div", { id: "ovlegend", className: "muted", style: "font-size:0.7rem;margin-top:4px" }));
+    const help = $("howto");
+    try { help.open = sessionStorage.getItem("dcHowto") !== "closed"; } catch (e) { /* ignore */ }
+    help.ontoggle = () => { try { sessionStorage.setItem("dcHowto", help.open ? "open" : "closed"); } catch (e) { /* ignore */ } };
     T.onChange(() => { showInfo(T.state.building); refresh(); });
     $("pause").onclick = () => {
       const gg = game();
@@ -90,6 +116,16 @@
     const hue = good ? 120 * f : 120 * (1 - f);
     return el("div", { className: "bar", title: `${Math.round(value)} / ${max}` },
       el("div", { style: `width:${f * 100}%;background:hsl(${hue},65%,45%)` }));
+  }
+
+  // Which of a colonist's needs are in the danger zone (shown in the warning colour).
+  function warnings(d) {
+    const w = [];
+    if (d.breath < 40) w.push("breath");
+    if (d.kcal < 1000) w.push("food");
+    if (d.health < 50) w.push("health");
+    if (d.stress > 80) w.push("stress");
+    return w;
   }
 
   function topbar(g) {
@@ -113,7 +149,8 @@
     const dupes = Object.entries(g.dupes);
     fill("dupes", dupes, () => dupes.length === 0 ? [el("div", { className: "muted" }, "No colonists alive.")] :
       dupes.map(([id, d]) => el("div", { className: "dupe" },
-        el("div", {}, el("span", { className: "nm" }, d.name), d.sick ? el("span", { className: "sick" }, " SICK") : ""),
+        el("div", {}, el("span", { className: "nm" + (warnings(d).length ? " warn" : "") }, d.name),
+          warnings(d).length ? el("span", { className: "warn" }, " LOW " + warnings(d).join(", ")) : "", d.sick ? el("span", { className: "sick" }, " SICK") : ""),
         el("div", { className: "bars", title: "Breath, food, bladder, stress, health" },
           bar(d.breath, 100, true), bar(d.kcal, 4000, true), bar(d.bladder, 100, false),
           bar(d.stress, 100, false), bar(d.health, 100, true)),
@@ -188,6 +225,7 @@
     build(g);
     topbar(g);
     sidePanels(g, state);
+    toolHint();
     mark($("tools"), "tool", DC.tools.state.tool);
     mark($("prios"), "prio", DC.tools.state.prio);
     mark($("buildmenu"), "building", DC.tools.state.tool === "build" ? DC.tools.state.building : "");
