@@ -17,6 +17,7 @@ things are, and its pitfalls. Read only the one closest to your game:
 - `block-blast`: grid placement with rotations, hover ghost, swappable market (`Choice`/`MultiChoice`).
 - `marooned`: hidden role, secret votes, map built as it's explored.
 - `bastion`: co-op simultaneous turns, server-side simulation sent as a replay.
+- `gilded-trail`: hex map from a seed as SVG, deck-building market, pending choices inside a turn.
 - `arena`: real-time (`RealtimeGame`); start from it for continuous movement.
 
 ## 1. Pin down the design (ask only about what's genuinely unclear)

@@ -1,0 +1,11 @@
+{
+  "name": "Field Journal",
+  "kind": "action",
+  "cost": 3,
+  "single": true,
+  "effect": {
+    "draw": 2,
+    "remove": 2
+  },
+  "text": "Draw 2 cards, then you may remove up to 2 cards in your hand from the game."
+}

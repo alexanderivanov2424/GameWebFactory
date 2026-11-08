@@ -1,0 +1,18 @@
+{
+  "name": "Coast Road",
+  "order": 4,
+  "text": "A short, quick race past trading villages.",
+  "dirs": [
+    1,
+    0,
+    1
+  ],
+  "weights": {
+    "machete": 3.5,
+    "paddle": 2,
+    "coin": 3.5,
+    "mountain": 1
+  },
+  "hazards": 0.8,
+  "seed": 32
+}

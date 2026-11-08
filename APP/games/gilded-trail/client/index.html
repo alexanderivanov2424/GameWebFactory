@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Gilded Trail</title>
+
+  <!-- Shared components: keep these, in this order. theme.js isn't deferred (no unstyled flash). -->
+  <script src="/shared/theme.js"></script>
+  <script src="/shared/home.js" defer></script>
+  <script src="/shared/settings.js" defer></script>
+  <script src="/shared/chat.js" defer></script>
+  <script src="/gamekit/dom.js" defer></script>
+  <script src="/gamekit/room.js" defer></script>
+  <script src="/gamekit/lobby.js" defer></script>
+  <script src="/gamekit/lobby-ui.js" defer></script>
+  <script src="board.js" defer></script>
+  <script src="game.js" defer></script>
+
+  <style>
+    /* Jungle at dusk with brass accents. Base styles come from /shared/theme.js. */
+    :root {
+      --gwf-main-width: 1480px;
+      --gwf-bg: #0e1813; --gwf-surface: #17271e; --gwf-line: #33503f; --gwf-text: #ece4cc;
+      --gwf-muted: #9fb09a; --gwf-accent: #b8862b; --gwf-accent-hover: #d9a441; --gwf-soft: #203529;
+      --gwf-soft-hover: #2a4535; --gwf-input-line: #33503f;
+      --brass: #d9a441; --ember: #e0714f;
+      --c-machete: #3d8b45; --c-paddle: #2f78b8; --c-coin: #d8b43a; --c-rubble: #8b8778; --c-camp: #b6452f;
+      --c-mountain: #3a332b; --c-start: #8a7a58; --c-joker: #c9c4b3; --c-action: #8b5fb5; --c-gold: #e2b84a;
+      color-scheme: dark;
+    }
+    main { padding-top: 16px; }
+    main.with-hand { padding-bottom: 210px; }
+    .top-bar { display: flex; align-items: center; gap: 16px; min-height: 40px; padding: 0 64px 0 104px; margin-bottom: 10px; }
+    .top-bar h1 { margin: 0; font-size: 1.6rem; color: var(--brass); font-family: Georgia, "Palatino Linotype", serif; }
+    .top-bar p { margin: 0; }
+    .card, .panel { border: 1px solid var(--gwf-line); }
+    .gwf-player { border-bottom-color: var(--gwf-line) !important; }
+
+    .layout { display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 16px; align-items: start; }
+    .side > .panel { margin-bottom: 12px; }
+    #result:empty { display: none; }
+    #result { border: 2px solid var(--brass); margin-bottom: 12px; font-size: 1.05rem; }
+    .status-bar { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; min-height: 34px; margin-bottom: 8px; }
+    .status-bar .final { color: var(--brass); font-weight: 700; }
+    .who { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+    .dot { width: 12px; height: 12px; border-radius: 50%; border: 2px solid #0b130e; display: inline-block; flex: none; }
+
+    /* Map */
+    .map { border: 1px solid var(--gwf-line); border-radius: var(--gwf-radius); overflow: auto; line-height: 0;
+           background: radial-gradient(ellipse at 40% 40%, #18301f, #0e1813 70%); max-height: 72vh; }
+    .map-svg { display: block; min-width: 900px; width: 100%; height: auto; user-select: none; }
+    .hex { stroke: #0b130e; stroke-width: 1.5; }
+    .hex.t-machete { fill: var(--c-machete); } .hex.t-paddle { fill: var(--c-paddle); } .hex.t-coin { fill: var(--c-coin); }
+    .hex.t-rubble { fill: var(--c-rubble); } .hex.t-camp { fill: var(--c-camp); } .hex.t-mountain { fill: var(--c-mountain); }
+    .hex.t-start { fill: var(--c-start); } .hex.goal { fill: var(--c-gold); }
+    .hex.step { stroke: var(--gwf-text); stroke-width: 2.5; cursor: pointer; }
+    .hex.go { stroke: var(--brass); stroke-width: 3.5; filter: brightness(1.18); cursor: pointer; }
+    .hex.go:hover, .hex.step:hover { filter: brightness(1.35); }
+    .marks { pointer-events: none; }
+    .goal-ring { fill: none; stroke-width: 4; }
+    .goal-ring.t-machete { stroke: var(--c-machete); } .goal-ring.t-paddle { stroke: var(--c-paddle); }
+    .goal-label { font: 700 9px system-ui, sans-serif; fill: #2a1d05; text-anchor: middle; letter-spacing: .08em; }
+    .peak { fill: #5a4f42; }
+    .pip { fill: rgba(255, 255, 255, .85); } .pip.dark { fill: rgba(20, 20, 20, .75); }
+    .border line { stroke-width: 6; stroke-linecap: round; }
+    .border.t-machete { stroke: var(--c-machete); } .border.t-paddle { stroke: var(--c-paddle); }
+    .border.t-coin { stroke: var(--c-coin); } .border.t-rubble { stroke: var(--c-rubble); }
+    .border, .border-open { pointer-events: none; }
+    .border-open line { stroke-width: 1.5; stroke-dasharray: 3 4; opacity: .6; }
+    .blockade { pointer-events: none; }
+    .blockade circle { stroke: #0b130e; stroke-width: 2; }
+    .blockade circle.t-machete { fill: var(--c-machete); } .blockade circle.t-paddle { fill: var(--c-paddle); }
+    .blockade circle.t-coin { fill: var(--c-coin); } .blockade circle.t-rubble { fill: var(--c-rubble); }
+    .blockade text { font: 700 11px ui-monospace, monospace; fill: #111; text-anchor: middle; dominant-baseline: central; }
+    .explorer { stroke: #0b130e; stroke-width: 2.5; }
+    .explorer.mine { cursor: pointer; }
+    .explorer.active { stroke: var(--brass); stroke-width: 3.5; stroke-dasharray: 4 3; }
+
+    /* Side panels */
+    .players { display: grid; gap: 6px; }
+    .prow { display: grid; grid-template-columns: 14px 1fr auto; gap: 8px; align-items: center; padding: 6px 8px; border-radius: 6px; }
+    .prow.current { background: var(--gwf-soft); box-shadow: inset 0 0 0 1px var(--brass); }
+    .prow.left { opacity: .5; }
+    .prow .meta { color: var(--gwf-muted); font-size: .8rem; font-variant-numeric: tabular-nums; }
+    .chip { display: inline-block; padding: 1px 7px; border-radius: 999px; font-size: .75rem; font-weight: 700; color: #111; margin-left: 2px; }
+    .chip.t-machete { background: var(--c-machete); } .chip.t-paddle { background: var(--c-paddle); }
+    .chip.t-coin { background: var(--c-coin); } .chip.t-rubble { background: var(--c-rubble); }
+    #prompt:empty { display: none; }
+    #prompt { border: 2px solid var(--brass); }
+    #prompt .row { margin-top: 8px; flex-wrap: wrap; gap: 8px; }
+    .log { max-height: 340px; overflow-y: auto; font-size: .85rem; }
+    .log-entry { padding: 3px 0 3px 8px; border-left: 3px solid var(--gwf-line); margin-bottom: 3px; }
+    .log-entry .r { color: var(--gwf-muted); font-variant-numeric: tabular-nums; margin-right: 4px; }
+    .rules-text { line-height: 1.45; } .rules-text li { margin-bottom: 4px; }
+
+    /* Cards */
+    .cards-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: stretch; }
+    .tcard { position: relative; width: 104px; min-height: 118px; border-radius: 8px; padding: 6px 7px; display: flex; flex-direction: column; gap: 2px;
+             background: var(--gwf-soft); border: 2px solid var(--gwf-line); color: var(--gwf-text); text-align: left; font: inherit; font-size: .8rem; }
+    button.tcard { cursor: pointer; }
+    button.tcard:hover:not(:disabled) { border-color: var(--brass); background: var(--gwf-soft-hover); }
+    button.tcard:disabled { opacity: .45; cursor: default; }
+    .tcard .band { height: 6px; border-radius: 3px; margin-bottom: 2px; }
+    .tcard .band.k-machete { background: var(--c-machete); } .tcard .band.k-paddle { background: var(--c-paddle); }
+    .tcard .band.k-coin { background: var(--c-coin); } .tcard .band.k-joker { background: var(--c-joker); }
+    .tcard .band.k-action { background: var(--c-action); }
+    .tcard .nm { font-weight: 700; font-size: .85rem; line-height: 1.15; }
+    .tcard .desc { font-size: .72rem; color: var(--gwf-muted); line-height: 1.2; }
+    .tcard .val { font: 700 1.35rem Georgia, serif; line-height: 1; margin-top: auto; }
+    .tcard .val small { font: .7rem system-ui, sans-serif; color: var(--gwf-muted); }
+    .tcard .foot { display: flex; justify-content: space-between; font-size: .7rem; color: var(--gwf-muted); }
+    .tcard .count { position: absolute; top: 4px; right: 6px; font: .7rem ui-monospace, monospace; color: var(--gwf-muted); }
+    .tcard .once { color: var(--ember); font-weight: 700; font-size: .62rem; letter-spacing: .05em; }
+    .tcard.sel { border-color: var(--brass); transform: translateY(-6px); box-shadow: 0 6px 14px rgba(0, 0, 0, .4); }
+    .tcard.moving { border-color: var(--gwf-text); }
+    .tcard.empty { justify-content: center; align-items: center; color: var(--gwf-muted); border-style: dashed; }
+    .market-wrap { margin-top: 12px; }
+    .market-wrap h3 { margin: 12px 0 6px; font-size: .95rem; }
+    .reserve .tcard { width: 132px; min-height: 0; flex-direction: row; align-items: center; gap: 6px; padding: 4px 6px; }
+    .reserve .tcard .band { width: 6px; height: 28px; margin: 0; flex: none; }
+    .reserve .tcard .val { font-size: 1rem; margin: 0 0 0 auto; }
+
+    /* Hand bar */
+    #hand-bar { position: fixed; left: 0; right: 0; bottom: 0; background: #0b130e; border-top: 1px solid var(--gwf-line);
+                padding: 10px 110px 12px 16px; box-shadow: 0 -4px 14px rgba(0, 0, 0, .4); z-index: 5; }
+    #hand-bar .label { font-size: .85rem; margin-bottom: 6px; display: flex; gap: 14px; flex-wrap: wrap; align-items: center; }
+    #hand-bar .label b { color: var(--brass); }
+    #hand-bar .controls { display: flex; gap: 8px; margin-left: auto; }
+  </style>
+</head>
+<body>
+  <main>
+    <div class="top-bar">
+      <h1>Gilded Trail</h1>
+      <p id="connection" class="muted small">Connecting…</p>
+    </div>
+    <div id="error" hidden></div>
+
+    <section id="lobby" hidden>
+      <div class="card">
+        <div class="row" style="margin-bottom: 8px">
+          <h2 style="margin: 0">Players</h2>
+          <span class="spacer"></span>
+          <button id="join" class="green" hidden>Join game</button>
+          <button id="ready" class="green" hidden>Ready</button>
+          <button id="leave" class="red" hidden>Leave game</button>
+        </div>
+        <ul id="players"></ul>
+        <div id="start"></div>
+        <p id="spectators" class="muted"></p>
+      </div>
+      <div class="card">
+        <h2>Game settings</h2>
+        <div id="settings"></div>
+      </div>
+      <div class="card rules-text">
+        <h2>How to play</h2>
+        <ul>
+          <li>Race from the start spaces to the golden city at the far end of the map. With 2 players, each has two explorers and both must arrive.</li>
+          <li>Select a card in your hand, then click a highlighted space next to your explorer. Jungle needs machetes (green), water needs paddles (blue), villages need coins (yellow); pips show how many. Jokers (grey) count as any one of them.</li>
+          <li>One card carries one explorer over several spaces of its kind until its value runs out. Switching cards loses what's left; cards are never added together for one space.</li>
+          <li>Rubble (grey): discard that many cards. Base camp (red): remove that many cards from the game. Mountains are impassable, and no two explorers share a space.</li>
+          <li>Blockades sit on tile borders. Pay one like a space to take it: the border opens for everyone (your explorer stays put). Blockades break ties.</li>
+          <li>Buy one card per turn. Coin cards and jokers pay their value, every other card pays ½. Reserve cards can only be bought once a market slot has sold out.</li>
+          <li>Action cards (purple) are played for their effect. Single-use cards leave the game once used.</li>
+          <li>End your turn: played cards and any cards you pick are discarded, then draw back up to 4. Unplayed cards may stay in hand.</li>
+          <li>When someone's explorers have all arrived, the round finishes. Most blockades wins a tie, then the highest blockade, then who arrived first.</li>
+        </ul>
+      </div>
+    </section>
+
+    <section id="game" hidden>
+      <div id="result" class="card"></div>
+      <div class="layout">
+        <div>
+          <div class="status-bar" id="status"></div>
+          <div id="board" class="map"></div>
+          <div class="market-wrap card">
+            <h2 style="margin: 0">Market</h2>
+            <div id="market" class="cards-row" style="margin-top: 8px"></div>
+            <h3>Reserve <span id="reserve-note" class="muted small"></span></h3>
+            <div id="reserve" class="cards-row reserve"></div>
+          </div>
+        </div>
+        <div class="side">
+          <div id="prompt" class="panel"></div>
+          <div class="panel"><h3 style="margin-top: 0">Expeditions</h3><div id="people" class="players"></div></div>
+          <div class="panel"><h3 style="margin-top: 0">Journal</h3><div id="log" class="log"></div></div>
+          <button id="back" hidden>Back to lobby</button>
+        </div>
+      </div>
+    </section>
+  </main>
+  <div id="hand-bar" hidden></div>
+</body>
+</html>

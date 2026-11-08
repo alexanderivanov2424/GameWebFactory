@@ -52,6 +52,9 @@ Games at a glance (details in each `NOTES.md`):
   placing 1, energy/hunger survival, camp projects with a two-player build-check card hand-off,
   secret gather rolls (announce a worse face, never better), nightly secret vote (tally only),
   secret objectives scored from per-player stats. Content files: `content/README.md`.
+- **gilded-trail**: `logic/` modules; hex map generated from a seed (preset JSON maps) drawn as
+  SVG, deck-building with a shared market and reserve, pending choices inside a turn, the server
+  sending every legal step.
 - **arena**: real-time demo (`RealtimeGame`): keyboard inputs as state, per-tick delta
   snapshots, canvas drawing with interpolation, ping shown above each player.
 

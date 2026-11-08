@@ -1,0 +1,9 @@
+{
+  "name": "Surveyor",
+  "kind": "action",
+  "cost": 4,
+  "effect": {
+    "draw": 2
+  },
+  "text": "Draw 2 cards."
+}

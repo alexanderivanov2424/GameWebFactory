@@ -1,0 +1,22 @@
+{
+  "name": "The Long Bend",
+  "order": 3,
+  "text": "A long trek that curves south and back east. For patient deck-builders.",
+  "dirs": [
+    0,
+    0,
+    1,
+    1,
+    2,
+    1,
+    0
+  ],
+  "weights": {
+    "machete": 5,
+    "paddle": 2.2,
+    "coin": 2,
+    "mountain": 1.5
+  },
+  "hazards": 1.2,
+  "seed": 5
+}
