@@ -1,5 +1,5 @@
 """Bastion: enemies and the round flow on fixture content (arrival, attack cycle, defeat ways,
-win and losses, leaving).
+win and losses, turns, ready, leaving).
 Run: python3 -I tools/run_tests.py bastion
 """
 
@@ -12,12 +12,7 @@ from gamekit import LobbyError
 helpers = importlib.import_module("games.bastion.tests.helpers")
 foes = importlib.import_module("games.bastion.logic.foes")
 match_module = importlib.import_module("games.bastion.logic.match")
-build = helpers.build
-
-
-def next_round(match):
-    for pid in match.seats:
-        match.end_turn(pid)
+build, next_round = helpers.build, helpers.next_round
 
 
 class ArrivalTests(helpers.FixtureCase):
@@ -59,7 +54,7 @@ class AttackTests(helpers.FixtureCase):
         match = helpers.new_match(self)
         witch = helpers.foe(self, match, "witch")
         witch.step = 1  # Hit: 3 damage to the keep
-        match.board.place("wall", 0, 4, 2, "p1")  # one tile next to the keep
+        match.board.place("wall", 0, 4, 2)  # one tile next to the keep
         next_round(match)
         self.assertEqual(match.keep, match.keep_max - 2)
 
@@ -186,23 +181,25 @@ class EndTests(helpers.FixtureCase):
         next_round(match)
         self.assertIn("too long", match.result["reason"])
 
-    def test_the_last_one_done_ends_the_round_and_leavers_dont_block(self):
-        match = helpers.new_match(self, players=2)
-        match.end_turn("p2")
-        self.assertEqual(match.round, 1)
+    def test_the_last_turn_ends_the_round_and_leavers_dont_block(self):
+        match = helpers.new_match(self, players=3)
+        match.end_turn("p1")
+        self.assertEqual((match.round, match.turn()), (1, "p2"))
+        match.leave("p2")  # their turn passes
+        self.assertEqual((match.round, match.turn()), (1, "p3"))
+        match.leave("p3")  # the last turn of the round
+        self.assertEqual((match.round, match.phase, match.order), (2, "place", ["p1"]))
         match.leave("p1")
-        self.assertEqual(match.round, 2)
-        self.assertFalse(match.seats["p2"].done)
-        match.leave("p2")
         self.assertEqual((match.result["victory"], match.result["reason"]), (False, "Everyone left."))
 
-    def test_taking_back_done(self):
-        match = helpers.new_match(self, players=2)
-        match.end_turn("p1")
-        match.end_turn("p1", False)
-        match.end_turn("p2")
-        self.assertEqual(match.round, 1)
-
+    def test_taking_back_ready(self):
+        match = helpers.new_match(self, players=2, act=False)
+        match.ready("p1")
+        match.ready("p1", False)
+        match.ready("p2")
+        self.assertEqual(match.phase, "place")
+        match.ready("p1")
+        self.assertEqual((match.phase, match.turn()), ("act", "p1"))
 
 if __name__ == "__main__":
     unittest.main()

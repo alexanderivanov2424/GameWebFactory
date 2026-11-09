@@ -1,65 +1,74 @@
 {
   "name": "River Valley",
   "rows": [
-    "FFFF......MMMMMM",
-    "FFF........MMMMM",
-    "FF...........MMM",
-    "F.............MM",
-    "F......~~......M",
-    "FF....~~........",
-    "F.....~.........",
-    "......~~.......M",
-    ".F.....~~.....MM",
-    "FFF.....~~...MMM",
-    "FFFF.....~~.MMMM"
+    "FFFFFF.........~~......MMMMMMMMM",
+    "FFFFF..........~.......MMMMMMMMM",
+    "FFFF..........~~........MMMMMMMM",
+    "FFF...........~....FF....MMMMMMM",
+    "FF...........~~...FFFF.....MMMMM",
+    "FF...........~.....FF.......MMMM",
+    "F............~~..............MMM",
+    "F.............~...............MM",
+    "...............~.....~~~.......M",
+    ".FF............~....~~~~~.......",
+    "FFF............~~....~~~......MM",
+    "FFFF............~............MMM",
+    "FFF.............~~..........MMMM",
+    "FF...............~...FFF.....MMM",
+    "F.......M........~..FFFFF.....MM",
+    ".......MMM.......~~..FFF.......M",
+    "......MMMM........~.............",
+    "FF.....MM.........~.......FFF...",
+    "FFF...............~~.....FFFFF..",
+    "FFFF...............~....FFFFFFF.",
+    "FFFFF..............~~..FFFFFFFFF",
+    "FFFFFF..............~.FFFFFFFFFF"
   ],
   "start": [
     {
       "structure": "keep",
-      "x": 4,
-      "y": 5
+      "x": 8,
+      "y": 10
     },
     {
-      "structure": "workshop",
-      "x": 4,
-      "y": 6,
-      "rotation": 1
+      "structure": "house",
+      "x": 8,
+      "y": 9
+    },
+    {
+      "structure": "farm",
+      "x": 9,
+      "y": 10
     },
     {
       "structure": "lumbermill",
-      "x": 1,
-      "y": 3,
-      "rotation": 1
-    },
-    {
-      "structure": "road",
-      "x": 2,
-      "y": 4
-    },
-    {
-      "structure": "road",
-      "x": 3,
-      "y": 4
-    },
-    {
-      "structure": "road",
-      "x": 3,
-      "y": 5
-    },
-    {
-      "structure": "road",
-      "x": 3,
-      "y": 6
-    },
-    {
-      "structure": "road",
       "x": 4,
-      "y": 4
+      "y": 11
     },
     {
       "structure": "road",
       "x": 5,
-      "y": 4
+      "y": 11
+    },
+    {
+      "structure": "road",
+      "x": 6,
+      "y": 11
+    },
+    {
+      "structure": "road",
+      "x": 7,
+      "y": 11
+    },
+    {
+      "structure": "road",
+      "x": 8,
+      "y": 11
+    },
+    {
+      "structure": "road",
+      "x": 7,
+      "y": 10
     }
   ]
 }

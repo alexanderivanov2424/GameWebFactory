@@ -10,7 +10,6 @@
     "wood": 2,
     "stone": 1
   },
-  "crew": "Miners",
   "requires": [
     {
       "near": "mountain"

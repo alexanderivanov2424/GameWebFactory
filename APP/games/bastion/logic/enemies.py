@@ -15,12 +15,13 @@ content/README.md. Bad files are logged (logger "bastion") and skipped.
         "lair":    None or {"name", "icon", "cells": [(dy, dx)]}: placed on empty grass on arrival
         "attacks": [attack], attack = {"name", "text" (generated), and any of:
                     "steal": {resource | "most": n}  ("most": the good the city has most of)
-                    "loot": n goods taken from carriages on unprotected road tiles
+                    "loot": n goods taken from the stores of unprotected buildings
                     "ruin": n tiles, "prefer": [structure id] (those first)
                     "keep": damage, "shield": each wall tile next to the keep blocks 1
                     "place": {"name", "icon"}, "count": n   blight tiles on empty grass
                     "curse": card id, "to": "each" | "one"   added to discard piles
-                    "plague": n buildings, "freeze": n buildings (can't work next round)
+                    "plague": n buildings (no unit can work them until cured),
+                    "freeze": n buildings (no unit can work them next round)
                     "kill": n soldiers} }
     attack_text(attack) / defeat_text(enemy)   readable rules text
     load_enemies(folder, cards) -> ENEMIES (tests feed temporary folders)
@@ -86,7 +87,7 @@ def attack_text(attack, cards=CARDS):
         if most:
             parts.append(f"Steals {most} of the good you have most of.")
     if "loot" in attack:
-        parts.append(f"Loots {attack['loot']} goods from carriages on the roads (not next to a wall or near a watchtower).")
+        parts.append(f"Loots {attack['loot']} goods waiting in buildings (not ones next to a wall or near a watchtower).")
     if "ruin" in attack:
         n = attack["ruin"]
         where = ""
@@ -106,7 +107,8 @@ def attack_text(attack, cards=CARDS):
     if "plague" in attack:
         parts.append(f"Plagues {attack['plague']} building{'s' if attack['plague'] > 1 else ''} (can't work until cured).")
     if "freeze" in attack:
-        parts.append(f"Freezes {attack['freeze']} building{'s' if attack['freeze'] > 1 else ''} for the next round.")
+        parts.append(f"Freezes {attack['freeze']} building{'s' if attack['freeze'] > 1 else ''}: no unit can work "
+                     f"{'them' if attack['freeze'] > 1 else 'it'} next round.")
     if "kill" in attack:
         parts.append(f"Kills {attack['kill']} soldier{'s' if attack['kill'] > 1 else ''}.")
     return " ".join(parts) or "Rests."
@@ -115,7 +117,8 @@ def attack_text(attack, cards=CARDS):
 def defeat_text(enemy):
     d, parts = enemy["defeat"], []
     if d.get("soldiers"):
-        parts.append(f"{d['soldiers']} soldier{'s' if d['soldiers'] > 1 else ''} per damage")
+        parts.append(f"{d['soldiers']} soldier{'s' if d['soldiers'] > 1 else ''} or fighting unit"
+                     f"{'s' if d['soldiers'] > 1 else ''} per damage")
     if d.get("resources"):
         parts.append(f"{amount_text(d['resources'])} per damage")
     if d.get("cure"):
@@ -123,7 +126,7 @@ def defeat_text(enemy):
     if d.get("cards"):
         parts.append("1 damage per curse card paid off")
     if d.get("raze"):
-        parts.append(f"raze its {enemy['lair']['name']} ({d['raze']} soldiers per tile)")
+        parts.append(f"raze its {enemy['lair']['name']} ({d['raze']} soldiers or units per tile)")
     return "; ".join(parts)
 
 

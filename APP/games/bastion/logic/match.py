@@ -1,31 +1,35 @@
 """Bastion: Match, one game from start to finish (no lobby, network or members).
 
-    match = Match({"p1": "Ann", "p2": "Bob"}, settings)   # names fixed at the start
-    match.play(pid, uid, x=None, y=None, rotation=0, remove=(), haul=False)   play a hand card: a
-                                    blueprint on x, y (its top-left cell, turned `rotation` quarter
-                                    turns), a targeted action on the building covering x, y, anything
-                                    else as is; `remove`: the hand uids a trash card removes from the
-                                    deck; `haul`: a card that works or hauls (Villagers) hauls
+    match = Match({"p1": "Ann", "p2": "Bob"}, settings)   # names fixed at the start (seat order)
+  Place phase (everyone at once):
+    match.place(pid, target) / match.unplace(pid, target)   one unit on / off a target (units.py)
+    match.ready(pid, done=True)     done placing (False takes it back); when everyone is ready
+                                    the act phase starts
+  Act phase (one player at a time, match.turn(), in match.order from the first player):
+    match.resolve(pid, target, tool=False, source=None)   one of your placed units acts (units.py)
+    match.play(pid, uid, x=None, y=None, rotation=0, remove=())   a hand card (playing.py)
+    match.buy(pid, slot)            a market card (bundle copies) into your discard pile, team gold
     match.reroll(pid)               deal the market anew for team gold (reroll_cost())
-    match.place_tile(pid, kind, x, y) / match.remove_tile(pid, x, y)   one road or wall tile,
-                                    for team gold (tiles.py)
-    match.strike(pid, foe, way, times=1)   hurt an active enemy: way "soldiers" or "resources"
-    match.raze(pid, x, y)           spend soldiers to remove an enemy blight tile
-    match.buy(pid, slot)            a market card into your discard pile, for team gold
-    match.end_turn(pid, done=True)  done with this round (False takes it back); when everyone
-                                    is done the round ends (end_round)
-    match.leave(pid)                pid left mid-game
+    match.place_tile(pid, kind, x, y) / match.remove_tile(pid, x, y)   road/wall tiles (tiles.py)
+    match.strike(pid, foe, way, times=1) / match.raze(pid, x, y)   soldier counter (combat.py)
+    match.end_turn(pid)             unresolved units are lost; the next player acts, or the round ends
+  Any time:
+    match.leave(pid)                pid left mid-game: their placements go; their turn passes
     match.public() / match.private(pid)   see views.py
     match.result                    None while playing; then {"winner": None, "victory", "reason", "round"}
+  For bots and clients reading legal moves: match.phase ("place" | "act"), match.turn(),
+    units.targets(match) (placeable now), units.free(match, pid), units.mine(match, pid),
+    units.resolve_reason(match, target, tool, source), hauling.sources(match.board),
+    views.build_targets(match, kind), views.action_targets(match, card), tiles.targets(match).
 
-Shared by the team: the board, the stockpile (match.stock: gold and goods), soldiers and the
-keep. Each player has their own deck and hand (seat.py).
+Shared by the team: the board, the stockpile (match.stock), soldiers, the keep, the road and
+wall stocks (match.tile_stock). Each player has their own deck, hand and units (seat.py).
 
-Round: everyone plays at once, in any order, until all have ended the turn. Then end_round:
-income (the keep's gold), carriages move (carriages.py; arrivals deliver and give their card
-back), every active enemy makes its next attack, the keep is checked, the next round starts
-(worked flags and the reroll price reset, the market is dealt anew), an enemy arrives if one is
-due, hands are refilled.
+Round: start_round (worked flags, hauls and the reroll price reset, the market is dealt anew,
+an enemy arrives if due, hands are discarded and refilled, the first player rotates in seat
+order, units are handed out) -> place phase -> act phase -> end_round: the keep's income, upkeep
+(food.py: the city eats; the hungry don't work next round), every active enemy makes its next
+attack, the keep is checked, the next round starts.
 The first enemy arrives on round peaceRounds + 1, then one every enemyGap rounds. Beating
 every enemy wins; the keep at 0 health, or enemies left OVERTIME rounds after the last one
 arrived, loses.
@@ -35,7 +39,7 @@ import random
 
 from gamekit import Deck, LobbyError
 
-from . import carriages, economy, tiles, views
+from . import combat, food, playing, tiles, units, views
 from .attacks import strike as enemy_strike
 from .board import Board
 from .cards import CARDS, STARTING_DECK, amount_text
@@ -43,10 +47,11 @@ from .foes import make_foes
 from .maps import MAPS, log as maps_log
 from .market import REROLL_COST, Market
 from .seat import Seat
-from .structures import OUTPUT_NAMES, RESOURCE_IDS, STRUCTURES, a
+from .structures import RESOURCE_IDS
 
 HAND_SIZE = 5
-START_STOCK = {"gold": 4, "wood": 4, "stone": 6}
+START_STOCK = {"gold": 4, "wood": 6, "stone": 4, "wheat": 6, "tools": 2}
+FIRST_CARD = "plan-house"  # always in the round-1 hand when the starting deck has one
 OVERTIME = 6  # rounds after the last enemy arrives before the city falls anyway
 COLORS = ["#2f6fdf", "#d9482b", "#2f9e44", "#b8860b"]
 
@@ -60,16 +65,27 @@ class Match:
         self.stock = {k: START_STOCK.get(k, 0) for k in RESOURCE_IDS}
         self.soldiers = 0
         self.keep_max = self.keep = settings["keepHealth"]
+        self.tile_stock = {kind: 0 for kind in tiles.KINDS}
         self.colors = {pid: COLORS[i % len(COLORS)] for i, pid in enumerate(self.names)}
         start = [cid for cid, n in (deck or STARTING_DECK).items() for _ in range(n)]
-        self.seats = {pid: Seat(pid, name, self.colors[pid], Deck(start, rng)) for pid, name in self.names.items()}
+        self.seats = {}
+        for pid, name in self.names.items():
+            seat = self.seats[pid] = Seat(pid, name, self.colors[pid], Deck(start, rng))
+            seat.to_top(FIRST_CARD)
         self.foes = make_foes(len(self.seats), settings, rng, enemies)
         self.market = Market([c for c, card in CARDS.items() if card["price"] is not None], rng)
         self.round = 1
+        self.phase = "place"
+        self.order = []  # this round's turn order (first player first)
+        self.turn_index = 0
+        self.placed = {}  # {target: {pid: units}} (units.py)
+        self.hungry = 0  # people the last upkeep couldn't feed
+        self.eaten = {"bread": 0, "wheat": 0, "hungry": 0}  # what the last upkeep did
+        self.hauled = 0  # haul resolutions this round (hauling.py)
         self.rerolls = 0  # market rerolls this round
         self.log = []
         self.result = None
-        self.step = 0  # bumped every round (client alerts)
+        self.step = 0  # bumped whenever the phase or the acting player changes (client alerts)
         first = self.foes[0].arrives if self.foes else 0
         self.write(f"Build up your city: the first enemy comes on round {first}.")
         self.start_round()
@@ -89,11 +105,27 @@ class Match:
             raise LobbyError("You're not in this game.")
         return self.seats[pid]
 
+    def placing(self, pid):
+        seat = self.seat(pid)
+        if self.phase != "place":
+            raise LobbyError("Units are placed at the start of a round.")
+        if seat.ready:
+            raise LobbyError("You're ready: take it back to change your placements.")
+        return seat
+
     def acting(self, pid):
         seat = self.seat(pid)
-        if seat.done:
-            raise LobbyError("You've ended your turn: take it back to act.")
+        if self.phase != "act":
+            raise LobbyError("Place your units first: everything else happens on your turn.")
+        if self.turn() != pid:
+            raise LobbyError(f"It's {self.names.get(self.turn(), 'someone else')}'s turn.")
         return seat
+
+    def turn(self):
+        """The pid acting now (act phase), else None."""
+        if self.phase == "act" and self.turn_index < len(self.order):
+            return self.order[self.turn_index]
+        return None
 
     def pay(self, cost, what):
         missing = [k for k, n in cost.items() if self.stock.get(k, 0) < n]
@@ -113,14 +145,21 @@ class Match:
     def plagued(self):
         return [s for s in self.board.structures.values() if s.plague is not None]
 
+    def population(self):
+        return food.population(self.board)
+
     def last_arrival(self):
         return max((f.arrives for f in self.foes), default=0)
+
+    def clear_gone(self):
+        units.clear_gone(self)
 
     # --- rounds -----------------------------------------------------------------------------
 
     def start_round(self):
-        self.step += 1
         self.rerolls = 0
+        self.hauled = 0
+        self.placed = {}
         if self.round > 1:
             self.market.redeal()
         for s in self.board.structures.values():
@@ -129,24 +168,57 @@ class Match:
             if foe.state == "coming" and foe.arrives <= self.round:
                 foe.arrive(self.board, self.rng)
                 self.write(f"{foe.enemy['icon']} {foe.name} arrives! Beat it: {foe.enemy['defeatText']}.")
+        seated = list(self.seats)
+        start = (self.round - 1) % len(seated) if seated else 0
+        self.order = seated[start:] + seated[:start]
         for seat in self.seats.values():
-            seat.done = False
             seat.refill(HAND_SIZE)
+        total = units.hand_out(self)
+        hungry = f" ({self.hungry} hungry)" if self.hungry else ""
+        if self.order:
+            self.write(f"Round {self.round}: {total} unit{'s' if total != 1 else ''}{hungry}; "
+                       f"{self.names[self.order[0]]} goes first.")
+        self.phase = "place"
+        self.turn_index = 0
+        self.step += 1
         self.board.version += 1
 
-    def end_turn(self, pid, done=True):
-        self.seat(pid).done = done
-        self.check_all_done()
+    def ready(self, pid, done=True):
+        seat = self.seat(pid)
+        if self.phase != "place":
+            raise LobbyError("Everyone is already acting.")
+        seat.ready = done
+        self.check_all_ready()
 
-    def check_all_done(self):
-        if self.result is None and self.seats and all(s.done for s in self.seats.values()):
+    def check_all_ready(self):
+        if self.result is None and self.phase == "place" and self.seats and all(s.ready for s in self.seats.values()):
+            self.phase = "act"
+            self.turn_index = 0
+            self.step += 1
+
+    def end_turn(self, pid):
+        self.acting(pid)
+        units.lose(self, pid)
+        self.turn_index += 1
+        self.next_turn()
+
+    def next_turn(self):
+        if self.result is not None:
+            return
+        self.step += 1
+        if self.turn_index >= len(self.order):
             self.end_round()
 
     def end_round(self):
         for s in self.board.structures.values():
             for k, n in s.spec["income"].items():
                 self.stock[k] += n
-        carriages.move_all(self)
+        people = self.population()
+        self.eaten = food.upkeep(people, self.stock)
+        self.hungry = self.eaten["hungry"]
+        ate = ", ".join(f"{n} {k}" for k, n in self.eaten.items() if k != "hungry" and n) or "nothing"
+        hungry = f"; {self.hungry} went hungry and won't work next round" if self.hungry else ""
+        self.write(f"Upkeep: {people} people ate {ate}{hungry}.")
         for foe in self.foes:
             if foe.active:
                 attack = foe.attack()
@@ -158,200 +230,36 @@ class Match:
         self.round += 1
         self.start_round()
 
-    # --- playing cards ----------------------------------------------------------------------
+    # --- units, cards, fighting (rules in units.py, playing.py, combat.py, tiles.py) ----------
 
-    def play(self, pid, uid, x=None, y=None, rotation=0, remove=(), haul=False):
-        seat = self.acting(pid)
-        instance = seat.hand_card(uid)
-        card = CARDS[instance["card"]]
-        if remove and not card["trash"]:
-            raise LobbyError(f"{card['name']} doesn't remove cards.")
-        if card["kind"] == "build":
-            self.build(seat, instance, card, x, y, rotation)
-        elif card["kind"] == "curse":
-            self.pay(card["pay"], card["name"])
-            seat.take(instance)  # gone from the deck for good
-            self.write(f"{seat.name} paid off {card['name']}.", pid)
-            foe = self.foes[instance["from"]] if "from" in instance else None
-            if card["hurts"] and foe and foe.defeat.get("cards"):
-                self.hurt(foe, 1, seat)
-        else:
-            self.action(seat, instance, card, x, y, remove, haul)
+    def place(self, pid, target):
+        units.place(self, pid, target)
 
-    def build(self, seat, instance, card, x, y, rotation):
-        if x is None or y is None:
-            raise LobbyError("Pick where to build.")
-        spec = STRUCTURES[card["structure"]]
-        self.board.check(spec["id"], rotation, x, y)
-        self.pay(spec["cost"], a(spec["name"]).capitalize())
-        structure = self.board.place(spec["id"], rotation, x, y, seat.pid)
-        seat.take(instance)
-        if structure and spec["card"]:
-            seat.deck.add(spec["card"])
-        extra = f" (+ {CARDS[spec['card']]['name']} card)" if structure and spec["card"] else ""
-        self.write(f"{seat.name} built {a(spec['name'])}{extra}.", seat.pid)
+    def unplace(self, pid, target):
+        units.unplace(self, pid, target)
 
-    def trashed(self, seat, instance, card, remove):
-        """The hand instances a trash card removes (checked, nothing changed yet)."""
-        if len(set(remove)) != len(remove) or len(remove) > card["trash"]:
-            raise LobbyError(f"{card['name']} removes up to {card['trash']} different cards.")
-        picked = [seat.hand_card(uid) for uid in remove]
-        if instance in picked:
-            raise LobbyError(f"{card['name']} can't remove itself.")
-        if any(CARDS[c["card"]]["kind"] == "curse" for c in picked):
-            raise LobbyError("Curses can only be paid off.")
-        return picked
+    def resolve(self, pid, target, tool=False, source=None):
+        units.resolve(self, pid, target, tool, source)
 
-    def action(self, seat, instance, card, x, y, remove=(), haul=False):
-        if haul and not card["haul"]:
-            raise LobbyError(f"{card['name']} doesn't haul.")
-        hauling = bool(card["haul"]) and (haul or not card["work"])
-        working = bool(card["work"]) and not hauling
-        target = None
-        cost = dict(card["cost"])
-        picked = self.trashed(seat, instance, card, remove) if card["trash"] else []
-        if working:
-            target = self.structure_at(x, y)
-            if card["work"] != "any" and target.kind not in card["work"]:
-                raise LobbyError(f"{card['name']} can't work {a(target.spec['name'])}.")
-            reason = economy.why_not(self.board, target, self.stock, self.round, self.plagued())
-            if reason:
-                raise LobbyError(reason)
-            if economy.amount(self.board, target, card) <= 0:
-                raise LobbyError(f"{card['name']} would make nothing there.")
-            uses = target.spec["work"]["uses"]  # paid by economy.work, after the card's own cost
-            if any(self.stock[k] < cost.get(k, 0) + uses.get(k, 0) for k in set(cost) | set(uses)):
-                raise LobbyError(f"The stockpile can't cover {card['name']} and the building's inputs.")
-        elif card["repair"]:
-            target = self.structure_at(x, y)
-            for k, n in economy.repair_cost(target).items():
-                cost[k] = cost.get(k, 0) + n
-        elif card["cure"]:
-            target = self.structure_at(x, y)
-            if target.plague is None:
-                raise LobbyError("That building isn't plagued.")
-        elif hauling:
-            target = self.structure_at(x, y)
-            reason = carriages.why_not(self.board, target)
-            if reason:
-                raise LobbyError(reason)
-        self.pay(cost, card["name"])
-        seat.take(instance)
-        said = []
-        if hauling:
-            said.append(carriages.send(self, seat, instance, card, target))
-        else:
-            seat.deck.discard([instance])
-        for removed in picked:
-            seat.take(removed)  # gone from the deck for good
-        if picked:
-            said.append("removed " + ", ".join(CARDS[c["card"]]["name"] for c in picked) + " from their deck")
-        elif card["trash"]:
-            said.append("removed nothing")
-        if working:
-            said.append(self.work(target, card))
-        if card["repair"]:
-            self.board.repair(target)
-            said.append(f"repaired the {target.spec['name']}")
-        if card["cure"]:
-            said.append(self.cure(target))
-        for k, n in card["gain"].items():
-            if k == "soldiers":
-                self.soldiers += n
-            else:
-                self.stock[k] += n
-        if card["gain"]:
-            said.append("gained " + amount_text(card["gain"]))
-        if card["draw"]:
-            seat.draw(card["draw"])
-            said.append(f"drew {card['draw']}")
-        if card["adds"]:
-            seat.deck.add(card["adds"])
-            said.append(f"took {a(CARDS[card['adds']]['name'])} card")
-        self.write(f"{seat.name} played {card['name']}: {', '.join(said)}.", seat.pid)
-
-    def work(self, s, card):
-        key, amount, where = economy.work(self.board, s, self.stock, card)
-        self.board.version += 1
-        name = s.spec["name"]
-        if key == "soldiers":
-            self.soldiers += amount
-        elif key == "keep":
-            healed = min(amount, self.keep_max - self.keep)
-            self.keep += healed
-            return f"the {name} healed the keep by {healed}"
-        elif key == "cure":
-            cured = [self.cure(p) for p in self.plagued()[:amount]]
-            return f"the {name} " + ", ".join(cured)
-        stored = " (stored, waiting for a haul)" if where == "stored" else ""
-        return f"the {name} made {amount} {OUTPUT_NAMES[key]}{stored}"
-
-    def cure(self, s):
-        foe = self.foes[s.plague]
-        s.plague = None
-        self.board.version += 1
-        if foe.defeat.get("cure"):
-            self.hurt(foe, 1)
-        return f"cured the {s.spec['name']}"
-
-    # --- fighting ---------------------------------------------------------------------------
-
-    def foe(self, index):
-        if not 0 <= index < len(self.foes) or not self.foes[index].active:
-            raise LobbyError("That enemy isn't here.")
-        return self.foes[index]
+    def play(self, pid, uid, x=None, y=None, rotation=0, remove=()):
+        playing.play(self, pid, uid, x, y, rotation, remove)
 
     def strike(self, pid, index, way, times=1):
-        seat = self.acting(pid)
-        foe = self.foe(index)
-        times = min(times, foe.hp)
-        if way == "soldiers" and foe.defeat.get("soldiers"):
-            need = foe.defeat["soldiers"] * times
-            if self.soldiers < need:
-                raise LobbyError(f"That takes {need} soldiers; you have {self.soldiers}.")
-            self.soldiers -= need
-        elif way == "resources" and foe.defeat.get("resources"):
-            self.pay({k: n * times for k, n in foe.defeat["resources"].items()}, "That")
-        else:
-            raise LobbyError(f"The {foe.name} can't be hurt that way.")
-        self.write(f"{seat.name} hit the {foe.name} for {times}.", pid)
-        self.hurt(foe, times, seat)
+        combat.strike(self, pid, index, way, times)
 
     def raze(self, pid, x, y):
-        seat = self.acting(pid)
-        blight = self.board.blights.get((x, y))
-        if not blight:
-            raise LobbyError("There's no enemy tile there.")
-        foe = self.foes[blight["foe"]]
-        cost = foe.raze if blight["lair"] else 1
-        if self.soldiers < cost:
-            raise LobbyError(f"Razing that takes {cost} soldier{'s' if cost > 1 else ''}; you have {self.soldiers}.")
-        self.soldiers -= cost
-        self.board.remove_blight((x, y))
-        self.write(f"{seat.name} razed a {blight['name']}.", pid)
-        if blight["lair"]:
-            self.hurt(foe, 1, seat)
+        combat.raze(self, pid, x, y)
 
-    def hurt(self, foe, amount, seat=None):
-        if not foe.hit(amount):
-            return
-        for cell in [c for c, b in self.board.blights.items() if b["foe"] == foe.index]:
-            self.board.remove_blight(cell)
-        for s in self.board.structures.values():
-            if s.plague == foe.index:
-                s.plague = None
-        self.board.version += 1
-        self.write(f"{foe.enemy['icon']} The {foe.name} is beaten!")
-        if all(f.state == "defeated" for f in self.foes):
-            self.end(True, "Every enemy is beaten: the city stands!")
-
-    # --- market, leaving, the end -------------------------------------------------------------
+    def hurt(self, foe, amount):
+        combat.hurt(self, foe, amount)
 
     def place_tile(self, pid, kind, x, y):
         tiles.place(self, pid, kind, x, y)
 
     def remove_tile(self, pid, x, y):
         tiles.remove(self, pid, x, y)
+
+    # --- market, leaving, the end -------------------------------------------------------------
 
     def reroll_cost(self):
         return REROLL_COST + self.rerolls
@@ -371,20 +279,35 @@ class Match:
         card = CARDS[self.market.slots[slot]]
         self.pay({"gold": card["price"]}, card["name"])
         self.market.take(slot)
-        seat.deck.add(card["id"])
-        self.write(f"{seat.name} bought {card['name']}.", pid)
+        for _ in range(card["bundle"]):
+            seat.deck.add(card["id"])
+        copies = f" ×{card['bundle']}" if card["bundle"] > 1 else ""
+        self.write(f"{seat.name} bought {card['name']}{copies}.", pid)
 
     def leave(self, pid):
-        seat = self.seats.pop(pid, None)
+        seat = self.seats.get(pid)
         if seat is None or self.result is not None:
+            self.seats.pop(pid, None)
             return
-        self.write(f"{seat.name} left; their cards are gone.")
+        acting = self.turn() == pid
+        units.lose(self, pid)
+        del self.seats[pid]
+        self.write(f"{seat.name} left; their cards and units are gone.")
         if not self.seats:
-            self.end(False, "Everyone left.")
-        else:
-            self.check_all_done()
+            return self.end(False, "Everyone left.")
+        index = self.order.index(pid) if pid in self.order else len(self.order)
+        if pid in self.order:
+            self.order.remove(pid)
+        if self.phase == "place":
+            self.check_all_ready()
+        elif index < self.turn_index:
+            self.turn_index -= 1
+        elif acting:
+            self.next_turn()
 
     def end(self, victory, reason):
+        if self.result is not None:
+            return
         self.write(reason)
         self.result = {"winner": None, "victory": victory, "reason": reason, "round": self.round}
 

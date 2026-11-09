@@ -8,5 +8,5 @@
   "cost": {
     "gold": 1
   },
-  "text": "Links buildings to the keep and storage yards, so Haul cards can carry their goods."
+  "text": "Links buildings to the keep and storage yards so their stored goods can be hauled and their inputs fetched. Bought 3 at a time; removing one is free."
 }

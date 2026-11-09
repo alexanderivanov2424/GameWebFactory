@@ -5,7 +5,8 @@
              start: [{"structure": id, "x", "y", "rotation"}] (tiles take one entry per piece)
     MAX_SIZE largest width/height (server.py validates cells against it)
 A map is only checked for shape here; Board places the start town when a game begins and
-logs a start entry that doesn't fit (tests check the real maps place every entry).
+logs a start entry that doesn't fit (after changing a shape, build a Board for each map and look
+for that error: NOTES.md pitfalls).
 """
 
 import logging
@@ -17,7 +18,7 @@ from .structures import CONTENT, STRUCTURES, TERRAIN
 
 log = logging.getLogger("bastion")
 
-MAX_SIZE = 24
+MAX_SIZE = 40
 DEFAULT = "valley"
 
 

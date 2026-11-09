@@ -7,7 +7,9 @@
         foe.state                     "coming" (face down), "active" or "defeated"
         foe.hp / foe.max_hp           damage left / total (a lair foe: its lair tiles)
         foe.defeat                    the enemy's ways to beat it (a copy: arrive() may change it)
-        foe.raze                      soldiers per lair tile
+        foe.raze                      soldiers (or unit strikes) per lair tile
+        foe.strikes                   fighting units' strikes not yet worth a damage (units.py)
+        foe.fightable                 units may fight it (it has defeat.soldiers)
         foe.attack()                  the attack it makes this round (then foe.step += 1)
         foe.arrive(board, rng)        turn face up; place its lair (as blights on empty grass)
         foe.hit(n)                    -> True if that beat it
@@ -44,6 +46,7 @@ class Foe:
         self.arrives = arrives
         self.state = "coming"
         self.step = 0
+        self.strikes = 0
         self.defeat = dict(enemy["defeat"])
         self.raze = max(1, math.ceil(self.defeat.get("raze", 0) * factor)) if "raze" in self.defeat else 0
         self.max_hp = self.hp = max(1, round(enemy["hp"] * factor))
@@ -55,6 +58,10 @@ class Foe:
     @property
     def active(self):
         return self.state == "active"
+
+    @property
+    def fightable(self):
+        return bool(self.defeat.get("soldiers"))
 
     def attack(self):
         attacks = self.enemy["attacks"]
@@ -97,6 +104,7 @@ class Foe:
             "next": self.step % len(attacks),
             "defeat": {k: v for k, v in self.defeat.items() if k != "raze"} | ({"raze": self.raze} if self.raze else {}),
             "lair": self.enemy["lair"]["name"] if self.enemy["lair"] else "",
+            "strikes": self.strikes, "fight": self.fightable,
         }
 
 

@@ -2,15 +2,16 @@
   "name": "Dragon",
   "icon": "🐉",
   "tier": 3,
-  "hp": 8,
+  "hp": 36,
   "defeat": {
-    "soldiers": 1
+    "soldiers": 2
   },
   "text": "The last and worst.",
   "attacks": [
     {
       "name": "Firebreath",
-      "ruin": 3
+      "ruin": 2,
+      "keep": 4
     },
     {
       "name": "Hoard",

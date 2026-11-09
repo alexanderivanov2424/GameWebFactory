@@ -1,0 +1,19 @@
+{
+  "name": "Carriage",
+  "icon": "🛒",
+  "shape": [
+    "##"
+  ],
+  "price": 3,
+  "cost": {
+    "wood": 3,
+    "tools": 1
+  },
+  "requires": [
+    {
+      "near": "road"
+    }
+  ],
+  "carriage": true,
+  "text": "A coach house by the road: each round, one more haul carries 5 goods instead of 3 (one per undamaged carriage)."
+}

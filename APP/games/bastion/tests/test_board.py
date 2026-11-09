@@ -24,7 +24,7 @@ class PlacementTests(helpers.FixtureCase):
         for x, y in ((3, 2), (0, 0), (5, 4), (7, 3)):  # keep, forest, mountain, off the edge
             with self.assertRaises(LobbyError):
                 board.check("ell", 0, x, y)
-        board.place("wall", 0, 1, 3, "p1")  # (1,3) (2,3); buildings may go over roads, not walls
+        board.place("wall", 0, 1, 3)  # (1,3) (2,3); buildings may go over roads, not walls
         with self.assertRaisesRegex(LobbyError, "empty grass"):
             board.check("hut", 0, 2, 3)
 
@@ -33,7 +33,7 @@ class PlacementTests(helpers.FixtureCase):
         footprints = [sorted(board.footprint("ell", r, 4, 2)) for r in range(4)]
         self.assertEqual(len({tuple(f) for f in footprints}), 4)
         self.assertTrue(all(len(f) == 3 for f in footprints))
-        built = board.place("ell", 1, 4, 2, "p1")
+        built = board.place("ell", 1, 4, 2)
         self.assertEqual(sorted(built.cells), footprints[1])
 
     def test_unsold_structures_cant_be_built(self):
@@ -46,8 +46,8 @@ class NearTests(helpers.FixtureCase):
         match = helpers.new_match(self)
         shop = build(match, "shop", 6, 1)
         build(match, "field", 4, 0)  # cells (4,0) (5,0) (4,1) (5,1): two touch the shop
-        match.board.place("road", 1, 7, 0, "p1")  # (7,0) (7,1): one touches the shop
-        match.board.place("road", 0, 6, 2, "p1")  # (6,2) (7,2): one touches the shop
+        match.board.place("road", 1, 7, 0)  # (7,0) (7,1): one touches the shop
+        match.board.place("road", 0, 6, 2)  # (6,2) (7,2): one touches the shop
         self.assertEqual(match.board.near(shop.cells, "field"), 1)
         self.assertEqual(match.board.near(shop.cells, "road"), 2)
 
@@ -55,7 +55,7 @@ class NearTests(helpers.FixtureCase):
         board = helpers.new_match(self).board
         self.assertEqual(board.near([(1, 1)], "forest"), 2)
         self.assertEqual(board.near([(5, 3)], "empty"), 4)
-        board.place("hut", 0, 4, 3, "p1")
+        board.place("hut", 0, 4, 3)
         self.assertEqual(board.near([(5, 3)], "empty"), 3)
         self.assertEqual(board.near([(5, 4)], "mountain"), 1)
 
@@ -69,8 +69,8 @@ class LinkTests(helpers.FixtureCase):
         match = helpers.new_match(self)
         shop = build(match, "shop", 6, 3)
         self.assertIsNone(match.board.link(shop))
-        match.board.place("road", 0, 4, 2, "p1")  # (4,2) touches the keep, (5,2)
-        match.board.place("road", 1, 6, 1, "p1")  # (6,1) (6,2): touches (5,2) and the shop
+        match.board.place("road", 0, 4, 2)  # (4,2) touches the keep, (5,2)
+        match.board.place("road", 1, 6, 1)  # (6,1) (6,2): touches (5,2) and the shop
         self.assertEqual(match.board.link(shop), "road")
         match.board.ruin((5, 2))  # raids break roads
         self.assertIsNone(match.board.link(shop))
@@ -90,7 +90,7 @@ class RaidTests(helpers.FixtureCase):
         hut = build(match, "hut", 1, 4)
         far = build(match, "hut", 6, 0)
         self.assertEqual(match.board.raid_targets(), [(1, 4), (6, 0)])
-        match.board.place("wall", 0, 1, 5, "p1")
+        match.board.place("wall", 0, 1, 5)
         build(match, "tower", 7, 1)
         self.assertFalse(match.board.raid_targets())
         self.assertTrue(match.board.protected(hut.cells[0]) and match.board.protected(far.cells[0]))
@@ -101,7 +101,7 @@ class RaidTests(helpers.FixtureCase):
     def test_raids_break_walls_when_all_is_protected(self):
         match = helpers.new_match(self)
         hut = build(match, "hut", 1, 4)
-        match.board.place("wall", 0, 1, 5, "p1")
+        match.board.place("wall", 0, 1, 5)
         attacks.ruin(match, 1, [])
         self.assertEqual(len(match.board.walls), 1)
         self.assertFalse(hut.ruined)

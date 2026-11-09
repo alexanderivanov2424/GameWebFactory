@@ -1,0 +1,28 @@
+{
+  "name": "Bakery",
+  "icon": "🍞",
+  "shape": [
+    "##"
+  ],
+  "price": 3,
+  "bundle": 2,
+  "cost": {
+    "wood": 2,
+    "stone": 1
+  },
+  "work": {
+    "uses": {
+      "wheat": 1
+    },
+    "makes": {
+      "bread": 1
+    }
+  },
+  "bonuses": [
+    {
+      "near": "farm",
+      "bonus": 1
+    }
+  ],
+  "text": "Bakes wheat into bread: a bread feeds 4 people, a wheat only 2. Fresh flour from a farm next to it bakes one more."
+}

@@ -1,24 +1,27 @@
 """Bastion: what clients see (Match.public / Match.private), and where each hand card may go.
 
-    public(match)     everything public: the catalog (static: "kinds" (structure files),
-                      "cards", resources, icons, terrain; cached on the match), round, keep,
-                      stockpile, soldiers, board ("structures", roads, walls, blights,
-                      carriages), foes (face-down ones show only their arrival round), market and
-                      rerollCost, tiles (where a road or wall tile may go and which can be
-                      removed: tiles.targets; catalog: removeCost), seats, log
-    private(match, pid)   {"hand", "targets", "hauls"} (None for someone not seated)
+    public(match)     everything public: the catalog (static, cached on the match: "kinds"
+                      (structure files), "cards", resources, icons, terrain, rule numbers),
+                      round, phase, turn order, population and food, units and placements,
+                      keep, stockpile, soldiers, tile stocks, hauls, the board ("structures",
+                      roads, walls, blights), foes (face-down ones show only their arrival
+                      round), market and rerollCost, tiles (where a road or wall tile may go
+                      and which can be removed: tiles.targets), seats, log
+    private(match, pid)   {"hand", "targets", "places", "sources"} (None for someone not seated)
     targets           {card uid: ...} for every playable hand card:
                       blueprint: {"<rotation>": {"x,y": output}} for each legal top-left cell
                                  (output: what the building would make there; -1 if it isn't worked)
-                      work/repair/cure action: {"<structure uid>": "preview text"}
-    hauls             {card uid: {"<structure uid>": "preview text"}} for every hand card that
-                      hauls (Villagers has both: "targets" to work, "hauls" to haul)
+                      repair/cure action: {"<structure uid>": "preview text"}
+    places            {target: {"text", "tool", "why"}} (units.preview): in the place phase every
+                      target a unit may go on now; in the act phase every target holding one
+                      of your units
+    sources           {"<structure uid>": "3 wood, 1 stone"} buildings a haul may take from now
 Blueprint targets depend only on the board, so they're cached by (board.version, structure).
 """
 
 from gamekit import LobbyError
 
-from . import carriages, economy, tiles
+from . import economy, food, hauling, tiles, units
 from .cards import CARDS, amount_text, public as card_public
 from .structures import OUTPUT_NAMES, RESOURCES, STRUCTURES, TERRAIN, public as structure_public
 
@@ -39,7 +42,10 @@ def catalog(match):
             "width": board.width,
             "height": board.height,
             "storeCap": economy.STORE_CAP,
-            "removeCost": tiles.REMOVE_COST,
+            "toolBoost": economy.TOOL_BOOST,
+            "feeds": dict(food.FEEDS),
+            "haulSizes": {"small": hauling.SMALL, "big": hauling.BIG},
+            "tileBatch": tiles.BATCH,
             "colors": dict(match.colors),
             "names": dict(match.names),
         }
@@ -48,7 +54,7 @@ def catalog(match):
 
 def structure_view(match, s, reach):
     board = match.board
-    view = {"kind": s.kind, "cells": [[x, y] for x, y in s.cells], "owner": s.owner or "",
+    view = {"kind": s.kind, "cells": [[x, y] for x, y in s.cells],
             "ruined": sorted([x, y] for x, y in s.ruined), "plague": s.plague is not None,
             "frozen": s.frozen == match.round, "worked": s.worked, "store": dict(s.store),
             "link": board.link(s, reach) or "none",
@@ -58,19 +64,49 @@ def structure_view(match, s, reach):
     return view
 
 
+def placements(match):
+    """{target: pid} for one-unit targets, {target: {pid: n}} for pools (haul, fight)."""
+    found = {}
+    for target, by in match.placed.items():
+        if target.startswith(units.POOLS):
+            found[target] = dict(by)
+        else:
+            found[target] = next(iter(by))
+    return found
+
+
 def public(match):
     from .match import OVERTIME
     board = match.board
     reach = board.road_reach()
     last = match.last_arrival()
+    haul_units = sum(match.placed.get("haul", {}).values())
     return {
         **catalog(match),
         "round": match.round,
         "step": match.step,
+        "phase": match.phase,
+        "firstPlayer": match.order[0] if match.order else "",
+        "turn": match.turn() or "",
+        "order": list(match.order),
+        "population": match.population(),
+        "hungry": match.hungry,
+        "eaten": dict(match.eaten),
+        "upkeep": food.feed(match.population(), match.stock),
+        "units": {pid: {"total": seat.units, "free": units.free(match, pid),
+                        "placed": sum(units.mine(match, pid).values())} for pid, seat in match.seats.items()},
+        "placements": placements(match),
+        "ready": {pid: seat.ready for pid, seat in match.seats.items()},
         "keep": match.keep,
         "keepMax": match.keep_max,
         "stock": dict(match.stock),
         "soldiers": match.soldiers,
+        "roadStock": match.tile_stock["road"],
+        "wallStock": match.tile_stock["wall"],
+        "carriages": hauling.carriages(board),
+        "hauls": {"next": hauling.capacity(board, match.hauled), "done": match.hauled,
+                  "bigLeft": max(0, hauling.carriages(board) - match.hauled),
+                  "queue": hauling.queue(board, match.hauled, haul_units)},
         "deadline": last + OVERTIME if match.foes else 0,
         "structures": {str(uid): structure_view(match, s, reach) for uid, s in board.structures.items()},
         **board.public(),
@@ -106,36 +142,26 @@ def build_targets(match, kind):
 
 
 def action_targets(match, card):
-    board, found = match.board, {}
-    plagued = match.plagued()
-    for uid, s in board.structures.items():
-        if card["work"]:
-            if card["work"] != "any" and s.kind not in card["work"]:
-                continue
-            if economy.why_not(board, s, match.stock, match.round, plagued):
-                continue
-            key = next(iter(s.spec["work"]["makes"]))
-            amount = economy.amount(board, s, card)
-            if amount <= 0:
-                continue
-            stored = key in economy.GOODS and board.link(s) != "depot"
-            found[str(uid)] = f"+{amount} {OUTPUT_NAMES[key]}" + (" (stored)" if stored else "")
-        elif card["repair"] and s.ruined:
+    found = {}
+    for uid, s in match.board.structures.items():
+        if card["repair"] and s.ruined:
             found[str(uid)] = f"repair for {len(s.ruined)} wood"
         elif card["cure"] and s.plague is not None:
             found[str(uid)] = "cure"
     return found
 
 
-def haul_targets(match, card, dist):
-    board, found = match.board, {}
-    for uid, s in board.structures.items():
-        if carriages.why_not(board, s):
+def places(match, pid):
+    if match.phase == "place":
+        wanted = units.targets(match)
+    else:
+        wanted = list(units.mine(match, pid))
+    found = {}
+    for target in wanted:
+        try:
+            found[target] = units.preview(match, target)
+        except LobbyError:  # the target is gone
             continue
-        steps = carriages.steps(board, s.cells, dist)
-        rounds = -(-steps // card["haul"])
-        when = "at once" if not steps else f"in {rounds} round{'s' if rounds > 1 else ''}"
-        found[str(uid)] = f"haul {amount_text(s.store)}: arrives {when}"
     return found
 
 
@@ -143,14 +169,12 @@ def private(match, pid):
     seat = match.seats.get(pid)
     if seat is None:
         return None
-    targets, hauls = {}, {}
-    dist = match.board.road_distances()
+    targets = {}
     for instance in seat.hand:
         card = CARDS[instance["card"]]
         if card["kind"] == "build":
             targets[str(instance["uid"])] = build_targets(match, card["structure"])
-        elif card["kind"] == "action" and (card["work"] or card["repair"] or card["cure"]):
+        elif card["kind"] == "action" and (card["repair"] or card["cure"]):
             targets[str(instance["uid"])] = action_targets(match, card)
-        if card["kind"] == "action" and card["haul"]:
-            hauls[str(instance["uid"])] = haul_targets(match, card, dist)
-    return {"hand": seat.private()["hand"], "targets": targets, "hauls": hauls}
+    return {"hand": seat.private()["hand"], "targets": targets, "places": places(match, pid),
+            "sources": {str(uid): amount_text(s.store) for uid, s in hauling.sources(match.board).items()}}

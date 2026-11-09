@@ -2,27 +2,26 @@
   "name": "Farm",
   "icon": "🌾",
   "shape": [
-    "##",
     "##"
   ],
   "price": 2,
+  "bundle": 3,
   "cost": {
-    "wood": 2
+    "wood": 1
   },
-  "crew": "Farmhands",
   "work": {
     "makes": {
-      "food": 2
+      "wheat": 1
     }
   },
   "bonuses": [
     {
-      "near": "water",
-      "bonus": 1
+      "near": "farm",
+      "each": 1,
+      "max": 2
     },
     {
-      "near": "empty",
-      "min": 4,
+      "near": "water",
       "bonus": 1
     },
     {
@@ -34,5 +33,5 @@
       "bonus": -1
     }
   ],
-  "text": "Grows food. Likes water and open fields; hates the dust of mines and quarries."
+  "text": "Grows wheat: +1 for every farm next to it (up to 2), so fields work best in clusters. Likes water; hates the dust of mines and quarries."
 }

@@ -4,19 +4,27 @@ Tests never depend on the real content: FixtureCase installs small fixture struc
 enemies (parsed by the real loaders) into the registries for each test and restores them after.
 
     class MyTests(helpers.FixtureCase): ...     # setUp installs the fixtures
-    new_match(players=1, enemies=(), **settings)   a Match on MAP with a fixed seed; `enemies` =
-                                       fixture enemy ids in arrival order (none by default)
+    new_match(players=1, enemies=(), act=True, **settings)   a Match on MAP with a fixed seed;
+                                       `enemies` = fixture enemy ids in arrival order (none by
+                                       default); act=True: everyone is ready, so it is p1's turn
+                                       in the act phase (act=False: still placing)
     give(match, pid, card_id)          a fresh instance of card_id in pid's hand -> its uid
-    build(match, kind, x, y, rotation=0, owner="p1")   place a structure directly (no checks)
+    build(match, kind, x, y, rotation=0)   place a structure directly (no checks)
     foe(match, enemy_id)               a fixture enemy made active right now -> Foe
+    units(match, pid, n)               give pid n more units to place this round
+    put(match, pid, target)            a unit of pid's on target (straight into match.placed, any phase)
+    ready_all(match)                   everyone ready: the act phase starts
+    next_round(match)                  everyone ready, everyone ends their turn, and everyone is
+                                       ready again in the new round (its act phase, first player's turn)
 
 MAP (8 x 6), keep at (3, 2):          Fixture structures (see STRUCTURES below):
     y0  F F . . . . . .                  mill "##" next to forest; wood 2; +1 next to >=2 forest,
     y1  F . . . . . . .                       +1 next to a yard, -1 next to another mill
     y2  . . . K . . . .                  yard "#" depot; shop "#" 2 wood -> 1 tools;
-    y3  . . . . . . . .                  field "##/##" food 2, +1 per cottage-like "hut" (max 2);
-    y4  . . . . . . M M                  clinic "#" 1 food -> cure 1; tower "#" protects 1;
-    y5  ~ . . . . . M M                  hut "#" gives the "work-any" card; road, wall tiles
+    y3  . . . . . . . .                  field "##/##" wheat 2, +1 per "hut" (max 2);
+    y4  . . . . . . M M                  clinic "#" 1 wheat -> cure 1; tower "#" protects 1;
+    y5  ~ . . . . . M M                  hut "#" population 2, gives the "boon" card; cart "#"
+                                         (a carriage); road, wall tiles
 """
 
 import importlib
@@ -40,21 +48,20 @@ STRUCTURES = {
              "bonuses": [{"near": "forest", "min": 2, "bonus": 1}, {"near": "yard", "bonus": 1}, {"near": "mill", "bonus": -1}]},
     "yard": {"name": "Yard", "shape": ["#"], "price": 1, "depot": True},
     "shop": {"name": "Shop", "shape": ["#"], "price": 1, "work": {"uses": {"wood": 2}, "makes": {"tools": 1}}},
-    "field": {"name": "Field", "shape": ["##", "##"], "price": 1, "work": {"makes": {"food": 2}},
+    "field": {"name": "Field", "shape": ["##", "##"], "price": 1, "work": {"makes": {"wheat": 2}},
               "bonuses": [{"near": "hut", "each": 1, "max": 2}]},
-    "clinic": {"name": "Clinic", "shape": ["#"], "price": 1, "work": {"uses": {"food": 1}, "makes": {"cure": 1}}},
+    "clinic": {"name": "Clinic", "shape": ["#"], "price": 1, "work": {"uses": {"wheat": 1}, "makes": {"cure": 1}}},
     "tower": {"name": "Tower", "shape": ["#"], "price": 1, "protects": 1},
-    "hut": {"name": "Hut", "shape": ["#"], "price": 1, "card": "work-any"},
+    "hut": {"name": "Hut", "shape": ["#"], "price": 1, "bundle": 2, "population": 2, "card": "boon"},
+    "cart": {"name": "Cart", "shape": ["#"], "price": 1, "carriage": True},
     "ell": {"name": "Ell", "shape": ["##", "#."], "price": 1},
 }
 CARDS = {
-    "work-any": {"name": "Work Any", "work": "any"},
-    "haul-2": {"name": "Haul Two", "haul": 2},
     "mend": {"name": "Mend", "repair": True},
-    "remedy": {"name": "Remedy", "cure": True, "cost": {"food": 1}},
+    "remedy": {"name": "Remedy", "cure": True, "cost": {"wheat": 1}},
     "boon": {"name": "Boon", "gain": {"gold": 2, "soldiers": 1}, "draw": 1},
     "note": {"name": "Note", "kind": "curse", "pay": {"gold": 1}, "hurts": True},
-    "dread": {"name": "Dread", "kind": "curse", "pay": {"food": 1}},
+    "dread": {"name": "Dread", "kind": "curse", "pay": {"wheat": 1}},
 }
 ENEMIES = {
     "brute": {"name": "Brute", "tier": 1, "hp": 2, "defeat": {"soldiers": 2},
@@ -98,7 +105,7 @@ class FixtureCase(unittest.TestCase):
         self.enemies = {eid: enemies.parse_enemy(eid, data, cards.CARDS) for eid, data in ENEMIES.items()}
 
 
-def new_match(case, players=1, enemies=(), **settings):
+def new_match(case, players=1, enemies=(), act=True, **settings):
     """A Match with fixed seed on MAP; `enemies` = fixture enemy ids in arrival order."""
     picked = {eid: case.enemies[eid] for eid in enemies}
     merged = {**SETTINGS, "enemies": len(enemies), **settings}
@@ -106,10 +113,13 @@ def new_match(case, players=1, enemies=(), **settings):
     original = foes_module.lineup
     foes_module.lineup = lambda pool, count, rng: [pool[eid] for eid in enemies]
     try:
-        return match_module.Match(names, merged, rng=random.Random(1), enemies=picked, maps={"test": MAP},
-                                  deck={"work-any": 5})
+        match = match_module.Match(names, merged, rng=random.Random(1), enemies=picked, maps={"test": MAP},
+                                   deck={"boon": 5})
     finally:
         foes_module.lineup = original
+    if act:
+        ready_all(match)
+    return match
 
 
 def give(match, pid, card_id):
@@ -118,8 +128,8 @@ def give(match, pid, card_id):
     return instance["uid"]
 
 
-def build(match, kind, x, y, rotation=0, owner="p1"):
-    return match.board.place(kind, rotation, x, y, owner)
+def build(match, kind, x, y, rotation=0):
+    return match.board.place(kind, rotation, x, y)
 
 
 def foe(case, match, enemy_id):
@@ -127,3 +137,26 @@ def foe(case, match, enemy_id):
     match.foes.append(made)
     made.arrive(match.board, match.rng)
     return made
+
+
+def units(match, pid, n):
+    match.seats[pid].units += n
+
+
+def put(match, pid, target):
+    by = match.placed.setdefault(target, {})
+    by[pid] = by.get(pid, 0) + 1
+    match.seats[pid].units += 1
+
+
+def ready_all(match):
+    for pid in list(match.seats):
+        if match.phase == "place" and match.result is None:
+            match.ready(pid)
+
+
+def next_round(match):
+    ready_all(match)
+    while match.turn() and match.result is None:
+        match.end_turn(match.turn())
+    ready_all(match)

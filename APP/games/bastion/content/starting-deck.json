@@ -1,6 +1,7 @@
 {
-  "villagers": 3,
-  "haul": 1,
+  "plan-house": 2,
+  "plan-farm": 1,
   "tax": 1,
-  "sell": 1
+  "sell": 1,
+  "levy": 1
 }

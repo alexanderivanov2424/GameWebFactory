@@ -2,37 +2,36 @@
 
 Cells are (x, y). Each cell holds at most one of: a building tile, a road, a wall or a blight
 (an enemy's tile). Only grass can be built on; buildings (not roads or walls) may also go over
-road tiles, which they replace, unless a carriage is on them. "Next to" always means
-orthogonally adjacent.
+road tiles, which they replace. "Next to" always means orthogonally adjacent. Structures have no
+owner: the whole team uses them.
 
-    board = Board(game_map)          places the map's starting town (owner None)
+    board = Board(game_map)          places the map's starting town
     board.structures                 {uid: Structure} buildings (roads and walls are cell sets:
                                      board.roads, board.walls); board.at {(x, y): uid}
-    board.blights                    {(x, y): {"name", "icon", "foe": enemy index, "lair": bool}}
-    board.carriages                  {uid: Carriage} goods being hauled (carriages.py); next_carriage
+    board.blights                    {(x, y): {"name", "icon", "foe": enemy index, "lair": bool,
+                                     "strikes": units that fought it so far (units.py)}}
     board.version                    bumped on every change (Match caches placement targets by it)
     board.footprint(kind, rotation, x, y)   the cells a placement covers (x, y = top-left)
     board.check(kind, rotation, x, y)       those cells, or LobbyError why it can't go there
-    board.place(kind, rotation, x, y, owner) -> Structure (None for a road or wall)
+    board.place(kind, rotation, x, y) -> Structure (None for a road or wall)
     board.near(cells, what)          how many of `what` are next to `cells`: terrain cells, "empty"
                                      grass cells, road/wall cells, or distinct buildings of a kind
     board.link(structure)            "depot" (next to a working depot), "road" (a road next to it
                                      reaches a cell next to a depot) or None (cut off)
-    board.road_distances()           {road cell: steps from it into a depot} for roads that reach one
-    board.toward_depot(cell, dist)   the next road cell on the shortest way to a depot
+    board.road_reach()               road cells whose network touches a depot
     board.protected(cell)            next to a wall, or within a watchtower's reach
     board.raid_targets(prefer)       unprotected, unruined tiles of buildings (not the keep)
+    board.loot_targets()             buildings with stored goods and at least one unprotected tile
     board.ruin(cell) / board.repair(structure)   damage one tile / fix every ruined tile
     board.clear(cell)                take a road or wall tile away
     board.free_spots(cells, rng)     random top-left spots where a blight shape fits on empty grass
-    board.public()                   tiles, blights and carriages for clients (terrain is in the catalog)
+    board.public()                   tiles and blights for clients (terrain is in the catalog)
 """
 
 from dataclasses import dataclass, field
 
 from gamekit import LobbyError
 
-from . import carriages
 from .structures import BUILDABLE, STRUCTURES, TERRAIN, a, describe
 
 DIRS = ((1, 0), (-1, 0), (0, 1), (0, -1))
@@ -43,10 +42,9 @@ class Structure:
     uid: int
     kind: str
     cells: list
-    owner: str = None  # who built it (None: the starting town)
     ruined: set = field(default_factory=set)
     plague: int = None  # index of the enemy that spread it
-    frozen: int = 0  # the round it can't work in
+    frozen: int = 0  # the round no unit may work it
     worked: bool = False  # worked this round
     store: dict = field(default_factory=dict)  # goods waiting to be hauled
 
@@ -67,14 +65,12 @@ class Board:
         self.roads = set()
         self.walls = set()
         self.blights = {}
-        self.carriages = {}
-        self.next_carriage = 1
         self.next_uid = 1
         self.version = 0
         for entry in game_map.start:
             try:
                 self.check(entry["structure"], entry["rotation"], entry["x"], entry["y"], start=True)
-                self.place(entry["structure"], entry["rotation"], entry["x"], entry["y"], None)
+                self.place(entry["structure"], entry["rotation"], entry["x"], entry["y"])
             except LobbyError as error:
                 if log:
                     log.error("Map %s: start %s doesn't fit: %s", game_map.name, entry, error)
@@ -124,8 +120,6 @@ class Board:
             if not self.inside(*cell):
                 raise LobbyError("That doesn't fit on the board.")
             if cell in self.roads and not spec["tile"]:
-                if any(c.cell == cell for c in self.carriages.values()):
-                    raise LobbyError("A carriage is on that road: wait until it has passed.")
                 continue
             if not self.empty(cell):
                 raise LobbyError("Build only on empty grass or over roads." if not spec["tile"] else "Build only on empty grass.")
@@ -134,7 +128,7 @@ class Board:
                 raise LobbyError(f"{a(spec['name']).capitalize()} must be {describe(cond, STRUCTURES)}.")
         return cells
 
-    def place(self, kind, rotation, x, y, owner):
+    def place(self, kind, rotation, x, y):
         cells = self.footprint(kind, rotation, x, y)
         self.version += 1
         tile = STRUCTURES[kind]["tile"]
@@ -142,7 +136,7 @@ class Board:
             (self.roads if tile == "road" else self.walls).update(cells)
             return None
         self.roads.difference_update(cells)  # a building replaces the roads under it
-        structure = Structure(self.next_uid, kind, cells, owner)
+        structure = Structure(self.next_uid, kind, cells)
         self.next_uid += 1
         self.structures[structure.uid] = structure
         for cell in cells:
@@ -163,7 +157,7 @@ class Board:
         return spots
 
     def add_blight(self, cell, name, icon, foe, lair=False):
-        self.blights[cell] = {"name": name, "icon": icon, "foe": foe, "lair": lair}
+        self.blights[cell] = {"name": name, "icon": icon, "foe": foe, "lair": lair, "strikes": 0}
         self.version += 1
 
     def remove_blight(self, cell):
@@ -196,11 +190,6 @@ class Board:
         """Road cells whose road network touches a depot."""
         return set(self.road_distances())
 
-    def toward_depot(self, cell, dist):
-        x, y = cell
-        closer = sorted(c for c in ((x + dx, y + dy) for dx, dy in DIRS) if dist.get(c) == dist[cell] - 1)
-        return closer[0] if closer else cell
-
     def link(self, structure, reach=None):
         around = self.neighbors(structure.cells)
         if structure.spec["depot"] or around & self.depot_cells():
@@ -225,6 +214,11 @@ class Board:
                       for c in s.cells if c not in s.ruined and not self.protected(c)]
         preferred = [c for c in open_cells if self.structures[self.at[c]].kind in prefer]
         return sorted(preferred or open_cells)
+
+    def loot_targets(self):
+        """Buildings a raid may loot: goods in store and a tile that isn't protected."""
+        return [s for _, s in sorted(self.structures.items())
+                if s.stored() and not all(self.protected(c) for c in s.cells)]
 
     def ruin(self, cell):
         """Ruin a building tile or break a wall/road tile. Returns the destroyed Structure if
@@ -258,5 +252,4 @@ class Board:
             "roads": sorted(f"{x},{y}" for x, y in self.roads),
             "walls": sorted(f"{x},{y}" for x, y in self.walls),
             "blights": {f"{x},{y}": dict(b) for (x, y), b in self.blights.items()},
-            "carriages": {str(uid): carriages.view(self, c) for uid, c in self.carriages.items()},
         }

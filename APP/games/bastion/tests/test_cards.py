@@ -1,5 +1,5 @@
-"""Bastion: playing cards on fixture content (blueprints, work, repair, cure, curses, gains), the
-market and the done flag, through Match.
+"""Bastion: playing cards on fixture content (blueprints, repair, cure, curses, gains), units
+working buildings, the market and whose turn it is, through Match.
 Run: python3 -I tools/run_tests.py bastion
 """
 
@@ -21,16 +21,16 @@ def in_hand(match, uid, pid="p1"):
 
 
 class BlueprintTests(helpers.FixtureCase):
-    def test_build_pays_leaves_the_deck_and_adds_the_crew_card(self):
+    def test_build_pays_and_leaves_the_deck(self):
         match = helpers.new_match(self)
         match.stock["wood"] = 3
         uid = give(match, "p1", "plan-mill")
         match.play("p1", uid, 1, 1, 0)
         mill = match.board.structures[match.board.at[(1, 1)]]
-        self.assertEqual((mill.kind, mill.owner, sorted(mill.cells)), ("mill", "p1", [(1, 1), (2, 1)]))
+        self.assertEqual((mill.kind, sorted(mill.cells)), ("mill", [(1, 1), (2, 1)]))
         self.assertEqual(match.stock["wood"], 2)
         self.assertNotIn("plan-mill", owned(match))
-        self.assertIn("crew-mill", [c["card"] for c in match.seats["p1"].deck.discard_pile])
+        self.assertIn("P1 built", match.log[-1]["text"])
 
     def test_rotation_is_used(self):
         match = helpers.new_match(self)
@@ -38,10 +38,10 @@ class BlueprintTests(helpers.FixtureCase):
         self.assertEqual(sorted(match.board.structures[match.board.at[(4, 2)]].cells),
                          sorted(match.board.footprint("ell", 1, 4, 2)))
 
-    def test_a_building_can_give_another_card(self):
+    def test_a_building_can_give_a_card(self):
         match = helpers.new_match(self)
         match.play("p1", give(match, "p1", "plan-hut"), 5, 3)
-        self.assertIn("work-any", [c["card"] for c in match.seats["p1"].deck.discard_pile])
+        self.assertIn("boon", [c["card"] for c in match.seats["p1"].deck.discard_pile])
 
     def test_refused_builds_change_nothing(self):
         match = helpers.new_match(self)
@@ -57,40 +57,45 @@ class BlueprintTests(helpers.FixtureCase):
         self.assertEqual(list(match.board.structures), [1])  # just the keep
 
 
-class WorkTests(helpers.FixtureCase):
-    def test_work_card_works_its_kind_only(self):
+class UnitWorkTests(helpers.FixtureCase):
+    def test_a_unit_works_its_building_once(self):
         match = helpers.new_match(self)
-        build(match, "shop", 4, 2)
-        build(match, "mill", 1, 1)
-        uid = give(match, "p1", "crew-mill")
-        with self.assertRaisesRegex(LobbyError, "can't work a Shop"):
-            match.play("p1", uid, 4, 2)
-        match.play("p1", uid, 1, 1)
-        self.assertEqual(match.board.structures[match.board.at[(1, 1)]].store, {"wood": 3})
-        self.assertFalse(in_hand(match, uid))
+        mill = build(match, "mill", 1, 1)
+        helpers.put(match, "p1", f"s{mill.uid}")
+        match.resolve("p1", f"s{mill.uid}")
+        self.assertEqual(mill.store, {"wood": 3})
+        self.assertEqual((match.placed, match.seats["p1"].spent), ({}, 1))
+        with self.assertRaisesRegex(LobbyError, "no unit there"):
+            match.resolve("p1", f"s{mill.uid}")
 
-    def test_needs_a_building(self):
-        match = helpers.new_match(self)
-        with self.assertRaisesRegex(LobbyError, "Pick a building"):
-            match.play("p1", give(match, "p1", "work-any"), 5, 5)
+    def test_needs_a_worked_building(self):
+        match = helpers.new_match(self, act=False)
+        helpers.units(match, "p1", 2)
+        hut = build(match, "hut", 5, 3)
+        with self.assertRaisesRegex(LobbyError, "nothing there"):
+            match.place("p1", "s99")
+        with self.assertRaisesRegex(LobbyError, "isn't worked"):
+            match.place("p1", f"s{hut.uid}")
 
     def test_refused_when_the_building_cant_work(self):
         match = helpers.new_match(self)
-        build(match, "shop", 4, 2)
+        shop = build(match, "shop", 4, 2)
         match.stock["wood"] = 1
-        uid = give(match, "p1", "work-any")
+        helpers.put(match, "p1", f"s{shop.uid}")
         with self.assertRaisesRegex(LobbyError, "needs 2 wood"):
-            match.play("p1", uid, 4, 2)
-        self.assertTrue(in_hand(match, uid))
+            match.resolve("p1", f"s{shop.uid}")
+        self.assertEqual(match.placed, {f"s{shop.uid}": {"p1": 1}})
 
-    def test_targets_list_only_workable_buildings(self):
-        match = helpers.new_match(self)
+    def test_places_list_only_open_buildings(self):
+        match = helpers.new_match(self, players=2, act=False)
+        helpers.units(match, "p1", 1)
         mill = build(match, "mill", 1, 1)
         build(match, "hut", 5, 3)
-        done = build(match, "mill", 1, 3)
-        done.worked = True
-        uid = give(match, "p1", "work-any")
-        self.assertEqual(match.private("p1")["targets"][str(uid)], {str(mill.uid): "+3 wood (stored)"})
+        taken = build(match, "mill", 1, 3)
+        helpers.put(match, "p2", f"s{taken.uid}")
+        places = match.private("p1")["places"]
+        self.assertEqual(sorted(places), sorted(["haul", f"s{mill.uid}"]))
+        self.assertEqual(places[f"s{mill.uid}"]["text"], "+3 wood (stored)")
 
 
 class RepairCureTests(helpers.FixtureCase):
@@ -108,26 +113,27 @@ class RepairCureTests(helpers.FixtureCase):
         with self.assertRaisesRegex(LobbyError, "isn't damaged"):
             match.play("p1", give(match, "p1", "mend"), 4, 4)
 
-    def test_cure_costs_food_and_hurts_the_plague_sender(self):
+    def test_cure_costs_wheat_and_hurts_the_plague_sender(self):
         match = helpers.new_match(self)
         rat = helpers.foe(self, match, "rat")
         mill = build(match, "mill", 1, 1)
         mill.plague = rat.index
         uid = give(match, "p1", "remedy")
-        match.stock["food"] = 1
+        match.stock["wheat"] = 1
         with self.assertRaisesRegex(LobbyError, "isn't plagued"):
             match.play("p1", uid, 3, 2)
         match.play("p1", uid, 1, 1)
         self.assertIsNone(mill.plague)
-        self.assertEqual((match.stock["food"], rat.hp), (0, rat.max_hp - 1))
+        self.assertEqual((match.stock["wheat"], rat.hp), (0, rat.max_hp - 1))
 
     def test_a_curing_building_cures_too(self):
         match = helpers.new_match(self)
         rat = helpers.foe(self, match, "rat")
         build(match, "mill", 1, 1).plague = rat.index
-        build(match, "clinic", 4, 2)
-        match.stock["food"] = 1
-        match.play("p1", give(match, "p1", "work-any"), 4, 2)
+        clinic = build(match, "clinic", 4, 2)
+        match.stock["wheat"] = 1
+        helpers.put(match, "p1", f"s{clinic.uid}")
+        match.resolve("p1", f"s{clinic.uid}")
         self.assertFalse(match.plagued())
         self.assertEqual(rat.hp, rat.max_hp - 1)
 
@@ -151,9 +157,9 @@ class CurseAndGainTests(helpers.FixtureCase):
 
     def test_curses_cant_be_played_without_paying(self):
         match = helpers.new_match(self)
-        match.stock["food"] = 0
+        match.stock["wheat"] = 0
         uid = self.curse(match, "dread", helpers.foe(self, match, "brute"))
-        with self.assertRaisesRegex(LobbyError, "short of food"):
+        with self.assertRaisesRegex(LobbyError, "short of wheat"):
             match.play("p1", uid)
         self.assertTrue(in_hand(match, uid))
 
@@ -178,14 +184,17 @@ class MarketAndTurnTests(helpers.FixtureCase):
         with self.assertRaisesRegex(LobbyError, "no such card"):
             match.buy("p1", 99)
 
-    def test_done_players_cant_act_until_they_take_it_back(self):
-        match = helpers.new_match(self, players=2)
-        uid = give(match, "p1", "boon")
+    def test_only_the_acting_player_plays(self):
+        match = helpers.new_match(self, players=2, act=False)
+        uid = give(match, "p2", "boon")
+        with self.assertRaisesRegex(LobbyError, "Place your units first"):
+            match.play("p2", uid)
+        match.ready("p1")
+        match.ready("p2")
+        with self.assertRaisesRegex(LobbyError, "P1's turn"):
+            match.play("p2", uid)
         match.end_turn("p1")
-        with self.assertRaisesRegex(LobbyError, "ended your turn"):
-            match.play("p1", uid)
-        match.end_turn("p1", False)
-        match.play("p1", uid)
+        match.play("p2", uid)
 
     def test_cards_must_be_in_hand(self):
         match = helpers.new_match(self)

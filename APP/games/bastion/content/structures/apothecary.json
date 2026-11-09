@@ -9,10 +9,9 @@
     "wood": 2,
     "tools": 1
   },
-  "crew": "Healers",
   "work": {
     "uses": {
-      "food": 1
+      "wood": 1
     },
     "makes": {
       "cure": 2
@@ -24,5 +23,5 @@
       "bonus": 1
     }
   ],
-  "text": "Cures up to 2 plagued buildings (the ones plagued longest first). Herbs from a farm next to it cure one more."
+  "text": "Cures up to 2 plagued buildings. Herbs from a farm next to it cure one more."
 }

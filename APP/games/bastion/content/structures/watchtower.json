@@ -9,6 +9,5 @@
     "stone": 3
   },
   "protects": 2,
-  "card": "lookout",
-  "text": "Protects every building tile within 2 cells (also diagonally) from raids. Adds a Lookout card to your deck."
+  "text": "Protects every building tile within 2 cells (also diagonally) from raids and loot."
 }

@@ -9,7 +9,6 @@
     "wood": 3,
     "stone": 1
   },
-  "crew": "Carpenters",
   "work": {
     "uses": {
       "wood": 1
@@ -28,9 +27,9 @@
       "bonus": 1
     },
     {
-      "near": "cottage",
+      "near": "house",
       "bonus": -1
     }
   ],
-  "text": "Turns wood into tools, which Sell cards turn into gold."
+  "text": "Turns wood into tools. Spend a tool when a unit works a building for +1 output; Sell cards turn tools into gold. Houses don't like the noise."
 }

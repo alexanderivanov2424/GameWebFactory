@@ -10,10 +10,9 @@
     "stone": 3,
     "tools": 1
   },
-  "crew": "Drill Sergeant",
   "work": {
     "uses": {
-      "food": 1,
+      "wheat": 1,
       "tools": 1
     },
     "makes": {
@@ -35,5 +34,5 @@
       "bonus": 1
     }
   ],
-  "text": "Trains soldiers from food and tools. Soldiers beat most enemies and raze what they build."
+  "text": "Trains soldiers from wheat and tools. Soldiers beat most enemies and raze what they build."
 }

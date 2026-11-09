@@ -2,7 +2,7 @@
   "name": "Frost Witch",
   "icon": "❄️",
   "tier": 2,
-  "hp": 4,
+  "hp": 6,
   "defeat": {
     "resources": {
       "wood": 2
@@ -21,7 +21,7 @@
     },
     {
       "name": "Icicles",
-      "keep": 2
+      "keep": 3
     }
   ]
 }

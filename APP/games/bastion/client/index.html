@@ -5,11 +5,13 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Bastion</title>
   <!--
-    Bastion's page: lobby (players, settings, rules), and the game: status bar (round, keep,
-    stockpile), the enemy cards above the board, the board (board.js draws it), the side panel
-    (inspector, market with Reroll, team, chronicle), the fixed bottom bar (your hand, confirm for trash cards,
-    Work/Haul switch for Villagers, End turn, Road / Wall / Remove tile buttons) and windows
-    (<dialog>): your deck, help. game.js renders everything from the state.
+    Bastion's page: lobby (players, settings, rules), and the game: status bar (round, phase, keep,
+    stockpile, population, hunger and upkeep, road / wall stock, carriages), the enemy cards above
+    the board (with a Fighting pool on enemies units can fight), the round bar (what to do now,
+    turn order, the Hauling pool), the 32 x 22 board (board.js draws it), the side panel (inspector,
+    market with Reroll, chronicle), the fixed bottom bar (Ready / End turn, your hand, confirm for
+    trash cards, Road / Wall / Remove tile buttons) and windows (<dialog>): your deck, help.
+    game.js renders everything from the state; panels.js draws the panels.
   -->
 
   <!-- Shared components: keep these, in this order. theme.js isn't deferred (no unstyled flash). -->
@@ -22,11 +24,12 @@
   <script src="/gamekit/lobby.js" defer></script>
   <script src="/gamekit/lobby-ui.js" defer></script>
   <script src="board.js" defer></script>
+  <script src="panels.js" defer></script>
   <script src="game.js" defer></script>
 
   <style>
     :root {
-      --gwf-main-width: 1260px;
+      --gwf-main-width: 1460px;
       --gwf-bg: #efe7d6;
       --gwf-surface: #fbf7ee;
       --gwf-line: #dccfb4;
@@ -34,7 +37,7 @@
       --gwf-accent-hover: #6f4620;
       --gwf-soft: #f1e5cd;
       --gwf-soft-hover: #e7d6b4;
-      --cell: 44px;
+      --cell: 30px;
       --grass: #a3c97a;
       --grass-alt: #98c06f;
       --forest: #4f7f3a;
@@ -44,22 +47,26 @@
       --wall: #7d7468;
     }
     main.with-bar { padding-bottom: 220px; }
-    h1 { font-family: Georgia, "Times New Roman", serif; letter-spacing: 0.02em; }
+    h1 { font-family: Georgia, "Times New Roman", serif; letter-spacing: 0.02em; margin: 0 0 6px; }
     .lead { font-size: 0.95rem; line-height: 1.45; }
 
     /* Status bar */
-    #status { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; margin-bottom: 10px; }
-    #status .round { font-family: Georgia, serif; font-size: 1.25rem; font-weight: 700; }
-    #status .pill { background: var(--gwf-surface); border: 1px solid var(--gwf-line); border-radius: 999px; padding: 3px 11px; white-space: nowrap; }
-    #status .pill.zero { opacity: 0.5; }
+    #status { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin-bottom: 8px; font-size: 0.88rem; }
+    #status .round { font-family: Georgia, serif; font-size: 1.2rem; font-weight: 700; }
+    #status .phase-now { font-weight: 700; background: #8a5a2b; color: #fff; border-radius: 999px; padding: 2px 11px; }
     #status .phase { color: #6b5a40; }
-    .meter { display: inline-block; vertical-align: middle; width: 120px; height: 12px; border-radius: 6px; background: #d8cbb0; overflow: hidden; }
+    #status .break { flex-basis: 100%; height: 0; }
+    #status .sep { width: 1px; height: 18px; background: #c9b996; }
+    #status .pill { background: var(--gwf-surface); border: 1px solid var(--gwf-line); border-radius: 999px; padding: 2px 9px; white-space: nowrap; }
+    #status .pill.zero { opacity: 0.5; }
+    #status .pill.warn { opacity: 1; background: #f8dcd6; border-color: #d98a7e; color: #7a221a; }
+    .meter { display: inline-block; vertical-align: middle; width: 100px; height: 11px; border-radius: 6px; background: #d8cbb0; overflow: hidden; }
     .meter > span { display: block; height: 100%; background: linear-gradient(90deg, #c0392b, #e67e22); }
     .meter.foe > span { background: linear-gradient(90deg, #6d2b8a, #b0479b); }
 
     /* Enemy cards */
-    #foes { display: flex; gap: 10px; overflow-x: auto; padding: 2px 2px 8px; margin-bottom: 8px; }
-    .foe { flex: none; width: 230px; background: #f6efe2; border: 2px solid #6d4a8a; border-radius: 10px; padding: 8px 10px; font-size: 0.8rem; }
+    #foes { display: flex; gap: 10px; overflow-x: auto; padding: 2px 2px 8px; margin-bottom: 6px; }
+    .foe { flex: none; width: 240px; background: #f6efe2; border: 2px solid #6d4a8a; border-radius: 10px; padding: 8px 10px; font-size: 0.8rem; }
     .foe .head { display: flex; align-items: center; gap: 6px; font-weight: 700; font-size: 0.95rem; }
     .foe .icon { font-size: 1.5rem; }
     .foe .hp { margin: 4px 0; display: flex; align-items: center; gap: 6px; }
@@ -70,34 +77,57 @@
     .foe li.next::marker { content: "▶ "; color: #b0479b; }
     .foe .beat { background: #efe3f5; border-radius: 6px; padding: 4px 6px; margin-top: 4px; }
     .foe .beat button { margin: 4px 4px 0 0; }
+    .foe .strikes { color: #6d2b8a; font-weight: 600; }
+    .foe .pool { margin-top: 6px; }
     .foe.coming { border-style: dashed; border-color: #a99; background: repeating-linear-gradient(45deg, #ece2d0 0 8px, #e5d9c3 8px 16px);
       display: grid; place-items: center; text-align: center; color: #6b5a40; width: 120px; min-height: 90px; }
     .foe.coming .icon { font-size: 2rem; }
     .foe.defeated { opacity: 0.45; border-color: #999; width: 150px; }
     .foe .text { font-style: italic; color: #7a6a50; }
 
-    #game-area { display: flex; gap: 16px; align-items: flex-start; }
-    #board-wrap { flex: none; position: relative; }
-    #side { flex: 1; min-width: 260px; }
+    /* Round bar: what to do, turn order, Hauling pool. Pools are click targets for units. */
+    #round-bar { display: flex; gap: 12px; align-items: stretch; padding: 8px 12px; margin-bottom: 10px; }
+    #round-info { flex: 1; display: flex; flex-direction: column; gap: 6px; justify-content: center; }
+    #round-info .head { font-weight: 600; }
+    #round-info .order { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+    #haul-pool { flex: none; width: 250px; }
+    .chip { display: inline-flex; align-items: center; gap: 5px; padding: 2px 9px; border-radius: 999px; background: #fff;
+      border: 1px solid var(--gwf-line); font-size: 0.82rem; }
+    .chip.now { background: #fff1c2; border-color: #d9a400; font-weight: 700; }
+    .chip.ready { color: #1a6a3a; }
+    .chip.done { opacity: 0.6; }
+    .chip.you { border-width: 2px; }
+    .pool { border: 2px solid #c4a46b; border-radius: 8px; padding: 5px 8px; background: #fffaf0; font-size: 0.82rem; }
+    .pool.can { border-style: dashed; border-color: #1a8a4a; cursor: pointer; }
+    .pool.can:hover { background: #e7f6e7; }
+    .pool.act { border-style: solid; box-shadow: 0 0 0 3px #9fd8b0; }
+    .pool-units { display: flex; flex-wrap: wrap; align-items: center; gap: 3px; margin: 4px 0 2px; min-height: 15px; }
+    .pool button { margin-top: 3px; }
+    .token { display: inline-block; width: 13px; height: 13px; border-radius: 50%; border: 2px solid #fff; box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.4); box-sizing: border-box; }
+    .token.mine { box-shadow: 0 0 0 2px #222; }
+
+    #game-area { display: flex; gap: 14px; align-items: flex-start; }
+    #board-wrap { flex: 0 1 auto; min-width: 0; overflow-x: auto; padding-bottom: 2px; }
+    #side { flex: 1; min-width: 280px; max-width: 460px; }
     #side .card { padding: 10px 12px; margin-bottom: 10px; }
     #side h3 { margin: 0 0 6px; }
 
     /* Board */
     #board { position: relative; display: grid; grid-template-columns: repeat(var(--w), var(--cell));
-      grid-template-rows: repeat(var(--h), var(--cell)); border: 3px solid #6b4f2e; border-radius: 6px; user-select: none; }
-    .cell { position: relative; width: var(--cell); height: var(--cell); box-sizing: border-box; display: grid; place-items: center; font-size: 22px; line-height: 1; }
+      grid-template-rows: repeat(var(--h), var(--cell)); border: 3px solid #6b4f2e; border-radius: 6px; user-select: none; width: max-content; }
+    .cell { position: relative; width: var(--cell); height: var(--cell); box-sizing: border-box; display: grid; place-items: center; font-size: 16px; line-height: 1; }
     .cell.grass { background: var(--grass); }
     .cell.grass.alt { background: var(--grass-alt); }
     .cell.forest { background: var(--forest); }
-    .cell.forest::after { content: "🌲"; font-size: 20px; opacity: 0.8; }
+    .cell.forest::after { content: "🌲"; font-size: 14px; opacity: 0.8; }
     .cell.mountain { background: var(--mountain); }
-    .cell.mountain::after { content: "⛰️"; font-size: 20px; opacity: 0.85; }
+    .cell.mountain::after { content: "⛰️"; font-size: 14px; opacity: 0.85; }
     .cell.water { background: var(--water); }
     .cell.road { background: var(--road); box-shadow: inset 0 0 0 1px #c4a46b; }
-    .cell.wall { background: repeating-linear-gradient(0deg, var(--wall) 0 9px, #5f574c 9px 11px); box-shadow: inset 0 0 0 2px #4d463d; }
+    .cell.wall { background: repeating-linear-gradient(0deg, var(--wall) 0 6px, #5f574c 6px 8px); box-shadow: inset 0 0 0 2px #4d463d; }
     .cell.blight { background: #3b2547; color: #fff; }
     .cell.blight.lair { background: #24122e; box-shadow: inset 0 0 0 2px #b0479b; }
-    .cell.bld { background: #efe0c0; border: 2px solid #6b4f2e; box-shadow: inset 0 -4px 0 var(--owner, transparent); }
+    .cell.bld { background: #efe0c0; border: 2px solid #6b4f2e; }
     .cell.bld.nt { border-top-color: transparent; }
     .cell.bld.nb { border-bottom-color: transparent; }
     .cell.bld.nl { border-left-color: transparent; }
@@ -105,32 +135,37 @@
     .cell.bld.worked { background: #ddd0b4; }
     .cell.bld.depot { background: #f3e4b8; }
     .cell.bld.ruined { background: #8b6d5a; }
-    .cell.bld.ruined::before { content: "🔥"; position: absolute; font-size: 18px; }
+    .cell.bld.ruined::before { content: "🔥"; position: absolute; font-size: 13px; }
     .cell.bld.sick { background: #cfe0a6; }
     .cell.bld.frozen { background: #d6ecf7; }
-    .cell .badge { position: absolute; font-size: 10px; font-weight: 700; line-height: 1; padding: 1px 3px; border-radius: 6px; pointer-events: none; }
-    .cell .out { right: 1px; bottom: 5px; background: #2f6f3e; color: #fff; }
+    .cell .badge { position: absolute; z-index: 1; font-size: 8px; font-weight: 700; line-height: 1; padding: 1px 2px; border-radius: 4px; pointer-events: none; white-space: nowrap; }
+    .cell .out { right: 0; bottom: 0; background: #2f6f3e; color: #fff; }
     .cell .out.none { background: #8a7a5c; }
-    .cell .store { left: 1px; top: 1px; background: #6b4f2e; color: #fff; }
-    .cell .carriage { left: 1px; bottom: 5px; font-size: 11px; background: #b03a2e; color: #fff; }
-    .cell .carriage.safe { background: #6b4f2e; }
-    .cell.road .carriage { top: 1px; bottom: auto; }
-    .cell.bld .carriage { top: 14px; bottom: auto; }
-    .cell .flags { right: 1px; top: 1px; font-size: 11px; background: none; padding: 0; }
-    .cell .done { left: 2px; bottom: 5px; color: #2f6f3e; font-size: 12px; background: none; }
-    .cell.hl { outline: 3px solid #ffd54a; outline-offset: -3px; z-index: 2; }
-    .cell.target { outline: 3px dashed #1a8a4a; outline-offset: -3px; z-index: 2; cursor: pointer; }
-    .cell.target.hl { outline-style: solid; background-color: #c8f0c8; }
+    .cell .store { left: 0; top: 0; background: #6b4f2e; color: #fff; }
+    .cell .flags { right: 0; top: 0; font-size: 9px; background: none; padding: 0; }
+    .cell .done { left: 1px; bottom: 1px; color: #2f6f3e; font-size: 10px; background: none; }
+    .cell .strikes { right: 0; bottom: 0; background: #b0479b; color: #fff; }
+    .cell .unit { left: 0; bottom: 0; width: 12px; height: 12px; padding: 0; border-radius: 50%; border: 2px solid #fff;
+      box-sizing: border-box; box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.5); }
+    .cell .unit.mine { box-shadow: 0 0 0 2px #111; }
+    .cell.spot { outline: 2px dashed #1a8a4a; outline-offset: -2px; z-index: 2; cursor: pointer; }
+    .cell.hl { outline: 2px solid #ffd54a; outline-offset: -2px; z-index: 2; }
+    .cell.target { outline: 2px dashed #1a8a4a; outline-offset: -2px; z-index: 2; cursor: pointer; background-color: #d6f0c8; }
+    .cell.target.hl, .cell.spot.hl { outline: 3px solid #1a8a4a; outline-offset: -3px; background-color: #c8f0c8; }
     .cell.ghost { background: rgba(70, 160, 90, 0.75) !important; outline: 2px solid #1a8a4a; outline-offset: -2px; z-index: 3; }
     .cell.ghost.bad { background: rgba(200, 60, 50, 0.6) !important; outline-color: #a33; }
     .cell.razeable { cursor: pointer; }
-    #tip { position: absolute; z-index: 10; pointer-events: none; background: rgba(30, 20, 10, 0.88); color: #fff; font-size: 0.8rem;
+    #tip { position: fixed; z-index: 30; pointer-events: none; background: rgba(30, 20, 10, 0.9); color: #fff; font-size: 0.8rem;
       padding: 4px 8px; border-radius: 6px; white-space: nowrap; }
 
-    /* Inspector, market, team, log */
+    /* Inspector, market, log */
     #inspector { font-size: 0.85rem; line-height: 1.4; min-height: 90px; }
+    #inspector > div { margin: 2px 0; }
     #inspector .parts { margin: 4px 0; padding-left: 16px; }
-    #inspector .plus { color: #2f6f3e; } #inspector .minus { color: #a33; }
+    #inspector .preview { font-weight: 600; color: #2f6f3e; }
+    .plus { color: #2f6f3e; } .minus { color: #a33; }
+    .choices { display: flex; flex-direction: column; gap: 5px; margin: 6px 0; }
+    button.wide { text-align: left; white-space: normal; }
     #market { display: flex; flex-direction: column; gap: 6px; }
     .market-head { display: flex; align-items: center; justify-content: space-between; }
     .market-head h3 { margin: 0; }
@@ -138,19 +173,18 @@
     .offer .what { flex: 1; }
     .offer .what b { display: block; font-size: 0.88rem; }
     .offer .what span { color: #6b5a40; }
-    ul.team { list-style: none; margin: 0; padding: 0; }
-    ul.team li { display: flex; align-items: center; gap: 8px; padding: 4px 0; font-size: 0.88rem; }
-    .dot { width: 12px; height: 12px; border-radius: 50%; flex: none; }
-    #log { max-height: 260px; overflow-y: auto; font-size: 0.8rem; line-height: 1.35; }
+    .dot { width: 12px; height: 12px; border-radius: 50%; flex: none; display: inline-block; }
+    #log { max-height: 300px; overflow-y: auto; font-size: 0.8rem; line-height: 1.35; }
     #log p { margin: 0 0 4px; }
     #log .r { color: #9a8a6c; }
     #result { padding: 10px 14px; border-radius: 8px; margin-bottom: 10px; font-size: 1.05rem; }
     #result.win { background: #d9f2d9; } #result.loss { background: #f5d5d0; }
 
-    /* Bottom bar: hand */
+    /* Bottom bar: phase button, hand, tile tools */
     #bar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 20; background: rgba(251, 247, 238, 0.97); border-top: 2px solid var(--gwf-line); }
     #bar .inner { max-width: var(--gwf-main-width); margin: 0 auto; padding: 8px 110px 10px 16px; display: flex; gap: 12px; align-items: stretch; }
-    #bar .info { width: 170px; flex: none; font-size: 0.82rem; display: flex; flex-direction: column; gap: 6px; }
+    #bar .info { width: 190px; flex: none; font-size: 0.82rem; display: flex; flex-direction: column; gap: 6px; }
+    #bar-info.warn { color: #a33; font-weight: 600; }
     #bar .tools { flex: none; display: flex; flex-direction: column; gap: 4px; justify-content: center; }
     #bar .tools button { white-space: nowrap; text-align: left; }
     #bar .tools button.on { outline: 2px solid #1a8a4a; background: #c8f0c8; }
@@ -206,19 +240,22 @@
       </div>
       <div class="card lead">
         <h2>How to play</h2>
-        <p>Build a city together, then beat every enemy that comes for it. You start with a keep, a few roads, a
-          lumbermill and a workshop, and a few <b>peaceful rounds</b> to grow before the first enemy arrives.</p>
-        <p>Everyone plays at the same time from their own hand. <b>Blueprints</b> place buildings (turn them any way);
-          <b>roads and walls</b> aren't cards: buy them one tile at a time (road: 1 gold, wall: 1 stone; removing one costs 1 gold);
-          each building cares about what's next to it (forest, mountains, water, roads, empty fields, other buildings),
-          gaining or losing output. <b>Work cards</b> make a building produce (Villagers work anything, but without the
-          bonuses); goods reach the shared stockpile at once next to the keep or a storage yard, or a <b>Haul</b>
-          sends a carriage with everything a building holds along the roads, a few cells each round (the card rides
-          along and comes back when it arrives; carriages on the road can be looted). Turn tools into gold with
-          <b>Sell</b>, and buy new cards in the market with the team's gold (dealt anew each round, or reroll it).</p>
-        <p><b>Enemies</b> are cards above the board, each with its own attacks (raids, plague, curses in your deck,
-          blight on the board…) and its own way to be beaten: soldiers, cures, bonfires, razing its lair, paying it off.
-          Beat them all to win; lose if the keep falls. Up to 4 players, or solo.</p>
+        <p>Grow a city together, keep its people fed, and beat every enemy that comes for it. You start with a keep, a
+          house, a farm, a lumbermill and a few roads, and some <b>peaceful rounds</b> to grow before the first enemy
+          arrives. Up to 4 players, or solo.</p>
+        <p><b>People are your workers.</b> Houses and the keep hold the city's population; each round the fed people
+          become <b>units</b>, shared out among the players. First everyone <b>places</b> their units at the same time:
+          one unit per building that makes something, any number on <b>Hauling</b>, on <b>Fighting</b> an enemy, or on an
+          enemy tile to raze it. Then, one player at a time, you <b>act</b>: resolve your units (each works its building,
+          hauls goods or strikes an enemy once), play cards from your hand, buy in the market and lay road and wall tiles,
+          then end your turn.</p>
+        <p><b>Buildings</b> come from blueprint cards (turn them any way) and care about what's next to them: forests,
+          mountains, water, roads, other buildings. Goods from a building next to the keep or a storage yard go straight to
+          the stockpile; others wait in the building until a hauling unit brings them in (3 goods, 5 with a Carriage). A
+          tool from the stockpile gives a worker +1. Roads and walls are bought in threes; removing one is free.</p>
+        <p><b>Food:</b> at the end of each round the city eats (bread feeds 4, wheat feeds 2). Hungry people don't work
+          next round. <b>Enemies</b> are cards above the board with their own attacks and their own way to be beaten.
+          Beat them all to win; lose if the keep falls.</p>
       </div>
     </section>
 
@@ -226,33 +263,35 @@
       <div id="result" hidden></div>
       <div id="status"></div>
       <div id="foes"></div>
+      <div id="round-bar" class="card">
+        <div id="round-info"></div>
+        <div id="haul-pool"></div>
+      </div>
       <div id="game-area">
         <div id="board-wrap">
           <div id="board"></div>
-          <div id="tip" hidden></div>
         </div>
         <div id="side">
           <div class="card" id="inspector"></div>
           <div class="card"><div class="market-head"><h3>Market</h3><button id="reroll" class="small plain"
             title="Deal all 6 cards anew. 2 gold, +1 for each reroll this round; the market is also dealt anew every round.">Reroll</button></div>
             <div id="market"></div></div>
-          <div class="card"><h3>Builders</h3><ul id="team" class="team"></ul></div>
           <div class="card"><h3>Chronicle</h3><div id="log"></div></div>
           <div class="row"><button id="back" hidden>Back to lobby</button></div>
         </div>
       </div>
     </section>
   </main>
+  <div id="tip" hidden></div>
 
   <div id="bar" hidden><div class="inner">
     <div class="info">
       <div id="bar-info"></div>
       <button id="confirm" class="green" hidden>Remove them</button>
-      <button id="mode" class="plain small" hidden>Haul instead</button>
-      <button id="end-turn" class="green">End turn</button>
+      <button id="phase-button" class="green">Ready</button>
       <button id="deck-button" class="plain small">Your deck</button>
     </div>
-    <div class="tools" title="Roads and walls aren't cards: buy one tile at a time with team gold">
+    <div class="tools" title="Roads and walls aren't cards: the team buys them 3 at a time, then lays them one by one">
       <button id="tool-road" class="plain small">Road</button>
       <button id="tool-wall" class="plain small">Wall</button>
       <button id="tool-remove" class="plain small">Remove</button>
@@ -273,36 +312,51 @@
       <p><b>Goal:</b> beat every enemy before the keep 🏰 falls. The first enemy arrives after a few peaceful rounds,
         then another every few rounds (the status bar says when). Enemies left 6 rounds after the last one arrives
         wear the city down: that's a loss too.</p>
-      <p><b>Rounds:</b> everyone plays at once. Each round you draw a fresh hand of 5. Click a card to use it; when
-        you're done, click <b>End turn</b> (you can take it back until everyone is done). At the end of the round the
-        keep makes 1 gold, carriages move and every enemy makes its next attack (▶ on its card).</p>
+      <p><b>Units:</b> houses 🏠 (2 people each) and the keep (2) are the city's population. At the start of each
+        round the people fed at the last upkeep become units, shared equally among the players (the rest go one each
+        from the first player ★, who moves one seat on every round).</p>
+      <p><b>1. Place (everyone at once).</b> Click an outlined building to put a unit there (one unit per building
+        per round, first come; buildings belong to nobody), click <b>Hauling</b> above the board, the <b>Fighting</b> pool
+        on an enemy card, or an enemy tile on the board. Hover first to see what it would do. Click your unit again (or
+        <b>Take back</b> on a pool) to remove it. <b>Shift+click</b> a pool to put all your free units in it (and, on
+        your turn, Shift+click a Fighting pool to make all your fighters there strike). Click <b>Ready</b> when you're done; <b>Not ready</b> takes it back
+        until the last player is ready. Everyone's units show as tokens in their colour.</p>
+      <p><b>2. Act (one at a time, in turn order).</b> On your turn your units are outlined: click one to make it act,
+        once, in any order. Then play cards, buy in the market, lay tiles, and click <b>End turn</b>: units you didn't
+        resolve are lost. Cards, the market and tiles only work on your turn.</p>
+      <ul>
+        <li><b>Work:</b> the building makes its output (the green badge): its base plus bonuses for what's next to it,
+          -1 per enemy blight next to it. With tools 🔨 in the stockpile you can spend 1 for +1 output (the inspector
+          offers both; Shift+click works with a tool). Inputs (wood for a workshop...) come from the stockpile, so the
+          building needs a link: next to the keep or a 📦 storage yard, or a road reaching one.</li>
+        <li><b>Goods:</b> a building next to the keep or a storage yard delivers straight to the stockpile. Others keep
+          their goods (badge like 🪵3, up to 6) until hauled. Gold, soldiers, keep repairs and cures never wait.</li>
+        <li><b>Haul:</b> a unit on Hauling moves up to 3 goods from one building (linked by road) to the stockpile at
+          once, biggest piles first. Each 🛒 Carriage makes one haul a round carry 5. With several buildings to haul
+          from, you pick one (the default is the one with the most goods).</li>
+        <li><b>Fight:</b> a unit on an enemy is 1 strike; every "per damage" strikes deal 1 damage, and the rest carry
+          over (shown on its card). A unit on an enemy tile is 1 strike toward razing it.</li>
+      </ul>
+      <p><b>3. End of round:</b> the keep makes 2 gold and 1 wheat, then the city eats: each bread 🍞 feeds 4 people, each wheat 🌾
+        feeds 2 (the least food that covers everyone). People left unfed are hungry and don't become units next round;
+        the status bar shows what the next upkeep will eat. Then every enemy makes its next attack (▶ on its card).
+        Farms grow wheat (more in clusters), bakeries turn wheat into bread.</p>
       <p><b>Building:</b> click a blueprint, then the board. Turn it with <b>R</b> or the mouse wheel; right-click or
         Esc cancels. The ghost shows whether it fits and what it would make there. Buildings can go over roads (the
-        road under them is gone; build a new one around). Mines and quarries need a mountain next to them,
-        lumbermills a forest. The blueprint then leaves your deck and the building's crew card joins it.</p>
-      <p><b>Roads and walls</b> aren't cards: click <b>Road</b> or <b>Wall</b> next to your hand, then click empty
-        grass to lay one tile (road: 1 gold, wall: 1 stone; keep clicking to lay more; right-click or Esc stops). <b>Remove</b> takes a
-        road or wall tile away for 1 gold (not a road a carriage is on).</p>
-      <p><b>Working:</b> a work card makes one building produce, once per round. Crew cards (Lumberjacks, Miners…)
-        get the full output; Villagers work any building but only make its base output (penalties still count).
-        Hover a building to see its output and every bonus: what it likes or hates next to it. Enemy blight next to a
-        building costs it 1.</p>
-      <p><b>Goods:</b> buildings next to the keep or a 📦 storage yard deliver straight to the stockpile. Others keep
-        their goods (the badge with the good's icon, e.g. 🪵3) until you play a haul card on them: a carriage 🛒 loads
-        everything there and, at the end of each round, moves along a road towards the keep or a storage yard
-        (Haul: 2 cells a round, Wagon Train: 4). The card rides along, out of your deck, and returns to your discard
-        pile when the goods arrive; the tip on the building says how many rounds that takes. <b>Villagers</b> can
-        haul too (1 cell a round): select them, then click <b>Haul instead</b>. Raiders can loot a carriage on a
-        road (red 🛒 badge) unless the road is next to a wall or near a watchtower. Workshops, smithies and the
-        like take their inputs from the stockpile, so they need a link too.</p>
-      <p><b>Market:</b> 6 cards, dealt anew every round. <b>Reroll</b> deals them anew now for 2 gold, +1 for each
-        reroll earlier in the round.</p>
-      <p><b>Gold:</b> the keep makes 1 a round. <b>Sell</b> turns tools (from a workshop) into gold; <b>Tax</b> gives
-        gold now but puts an <b>Unrest</b> curse in your deck. Building a ⛪ chapel gives you <b>Absolution</b>: click
-        it, click up to 2 other cards in your hand, then confirm to remove them from your deck for good.</p>
-      <p><b>Defence:</b> raids ruin building tiles 🔥 (a damaged building can't work until Masons repair it). Tiles
-        next to a wall, or within 2 of a watchtower 🗼, are safe; when everything is safe, raids break walls instead.
-        Barracks train soldiers 🗡️; spend them on an enemy's card, or click an enemy tile on the board to raze it.</p>
+        road under them is gone). The blueprint then leaves your deck.</p>
+      <p><b>Roads and walls</b> aren't cards: click <b>Road</b> or <b>Wall</b> next to your hand, then click empty grass
+        to lay one tile from the team's stock (status bar). With the stock empty, the next tile buys 3 (roads: 1 gold,
+        walls: 1 stone). <b>Remove</b> takes a road or wall away for free (no refund).</p>
+      <p><b>Market:</b> 6 cards, dealt anew every round, bought with team gold. Blueprints come in bundles (e.g. House
+        ×3: three copies join your discard pile). <b>Reroll</b> deals them anew for 2 gold, +1 for each reroll earlier
+        in the round.</p>
+      <p><b>Gold:</b> the keep makes 2 a round. <b>Sell</b> turns tools into gold; <b>Tax</b> gives gold now but puts an
+        <b>Unrest</b> curse in your deck. Building a ⛪ chapel gives you <b>Absolution</b>: click it, click up to 2 other
+        cards in your hand, then confirm to remove them from your deck for good.</p>
+      <p><b>Defence:</b> raids ruin building tiles 🔥 (a damaged building can't be worked until Masons repair it) and loot
+        goods waiting in buildings. Tiles next to a wall, or near a watchtower 🗼, are safe; when everything is safe,
+        raids break walls instead. Barracks train soldiers 🗡️: spend them with Strike on an enemy's card, or click an
+        enemy tile on your turn to raze it.</p>
       <p><b>Curse cards</b> that enemies slip into your deck clog your hand; play one to pay its cost and remove it
         for good.</p>
     </div>

@@ -3,7 +3,7 @@
   "icon": "💀",
   "tier": 2,
   "defeat": {
-    "raze": 2
+    "raze": 3
   },
   "lair": {
     "name": "Dark Altar",
@@ -24,7 +24,7 @@
     },
     {
       "name": "Drain",
-      "keep": 2
+      "keep": 3
     },
     {
       "name": "Hex",

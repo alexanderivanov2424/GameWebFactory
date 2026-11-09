@@ -8,5 +8,5 @@
   "cost": {
     "stone": 1
   },
-  "text": "Building tiles next to a wall can't be ruined by raids. When every tile is protected, raids break walls instead."
+  "text": "Building tiles next to a wall can't be ruined or looted by raids. When every tile is protected, raids break walls instead. Bought 3 at a time; removing one is free."
 }

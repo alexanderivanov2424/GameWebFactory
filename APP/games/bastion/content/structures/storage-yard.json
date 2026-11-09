@@ -10,6 +10,5 @@
     "stone": 1
   },
   "depot": true,
-  "card": "haul",
-  "text": "A depot: buildings next to it deliver their goods at once, and roads can haul to it. Lumbermills, quarries and mines next to it work better. Adds a Haul card to your deck."
+  "text": "A depot: buildings next to it deliver their goods at once, and haulers bring goods here from any building whose roads reach it. Lumbermills, quarries and mines next to it work better."
 }

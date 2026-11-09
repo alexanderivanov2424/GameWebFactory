@@ -2,9 +2,9 @@
   "name": "Orc Warlord",
   "icon": "⚔️",
   "tier": 3,
-  "hp": 7,
+  "hp": 34,
   "defeat": {
-    "soldiers": 1
+    "soldiers": 2
   },
   "text": "Brings his whole horde to your gates.",
   "attacks": [
@@ -18,7 +18,7 @@
     },
     {
       "name": "Assault",
-      "keep": 3,
+      "keep": 5,
       "shield": true
     },
     {

@@ -2,7 +2,7 @@
   "name": "Bandit Lord",
   "icon": "🏴",
   "tier": 2,
-  "hp": 4,
+  "hp": 16,
   "defeat": {
     "soldiers": 2,
     "cards": true
@@ -23,7 +23,8 @@
     },
     {
       "name": "Ambush",
-      "kill": 2
+      "kill": 2,
+      "keep": 2
     }
   ]
 }

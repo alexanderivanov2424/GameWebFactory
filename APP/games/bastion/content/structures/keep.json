@@ -5,8 +5,10 @@
     "#"
   ],
   "depot": true,
+  "population": 2,
   "income": {
-    "gold": 1
+    "gold": 2,
+    "wheat": 1
   },
-  "text": "The heart of the city: makes 1 gold every round and takes in goods. If its health reaches 0, the city falls."
+  "text": "The heart of the city: home for 2 people, makes 2 gold and 1 wheat every round (so its own people never starve) and takes in goods. If its health reaches 0, the city falls."
 }

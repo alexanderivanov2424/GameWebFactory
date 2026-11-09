@@ -2,7 +2,7 @@
   "name": "Rat King",
   "icon": "🐀",
   "tier": 1,
-  "hp": 3,
+  "hp": 4,
   "defeat": {
     "cure": true
   },
@@ -19,7 +19,7 @@
     {
       "name": "Gnaw",
       "steal": {
-        "food": 1,
+        "wheat": 1,
         "wood": 1
       }
     }

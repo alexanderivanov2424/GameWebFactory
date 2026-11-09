@@ -10,7 +10,6 @@
     "stone": 2,
     "tools": 1
   },
-  "crew": "Smiths",
   "work": {
     "uses": {
       "ore": 1,
@@ -30,7 +29,7 @@
       "bonus": 1
     },
     {
-      "near": "cottage",
+      "near": "house",
       "bonus": -1
     }
   ],

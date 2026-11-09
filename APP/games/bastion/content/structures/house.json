@@ -1,0 +1,15 @@
+{
+  "name": "House",
+  "icon": "🏠",
+  "shape": [
+    "#"
+  ],
+  "price": 2,
+  "bundle": 3,
+  "cost": {
+    "wood": 1,
+    "stone": 1
+  },
+  "population": 2,
+  "text": "Home for 2 people: each round the city's fed people become units to place. Markets and chapels like houses nearby; workshops and smithies are too noisy for them."
+}

@@ -4,12 +4,12 @@
                                                 happened (for the log); randomness from match.rng
 Raids (ruin) only hit unprotected building tiles (board.raid_targets); when none are open they
 break a wall tile instead, and do nothing if there are no walls. A building whose every tile is
-ruined is destroyed. Looting takes goods from carriages on road tiles that aren't protected
-(next to a wall or within a watchtower's reach), one at a time from a random carriage; an emptied
-carriage turns back and its card returns to its owner. Blights go on empty grass next to a building when there is any.
+ruined is destroyed. Looting takes goods waiting in buildings' stores, one at a time from a
+random unprotected building (board.loot_targets: one with a tile that isn't next to a wall or
+within a watchtower's reach). Blights go on empty grass next to a building when there is any.
+Freeze marks a building for the next round and plague until cured: no unit can go on it (units.py).
 """
 
-from . import carriages
 from .structures import GOODS, a
 
 
@@ -28,16 +28,14 @@ def steal(match, amounts):
 def loot(match, count):
     board, taken = match.board, {}
     for _ in range(count):
-        open_ = [c for _, c in sorted(board.carriages.items()) if c.cell and not board.protected(c.cell)]
+        open_ = board.loot_targets()
         if not open_:
             break
-        carriage = match.rng.choice(open_)
-        good = match.rng.choice(sorted(carriage.goods))
-        carriage.goods[good] -= 1
-        if not carriage.goods[good]:
-            del carriage.goods[good]
-        if not carriage.goods:
-            carriages.return_card(match, carriage)
+        s = match.rng.choice(open_)
+        good = match.rng.choice(sorted(s.store))
+        s.store[good] -= 1
+        if not s.store[good]:
+            del s.store[good]
         board.version += 1
         taken[good] = taken.get(good, 0) + 1
     return taken
@@ -75,8 +73,8 @@ def strike(match, foe, attack):
         out.append("stole " + (", ".join(f"{n} {k}" for k, n in taken.items()) if taken else "nothing"))
     if "loot" in attack:
         taken = loot(match, attack["loot"])
-        out.append("looted " + (", ".join(f"{n} {k}" for k, n in taken.items()) + " from carriages" if taken
-                                else "nothing (no unprotected carriages on the roads)"))
+        out.append("looted " + (", ".join(f"{n} {k}" for k, n in taken.items()) + " from building stores" if taken
+                                else "nothing (no unprotected goods waiting in buildings)"))
     if "ruin" in attack:
         hits = ruin(match, attack["ruin"], attack["prefer"])
         out.append("ruined " + (", ".join(hits) if hits else "nothing (all protected, no walls to break)"))

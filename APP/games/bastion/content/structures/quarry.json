@@ -9,7 +9,6 @@
   "cost": {
     "wood": 2
   },
-  "crew": "Stonecutters",
   "requires": [
     {
       "near": "mountain"
@@ -29,11 +28,8 @@
     {
       "near": "storage-yard",
       "bonus": 1
-    },
-    {
-      "near": "road",
-      "bonus": 1
     }
   ],
-  "text": "Cuts stone from the mountain next to it. Carts on a road next to it speed it up."
+  "text": "Cuts stone from the mountain next to it; a storage yard next to it speeds it up.",
+  "bundle": 2
 }

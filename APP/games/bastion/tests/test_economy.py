@@ -121,7 +121,7 @@ class WhoCanWorkTests(helpers.FixtureCase):
 
     def test_cures_need_a_plague(self):
         match = helpers.new_match(self)
-        match.stock["food"] = 2
+        match.stock["wheat"] = 2
         clinic = build(match, "clinic", 4, 2)
         self.assertIn("Nothing is plagued", why_not(match, clinic))
         build(match, "mill", 1, 1).plague = 0

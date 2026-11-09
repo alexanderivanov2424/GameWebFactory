@@ -9,7 +9,6 @@
   "cost": {
     "wood": 2
   },
-  "crew": "Lumberjacks",
   "requires": [
     {
       "near": "forest"
@@ -35,5 +34,6 @@
       "bonus": -1
     }
   ],
-  "text": "Cuts wood from the forest next to it. Two mills side by side fight over the trees."
+  "text": "Cuts wood from the forest next to it. Two mills side by side fight over the trees.",
+  "bundle": 2
 }

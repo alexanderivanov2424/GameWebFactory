@@ -2,7 +2,7 @@
   "name": "Siege Ogre",
   "icon": "👹",
   "tier": 2,
-  "hp": 6,
+  "hp": 40,
   "defeat": {
     "soldiers": 1
   },
@@ -14,7 +14,7 @@
     },
     {
       "name": "Hurl Boulder",
-      "keep": 3,
+      "keep": 4,
       "shield": true
     },
     {

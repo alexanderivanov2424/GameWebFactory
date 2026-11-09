@@ -2,7 +2,7 @@
   "name": "Goblin Raiders",
   "icon": "👺",
   "tier": 1,
-  "hp": 3,
+  "hp": 20,
   "defeat": {
     "soldiers": 1
   },
@@ -16,7 +16,8 @@
     },
     {
       "name": "Torch",
-      "ruin": 1
+      "ruin": 1,
+      "keep": 1
     },
     {
       "name": "Waylay",

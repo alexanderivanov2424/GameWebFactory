@@ -1,31 +1,35 @@
 """Bastion: loading the structure files (content/structures/*.json) when the game is imported.
 
-A structure is anything placed on the board: buildings (several cells, worked by cards for
-goods), and the two tile kinds, roads and walls (cell sets, never worked). Fields are
+A structure is anything placed on the board: buildings (one or more cells; units work some of
+them for goods, houses give the city its people) and the two tile kinds, roads and walls (cell
+sets, never worked). Structures belong to nobody: the whole team uses them. Fields are
 documented in content/README.md. Bad files are logged (logger "bastion") and skipped.
 
-    RESOURCES    [(id, name, icon)] in display order. GOODS are the ones stored in buildings and
-                 hauled; gold is paid straight into the stockpile.
+    RESOURCES    [(id, name, icon)] in display order. GOODS (everything but gold) are stored in
+                 buildings and hauled; gold is paid straight into the stockpile. Wheat and bread
+                 are food (food.py).
     OUTPUTS      what a building's work may make: GOODS + gold, soldiers, keep (health), cure
     TERRAIN      {code letter: terrain name} for map rows; BUILDABLE terrain is "grass"
     STRUCTURES   {id: structure}, structure = {
         "id", "name", "icon", "text",
-        "tile":     None for buildings, "road" or "wall" for tiles (one cell each, bought and
-                    removed one at a time for their cost: tiles.py; never sold as blueprints)
+        "tile":     None for buildings, "road" or "wall" for tiles (one cell each, placed and
+                    removed one at a time; "cost" buys a batch of tiles.BATCH: tiles.py; never
+                    sold as blueprints)
         "pieces":   4 rotations (gamekit.shapes), each [(dy, dx)]; "sizes": [(h, w)] each
         "cost":     {resource: n} paid from the stockpile to build it
         "price":    gold for its blueprint in the market (None: never sold; always None for tiles)
+        "bundle":   copies of the blueprint one market purchase adds (1+)
         "requires": [condition] that must all hold where it's placed
         "work":     None or {"uses": {resource: n}, "makes": {output: n}} (one output)
         "bonuses":  [condition with "bonus" (min) or "each" (per thing, up to "max")]
         "income":   {resource: n} made at the end of every round without a card (the keep)
         "depot":    goods made next to it go straight to the stockpile; roads deliver here
         "protects": radius (cells, square) of raid protection around it (0: none)
-        "card":     card id added to the builder's deck when built (None: none); buildings that
-                    work get a crew card "crew-<id>" (named "crew") unless "card" names another
-        "crew":     the crew card's name }
+        "population": people living there (houses, the keep; ruined ones still count)
+        "carriage": each undamaged one makes one haul a round carry hauling.BIG goods
+        "card":     card id added to the builder's deck when built (None: none) }
     condition = {"near": terrain | "empty" | "road" | "wall" | structure id, "min": n, ...}
-    describe(condition)   readable text ("next to ≥3 forest", "per Cottage next to it (max 3)")
+    describe(condition)   readable text ("next to ≥3 forest", "per House next to it (max 3)")
     load_structures(folder) -> STRUCTURES (tests feed temporary folders)
 """
 
@@ -39,9 +43,10 @@ log = logging.getLogger("bastion")
 
 CONTENT = Path(__file__).resolve().parent.parent / "content"
 RESOURCES = [("gold", "Gold", "💰"), ("wood", "Wood", "🪵"), ("stone", "Stone", "🪨"),
-             ("ore", "Ore", "⛓️"), ("food", "Food", "🌾"), ("tools", "Tools", "🔨")]
+             ("ore", "Ore", "⛓️"), ("wheat", "Wheat", "🌾"), ("bread", "Bread", "🍞"),
+             ("tools", "Tools", "🔨")]
 RESOURCE_IDS = [r[0] for r in RESOURCES]
-GOODS = ["wood", "stone", "ore", "food", "tools"]
+GOODS = [r for r in RESOURCE_IDS if r != "gold"]
 OUTPUTS = RESOURCE_IDS + ["soldiers", "keep", "cure"]
 OUTPUT_NAMES = {**{r[0]: r[1].lower() for r in RESOURCES}, "soldiers": "soldiers", "keep": "keep health",
                 "cure": "plague cured"}
@@ -97,8 +102,6 @@ def parse_structure(structure_id, data):
     card = data.get("card")
     if card is not None and not isinstance(card, str):
         raise ValueError("card must be a card id")
-    if card is None and work:
-        card = f"crew-{structure_id}"
     return {
         "id": structure_id,
         "name": name,
@@ -109,14 +112,16 @@ def parse_structure(structure_id, data):
         "sizes": sizes,
         "cost": amounts(data, "cost", RESOURCE_IDS),
         "price": whole(data, "price", 0, 30) if "price" in data and not tile else None,
+        "bundle": whole(data, "bundle", 1, 5, default=1),
         "requires": conditions(data, "requires", False),
         "work": work,
         "bonuses": conditions(data, "bonuses", True) if work else [],
         "income": amounts(data, "income", RESOURCE_IDS),
         "depot": flag(data, "depot"),
         "protects": whole(data, "protects", 0, 5, default=0),
+        "population": whole(data, "population", 0, 10, default=0),
+        "carriage": flag(data, "carriage"),
         "card": card,
-        "crew": text(data, "crew", 30) or f"{name} Crew",
     }
 
 
@@ -163,11 +168,12 @@ def public(s, structures):
     view = {
         "name": s["name"], "icon": s["icon"], "text": s["text"], "tile": s["tile"],
         "rotations": [[[dx, dy] for dy, dx in piece] for piece in s["pieces"]],
-        "cost": s["cost"], "price": s["price"],
+        "cost": s["cost"], "price": s["price"], "bundle": s["bundle"],
         "requires": [describe(c, structures) for c in s["requires"]],
         "work": s["work"],
         "bonuses": [[describe(c, structures), c.get("bonus", c.get("each"))] for c in s["bonuses"]],
         "income": s["income"], "depot": s["depot"], "protects": s["protects"], "card": s["card"],
+        "population": s["population"], "carriage": s["carriage"],
     }
     return {k: v for k, v in view.items() if v is not None}  # PatchState: no nulls in dicts
 

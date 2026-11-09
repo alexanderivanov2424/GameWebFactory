@@ -11,7 +11,6 @@
     "wood": 3,
     "stone": 2
   },
-  "crew": "Merchants",
   "work": {
     "makes": {
       "gold": 2
@@ -19,7 +18,7 @@
   },
   "bonuses": [
     {
-      "near": "cottage",
+      "near": "house",
       "each": 1,
       "max": 3
     },
@@ -28,5 +27,5 @@
       "bonus": 1
     }
   ],
-  "text": "Trades for gold. Every cottage next to it brings customers."
+  "text": "Trades for gold. Every house next to it brings customers."
 }
