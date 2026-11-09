@@ -21,9 +21,12 @@ Turn (any order):
 - Buy at most one card: coin cards and jokers pay their value, any other card 1/2. Reserve
   cards only while a market slot is empty (the bought card then fills it).
 - Play action cards: draw cards, remove cards from the game, take a free card, or step
-  ignoring a space's requirement (details in logic/actions.py).
+  ignoring a space's requirement (details in logic/actions.py). A choice with nothing to
+  choose from (no cards in hand to remove, nothing left to take) is skipped.
 - End turn: played cards and any cards picked from hand are discarded; draw back up to 4.
 Single-use cards leave the game once used for their value or effect.
+Everyone can see the cards each player owns (hand, deck and discard together, not which are in
+hand) and the cards they removed: purchases and removals are public anyway.
 End: when a player's explorers have all arrived, the round finishes. Among arrived players,
 most blockades wins, then the highest blockade, then the first to arrive. A player who leaves
 is out (their explorers leave the board); the last one left wins.

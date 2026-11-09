@@ -1,23 +1,23 @@
 """Bastion: the cards, loaded when the game is imported: content/cards/*.json (actions and enemy
 curses) plus two cards made from every structure file (structures.py):
     "plan-<id>"  the blueprint (kind "build"), sold for the structure's "price"; building it
-                 removes the card from the deck unless the structure is "reusable"
+                 removes the card from the deck (roads and walls have no blueprint: tiles.py)
     "crew-<id>"  for buildings that work: "work a <structure>", added to the builder's deck
 Fields are documented in content/README.md. Bad files are logged (logger "bastion") and skipped.
 
     CARDS   {id: card}, card = {
         "id", "name", "kind": "build" | "action" | "curse", "text" (generated unless given),
         "price":    gold in the market (None: never sold)
-        "structure": what a build card builds; "keep": it stays in the deck when played
+        "structure": what a build card builds
         "cost":     {resource: n} paid when an action is played
         "work":     None, "any" or [structure id]: work one such building (a target)
         "boost":    extra output for that work
         "unskilled": that work gets the base output and penalties but no bonuses (Villagers)
         "repair":   repair one damaged structure (a target; 1 wood per ruined tile)
         "cure":     cure one plagued structure (a target)
-        "haul":     move up to n goods (+1 per population: cottages) from buildings and roads
-                    towards a depot, each up to "reach" steps along roads (economy.haul)
-        "reach":    how far a haul carries each good (cells)
+        "haul":     send a building's stored goods to a depot in a carriage moving n cells a
+                    round (carriages.py; a target); the card rides along and returns on arrival.
+                    May be combined with "work" (Villagers): the play message picks which
         "gain":     {resource or "soldiers": n}
         "draw":     draw n cards
         "adds":     card id put in the player's discard pile when played (Tax: Unrest)
@@ -51,8 +51,7 @@ def card_text(card, structures):
     if card["kind"] == "build":
         s = structures[card["structure"]]
         cost = f" for {amount_text(s['cost'])}" if s["cost"] else ""
-        stays = " Stays in your deck." if card["keep"] else " Leaves your deck once built."
-        return f"Build {a(s['name'])}{cost}.{stays}"
+        return f"Build {a(s['name'])}{cost}. Leaves your deck once built."
     if card["kind"] == "curse":
         hurt = " and deal 1 damage to its sender" if card["hurts"] else ""
         return f"Pay {amount_text(card['pay'])} to remove this card from your deck{hurt}."
@@ -71,9 +70,12 @@ def card_text(card, structures):
         parts.append("Repair a damaged structure (1 wood per tile).")
     if card["cure"]:
         parts.append("Cure a plagued building.")
-    if card["haul"]:
-        parts.append(f"Haul up to {card['haul']} goods (+1 per cottage), each {card['reach']} cells along roads "
-                     f"towards the keep or a storage yard.")
+    if card["haul"] and card["work"]:
+        parts[-1] = parts[-1][:-1] + f", or haul from one ({card['haul']} cell{'s' if card['haul'] > 1 else ''} a round)."
+    elif card["haul"]:
+        parts.append(f"Haul: a carriage takes every good stored in a building along the roads to the keep or a "
+                     f"storage yard, {card['haul']} cell{'s' if card['haul'] > 1 else ''} a round. This card rides "
+                     f"along and returns to your discard pile when it arrives.")
     if card["gain"]:
         parts.append(f"Gain {amount_text(card['gain'])}.")
     if card["draw"]:
@@ -89,8 +91,8 @@ def card_text(card, structures):
 
 
 def blank(card_id, name, kind):
-    return {"id": card_id, "name": name, "kind": kind, "text": "", "price": None, "structure": None, "keep": False,
-            "cost": {}, "work": None, "boost": 0, "repair": False, "cure": False, "haul": 0, "reach": 0, "gain": {}, "draw": 0,
+    return {"id": card_id, "name": name, "kind": kind, "text": "", "price": None, "structure": None,
+            "cost": {}, "work": None, "boost": 0, "repair": False, "cure": False, "haul": 0, "gain": {}, "draw": 0,
             "unskilled": False, "adds": None, "trash": 0, "pay": {}, "hurts": False}
 
 
@@ -110,14 +112,16 @@ def parse_card(card_id, data, structures):
             raise ValueError("work must be \"any\" or a list of structure ids that work")
         card.update(
             cost=amounts(data, "cost", RESOURCE_IDS), work=work, boost=whole(data, "boost", 0, 5, default=0),
-            repair=flag(data, "repair"), cure=flag(data, "cure"), haul=whole(data, "haul", 0, 20, default=0),
-            reach=whole(data, "reach", 1, 30, default=4), unskilled=flag(data, "unskilled"),
+            repair=flag(data, "repair"), cure=flag(data, "cure"), haul=whole(data, "haul", 0, 10, default=0),
+            unskilled=flag(data, "unskilled"),
             gain=amounts(data, "gain", RESOURCE_IDS + ["soldiers"]), draw=whole(data, "draw", 0, 5, default=0),
             trash=whole(data, "trash", 0, 5, default=0), adds=data.get("adds"))
         if card["adds"] is not None and not isinstance(card["adds"], str):
             raise ValueError("adds must be a card id")
         if sum(1 for k in ("work", "repair", "cure") if card[k]) > 1:
             raise ValueError("a card may target only one way (work, repair or cure)")
+        if card["haul"] and (card["repair"] or card["cure"]):
+            raise ValueError("haul combines only with work")
     card["text"] = text(data, "text", 200) or card_text(card, structures)
     return card
 
@@ -127,7 +131,7 @@ def structure_cards(structures):
     for sid, s in structures.items():
         if s["price"] is not None:
             card = blank(f"plan-{sid}", s["name"], "build")
-            card.update(price=s["price"], structure=sid, keep=s["reusable"])
+            card.update(price=s["price"], structure=sid)
             card["text"] = card_text(card, structures)
             cards[card["id"]] = card
         if s["card"] == f"crew-{sid}":
@@ -163,7 +167,7 @@ def load_cards(folder, structures):
 
 
 def targeted(card):
-    return bool(card["work"] or card["repair"] or card["cure"])
+    return bool(card["work"] or card["repair"] or card["cure"] or card["haul"])
 
 
 def load_counts(path, cards):
@@ -175,8 +179,9 @@ def load_counts(path, cards):
 
 
 def public(card):
-    view = {k: card[k] for k in ("name", "kind", "text", "price", "structure", "keep", "cost", "pay", "hurts", "trash")}
-    return {k: v for k, v in view.items() if v is not None} | {"targeted": targeted(card)}  # PatchState: no nulls
+    view = {k: card[k] for k in ("name", "kind", "text", "price", "structure", "cost", "pay", "hurts", "trash", "haul")}
+    return ({k: v for k, v in view.items() if v is not None}  # PatchState: no nulls
+            | {"targeted": targeted(card), "works": bool(card["work"] or card["repair"] or card["cure"])})
 
 
 CARDS = load_cards(CONTENT / "cards", STRUCTURES)

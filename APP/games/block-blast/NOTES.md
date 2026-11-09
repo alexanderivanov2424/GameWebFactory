@@ -76,6 +76,11 @@ Tests: `tests/` (`python3 -I tools/run_tests.py block-blast`).
   (`clear_lines` -> `Cleared`, `apply_symbols` -> `Clear`, `deal_damage`) and never sees the
   Match; `Match.resolve_clears` picks the target, writes the log and `lastClear`, and knocks out.
   Test new effects on those functions directly (`PureEffectTests`).
+- **Undo inside a turn**: `put_down` pushes a `Placed` record (card, its hand index, board, piece,
+  position, exile) onto `Match.undo_stack`; `Match.undo` pops one, `board.unplace`s its tiles, takes
+  the card off the discard pile (unless exile) and puts it back at its hand index. Any clear
+  (`resolve_clears`) and `next_turn` empty the stack, so gold, damage and knock-outs are never
+  undone; buys aren't either. The client's Undo button / U / Ctrl+Z is enabled from `undoable`.
 - **Shield and card removal resources**: shield absorbs damage point for point and decays by 1
   in `next_turn` for the player whose turn starts; chapel tokens are spent with `remove`
   (any time) on a hand card, which leaves the deck without being discarded.
@@ -85,7 +90,7 @@ Tests: `tests/` (`python3 -I tools/run_tests.py block-blast`).
   type-check (`whole_number`, strict ranges) and call `Match`; `on_game_message` dispatches, then
   `check_over()`.
 - `logic/match.py`: `Match`: setup, who may act (`require_turn` / `require_in`), `place` / `patch`
-  (both via `put_down`, then `resolve_clears`), `buy`, `aim`, `remove_card`, `end_turn` ->
+  (both via `put_down`, then `resolve_clears`), `undo` (`undo_stack` of `Placed`), `buy`, `aim`, `remove_card`, `end_turn` ->
   `next_turn` (market refill, shield decay), `knock_out`, `leave`, `public` (the unchanging part,
   `static_state()`, is built once into `self.catalog`), `private`. Log entries are
   `{step, pid, text}`; `lastClear` drives the client's flash.
@@ -94,7 +99,7 @@ Tests: `tests/` (`python3 -I tools/run_tests.py block-blast`).
 - `logic/effects.py`: `clear_lines` (spoiling, counting symbols), `EFFECTS` / `apply_symbols`,
   `deal_damage`. No Match, no log.
 - `logic/tiles.py`, `logic/symbols.py`: the registries (`TileType`, `Symbol`: names, codes, flags).
-- `logic/board.py`: board of `(tile, symbol)` cells; `fits`, `place`, `full_lines`, `clear`,
+- `logic/board.py`: board of `(tile, symbol)` cells; `fits`, `place`, `unplace`, `full_lines`, `clear`,
   `layers` / `public` (the two-layer client form).
 - `logic/market/`: `__init__.py` (`MARKETS`, `DEFAULT`, `MAX_SIZE`, `make`), `base.py`
   (`Market`: bonus deck as a `Deck` that only shrinks, slots, `take`, `public`), `conveyor.py`

@@ -1,12 +1,13 @@
 /*
- * Bastion: BastionBoard draws the shared board (terrain, roads with the goods a haul left on
- * them, walls, enemy blights and buildings with their badges) and reports the mouse. No rules here: outputs, links and flags
+ * Bastion: BastionBoard draws the shared board (terrain, roads, walls, enemy blights, buildings
+ * with their badges, carriages 🛒 hauling goods) and reports the mouse. No rules here: outputs, links and flags
  * all come from the state.
  *
  *   const board = BastionBoard.create(element, { onHover(x, y), onLeave(), onClick(x, y),
  *                                                onRightClick(), onWheel(direction) })
  *   board.build(game)          rebuild every cell from game (catalog terrain + structures)
  *   board.structureAt(x, y)    uid (string) of the building there, or null
+ *   board.carriagesAt(x, y)    [carriage] on that cell (game.carriages values)
  *   board.clearMarks()         remove hover marks (ghost, bad, target, hl)
  *   board.mark(cells, cls)     add `cls` to each [x, y] that is on the board
  *   board.cellRect(x, y)       {left, top} of a cell inside the board's parent (for tips)
@@ -22,6 +23,7 @@ const BastionBoard = (() => {
     let width = 0;
     let height = 0;
     let owner = {}; // "x,y" -> structure uid
+    let carts = {}; // "x,y" -> [carriage]
 
     const pos = (target) => {
       const cell = target.closest(".cell");
@@ -67,11 +69,6 @@ const BastionBoard = (() => {
           if (base === "grass" && (x + y) % 2) cell.classList.add("alt");
           cell.dataset.x = x;
           cell.dataset.y = y;
-          const cargo = (game.cargo || {})[key];
-          if (cargo) {
-            const n = Object.values(cargo.goods).reduce((a, b) => a + b, 0);
-            cell.append(el("span", { className: `badge cargo${cargo.safe ? " safe" : ""}`, textContent: `📦${n}` }));
-          }
           if (blight) {
             cell.classList.add("razeable");
             if (blight.lair) cell.classList.add("lair");
@@ -82,6 +79,14 @@ const BastionBoard = (() => {
         cells.push(row);
       }
       for (const [uid, s] of Object.entries(game.structures)) drawStructure(game, uid, s);
+      carts = {};
+      for (const c of Object.values(game.carriages || {})) (carts[`${c.x},${c.y}`] ||= []).push(c);
+      for (const [key, list] of Object.entries(carts)) {
+        const [x, y] = key.split(",").map(Number);
+        const n = list.reduce((sum, c) => sum + Object.values(c.goods).reduce((a, b) => a + b, 0), 0);
+        const safe = list.every((c) => c.safe);
+        cells[y][x].append(el("span", { className: `badge carriage${safe ? " safe" : ""}`, textContent: `🛒${n}` }));
+      }
       element.replaceChildren(...cells.flat());
     }
 
@@ -114,8 +119,8 @@ const BastionBoard = (() => {
         const key = Object.keys(info.work.makes)[0];
         cell.append(el("span", { className: `badge out${s.output ? "" : " none"}`, textContent: `+${s.output}${game.icons[key] || ""}` }));
       }
-      const stored = Object.values(s.store).reduce((a, b) => a + b, 0);
-      if (stored) cell.append(el("span", { className: "badge store", textContent: `📦${stored}` }));
+      const stored = Object.entries(s.store).map(([k, n]) => `${game.icons[k] || k}${n}`).join(" ");
+      if (stored) cell.append(el("span", { className: "badge store", textContent: stored }));
       const flags = (s.plague ? "🦠" : "") + (s.frozen ? "❄️" : "") + (s.link === "none" && info.work ? "⛓️‍💥" : "");
       if (flags) cell.append(el("span", { className: "badge flags", textContent: flags }));
       if (s.worked) cell.append(el("span", { className: "badge done", textContent: "✓" }));
@@ -142,6 +147,7 @@ const BastionBoard = (() => {
       mark,
       cellRect,
       structureAt: (x, y) => owner[`${x},${y}`] || null,
+      carriagesAt: (x, y) => carts[`${x},${y}`] || [],
     };
   }
 

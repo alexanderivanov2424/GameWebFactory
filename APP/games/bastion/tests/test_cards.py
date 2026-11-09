@@ -43,26 +43,17 @@ class BlueprintTests(helpers.FixtureCase):
         match.play("p1", give(match, "p1", "plan-hut"), 5, 3)
         self.assertIn("work-any", [c["card"] for c in match.seats["p1"].deck.discard_pile])
 
-    def test_reusable_blueprints_stay(self):
-        match = helpers.new_match(self)
-        uid = give(match, "p1", "plan-road")
-        match.play("p1", uid, 4, 2, 0)
-        self.assertEqual(match.board.roads, {(4, 2), (5, 2)})
-        self.assertIn(uid, [c["uid"] for c in match.seats["p1"].deck.discard_pile])
-
     def test_refused_builds_change_nothing(self):
         match = helpers.new_match(self)
-        match.stock["stone"] = 0
-        wall = give(match, "p1", "plan-wall")
-        with self.assertRaisesRegex(LobbyError, "short of stone"):
-            match.play("p1", wall, 4, 2, 0)
+        match.stock["wood"] = 0
         mill = give(match, "p1", "plan-mill")
+        with self.assertRaisesRegex(LobbyError, "short of wood"):
+            match.play("p1", mill, 1, 1, 0)
         with self.assertRaisesRegex(LobbyError, "next to forest"):
             match.play("p1", mill, 4, 4, 0)
         with self.assertRaisesRegex(LobbyError, "Pick where"):
             match.play("p1", mill)
-        self.assertTrue(in_hand(match, wall) and in_hand(match, mill))
-        self.assertFalse(match.board.walls)
+        self.assertTrue(in_hand(match, mill))
         self.assertEqual(list(match.board.structures), [1])  # just the keep
 
 

@@ -85,18 +85,23 @@
       }
       root.append(tiles, marks);
 
-      // Blockades: a thick line along each border edge, with the value in a disc.
+      // Blockades: a thick line along each border edge (over a dark outline, so it stands out
+      // from tiles of its own color), with the value in a disc.
       for (const [id, b] of Object.entries(game.blockades)) {
         const lines = svg("g", { class: b.takenBy ? "border-open" : `border t-${b.t}` });
+        const outlines = [], strokes = [];
         let mx = 0, my = 0;
         for (const [a, c] of b.edges) {
           const [x1, y1] = pixel(board.hexes[a]);
           const [x2, y2] = pixel(board.hexes[c]);
           const cx = (x1 + x2) / 2, cy = (y1 + y2) / 2, len = Math.hypot(x2 - x1, y2 - y1);
           const ux = (-(y2 - y1) / len) * SIZE / 2, uy = ((x2 - x1) / len) * SIZE / 2;
-          lines.append(svg("line", { x1: cx - ux, y1: cy - uy, x2: cx + ux, y2: cy + uy }));
+          const ends = { x1: cx - ux, y1: cy - uy, x2: cx + ux, y2: cy + uy };
+          outlines.push(svg("line", { ...ends, class: "outline" }));
+          strokes.push(svg("line", ends));
           mx += cx; my += cy;
         }
+        lines.append(...outlines, ...strokes);
         if (b.takenBy) lines.setAttribute("stroke", game.players[b.takenBy]?.color || "#999");
         root.append(lines);
         if (!b.takenBy && b.edges.length) {

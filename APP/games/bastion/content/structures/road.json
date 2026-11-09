@@ -1,11 +1,12 @@
 {
   "name": "Road",
-  "icon": "",
+  "icon": "🛤️",
   "shape": [
-    "##"
+    "#"
   ],
   "tile": "road",
-  "price": 1,
-  "reusable": true,
+  "cost": {
+    "gold": 1
+  },
   "text": "Links buildings to the keep and storage yards, so Haul cards can carry their goods."
 }

@@ -10,18 +10,17 @@ documented in content/README.md. Bad files are logged (logger "bastion") and ski
     TERRAIN      {code letter: terrain name} for map rows; BUILDABLE terrain is "grass"
     STRUCTURES   {id: structure}, structure = {
         "id", "name", "icon", "text",
-        "tile":     None for buildings, "road" or "wall" for tiles
+        "tile":     None for buildings, "road" or "wall" for tiles (one cell each, bought and
+                    removed one at a time for their cost: tiles.py; never sold as blueprints)
         "pieces":   4 rotations (gamekit.shapes), each [(dy, dx)]; "sizes": [(h, w)] each
         "cost":     {resource: n} paid from the stockpile to build it
-        "price":    gold for its blueprint in the market (None: never sold)
-        "reusable": the blueprint stays in the deck after building (roads and walls)
+        "price":    gold for its blueprint in the market (None: never sold; always None for tiles)
         "requires": [condition] that must all hold where it's placed
         "work":     None or {"uses": {resource: n}, "makes": {output: n}} (one output)
         "bonuses":  [condition with "bonus" (min) or "each" (per thing, up to "max")]
         "income":   {resource: n} made at the end of every round without a card (the keep)
         "depot":    goods made next to it go straight to the stockpile; roads deliver here
         "protects": radius (cells, square) of raid protection around it (0: none)
-        "population": people living there (cottages): each Haul moves 1 more good per person
         "card":     card id added to the builder's deck when built (None: none); buildings that
                     work get a crew card "crew-<id>" (named "crew") unless "card" names another
         "crew":     the crew card's name }
@@ -109,15 +108,13 @@ def parse_structure(structure_id, data):
         "pieces": pieces,
         "sizes": sizes,
         "cost": amounts(data, "cost", RESOURCE_IDS),
-        "price": whole(data, "price", 0, 30) if "price" in data else None,
-        "reusable": flag(data, "reusable"),
+        "price": whole(data, "price", 0, 30) if "price" in data and not tile else None,
         "requires": conditions(data, "requires", False),
         "work": work,
         "bonuses": conditions(data, "bonuses", True) if work else [],
         "income": amounts(data, "income", RESOURCE_IDS),
         "depot": flag(data, "depot"),
         "protects": whole(data, "protects", 0, 5, default=0),
-        "population": whole(data, "population", 0, 5, default=0),
         "card": card,
         "crew": text(data, "crew", 30) or f"{name} Crew",
     }
@@ -166,12 +163,11 @@ def public(s, structures):
     view = {
         "name": s["name"], "icon": s["icon"], "text": s["text"], "tile": s["tile"],
         "rotations": [[[dx, dy] for dy, dx in piece] for piece in s["pieces"]],
-        "cost": s["cost"], "price": s["price"], "reusable": s["reusable"],
+        "cost": s["cost"], "price": s["price"],
         "requires": [describe(c, structures) for c in s["requires"]],
         "work": s["work"],
         "bonuses": [[describe(c, structures), c.get("bonus", c.get("each"))] for c in s["bonuses"]],
         "income": s["income"], "depot": s["depot"], "protects": s["protects"], "card": s["card"],
-        "population": s["population"],
     }
     return {k: v for k, v in view.items() if v is not None}  # PatchState: no nulls in dicts
 

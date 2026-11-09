@@ -34,20 +34,32 @@
     {
       "structure": "road",
       "x": 2,
-      "y": 4,
-      "rotation": 0
+      "y": 4
     },
     {
       "structure": "road",
       "x": 3,
-      "y": 5,
-      "rotation": 1
+      "y": 4
+    },
+    {
+      "structure": "road",
+      "x": 3,
+      "y": 5
+    },
+    {
+      "structure": "road",
+      "x": 3,
+      "y": 6
+    },
+    {
+      "structure": "road",
+      "x": 4,
+      "y": 4
     },
     {
       "structure": "road",
       "x": 5,
-      "y": 4,
-      "rotation": 0
+      "y": 4
     }
   ]
 }

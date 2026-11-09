@@ -42,9 +42,11 @@ Native→Local Guide.
   changes; `highlight(...)` only toggles classes ("go" = this click acts now, "step" = legal
   but needs a card or a choice).
 - `client/game.js`: `renderGame()` calls `renderResult`, `renderStatus`, `renderPrompt`
-  (side panel: the current choice), `renderPeople`, `renderLog`, `renderMarket` (market +
-  reserve below the map), `renderHand` (fixed bottom bar with Buy / End turn). Modes:
-  `explorer`, `cardSel`, `mode` (pay / buy / end / play) and `picks`, reset each turn.
+  (side panel: the current choice, Play buttons for selected action cards), `renderPeople`
+  (with a Deck button per player: `deckList` shows their public `owned` / `removedCards`
+  counts), `renderLog`, `renderMarket` (market + reserve below the map, both as full cards), `renderHand` (fixed
+  bottom bar with End turn). No modes: `picks` (cards selected in hand) is used by whatever is
+  clicked next (`plan(req)` decides what a space click does), plus `explorer` and `viewDeck`.
 - `tests/`: `test_content.py` (files, boards), `test_rules.py` (Match, one rule per test),
   `test_lobby.py` (Sim), `helpers.py` (fixtures).
 
@@ -56,6 +58,12 @@ Native→Local Guide.
   or discarded for rubble, they go to the discard pile.
 - The Courier's free card isn't a purchase: any card with copies left, market or reserve, and
   it never moves a reserve card into an empty slot.
+- Each player's owned cards (`owned`: hand + deck + discard + played, by card id) and removed
+  cards are public: every purchase and removal is logged by name, so this only saves players
+  from counting; which cards are in hand stays secret.
+- A card's choice with nothing to choose from is skipped on the server (Naturalist / Field
+  Journal with an empty hand, Courier with everything sold out). The client sends the
+  "remove" choice by itself once no more cards can be picked (the max, or the whole hand).
 - Tie-break: most blockades, then the highest single blockade, then who arrived first.
 - Star Chart (Compass) costs 2; card costs come from memory of the published game and may
   need tuning.
@@ -65,5 +73,7 @@ Native→Local Guide.
   `""`, and `turn` / `moving` / `pending` are left out when absent.
 - The round ends when every remaining player's `TurnQueue` value is equal (everyone has had
   as many turns); re-check that after a player leaves, or a final round never ends.
+- Picks and pending choices: the client clears `picks` whenever a card's choice starts or
+  ends, so cards selected before playing a Naturalist are never trashed by accident.
 - A movement card stays bound to the explorer it started moving: the other explorer needs a
   new card (one card never moves two explorers).

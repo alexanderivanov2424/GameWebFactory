@@ -85,7 +85,7 @@ APP/
   gamekit/              Shared game library, server side (Python package `gamekit`). Games import only this.
     __init__.py         Re-exports: LobbyGame, LobbyError, PLAYING/FINISHED/LOBBY, Int, Choice, MultiChoice, TurnQueue, SecretChoices,
                         Deck, RealtimeGame, FullState, PatchState, Snapshots, turtle
-    lobby.py            LobbyGame: spectators/players, host, ready, phases, public + private state sync,
+    lobby.py            LobbyGame: spectators/players, host, ready, phases, end-game vote, public + private state sync,
                         SETTINGS, ACTIONS dispatch, game_number, schedule() timers, SYNC,
                         saved player data (load_data / save_data / account_name)
     realtime.py         RealtimeGame: LobbyGame on a fixed tick (tick(dt)), buffered inputs, ping
@@ -114,7 +114,8 @@ APP/
       room.js           AppRoom.connect(gameId, handlers): low-level game room connection
       lobby.js          AppLobby.connect(gameId, handlers): lobby client (use this for games)
       lobby-ui.js       AppLobbyUI: player list, start button/status, spectators, connection text, error banner,
-                        "your turn" alert, lobbyButtons (join/leave/ready/back), settingsForm (from SETTINGS)
+                        "your turn" alert, lobbyButtons (join/leave/ready/back), settingsForm (from SETTINGS),
+                        endGameButton (the "End game" vote, on every game page)
       realtime.js       AppRealtime.attach(lobby): interpolated sampling, keyboard controls, ping (real-time games)
   games/<game-id>/      One folder per game: a Python package `games.<game-id>`
     game.json           {"name": ..., "description": ...} shown on the home page
@@ -215,6 +216,9 @@ Summary:
 ## Lobby model (shared by all games)
 - Every connected tab is a **member**: a **spectator** until it joins, then a **player**. Players join and leave explicitly, and only in the lobby phase.
 - Phases: `lobby` (before the game) → `playing` → `finished` → host returns everyone to `lobby`.
+- **Ending early:** during play every page shows an "End game" button (top right, left of Settings;
+  `AppLobbyUI.endGameButton`, added by `lobby.js`). Once every player has voted, everyone goes back to the
+  lobby (`end_vote` in `gamekit/lobby.py`; `reset_game` runs). Games need no code for it.
   `state.gameNumber` counts games started in the room (key per-game client data by it).
 - **Host**: the first player to join. Only the host changes settings, starts the game, passes hosting to another player, or returns to the lobby. If the host leaves, the next player in join order becomes host.
 - **Ready and start**: once all players are ready (and `MIN_PLAYERS` is met and `start_check()` passes), the host clicks **Start game** to begin. Nothing starts automatically.

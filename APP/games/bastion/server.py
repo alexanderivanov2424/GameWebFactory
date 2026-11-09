@@ -9,10 +9,12 @@ soldiers and the keep's health (the host's "Keep health"; at 0 the game is lost)
 Rounds (everyone plays at once, in any order): each round everyone discards their hand and
 draws 5. Play cards from your hand, buy from the market, fight; then End turn (it can be taken
 back until everyone has ended). When everyone has ended, the round ends.
+- Roads and walls aren't cards: anyone may, at any time in the round, place a 1x1 tile on empty
+  grass (a road for 1 gold, a wall for 1 stone), or pay 1 gold to remove one (not a road a carriage is on).
 - Blueprints (bought in the market) build a structure: place its shape on empty grass, turned
   any of 4 ways (never mirrored), and pay its cost from the stockpile. Buildings may also go
-  over road tiles (replacing them) unless goods wait on them. The blueprint then leaves your
-  deck (roads and walls stay) and, if the building is worked, its crew card joins your deck
+  over road tiles (replacing them) unless a carriage is on them. The blueprint then leaves your
+  deck and, if the building is worked, its crew card joins your deck
   (cottages give Villagers, storage yards Haul, watchtowers Lookout, chapels Absolution).
   Some buildings must go next to something (a mine next to a mountain, a lumbermill next to
   forest).
@@ -22,20 +24,26 @@ back until everyone has ended). When everyone has ended, the round ends.
   blight tile next to it. Villagers are unskilled: base output and penalties, no bonuses.
   Buildings that use inputs take them from the stockpile.
 - Goods: a building next to the keep or a storage yard (a depot) delivers to the stockpile
-  at once; others keep their goods (up to 6) until a Haul card carries them along roads that
-  reach a depot. A haul moves a number of goods (the card's, +1 per cottage) a number of cells
-  each; goods that don't reach a depot are left on the road tile they stopped on, where the
-  next haul picks them up first and raids (loot) can take them unless the tile is next to a
-  wall or near a watchtower. A building with inputs must be next to a depot or a road that
-  reaches one. Gold, soldiers, keep health and cures never wait.
+  at once; others keep their goods (up to 6) until a haul card is played on them (Haul: 2 cells
+  a round, Wagon Train: 4, or Villagers as a haul: 1). A carriage loads every good stored
+  there and, at the end of each round, moves that many cells along roads to the nearest depot
+  (the step into the depot counts). The card rides along, out of your deck, and returns to
+  your discard pile when the goods arrive. Hauling from a building next to a depot delivers
+  at once. A carriage whose roads no longer reach a depot waits. Raids (loot) can take goods
+  from carriages on road tiles that aren't next to a wall or near a watchtower; a carriage
+  that loses everything turns back and its card returns. A building with inputs must be next
+  to a depot or a road that reaches one. Gold, soldiers, keep health and cures never wait.
 - Other actions: haul, repair a damaged building (1 wood per ruined tile), cure a plagued one,
   gain resources or soldiers (Sell: tools for gold; Tax: gold, but it adds an Unrest curse),
   draw cards, remove other cards in your hand from your deck for good (Absolution; not
   curses). Each card says what it does and costs.
 - Market: 6 cards anyone may buy at any time with the team's gold (unlimited copies: a bought
-  slot is refilled at once); bought cards go to the buyer's discard pile.
-End of a round: the keep makes 1 gold, then every active enemy makes its next attack (each
-has 2-3 it takes in turn), then the next round starts; an enemy that is due arrives.
+  slot is refilled at once); bought cards go to the buyer's discard pile. It is dealt anew at
+  the start of every round, and anyone may reroll it (deal all 6 anew) for 2 gold, +1 for
+  each reroll earlier in the same round.
+End of a round: the keep makes 1 gold, carriages move, then every active enemy makes its next
+attack (each has 2-3 it takes in turn), then the next round starts; an enemy that is due
+arrives.
 
 Enemies are cards above the board. The first arrives on round peaceRounds + 1, then one every
 enemyGap rounds ("enemies" in all; lower tiers first, a boss last). Each has its own ways to
@@ -43,13 +51,14 @@ be beaten (on its card): soldiers per damage, resources per damage (Frost Witch:
 the plague it spread (Rat King), paying off the curse cards it sends (Bandit Lord), razing its
 lair tiles with soldiers (Necromancer). Attacks steal from the stockpile, ruin building tiles
 (not ones next to a wall or near a watchtower; with none open they break a wall), damage the
-keep, loot goods left on unprotected roads, put blight tiles on the board (raze one with 1 soldier), add curse cards to decks (pay
+keep, loot goods from carriages on unprotected roads, put blight tiles on the board (raze one with 1 soldier), add curse cards to decks (pay
 their cost to play them and remove them for good), plague or freeze buildings, kill soldiers.
 Enemy health scales with difficulty (75/100/130%) and +50% per player after the first.
 Beating every enemy wins. The keep at 0, or any enemy left 6 rounds after the last one
 arrived, loses.
 
-Leaving mid-game: the player's cards are gone; their buildings stay. If nobody is left the
+Leaving mid-game: the player's cards are gone (their carriages still deliver); their
+buildings stay. If nobody is left the
 game ends (lost).
 
 Hidden: your hand and your deck's order. Public: everything else (each player's whole deck,
@@ -63,13 +72,18 @@ Settings:        {"difficulty": "easy" | "normal" | "hard" ("normal"), "keepHeal
                   "map": map id ("valley"), "enemies": 3-7 (5), "peaceRounds": 2-8 (5),
                   "enemyGap": 2-5 (3)}
 Game messages:
-    {"action": "play", "uid": n, "x"?: col, "y"?: row, "rotation"?: 0-3, "remove"?: [uid, ...]}
+    {"action": "play", "uid": n, "x"?: col, "y"?: row, "rotation"?: 0-3, "remove"?: [uid, ...],
+     "haul"?: bool}
                        a hand card; blueprints need x, y (top-left of the turned shape) and
-                       rotation; work/repair/cure cards need x, y on the building; trash cards
-                       (Absolution) list the other hand cards to remove in "remove"
+                       rotation; work/repair/cure/haul cards need x, y on the building; trash
+                       cards (Absolution) list the other hand cards to remove in "remove";
+                       "haul": true plays a card that can work or haul (Villagers) as a haul
     {"action": "strike", "foe": i, "way": "soldiers" | "resources", "times"?: n (1)}
     {"action": "raze", "x": col, "y": row}        an enemy tile, with soldiers
     {"action": "buy", "slot": n}                  a market card (0-based)
+    {"action": "reroll"}                          deal the market anew (state.game.rerollCost gold)
+    {"action": "tile", "kind": "road" | "wall", "x": col, "y": row}   place one tile (its cost)
+    {"action": "remove_tile", "x": col, "y": row}  remove a road or wall tile (removeCost)
     {"action": "end_turn", "done"?: bool}         false takes it back
 
 Code: this file connects the game to the lobby and type-checks message fields. The rules live
@@ -94,8 +108,8 @@ def cell(data, required=False):
             whole_number(data.get("y"), "Row", 0, MAX_SIZE - 1, clamp=False))
 
 
-def flag(data, key):
-    value = data.get(key, True)
+def flag(data, key, default=True):
+    value = data.get(key, default)
     if not isinstance(value, bool):
         raise LobbyError(f"{key} must be true or false.")
     return value
@@ -120,6 +134,9 @@ class Game(LobbyGame):
         "strike": "on_strike",
         "raze": "on_raze",
         "buy": "on_buy",
+        "reroll": "on_reroll",
+        "tile": "on_tile",
+        "remove_tile": "on_remove_tile",
         "end_turn": "on_end_turn",
     }
 
@@ -150,7 +167,8 @@ class Game(LobbyGame):
         if not isinstance(remove, list) or len(remove) > 10:
             raise LobbyError("remove must be a list of cards.")
         remove = [whole_number(uid, "Card", 0) for uid in remove]
-        self.match.play(member.id, whole_number(data.get("uid"), "Card", 0), x, y, rotation, remove)
+        self.match.play(member.id, whole_number(data.get("uid"), "Card", 0), x, y, rotation, remove,
+                        flag(data, "haul", False))
 
     def on_strike(self, member, data):
         self.match.strike(member.id, whole_number(data.get("foe"), "Enemy", 0, 20, clamp=False),
@@ -162,6 +180,16 @@ class Game(LobbyGame):
 
     def on_buy(self, member, data):
         self.match.buy(member.id, whole_number(data.get("slot"), "Slot", 0, 20, clamp=False))
+
+    def on_tile(self, member, data):
+        kind = one_of(data.get("kind"), ("road", "wall"), "Pick a road or a wall.")
+        self.match.place_tile(member.id, kind, *cell(data, required=True))
+
+    def on_remove_tile(self, member, data):
+        self.match.remove_tile(member.id, *cell(data, required=True))
+
+    def on_reroll(self, member, data):
+        self.match.reroll(member.id)
 
     def on_end_turn(self, member, data):
         self.match.end_turn(member.id, flag(data, "done"))

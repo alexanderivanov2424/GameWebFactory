@@ -23,16 +23,27 @@ from it is ever needed (deterministic simulation sent as a compact replay).
   per rotation with the output the building would have there (blueprints; cached by
   `board.version`), or every building the card may work/repair/cure with a preview text. The
   client's ghost, outlines and tips need no rules.
+- **Board pieces bought without cards** (`tiles.py`): road and wall tiles are 1x1, placed or
+  removed one at a time for team gold through their own messages (`tile`, `remove_tile`). Their
+  legal cells go in the public state (`tiles`, cached by `board.version`), and the client's
+  Road / Wall / Remove buttons stay on until cancelled so several tiles can be laid in a row.
 - **Cards made from other content**: every structure file yields a blueprint `plan-<id>` and,
   if it works, a crew card `crew-<id>` (`cards.structure_cards`).
 - **Enemies as cards with cycling attacks** (`foes.py`, `attacks.py`): attack parts are generic
   (steal, ruin, keep, place blights, curse cards into decks, plague, freeze, kill), and each
   enemy has its own `defeat` ways (soldiers, resources, cures, paying off its curses, razing its
   lair), so a new enemy is usually just JSON.
-- **Goods travelling on the board**: a haul moves each good a limited number of steps along
-  roads (`Board.road_distances` is a BFS from the depots; `toward_depot` walks it), so goods can
-  be left on road tiles (`board.cargo`) for the next haul, and enemy `loot` attacks take them
-  from unprotected tiles. Cargo reaches clients as `{"goods", "safe"}` per road cell.
+- **Goods travelling on the board** (`carriages.py`, rebuilt from feedback on 2026-11-09): a haul
+  card played on a building loads everything stored there onto a carriage (`board.carriages`) that
+  moves the card's `haul` value in cells along roads at each round's end (`Board.road_distances` is
+  a BFS from the depots; `toward_depot` walks it). The card instance rides in the carriage, out of
+  the deck, and goes back to its owner's discard pile on arrival (or when a `loot` attack empties
+  the carriage). Haul previews say how many rounds the trip takes (`carriages.steps`).
+- **A card with two modes** (Villagers: `work` + `haul`): `private.targets` holds its work targets
+  and `private.hauls` its haul targets; the play message's `"haul": true` picks hauling, and the
+  client's bar shows a "Haul instead" / "Work instead" switch (`selection.haul`).
+- **Market redealt every round, plus a paid reroll** whose price climbs within a round
+  (`Match.rerolls`, `REROLL_COST` in `market.py`); `rerollCost` reaches the client in the state.
 - **A card that picks other hand cards** (Absolution, `trash`): the play message lists their uids
   in `remove`; the client has a pick mode in the hand bar with a confirm button.
 - **Card instances with extra fields**: curse cards an enemy adds carry `"from": enemy index`
@@ -45,28 +56,28 @@ from it is ever needed (deterministic simulation sent as a compact replay).
 - `logic/match.py`: `Match` (constants at the top: `HAND_SIZE`, `START_STOCK`, `OVERTIME`,
   `COLORS`): `start_round` (reset worked flags, arrivals, refill hands), `end_turn` /
   `check_all_done` -> `end_round` (income, attacks, loss checks), `play` -> `build` / `action`
-  (`trashed` checks a trash card's picks) / curse payment, `population`, `work`, `cure`, `strike`, `raze`, `hurt` (beaten: its blights and plague go;
+  (`trashed` checks a trash card's picks; a haul card goes to `carriages.send`) / curse payment, `work`, `cure`, `strike`, `raze`, `hurt` (beaten: its blights and plague go;
   all beaten wins), `buy`, `leave`, `end`.
 - `logic/views.py`: `public` (catalog cached on the match: `kinds`, `cards`, `icons`, terrain),
   `private` + `build_targets` / `action_targets`.
 - `logic/board.py`: `Structure` (uid, kind, cells, owner, ruined, plague, frozen, worked, store),
   `Board` (placement `check` / `place`: buildings may replace roads, `near`, `link` /
-  `road_distances` / `road_reach` / `toward_depot`, cargo, `protected`, `raid_targets`,
+  `road_distances` / `road_reach` / `toward_depot`, `carriages`, `protected`, `raid_targets`,
   `ruin` / `repair`, blights, `public`).
 - `logic/economy.py`: `output` (`unskilled`: no bonuses), `amount` (with a card), `why_not`,
-  `work`, `haul` (distance-limited, leaves goods on roads), `repair_cost`, `STORE_CAP`.
-- `logic/foes.py`, `logic/attacks.py`, `logic/seat.py`, `logic/market.py`,
+  `work`, `repair_cost`, `STORE_CAP`.
+- `logic/tiles.py`, `logic/carriages.py`, `logic/foes.py`, `logic/attacks.py`, `logic/seat.py`, `logic/market.py`,
   `logic/structures.py`, `logic/cards.py`, `logic/enemies.py`, `logic/maps.py`: see
   `logic/__init__.py`.
-- `client/board.js` (`BastionBoard`): the grid (terrain, roads with cargo badges, walls, blights,
+- `client/board.js` (`BastionBoard`): the grid (terrain, roads, walls, blights, carriage 🛒 badges,
   buildings with merged borders, owner stripe, output/store/flag badges), mouse events, hover marks.
 - `client/game.js`: status bar, enemy cards (strike buttons), hover (ghost / outlines / tips),
-  inspector (buildings, blights, cargo), market, team, chronicle, hand bar (trash pick mode),
+  inspector (buildings, blights, carriages), market (Reroll), team, chronicle, hand bar (trash pick mode, Work/Haul switch, Road / Wall / Remove tools),
   deck window.
 - `tests/`: `helpers.py` (`FixtureCase` installs small fixture structures, cards and enemies,
   parsed by the real loaders, into the shared registries per test; an 8x6 `MAP`; `new_match`,
   `give`, `build`, `foe`), `test_board.py` (placement, rotation, near, links, raids),
-  `test_economy.py` (output, delivery, haul, who can work), `test_cards.py` (playing every kind
+  `test_economy.py` (output, delivery, who can work; no carriage tests yet), `test_cards.py` (playing every kind
   of card, market, done flag), `test_foes.py` (arrival, attacks, defeat ways, win/loss, leaving),
   `test_lobby.py` (Sim, real content). Tests never check real content numbers.
 
@@ -77,7 +88,7 @@ from it is ever needed (deterministic simulation sent as a compact replay).
   `cards.public`); structure views use `""` / `false`.
 - Shapes whose rotations coincide (a domino turned twice) give identical target maps; harmless.
 - Building over roads: a road whose tiles a building covers is gone, which can cut the network
-  (and links) apart; `check` refuses road tiles holding cargo so goods are never lost silently.
+  (and links) apart; `check` refuses road tiles with a carriage on them. A cut-off carriage just waits (its card stays out of the deck until the roads reach a depot again).
 - Starting-town entries in the maps must fit the current shapes: changing a shape can silently
   drop a start building (logged "doesn't fit"); check both maps after a shape change.
 - Numbers (costs, prices, outputs, enemy health, peaceful rounds) are a first pass reasoned from

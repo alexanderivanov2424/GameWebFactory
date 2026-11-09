@@ -7,7 +7,8 @@
   <!--
     Bastion's page: lobby (players, settings, rules), and the game: status bar (round, keep,
     stockpile), the enemy cards above the board, the board (board.js draws it), the side panel
-    (inspector, market, team, chronicle), the fixed bottom bar (your hand, confirm for trash cards, End turn) and windows
+    (inspector, market with Reroll, team, chronicle), the fixed bottom bar (your hand, confirm for trash cards,
+    Work/Haul switch for Villagers, End turn, Road / Wall / Remove tile buttons) and windows
     (<dialog>): your deck, help. game.js renders everything from the state.
   -->
 
@@ -111,8 +112,10 @@
     .cell .out { right: 1px; bottom: 5px; background: #2f6f3e; color: #fff; }
     .cell .out.none { background: #8a7a5c; }
     .cell .store { left: 1px; top: 1px; background: #6b4f2e; color: #fff; }
-    .cell .cargo { left: 1px; top: 1px; font-size: 11px; background: #b03a2e; color: #fff; }
-    .cell .cargo.safe { background: #6b4f2e; }
+    .cell .carriage { left: 1px; bottom: 5px; font-size: 11px; background: #b03a2e; color: #fff; }
+    .cell .carriage.safe { background: #6b4f2e; }
+    .cell.road .carriage { top: 1px; bottom: auto; }
+    .cell.bld .carriage { top: 14px; bottom: auto; }
     .cell .flags { right: 1px; top: 1px; font-size: 11px; background: none; padding: 0; }
     .cell .done { left: 2px; bottom: 5px; color: #2f6f3e; font-size: 12px; background: none; }
     .cell.hl { outline: 3px solid #ffd54a; outline-offset: -3px; z-index: 2; }
@@ -129,6 +132,8 @@
     #inspector .parts { margin: 4px 0; padding-left: 16px; }
     #inspector .plus { color: #2f6f3e; } #inspector .minus { color: #a33; }
     #market { display: flex; flex-direction: column; gap: 6px; }
+    .market-head { display: flex; align-items: center; justify-content: space-between; }
+    .market-head h3 { margin: 0; }
     .offer { display: flex; align-items: center; gap: 8px; font-size: 0.82rem; border-bottom: 1px solid var(--gwf-line); padding-bottom: 5px; }
     .offer .what { flex: 1; }
     .offer .what b { display: block; font-size: 0.88rem; }
@@ -146,6 +151,9 @@
     #bar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 20; background: rgba(251, 247, 238, 0.97); border-top: 2px solid var(--gwf-line); }
     #bar .inner { max-width: var(--gwf-main-width); margin: 0 auto; padding: 8px 110px 10px 16px; display: flex; gap: 12px; align-items: stretch; }
     #bar .info { width: 170px; flex: none; font-size: 0.82rem; display: flex; flex-direction: column; gap: 6px; }
+    #bar .tools { flex: none; display: flex; flex-direction: column; gap: 4px; justify-content: center; }
+    #bar .tools button { white-space: nowrap; text-align: left; }
+    #bar .tools button.on { outline: 2px solid #1a8a4a; background: #c8f0c8; }
     #cards { display: flex; gap: 8px; overflow-x: auto; padding-top: 4px; }
     .pcard { position: relative; flex: none; width: 128px; height: 168px; box-sizing: border-box; border: 2px solid #c4a46b; border-radius: 9px;
       background: #fffaf0; padding: 6px 7px; font-size: 0.72rem; display: flex; flex-direction: column; gap: 3px; cursor: pointer; }
@@ -201,11 +209,13 @@
         <p>Build a city together, then beat every enemy that comes for it. You start with a keep, a few roads, a
           lumbermill and a workshop, and a few <b>peaceful rounds</b> to grow before the first enemy arrives.</p>
         <p>Everyone plays at the same time from their own hand. <b>Blueprints</b> place buildings (turn them any way);
+          <b>roads and walls</b> aren't cards: buy them one tile at a time (road: 1 gold, wall: 1 stone; removing one costs 1 gold);
           each building cares about what's next to it (forest, mountains, water, roads, empty fields, other buildings),
           gaining or losing output. <b>Work cards</b> make a building produce (Villagers work anything, but without the
-          bonuses); goods reach the shared stockpile at once next to the keep or a storage yard, or are carried by
-          <b>Haul</b> along roads, a few cells at a time: goods left on a road can be looted. Turn tools into gold with
-          <b>Sell</b>, and buy new cards in the market with the team's gold.</p>
+          bonuses); goods reach the shared stockpile at once next to the keep or a storage yard, or a <b>Haul</b>
+          sends a carriage with everything a building holds along the roads, a few cells each round (the card rides
+          along and comes back when it arrives; carriages on the road can be looted). Turn tools into gold with
+          <b>Sell</b>, and buy new cards in the market with the team's gold (dealt anew each round, or reroll it).</p>
         <p><b>Enemies</b> are cards above the board, each with its own attacks (raids, plague, curses in your deck,
           blight on the board…) and its own way to be beaten: soldiers, cures, bonfires, razing its lair, paying it off.
           Beat them all to win; lose if the keep falls. Up to 4 players, or solo.</p>
@@ -223,7 +233,9 @@
         </div>
         <div id="side">
           <div class="card" id="inspector"></div>
-          <div class="card"><h3>Market</h3><div id="market"></div></div>
+          <div class="card"><div class="market-head"><h3>Market</h3><button id="reroll" class="small plain"
+            title="Deal all 6 cards anew. 2 gold, +1 for each reroll this round; the market is also dealt anew every round.">Reroll</button></div>
+            <div id="market"></div></div>
           <div class="card"><h3>Builders</h3><ul id="team" class="team"></ul></div>
           <div class="card"><h3>Chronicle</h3><div id="log"></div></div>
           <div class="row"><button id="back" hidden>Back to lobby</button></div>
@@ -236,8 +248,14 @@
     <div class="info">
       <div id="bar-info"></div>
       <button id="confirm" class="green" hidden>Remove them</button>
+      <button id="mode" class="plain small" hidden>Haul instead</button>
       <button id="end-turn" class="green">End turn</button>
       <button id="deck-button" class="plain small">Your deck</button>
+    </div>
+    <div class="tools" title="Roads and walls aren't cards: buy one tile at a time with team gold">
+      <button id="tool-road" class="plain small">Road</button>
+      <button id="tool-wall" class="plain small">Wall</button>
+      <button id="tool-remove" class="plain small">Remove</button>
     </div>
     <div id="cards"></div>
   </div></div>
@@ -257,22 +275,28 @@
         wear the city down: that's a loss too.</p>
       <p><b>Rounds:</b> everyone plays at once. Each round you draw a fresh hand of 5. Click a card to use it; when
         you're done, click <b>End turn</b> (you can take it back until everyone is done). At the end of the round the
-        keep makes 1 gold and every enemy makes its next attack (▶ on its card).</p>
+        keep makes 1 gold, carriages move and every enemy makes its next attack (▶ on its card).</p>
       <p><b>Building:</b> click a blueprint, then the board. Turn it with <b>R</b> or the mouse wheel; right-click or
         Esc cancels. The ghost shows whether it fits and what it would make there. Buildings can go over roads (the
         road under them is gone; build a new one around). Mines and quarries need a mountain next to them,
-        lumbermills a forest. The blueprint then leaves your deck (roads and walls stay) and the building's crew card
-        joins it.</p>
+        lumbermills a forest. The blueprint then leaves your deck and the building's crew card joins it.</p>
+      <p><b>Roads and walls</b> aren't cards: click <b>Road</b> or <b>Wall</b> next to your hand, then click empty
+        grass to lay one tile (road: 1 gold, wall: 1 stone; keep clicking to lay more; right-click or Esc stops). <b>Remove</b> takes a
+        road or wall tile away for 1 gold (not a road a carriage is on).</p>
       <p><b>Working:</b> a work card makes one building produce, once per round. Crew cards (Lumberjacks, Miners…)
         get the full output; Villagers work any building but only make its base output (penalties still count).
         Hover a building to see its output and every bonus: what it likes or hates next to it. Enemy blight next to a
         building costs it 1.</p>
       <p><b>Goods:</b> buildings next to the keep or a 📦 storage yard deliver straight to the stockpile. Others keep
-        their goods (the 📦n badge) until a <b>Haul</b> card carries them along a road that reaches the keep or a
-        storage yard. A Haul moves a number of goods (+1 per cottage 👥) a number of cells each: goods that don't
-        make it are left on the road (a red 📦n badge) and the next Haul carries them on first. Raiders can loot
-        goods on a road unless it's next to a wall or near a watchtower. Workshops, smithies and the like take
-        their inputs from the stockpile, so they need a link too.</p>
+        their goods (the badge with the good's icon, e.g. 🪵3) until you play a haul card on them: a carriage 🛒 loads
+        everything there and, at the end of each round, moves along a road towards the keep or a storage yard
+        (Haul: 2 cells a round, Wagon Train: 4). The card rides along, out of your deck, and returns to your discard
+        pile when the goods arrive; the tip on the building says how many rounds that takes. <b>Villagers</b> can
+        haul too (1 cell a round): select them, then click <b>Haul instead</b>. Raiders can loot a carriage on a
+        road (red 🛒 badge) unless the road is next to a wall or near a watchtower. Workshops, smithies and the
+        like take their inputs from the stockpile, so they need a link too.</p>
+      <p><b>Market:</b> 6 cards, dealt anew every round. <b>Reroll</b> deals them anew now for 2 gold, +1 for each
+        reroll earlier in the round.</p>
       <p><b>Gold:</b> the keep makes 1 a round. <b>Sell</b> turns tools (from a workshop) into gold; <b>Tax</b> gives
         gold now but puts an <b>Unrest</b> curse in your deck. Building a ⛪ chapel gives you <b>Absolution</b>: click
         it, click up to 2 other cards in your hand, then confirm to remove them from your deck for good.</p>

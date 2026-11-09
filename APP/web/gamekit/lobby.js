@@ -9,7 +9,7 @@
  *   });
  *
  * state: { phase: "lobby" | "playing" | "finished", you, hostId, settings, settingsSpec, startBlocker,
- *          players: [{ id, name, connected, ready, options }], spectators: [{ id, name, connected }],
+ *          players: [{ id, name, connected, ready, endVote, options }], spectators: [{ id, name, connected }],
  *          game, private, result, gameNumber, minPlayers, maxPlayers }
  *
  * gameNumber counts games started in this room: key per-game client data (marks, which
@@ -19,7 +19,10 @@
  *
  * Actions: lobby.join(), leave(), setReady(bool), setOptions(obj), updateSettings(obj),
  *          start() (host only, once startBlocker is null), makeHost(playerId), backToLobby(),
- *          sendGame(obj)
+ *          voteEnd(bool) (vote to end the game early; players, while playing), sendGame(obj)
+ *
+ * Every page gets the "End game" vote button (AppLobbyUI.endGameButton, if lobby-ui.js is loaded):
+ * connect() adds it, so games need no code for it.
  *
  * startBlocker is the reason the host can't start yet (null when they can).
  * Helpers: lobby.me() -> your entry plus { player: true/false }, lobby.isHost()
@@ -138,6 +141,7 @@
       start: () => room.send({ type: "start" }),
       makeHost: (playerId) => room.send({ type: "make_host", playerId }),
       backToLobby: () => room.send({ type: "back_to_lobby" }),
+      voteEnd: (vote) => room.send({ type: "end_vote", vote: Boolean(vote) }),
       sendGame: (data) => room.send({ ...data, type: "game" }),
       sendInput(data) {
         inputSeq++;
@@ -149,6 +153,7 @@
         (listeners[type] ||= []).push(fn);
       },
     };
+    window.AppLobbyUI?.endGameButton?.(api);
     return api;
   }
 

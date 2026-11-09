@@ -11,7 +11,8 @@
  * Provides: box-sizing, [hidden], body, main (72px top padding for the fixed GWF and
  * settings buttons; set --gwf-main-width), h1, h2, h3, .muted, .small, .card/.panel, .row,
  * .spacer, buttons (default accent; .green, .red, .plain, .small) and number/text inputs
- * and selects.
+ * and selects (colored from --gwf-surface/--gwf-text, disabled ones from --gwf-bg/--gwf-muted, so
+ * they stay readable on dark themes).
  */
 (() => {
   const STYLE = `
@@ -65,10 +66,10 @@
 
     :where(input[type="number"], input[type="text"], select) {
       font: inherit; padding: 6px 8px; border: 1px solid var(--gwf-input-line);
-      border-radius: 6px; background: #fff; color: inherit;
+      border-radius: 6px; background: var(--gwf-surface); color: var(--gwf-text);
     }
     :where(input[type="number"]) { width: 72px; }
-    :where(input:disabled, select:disabled) { background: var(--gwf-bg); color: #555; }
+    :where(input:disabled, select:disabled) { background: var(--gwf-bg); color: var(--gwf-muted); }
   `;
 
   const style = document.createElement("style");

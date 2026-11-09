@@ -208,7 +208,8 @@
         <p>Everyone has an empty 9×9 board, a deck of shape cards and a hand of 3. On your turn, play
           as many cards as you like: place the card's shape on your board (rotate with <b>R</b>, right-click
           or the mouse wheel; shapes are never mirrored), or discard a card to place a single blank tile
-          (<b>Patch</b>).</p>
+          (<b>Patch</b>). Changed your mind? <b>Undo</b> (<b>U</b> or Ctrl+Z) takes back your last placements
+          until a row or column clears or your turn ends.</p>
         <p>A full row or column clears. Each <span class="sym sym-coin">●</span> coin on a cleared cell gives
           1 gold; each <span class="sym sym-attack">⚔</span> attack deals 1 damage to the opponent you're
           aiming at (change your target any time); each <span class="sym sym-shield">🛡</span> shield gives 1
@@ -279,6 +280,7 @@
           <button id="rotate" class="small" title="R, right-click or mouse wheel">Rotate (R)</button>
           <button id="patch" class="small" title="P: discard this card to place a blank 1×1 tile">Patch 1×1 (P)</button>
           <button id="cancel" class="small plain">Cancel (Esc)</button>
+          <button id="undo" class="small" title="U or Ctrl+Z: take back your last placement (not once a line has cleared)">Undo (U)</button>
         </div>
         <div id="hand-hint"></div>
       </div>

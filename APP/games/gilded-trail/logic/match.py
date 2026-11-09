@@ -4,6 +4,7 @@
     match.turn()                     # whose turn it is, or None once over
     match.move / pay / buy / play / trash / take / guide / end_turn   (pid first; LobbyError if illegal)
     match.remove(pid)                # pid left mid-game
+    match.owned(pid)                 # {card id: copies} pid owns (shown as "view deck")
     match.public() / match.private(pid)
     match.result                     # None while playing; then {"winner", "winners", "reason"}
 
@@ -18,6 +19,7 @@ same ranking among arrived players; nobody wins if no one arrived).
 """
 
 import random
+from collections import Counter
 
 from gamekit import Deck, LobbyError, TurnQueue
 
@@ -117,6 +119,16 @@ class Match:
         self.played = []      # cards played this turn (to the discard pile at the end)
         self.bought = False
         self.pending = None   # {"kind": "remove", "max": n} | {"kind": "free"} | {"kind": "guide"}
+
+    def owned(self, pid):
+        """{card id: copies} of every card pid still owns (hand, deck, discard, played this
+        turn). Public: purchases and removals are all logged, so this hides only which cards
+        are in hand."""
+        p = self.players[pid]
+        cards = p["hand"] + p["deck"].draw_pile + p["deck"].discard_pile
+        if self.turn() == pid:
+            cards = cards + self.played
+        return dict(Counter(c["card"] for c in cards))
 
     def turn(self):
         return self.queue.current() if self.result is None else None
@@ -251,6 +263,8 @@ class Match:
                     "deck": len(p["deck"]),
                     "discard": len(p["deck"].discard_pile),
                     "removed": len(p["removed"]),
+                    "owned": self.owned(pid),
+                    "removedCards": dict(Counter(c["card"] for c in p["removed"])),
                     **({"arrived": True} if "arrived" in p else {}),
                     **({"left": True} if p.get("left") else {}),
                 }

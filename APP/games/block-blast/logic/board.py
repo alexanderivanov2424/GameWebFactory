@@ -8,6 +8,7 @@ A piece (what a card places, in one rotation) is a list of (dr, dc, tile, symbol
     fits(board, piece, row, col)      True if every tile lands on an empty cell on the board
                                       (row, col = where the piece's top-left corner goes)
     place(board, piece, row, col)     puts the tiles down (call fits first)
+    unplace(board, piece, row, col)   takes them back up (undo; only right while nothing cleared)
     full_lines(board)                 (rows, cols): indexes of the full rows and columns
     line_cells(rows, cols)            the set of (r, c) in those lines (crossings once)
     clear(board, rows, cols)          empties them; returns [(r, c, cell)] removed, each cell
@@ -38,6 +39,11 @@ def fits(board, piece, row, col):
 def place(board, piece, row, col):
     for dr, dc, tile, symbol in piece:
         board[row + dr][col + dc] = (tile, symbol)
+
+
+def unplace(board, piece, row, col):
+    for dr, dc, _, _ in piece:
+        board[row + dr][col + dc] = None
 
 
 def full_lines(board):

@@ -1,11 +1,14 @@
 """Bastion: Match, one game from start to finish (no lobby, network or members).
 
     match = Match({"p1": "Ann", "p2": "Bob"}, settings)   # names fixed at the start
-    match.play(pid, uid, x=None, y=None, rotation=0, remove=())   play a hand card: a blueprint
-                                    on x, y (its top-left cell, turned `rotation` quarter turns), a
-                                    targeted action on the building covering x, y, anything else as
-                                    is; `remove`: the hand uids a trash card removes from the deck
-    match.population()              cottages and the like (each Haul moves 1 more good per person)
+    match.play(pid, uid, x=None, y=None, rotation=0, remove=(), haul=False)   play a hand card: a
+                                    blueprint on x, y (its top-left cell, turned `rotation` quarter
+                                    turns), a targeted action on the building covering x, y, anything
+                                    else as is; `remove`: the hand uids a trash card removes from the
+                                    deck; `haul`: a card that works or hauls (Villagers) hauls
+    match.reroll(pid)               deal the market anew for team gold (reroll_cost())
+    match.place_tile(pid, kind, x, y) / match.remove_tile(pid, x, y)   one road or wall tile,
+                                    for team gold (tiles.py)
     match.strike(pid, foe, way, times=1)   hurt an active enemy: way "soldiers" or "resources"
     match.raze(pid, x, y)           spend soldiers to remove an enemy blight tile
     match.buy(pid, slot)            a market card into your discard pile, for team gold
@@ -19,8 +22,10 @@ Shared by the team: the board, the stockpile (match.stock: gold and goods), sold
 keep. Each player has their own deck and hand (seat.py).
 
 Round: everyone plays at once, in any order, until all have ended the turn. Then end_round:
-income (the keep's gold), every active enemy makes its next attack, the keep is checked, the
-next round starts (worked flags reset), an enemy arrives if one is due, hands are refilled.
+income (the keep's gold), carriages move (carriages.py; arrivals deliver and give their card
+back), every active enemy makes its next attack, the keep is checked, the next round starts
+(worked flags and the reroll price reset, the market is dealt anew), an enemy arrives if one is
+due, hands are refilled.
 The first enemy arrives on round peaceRounds + 1, then one every enemyGap rounds. Beating
 every enemy wins; the keep at 0 health, or enemies left OVERTIME rounds after the last one
 arrived, loses.
@@ -30,18 +35,18 @@ import random
 
 from gamekit import Deck, LobbyError
 
-from . import economy, views
+from . import carriages, economy, tiles, views
 from .attacks import strike as enemy_strike
 from .board import Board
 from .cards import CARDS, STARTING_DECK, amount_text
 from .foes import make_foes
 from .maps import MAPS, log as maps_log
-from .market import Market
+from .market import REROLL_COST, Market
 from .seat import Seat
 from .structures import OUTPUT_NAMES, RESOURCE_IDS, STRUCTURES, a
 
 HAND_SIZE = 5
-START_STOCK = {"gold": 4, "wood": 4, "stone": 2}
+START_STOCK = {"gold": 4, "wood": 4, "stone": 6}
 OVERTIME = 6  # rounds after the last enemy arrives before the city falls anyway
 COLORS = ["#2f6fdf", "#d9482b", "#2f9e44", "#b8860b"]
 
@@ -61,6 +66,7 @@ class Match:
         self.foes = make_foes(len(self.seats), settings, rng, enemies)
         self.market = Market([c for c, card in CARDS.items() if card["price"] is not None], rng)
         self.round = 1
+        self.rerolls = 0  # market rerolls this round
         self.log = []
         self.result = None
         self.step = 0  # bumped every round (client alerts)
@@ -107,9 +113,6 @@ class Match:
     def plagued(self):
         return [s for s in self.board.structures.values() if s.plague is not None]
 
-    def population(self):
-        return sum(s.spec["population"] for s in self.board.structures.values() if not s.ruined)
-
     def last_arrival(self):
         return max((f.arrives for f in self.foes), default=0)
 
@@ -117,6 +120,9 @@ class Match:
 
     def start_round(self):
         self.step += 1
+        self.rerolls = 0
+        if self.round > 1:
+            self.market.redeal()
         for s in self.board.structures.values():
             s.worked = False
         for foe in self.foes:
@@ -140,6 +146,7 @@ class Match:
         for s in self.board.structures.values():
             for k, n in s.spec["income"].items():
                 self.stock[k] += n
+        carriages.move_all(self)
         for foe in self.foes:
             if foe.active:
                 attack = foe.attack()
@@ -153,7 +160,7 @@ class Match:
 
     # --- playing cards ----------------------------------------------------------------------
 
-    def play(self, pid, uid, x=None, y=None, rotation=0, remove=()):
+    def play(self, pid, uid, x=None, y=None, rotation=0, remove=(), haul=False):
         seat = self.acting(pid)
         instance = seat.hand_card(uid)
         card = CARDS[instance["card"]]
@@ -169,7 +176,7 @@ class Match:
             if card["hurts"] and foe and foe.defeat.get("cards"):
                 self.hurt(foe, 1, seat)
         else:
-            self.action(seat, instance, card, x, y, remove)
+            self.action(seat, instance, card, x, y, remove, haul)
 
     def build(self, seat, instance, card, x, y, rotation):
         if x is None or y is None:
@@ -179,8 +186,6 @@ class Match:
         self.pay(spec["cost"], a(spec["name"]).capitalize())
         structure = self.board.place(spec["id"], rotation, x, y, seat.pid)
         seat.take(instance)
-        if card["keep"]:
-            seat.deck.discard([instance])
         if structure and spec["card"]:
             seat.deck.add(spec["card"])
         extra = f" (+ {CARDS[spec['card']]['name']} card)" if structure and spec["card"] else ""
@@ -197,11 +202,15 @@ class Match:
             raise LobbyError("Curses can only be paid off.")
         return picked
 
-    def action(self, seat, instance, card, x, y, remove=()):
+    def action(self, seat, instance, card, x, y, remove=(), haul=False):
+        if haul and not card["haul"]:
+            raise LobbyError(f"{card['name']} doesn't haul.")
+        hauling = bool(card["haul"]) and (haul or not card["work"])
+        working = bool(card["work"]) and not hauling
         target = None
         cost = dict(card["cost"])
         picked = self.trashed(seat, instance, card, remove) if card["trash"] else []
-        if card["work"]:
+        if working:
             target = self.structure_at(x, y)
             if card["work"] != "any" and target.kind not in card["work"]:
                 raise LobbyError(f"{card['name']} can't work {a(target.spec['name'])}.")
@@ -221,29 +230,31 @@ class Match:
             target = self.structure_at(x, y)
             if target.plague is None:
                 raise LobbyError("That building isn't plagued.")
+        elif hauling:
+            target = self.structure_at(x, y)
+            reason = carriages.why_not(self.board, target)
+            if reason:
+                raise LobbyError(reason)
         self.pay(cost, card["name"])
         seat.take(instance)
-        seat.deck.discard([instance])
         said = []
+        if hauling:
+            said.append(carriages.send(self, seat, instance, card, target))
+        else:
+            seat.deck.discard([instance])
         for removed in picked:
             seat.take(removed)  # gone from the deck for good
         if picked:
             said.append("removed " + ", ".join(CARDS[c["card"]]["name"] for c in picked) + " from their deck")
         elif card["trash"]:
             said.append("removed nothing")
-        if card["work"]:
+        if working:
             said.append(self.work(target, card))
         if card["repair"]:
             self.board.repair(target)
             said.append(f"repaired the {target.spec['name']}")
         if card["cure"]:
             said.append(self.cure(target))
-        if card["haul"]:
-            delivered, dropped = economy.haul(self.board, self.stock, card["haul"] + self.population(), card["reach"])
-            text = "hauled " + (amount_text(delivered) if delivered else "nothing") + " to the stockpile"
-            if dropped:
-                text += f" ({amount_text(dropped)} left on the roads)"
-            said.append(text)
         for k, n in card["gain"].items():
             if k == "soldiers":
                 self.soldiers += n
@@ -335,6 +346,23 @@ class Match:
             self.end(True, "Every enemy is beaten: the city stands!")
 
     # --- market, leaving, the end -------------------------------------------------------------
+
+    def place_tile(self, pid, kind, x, y):
+        tiles.place(self, pid, kind, x, y)
+
+    def remove_tile(self, pid, x, y):
+        tiles.remove(self, pid, x, y)
+
+    def reroll_cost(self):
+        return REROLL_COST + self.rerolls
+
+    def reroll(self, pid):
+        seat = self.acting(pid)
+        cost = self.reroll_cost()
+        self.pay({"gold": cost}, "A reroll")
+        self.rerolls += 1
+        self.market.redeal()
+        self.write(f"{seat.name} rerolled the market for {cost} gold.", pid)
 
     def buy(self, pid, slot):
         seat = self.acting(pid)

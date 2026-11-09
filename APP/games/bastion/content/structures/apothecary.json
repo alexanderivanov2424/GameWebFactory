@@ -15,7 +15,7 @@
       "food": 1
     },
     "makes": {
-      "cure": 1
+      "cure": 2
     }
   },
   "bonuses": [
@@ -24,5 +24,5 @@
       "bonus": 1
     }
   ],
-  "text": "Cures plagued buildings (the ones plagued longest first). Herbs from a farm next to it cure one more."
+  "text": "Cures up to 2 plagued buildings (the ones plagued longest first). Herbs from a farm next to it cure one more."
 }

@@ -15,7 +15,9 @@ Rules:
 - Action cards go to the discard pile when played (single-use ones are removed). Effects
   (cards/*.json "effect"): draw N; then remove up to N cards in hand; free = take any card
   from the market or reserve (not a purchase); guide = the Local Guide's step
-  (movement.guide). While a choice is pending, nothing else can be done.
+  (movement.guide). While a choice is pending, nothing else can be done. A choice with
+  nothing to choose from is skipped: no "remove" with an empty hand, no "free" with every
+  card sold out (and a guide with no step can't be played at all).
 """
 
 from gamekit import LobbyError
@@ -62,10 +64,13 @@ def play(m, pid, uid):
     m.use_card(pid, card, single_removed=True, quiet=True)
     if effect.get("draw"):
         m.draw(pid, effect["draw"])
+    # A choice with nothing to choose from is skipped (an empty hand, a sold-out supply).
     if effect.get("remove"):
-        m.pending = {"kind": "remove", "max": effect["remove"]}
+        if m.players[pid]["hand"]:
+            m.pending = {"kind": "remove", "max": effect["remove"]}
     elif effect.get("free"):
-        m.pending = {"kind": "free"}
+        if any(m.market.supply.values()):
+            m.pending = {"kind": "free"}
     elif effect.get("guide"):
         m.pending = {"kind": "guide"}
 

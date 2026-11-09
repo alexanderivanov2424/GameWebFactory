@@ -1,12 +1,10 @@
 {
   "name": "Wall",
-  "icon": "",
+  "icon": "🧱",
   "shape": [
-    "##"
+    "#"
   ],
   "tile": "wall",
-  "price": 2,
-  "reusable": true,
   "cost": {
     "stone": 1
   },

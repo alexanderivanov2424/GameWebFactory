@@ -8,6 +8,8 @@
                                           play a hand card as its shape, on your own board, or for
                                           a goblin card on `board`, an opponent still in
     match.patch(pid, uid, row, col)       discard a hand card for a blank 1x1 tile
+    match.undo(pid)                       take back the turn's last place / patch, until a line
+                                          clears (self.undo_stack, emptied by a clear or the turn's end)
     match.buy(pid, slot)                  buy a market card (to the discard pile; BUYS_PER_TURN a turn)
     match.market_remove(pid, slot)        markets with CAN_REMOVE: instead of buying, a market card
                                           leaves the game (uses the turn's buy)
@@ -28,6 +30,7 @@ that type's SIZE_SETTING), dealt from the card packs in settings["packs"] (packs
 """
 
 import random
+from collections import namedtuple
 
 from gamekit import Deck, LobbyError, TurnQueue
 
@@ -43,6 +46,10 @@ HAND_SIZE = 3
 BUYS_PER_TURN = 1
 PATCH = [(0, 0, tiles.DEFAULT_TILE, None)]  # the blank 1x1 tile placed by discarding a card
 LOG_SENT = 60  # newest log entries in the public state
+
+# One placement that can still be taken back: the hand card and where it was in the hand, the
+# board (public id) and piece it went on, and whether it skipped the discard pile.
+Placed = namedtuple("Placed", "card index board piece row col exile what")
 
 
 class Match:
@@ -72,6 +79,7 @@ class Match:
         self.step = 0  # +1 per change, for client animations
         self.turn_number = 1
         self.buys = 0  # market cards bought (or removed) this turn
+        self.undo_stack = []  # this turn's placements since the last clear (Placed), newest last
         self.last_clear = None  # {"step", "pid", "cells": [[r, c], ...]}
         self.result = None
         self.catalog = self.static_state()  # the part of public() that never changes: built once
@@ -112,13 +120,15 @@ class Match:
 
     # --- Playing cards ------------------------------------------------------------------------
 
-    def put_down(self, seat, card, piece, board, row, col, exile=False):
+    def put_down(self, seat, card, piece, board, row, col, exile=False, what=""):
         """Place `piece` (board.py) with its top-left corner at (row, col) on the board of player
-        `board`. The card leaves `seat`'s hand for its discard pile, or with exile for good."""
+        `board`. The card leaves `seat`'s hand for its discard pile, or with exile for good.
+        Remembered for undo (`what`: how the log names it) until resolve_clears clears a line."""
         grid = self.seats[board].board
         if not boards.fits(grid, piece, row, col):
             raise LobbyError("It doesn't fit there.")
         boards.place(grid, piece, row, col)
+        self.undo_stack.append(Placed(card, seat.hand.index(card), board, piece, row, col, exile, what))
         seat.hand.remove(card)
         if not exile:
             seat.deck.discard([card])
@@ -134,7 +144,7 @@ class Match:
         elif board not in (None, pid):
             raise LobbyError(f"{definition['name']} goes on your own board.")
         board = board or pid
-        self.put_down(seat, card, definition["pieces"][rotation], board, row, col, definition["exile"])
+        self.put_down(seat, card, definition["pieces"][rotation], board, row, col, definition["exile"], definition["name"])
         where = "" if board == pid else f" on {self.names[board]}'s board"
         gone = " It leaves their deck." if definition["exile"] else ""
         self.add_log(pid, f"{self.names[pid]} placed {definition['name']}{where}.{gone}")
@@ -144,7 +154,7 @@ class Match:
         self.require_turn(pid)
         seat = self.seats[pid]
         card = seat.hand_card(uid)
-        self.put_down(seat, card, PATCH, pid, row, col)
+        self.put_down(seat, card, PATCH, pid, row, col, what=f"the 1×1 tile ({self.cards[card['card']]['name']} is back in their hand)")
         self.add_log(pid, f"{self.names[pid]} discarded {self.cards[card['card']]['name']} for a 1×1 tile.")
         self.resolve_clears(pid)
 
@@ -155,6 +165,7 @@ class Match:
         cleared = effects.clear_lines(seat.board)
         if cleared is None:
             return
+        self.undo_stack.clear()  # a clear (gold, damage, knock-outs) can't be taken back
         clear = effects.apply_symbols(seat, cleared.counts)
         target = seat.target if clear.damage else None
         if target is not None:
@@ -170,6 +181,22 @@ class Match:
         self.last_clear = {"step": self.step, "pid": pid, "cells": [[r, c] for r, c, _ in cleared.removed]}
         if target is not None and self.seats[target].health == 0:
             self.knock_out(target, f"{self.names[target]} is knocked out!")
+
+    def undo(self, pid):
+        """Take back the current player's last placement or patch this turn: its tiles leave the
+        board and the card returns to its place in the hand (off the discard pile). Only while
+        no line has cleared since; buys are not undone."""
+        self.require_turn(pid)
+        if not self.undo_stack:
+            raise LobbyError("Nothing to undo: placements can't be taken back once a line has cleared.")
+        move = self.undo_stack.pop()
+        seat = self.seats[pid]
+        boards.unplace(self.seats[move.board].board, move.piece, move.row, move.col)
+        if not move.exile:
+            pile = seat.deck.discard_pile
+            pile.pop(next(i for i, c in enumerate(pile) if c["uid"] == move.card["uid"]))
+        seat.hand.insert(move.index, move.card)
+        self.add_log(pid, f"{self.names[pid]} took back {move.what}.")
 
     # --- Market, aim, card removal, turns -----------------------------------------------------
 
@@ -234,6 +261,7 @@ class Match:
         self.market.refill()
         self.queue.advance(pid)
         self.buys = 0
+        self.undo_stack.clear()
         self.turn_number += 1
         starting = self.seats[self.queue.current()]
         starting.shield = max(0, starting.shield - 1)  # shields decay at the start of your turn
@@ -302,6 +330,7 @@ class Match:
             "turnNumber": self.turn_number,
             "step": self.step,
             "buysLeft": max(0, BUYS_PER_TURN - self.buys),  # for the player whose turn it is
+            "undoable": len(self.undo_stack),  # placements the current player can still take back
             "seats": {pid: {**seat.public(), "deck": self.deck_list(seat)} for pid, seat in self.seats.items()},
             "market": self.market.public(),  # {"type", "label", "canRemove", "slots", "deck"}
             "log": self.log[-LOG_SENT:],

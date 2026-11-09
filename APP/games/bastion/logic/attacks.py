@@ -4,10 +4,12 @@
                                                 happened (for the log); randomness from match.rng
 Raids (ruin) only hit unprotected building tiles (board.raid_targets); when none are open they
 break a wall tile instead, and do nothing if there are no walls. A building whose every tile is
-ruined is destroyed. Looting takes goods a haul left on road tiles that aren't protected (next to
-a wall or within a watchtower's reach), one at a time from a random tile. Blights go on empty grass next to a building when there is any.
+ruined is destroyed. Looting takes goods from carriages on road tiles that aren't protected
+(next to a wall or within a watchtower's reach), one at a time from a random carriage; an emptied
+carriage turns back and its card returns to its owner. Blights go on empty grass next to a building when there is any.
 """
 
+from . import carriages
 from .structures import GOODS, a
 
 
@@ -26,12 +28,17 @@ def steal(match, amounts):
 def loot(match, count):
     board, taken = match.board, {}
     for _ in range(count):
-        cells = sorted(c for c in board.cargo if not board.protected(c))
-        if not cells:
+        open_ = [c for _, c in sorted(board.carriages.items()) if c.cell and not board.protected(c.cell)]
+        if not open_:
             break
-        cell = match.rng.choice(cells)
-        good = match.rng.choice(sorted(board.cargo[cell]))
-        board.take_cargo(cell, good)
+        carriage = match.rng.choice(open_)
+        good = match.rng.choice(sorted(carriage.goods))
+        carriage.goods[good] -= 1
+        if not carriage.goods[good]:
+            del carriage.goods[good]
+        if not carriage.goods:
+            carriages.return_card(match, carriage)
+        board.version += 1
         taken[good] = taken.get(good, 0) + 1
     return taken
 
@@ -68,8 +75,8 @@ def strike(match, foe, attack):
         out.append("stole " + (", ".join(f"{n} {k}" for k, n in taken.items()) if taken else "nothing"))
     if "loot" in attack:
         taken = loot(match, attack["loot"])
-        out.append("looted " + (", ".join(f"{n} {k}" for k, n in taken.items()) + " from the roads" if taken
-                                else "nothing (no unprotected goods on the roads)"))
+        out.append("looted " + (", ".join(f"{n} {k}" for k, n in taken.items()) + " from carriages" if taken
+                                else "nothing (no unprotected carriages on the roads)"))
     if "ruin" in attack:
         hits = ruin(match, attack["ruin"], attack["prefer"])
         out.append("ruined " + (", ".join(hits) if hits else "nothing (all protected, no walls to break)"))

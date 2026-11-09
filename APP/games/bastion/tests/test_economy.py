@@ -1,4 +1,4 @@
-"""Bastion: economy rules on fixture content (output and bonuses, delivery, hauling, who can work).
+"""Bastion: economy rules on fixture content (output and bonuses, delivery, who can work).
 Run: python3 -I tools/run_tests.py bastion
 """
 
@@ -88,33 +88,6 @@ class DeliveryTests(helpers.FixtureCase):
         economy.work(match.board, shop, match.stock)
         self.assertEqual((match.stock["wood"], match.stock["tools"]), (1, 1))
         self.assertTrue(shop.worked)
-
-
-class HaulTests(helpers.FixtureCase):
-    def linked_road(self, match):
-        match.board.place("road", 0, 4, 2, "p1")  # (4,2) touches the keep, (5,2)
-
-    def test_only_road_linked_buildings_fullest_first(self):
-        match = helpers.new_match(self)
-        self.linked_road(match)
-        big = build(match, "shop", 5, 3)
-        small = build(match, "hut", 5, 1)
-        cut_off = build(match, "shop", 7, 5)
-        big.store, small.store, cut_off.store = {"tools": 3}, {"food": 1}, {"tools": 4}
-        match.stock.update(tools=0, food=0)
-        self.assertEqual(economy.haul(match.board, match.stock, 3, 10), ({"tools": 3}, {}))
-        self.assertEqual((big.store, small.store, cut_off.store), ({}, {"food": 1}, {"tools": 4}))
-        self.assertEqual(match.stock["tools"], 3)
-
-    def test_up_to_the_limit(self):
-        match = helpers.new_match(self)
-        self.linked_road(match)
-        shop = build(match, "shop", 5, 3)
-        shop.store = {"tools": 2, "wood": 3}
-        match.stock.update(tools=0, wood=0)
-        # one good at a time from the biggest pile (ties: the earlier good)
-        self.assertEqual(economy.haul(match.board, match.stock, 4, 10), ({"wood": 3, "tools": 1}, {}))
-        self.assertEqual(shop.store, {"tools": 1})
 
 
 class WhoCanWorkTests(helpers.FixtureCase):

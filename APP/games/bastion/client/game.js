@@ -5,14 +5,17 @@
  *
  * Sections: lobby; status bar (renderStatus); enemy cards (renderFoes, with strike buttons);
  * board (BastionBoard + hover: ghost for blueprints with R / wheel to turn, target outlines for
- * work/repair/cure cards, click an enemy tile to raze it, goods left on roads); side panel (renderInspector,
- * renderMarket, renderTeam, renderLog); bottom bar (renderBar: hand, End turn; a trash card
- * such as Absolution: click it, click the hand cards to remove, then "Remove them"); deck window, help.
+ * work/repair/cure/haul cards, click an enemy tile to raze it, carriages); side panel (renderInspector,
+ * renderMarket with Reroll, renderTeam, renderLog); bottom bar (renderBar: hand, End turn; a trash card
+ * such as Absolution: click it, click the hand cards to remove, then "Remove them"; a card that works
+ * or hauls (Villagers): "Haul instead" / "Work instead" switches selection.haul; Road / Wall / Remove
+ * set `tool` to lay or remove tiles until cancelled); deck window, help.
  */
 (() => {
   const { $, el } = AppDom;
   let state = null;
-  let selection = null; // {uid, card, rotation} (+ trash: true, remove: [uid] for a trash card)
+  let selection = null; // {uid, card, rotation, haul} (+ trash: true, remove: [uid] for a trash card)
+  let tool = null; // "road" | "wall" | "remove": laying or removing tiles (never with a selection)
   let hover = null; // [x, y]
 
   const lobby = AppLobby.connect("bastion", {
@@ -54,9 +57,13 @@
   const amounts = (obj) => Object.entries(obj || {}).map(([k, n]) => `${n}${icon(k)}`).join(" ");
   const affordable = (cost) => Object.entries(cost || {}).every(([k, n]) => (game().stock[k] || 0) >= n);
   const canAct = () => state.phase === "playing" && mySeat() && !mySeat().done;
-  const targetsOf = (uid) => (priv() && priv().targets[String(uid)]) || null;
+  // Where a hand card may go: priv().targets (build/work/repair/cure) or, with haul, priv().hauls.
+  const targetsOf = (uid, haul = false) => (priv() && ((haul ? priv().hauls : priv().targets) || {})[String(uid)]) || null;
   const nameOf = (pid) => game().names[pid] || pid;
   const signed = (n) => (n > 0 ? `+${n}` : String(n));
+  const TOOLS = ["road", "wall", "remove"];
+  const tileSpots = (t) => new Set((game().tiles || {})[t] || []); // legal cells, from the server
+  const toolCost = (t) => (t === "remove" ? game().removeCost : game().kinds[t].cost);
 
   function costOf(cardId) {
     const card = cardOf(cardId);
@@ -111,6 +118,7 @@
     renderButtons();
     if (inLobby) {
       selection = null;
+      tool = null;
       $("bar").hidden = true;
       $("help-button").hidden = true;
       $("main").classList.remove("with-bar");
@@ -173,9 +181,7 @@
       el("span", { className: "round" }, `Round ${g.round}`),
       el("span", { className: "phase" }, phase),
       keep, ...pills,
-      el("span", { className: `pill${g.soldiers ? "" : " zero"}`, title: "Soldiers" }, `${icon("soldiers")} ${g.soldiers}`),
-      el("span", { className: `pill${g.population ? "" : " zero"}`, title: "Population (cottages): every Haul moves 1 more good per person" },
-        `👥 ${g.population}`));
+      el("span", { className: `pill${g.soldiers ? "" : " zero"}`, title: "Soldiers" }, `${icon("soldiers")} ${g.soldiers}`));
   }
 
   // --- enemies ----------------------------------------------------------------------------------
@@ -258,7 +264,21 @@
     const g = game();
     let tip = null;
     const at = hover ? board.structureAt(hover[0], hover[1]) : null;
-    if (selection && isBuild(selection.card) && hover) {
+    if (tool) {
+      const spots = tileSpots(tool);
+      const ok = Boolean(hover) && spots.has(`${hover[0]},${hover[1]}`);
+      if (tool === "remove") {
+        board.mark([...spots].map((k) => k.split(",").map(Number)), "target");
+        if (ok) {
+          board.mark([hover], "hl");
+          tip = `Remove: ${amounts(g.removeCost)}`;
+        }
+      } else if (hover) {
+        board.mark([hover], "ghost");
+        if (!ok) board.mark([hover], "bad");
+        tip = ok ? `${g.kinds[tool].name}: ${amounts(g.kinds[tool].cost)}` : "Can't build here";
+      }
+    } else if (selection && isBuild(selection.card) && hover) {
       const { ax, ay, cells } = anchor(selection.card, selection.rotation, hover[0], hover[1]);
       const spots = (targetsOf(selection.uid) || {})[String(selection.rotation)] || {};
       const value = spots[`${ax},${ay}`];
@@ -268,7 +288,7 @@
       const key = kind.work ? Object.keys(kind.work.makes)[0] : null;
       tip = value === undefined ? "Can't build here" : key ? `Would make +${value}${icon(key)}` : "Build here";
     } else if (selection && !selection.trash) {
-      const targets = targetsOf(selection.uid) || {};
+      const targets = targetsOf(selection.uid, selection.haul) || {};
       for (const uid of Object.keys(targets)) board.mark(structureCells(uid), "target");
       if (at && targets[at]) {
         board.mark(structureCells(at), "hl");
@@ -288,6 +308,13 @@
 
   function clickCell(x, y) {
     if (!state || !state.game || !canAct()) return;
+    if (tool) {
+      if (!tileSpots(tool).has(`${x},${y}`)) {
+        return showError(tool === "remove" ? "Pick one of the outlined road or wall tiles." : "Roads and walls go on empty grass.");
+      }
+      send(tool === "remove" ? { action: "remove_tile", x, y } : { action: "tile", kind: tool, x, y });
+      return; // the tool stays on to lay or remove more
+    }
     if (selection && selection.trash) return;
     if (selection && isBuild(selection.card)) {
       const { ax, ay } = anchor(selection.card, selection.rotation, x, y);
@@ -297,8 +324,8 @@
       selection = null;
     } else if (selection) {
       const at = board.structureAt(x, y);
-      if (!at || !(targetsOf(selection.uid) || {})[at]) return showError("Pick one of the outlined buildings.");
-      send({ action: "play", uid: selection.uid, x, y });
+      if (!at || !(targetsOf(selection.uid, selection.haul) || {})[at]) return showError("Pick one of the outlined buildings.");
+      send({ action: "play", uid: selection.uid, x, y, ...(selection.haul ? { haul: true } : {}) });
       selection = null;
     } else if (game().blights[`${x},${y}`]) {
       send({ action: "raze", x, y });
@@ -312,13 +339,15 @@
   }
 
   function cancel() {
-    if (!selection) return;
+    if (!selection && !tool) return;
     selection = null;
+    tool = null;
     renderBar();
     updateHover();
   }
 
   function checkSelection() {
+    if (tool && (!canAct() || !affordable(toolCost(tool)))) tool = null;
     if (!selection) return;
     const p = priv();
     if (!canAct() || !p || !p.hand.some((c) => c.uid === selection.uid)) selection = null;
@@ -359,6 +388,14 @@
   function renderInspector(uid) {
     const g = game();
     const box = $("inspector");
+    if (tool) {
+      const head = tool === "remove"
+        ? [el("h3", {}, "✖ Remove a road or wall"),
+          el("div", {}, `Click an outlined tile: ${amounts(g.removeCost)} each. A road with a carriage on it can't be removed.`)]
+        : [el("h3", {}, `${g.kinds[tool].icon} ${g.kinds[tool].name}`), ...kindInfo(g.kinds[tool])];
+      box.replaceChildren(...head, el("div", { className: "muted small" }, "Keep clicking to do more · right-click or Esc: stop"));
+      return;
+    }
     if (selection && isBuild(selection.card)) {
       const kind = g.kinds[cardOf(selection.card).structure];
       box.replaceChildren(el("h3", {}, `${kind.icon} ${kind.name}`), ...kindInfo(kind),
@@ -382,19 +419,22 @@
       if (s.plague) lines.push(el("div", { className: "minus" }, "🦠 Plagued: can't work until cured."));
       if (s.frozen) lines.push(el("div", {}, "❄️ Frozen this round."));
       if (s.ruined.length) lines.push(el("div", { className: "minus" }, `🔥 ${s.ruined.length} ruined tile(s): repair before it can work.`));
+      for (const c of Object.values(g.carriages || {})) {
+        if (!c.road && s.cells.some(([x, y]) => x === c.x && y === c.y)) lines.push(el("div", {}, carriageText(c)));
+      }
       if (s.kind !== "keep") lines.push(el("div", { className: "muted" }, `Safe from raids: ${s.protected}/${s.cells.length} tiles`));
       if (kind.text) lines.push(el("div", { className: "muted" }, kind.text));
       box.replaceChildren(...lines);
       return;
     }
-    const cargo = hover && g.cargo ? g.cargo[`${hover[0]},${hover[1]}`] : null;
-    if (cargo) {
-      box.replaceChildren(el("h3", {}, "📦 Goods on the road"),
-        el("div", {}, amounts(cargo.goods)),
-        el("div", {}, "A Haul left them here: the next Haul carries them on first."),
-        el("div", { className: cargo.safe ? "" : "minus" }, cargo.safe
+    const carts = hover ? board.carriagesAt(hover[0], hover[1]) : [];
+    if (carts.length) {
+      const safe = carts.every((c) => c.safe);
+      box.replaceChildren(el("h3", {}, `🛒 Carriage${carts.length > 1 ? "s" : ""} on the road`),
+        ...carts.map((c) => el("div", {}, carriageText(c))),
+        el("div", { className: safe ? "" : "minus" }, safe
           ? "Safe from looting (next to a wall or near a watchtower)."
-          : "Unprotected: raiders can loot them. A wall next to the road or a watchtower nearby keeps them safe."));
+          : "Unprotected: raiders can loot it. A wall next to the road or a watchtower nearby keeps it safe."));
       return;
     }
     const b = hover ? g.blights[`${hover[0]},${hover[1]}`] : null;
@@ -409,8 +449,17 @@
       el("div", { className: "muted" }, "Hover a building to see what it makes and why."));
   }
 
+  function carriageText(c) {
+    const cells = `${c.speed} cell${c.speed > 1 ? "s" : ""} a round`;
+    return `🛒 ${nameOf(c.owner)}'s ${cardOf(c.card).name}: ${amounts(c.goods)} from the ${c.from}, ${cells}. `
+      + "The card comes back when it reaches the keep or a storage yard.";
+  }
+
   function renderMarket() {
     const g = game();
+    const reroll = $("reroll");
+    reroll.textContent = `Reroll ${g.rerollCost}${icon("gold")}`;
+    reroll.disabled = !canAct() || g.stock.gold < g.rerollCost;
     $("market").replaceChildren(...g.market.map((cardId, slot) => {
       const card = cardOf(cardId);
       const kind = card.kind === "build" ? g.kinds[card.structure] : null;
@@ -461,10 +510,13 @@
     let info = "Click a card to use it.";
     if (finished) info = "The game is over.";
     else if (seat.done) info = "Waiting for the others…";
+    else if (tool === "remove") info = "Click a road or wall tile to remove it (Esc stops).";
+    else if (tool) info = `Click empty grass to lay a ${tool} tile (Esc stops).`;
     else if (selection && isBuild(selection.card)) info = "Click the board to build (R turns it).";
     else if (selection && selection.trash) {
       info = `Click up to ${cardOf(selection.card).trash} other cards to remove from your deck for good, then confirm.`;
-    } else if (selection) info = "Click an outlined building.";
+    } else if (selection && selection.haul) info = "Click an outlined building to haul its goods.";
+    else if (selection) info = "Click an outlined building.";
     $("bar-info").textContent = info;
     const confirm = $("confirm");
     confirm.hidden = !(selection && selection.trash) || finished || seat.done;
@@ -472,10 +524,21 @@
       const n = selection.remove.length;
       confirm.textContent = n ? `Remove ${n} card${n > 1 ? "s" : ""}` : "Play (remove none)";
     }
+    const mode = $("mode");
+    const both = selection && !selection.trash && !isBuild(selection.card) && cardOf(selection.card).works && cardOf(selection.card).haul;
+    mode.hidden = !both || finished || seat.done;
+    if (!mode.hidden) mode.textContent = selection.haul ? "Work instead" : "Haul instead";
+    const has = (targets) => Boolean(targets && Object.keys(targets).length);
+    for (const t of TOOLS) {
+      const button = $(`tool-${t}`);
+      const kind = game().kinds[t];
+      button.textContent = `${t === "remove" ? "✖ Remove" : `${kind.icon} ${kind.name}`} ${amounts(toolCost(t))}`;
+      button.disabled = finished || seat.done || !affordable(toolCost(t));
+      button.classList.toggle("on", tool === t);
+    }
     $("cards").replaceChildren(...p.hand.map((c) => {
       const card = cardOf(c.card);
-      const targets = targetsOf(c.uid);
-      const empty = card.targeted && targets && !Object.keys(targets).length;
+      const empty = card.targeted && !(card.works && has(targetsOf(c.uid))) && !(card.haul && has(targetsOf(c.uid, true)));
       const marked = Boolean(selection && selection.trash && selection.remove.includes(c.uid));
       const node = cardEl(c.card, { off: !affordable(costOf(c.card)) || empty, selected: selection && selection.uid === c.uid, marked });
       node.addEventListener("click", () => clickCard(c));
@@ -483,8 +546,17 @@
     }));
   }
 
+  // A card that works or hauls (Villagers) starts in work mode unless only hauling has targets.
+  function startsHauling(uid, card) {
+    if (!card.haul) return false;
+    if (!card.works) return true;
+    const work = targetsOf(uid) || {};
+    return !Object.keys(work).length && Object.keys(targetsOf(uid, true) || {}).length > 0;
+  }
+
   function clickCard(instance) {
     if (!canAct()) return;
+    tool = null;
     const card = cardOf(instance.card);
     if (selection && selection.trash && instance.uid !== selection.uid) {
       const trash = cardOf(selection.card);
@@ -504,7 +576,8 @@
       return;
     }
     if (card.kind === "build" || card.targeted) {
-      selection = selection && selection.uid === instance.uid ? null : { uid: instance.uid, card: instance.card, rotation: 0 };
+      selection = selection && selection.uid === instance.uid ? null
+        : { uid: instance.uid, card: instance.card, rotation: 0, haul: card.kind !== "build" && startsHauling(instance.uid, card) };
       renderBar();
       updateHover();
       return;
@@ -517,6 +590,27 @@
     send({ action: "play", uid: selection.uid, remove: selection.remove });
     selection = null;
     renderBar();
+  });
+
+  for (const t of TOOLS) {
+    $(`tool-${t}`).addEventListener("click", () => {
+      if (!canAct()) return;
+      tool = tool === t ? null : t;
+      selection = null;
+      renderBar();
+      updateHover();
+    });
+  }
+
+  $("mode").addEventListener("click", () => {
+    if (!selection || !canAct()) return;
+    selection.haul = !selection.haul;
+    renderBar();
+    updateHover();
+  });
+
+  $("reroll").addEventListener("click", () => {
+    if (canAct()) send({ action: "reroll" });
   });
 
   $("end-turn").addEventListener("click", () => {

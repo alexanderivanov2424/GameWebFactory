@@ -33,8 +33,8 @@ foes_module = importlib.import_module(f"games.{GAME}.logic.foes")
 
 STRUCTURES = {
     "keep": {"name": "Keep", "shape": ["#"], "depot": True, "income": {"gold": 1}},
-    "road": {"name": "Road", "shape": ["##"], "tile": "road", "price": 1, "reusable": True},
-    "wall": {"name": "Wall", "shape": ["##"], "tile": "wall", "price": 1, "reusable": True, "cost": {"stone": 1}},
+    "road": {"name": "Road", "shape": ["##"], "tile": "road", "cost": {"gold": 1}},
+    "wall": {"name": "Wall", "shape": ["##"], "tile": "wall", "cost": {"stone": 1}},
     "mill": {"name": "Mill", "shape": ["##"], "price": 1, "cost": {"wood": 1}, "requires": [{"near": "forest"}],
              "work": {"makes": {"wood": 2}},
              "bonuses": [{"near": "forest", "min": 2, "bonus": 1}, {"near": "yard", "bonus": 1}, {"near": "mill", "bonus": -1}]},

@@ -2,15 +2,14 @@
 
 Cells are (x, y). Each cell holds at most one of: a building tile, a road, a wall or a blight
 (an enemy's tile). Only grass can be built on; buildings (not roads or walls) may also go over
-road tiles, which they replace, unless goods are waiting on them. "Next to" always means
+road tiles, which they replace, unless a carriage is on them. "Next to" always means
 orthogonally adjacent.
 
     board = Board(game_map)          places the map's starting town (owner None)
     board.structures                 {uid: Structure} buildings (roads and walls are cell sets:
                                      board.roads, board.walls); board.at {(x, y): uid}
     board.blights                    {(x, y): {"name", "icon", "foe": enemy index, "lair": bool}}
-    board.cargo                      {(x, y) road cell: {good: n}} goods a haul left on the road
-    board.add_cargo(cell, good) / board.take_cargo(cell, good)   one good on / off a road tile
+    board.carriages                  {uid: Carriage} goods being hauled (carriages.py); next_carriage
     board.version                    bumped on every change (Match caches placement targets by it)
     board.footprint(kind, rotation, x, y)   the cells a placement covers (x, y = top-left)
     board.check(kind, rotation, x, y)       those cells, or LobbyError why it can't go there
@@ -24,14 +23,16 @@ orthogonally adjacent.
     board.protected(cell)            next to a wall, or within a watchtower's reach
     board.raid_targets(prefer)       unprotected, unruined tiles of buildings (not the keep)
     board.ruin(cell) / board.repair(structure)   damage one tile / fix every ruined tile
+    board.clear(cell)                take a road or wall tile away
     board.free_spots(cells, rng)     random top-left spots where a blight shape fits on empty grass
-    board.public()                   tiles, blights and cargo for clients (terrain is in the catalog)
+    board.public()                   tiles, blights and carriages for clients (terrain is in the catalog)
 """
 
 from dataclasses import dataclass, field
 
 from gamekit import LobbyError
 
+from . import carriages
 from .structures import BUILDABLE, STRUCTURES, TERRAIN, a, describe
 
 DIRS = ((1, 0), (-1, 0), (0, 1), (0, -1))
@@ -66,7 +67,8 @@ class Board:
         self.roads = set()
         self.walls = set()
         self.blights = {}
-        self.cargo = {}
+        self.carriages = {}
+        self.next_carriage = 1
         self.next_uid = 1
         self.version = 0
         for entry in game_map.start:
@@ -115,15 +117,15 @@ class Board:
 
     def check(self, kind, rotation, x, y, start=False):
         spec = STRUCTURES[kind]
-        if spec["price"] is None and not start:
+        if spec["price"] is None and not spec["tile"] and not start:
             raise LobbyError(f"{a(spec['name']).capitalize()} can't be built.")
         cells = self.footprint(kind, rotation, x, y)
         for cell in cells:
             if not self.inside(*cell):
                 raise LobbyError("That doesn't fit on the board.")
             if cell in self.roads and not spec["tile"]:
-                if cell in self.cargo:
-                    raise LobbyError("Goods are waiting on that road: haul them away first.")
+                if any(c.cell == cell for c in self.carriages.values()):
+                    raise LobbyError("A carriage is on that road: wait until it has passed.")
                 continue
             if not self.empty(cell):
                 raise LobbyError("Build only on empty grass or over roads." if not spec["tile"] else "Build only on empty grass.")
@@ -166,20 +168,6 @@ class Board:
 
     def remove_blight(self, cell):
         del self.blights[cell]
-        self.version += 1
-
-    def add_cargo(self, cell, good):
-        pile = self.cargo.setdefault(cell, {})
-        pile[good] = pile.get(good, 0) + 1
-        self.version += 1
-
-    def take_cargo(self, cell, good):
-        pile = self.cargo[cell]
-        pile[good] -= 1
-        if not pile[good]:
-            del pile[good]
-        if not pile:
-            del self.cargo[cell]
         self.version += 1
 
     # --- links and protection ----------------------------------------------------------------
@@ -247,13 +235,17 @@ class Board:
             return None
         if cell in self.roads:
             self.roads.discard(cell)
-            self.cargo.pop(cell, None)
             return None
         structure = self.structures[self.at[cell]]
         structure.ruined.add(cell)
         if len(structure.ruined) == len(structure.cells):
             return self.remove(structure.uid)
         return None
+
+    def clear(self, cell):
+        self.roads.discard(cell)
+        self.walls.discard(cell)
+        self.version += 1
 
     def repair(self, structure):
         structure.ruined.clear()
@@ -266,6 +258,5 @@ class Board:
             "roads": sorted(f"{x},{y}" for x, y in self.roads),
             "walls": sorted(f"{x},{y}" for x, y in self.walls),
             "blights": {f"{x},{y}": dict(b) for (x, y), b in self.blights.items()},
-            "cargo": {f"{x},{y}": {"goods": dict(pile), "safe": self.protected((x, y))}
-                      for (x, y), pile in self.cargo.items()},
+            "carriages": {str(uid): carriages.view(self, c) for uid, c in self.carriages.items()},
         }

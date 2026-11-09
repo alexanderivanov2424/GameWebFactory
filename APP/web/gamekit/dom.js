@@ -6,9 +6,11 @@
  *   $(id)                          document.getElementById(id)
  *   el(tag, props, ...children)    createElement + Object.assign(props) + append(children).
  *                                  Strings become text nodes, so player names are safe.
+                                 Arrays of children are flattened (el("ul", {}, items)).
  *                                  e.g. el("li", { className: "me" }, name, el("b", {}, "Host"))
  *   svg(tag, attrs, ...children)   an SVG element (createElementNS): attrs are set as attributes
- *                                  (skipped if null/undefined/false); strings become text nodes.
+ *                                  (skipped if null/undefined/false); strings become text nodes,
+                                 arrays of children are flattened.
  *                                  e.g. svg("circle", { cx: 10, cy: 10, r: 4, class: "dot" })
  *   debounce(fn, ms)               call fn only after `ms` without new calls
  *   setInput(input, value)         set input.value unless the user is typing in it
@@ -20,7 +22,7 @@
   function el(tag, props = {}, ...children) {
     const node = document.createElement(tag);
     Object.assign(node, props);
-    node.append(...children);
+    node.append(...children.flat(Infinity));
     return node;
   }
 
@@ -31,7 +33,7 @@
     for (const [key, value] of Object.entries(attrs)) {
       if (value !== null && value !== undefined && value !== false) node.setAttribute(key, value);
     }
-    node.append(...children);
+    node.append(...children.flat(Infinity));
     return node;
   }
 

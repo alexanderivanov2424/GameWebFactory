@@ -9,6 +9,10 @@ Subclass LobbyGame (instead of BaseGame) to get:
 - Ready and start: players mark themselves ready. Once everyone is ready (and
   start_check passes), the host clicks Start ("start" message) to begin the game.
 - Phases: "lobby" (before the game) -> "playing" -> "finished" -> (host) back to "lobby".
+- Ending early: during play any player can vote to end the game ("end_vote" message,
+  {"vote": true/false}; shown as players[].endVote). Once every player has voted, everyone goes
+  back to the lobby (reset_game runs, no result). Clients get an "End game" button for it from
+  web/gamekit/lobby-ui.js on every game page, so games need no code for it.
 - Sessions: players keep their seat through reloads and short disconnects
   (see RECONNECT_GRACE in rooms.py) and are shown as offline meanwhile.
 - State: after every change, each client gets one "state" message describing the room:
@@ -67,6 +71,7 @@ class Member:
         self.name = "Anonymous"
         self.playing = False
         self.ready = False
+        self.end_vote = False  # voted to end the current game early (see _on_end_vote)
         self.options = {}  # Per-player choices made in the lobby (e.g. a color).
         self.joined_at = 0
         # Used by RealtimeGame (realtime.py): latest input, its sequence number, reported ping (ms).
@@ -317,6 +322,12 @@ class LobbyGame(BaseGame):
         if self.phase == FINISHED:
             self._return_to_lobby()
 
+    async def _on_end_vote(self, member, data):
+        if self.phase != PLAYING or not member.playing:
+            raise LobbyError("You can only vote to end a game you're playing.")
+        member.end_vote = bool(data.get("vote"))
+        self._check_end_vote()
+
     async def _on_start(self, member, data):
         self._require_host(member)
         if self.phase != LOBBY:
@@ -328,6 +339,8 @@ class LobbyGame(BaseGame):
         self.phase = PLAYING
         self.result = None
         self.game_number += 1
+        for player in self.players:
+            player.end_vote = False
         self.start_game()
 
     async def _on_resync(self, member, data):
@@ -348,6 +361,7 @@ class LobbyGame(BaseGame):
         "make_host": _on_make_host,
         "start": _on_start,
         "back_to_lobby": _on_back_to_lobby,
+        "end_vote": _on_end_vote,
         "game": _on_game,
         "resync": _on_resync,
     }
@@ -367,6 +381,7 @@ class LobbyGame(BaseGame):
     def _remove_player(self, member):
         member.playing = False
         member.ready = False
+        member.end_vote = False
         member.options = {}
         if self.host_id == member.id:
             remaining = self.players
@@ -375,6 +390,13 @@ class LobbyGame(BaseGame):
             self.on_player_removed(member)
         if self.phase != LOBBY and not self.players:
             self._return_to_lobby()
+        self._check_end_vote()  # the players left may all have voted already
+
+    def _check_end_vote(self):
+        """Back to the lobby once every player has voted to end the game."""
+        players = self.players
+        if self.phase == PLAYING and players and all(p.end_vote for p in players):
+            self._return_to_lobby()
 
     def _return_to_lobby(self):
         self.cancel_timers()
@@ -382,6 +404,7 @@ class LobbyGame(BaseGame):
         self.result = None
         for player in self.players:
             player.ready = False
+            player.end_vote = False
         self.reset_game()
 
     def _start_blocker(self):
@@ -413,7 +436,8 @@ class LobbyGame(BaseGame):
             "minPlayers": self.MIN_PLAYERS,
             "maxPlayers": self.MAX_PLAYERS,
             "startBlocker": self._start_blocker() if self.phase == LOBBY else None,
-            "players": [{**info(m), "ready": m.ready, "options": m.options} for m in self.players],
+            "players": [{**info(m), "ready": m.ready, "endVote": m.end_vote, "options": m.options}
+                        for m in self.players],
             "spectators": [info(m) for m in self.members.values() if not m.playing],
             "result": self.result,
         }

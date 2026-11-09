@@ -15,7 +15,7 @@ content/README.md. Bad files are logged (logger "bastion") and skipped.
         "lair":    None or {"name", "icon", "cells": [(dy, dx)]}: placed on empty grass on arrival
         "attacks": [attack], attack = {"name", "text" (generated), and any of:
                     "steal": {resource | "most": n}  ("most": the good the city has most of)
-                    "loot": n goods taken from unprotected road tiles (left there by hauls)
+                    "loot": n goods taken from carriages on unprotected road tiles
                     "ruin": n tiles, "prefer": [structure id] (those first)
                     "keep": damage, "shield": each wall tile next to the keep blocks 1
                     "place": {"name", "icon"}, "count": n   blight tiles on empty grass
@@ -86,7 +86,7 @@ def attack_text(attack, cards=CARDS):
         if most:
             parts.append(f"Steals {most} of the good you have most of.")
     if "loot" in attack:
-        parts.append(f"Loots {attack['loot']} goods left on roads (not next to a wall or near a watchtower).")
+        parts.append(f"Loots {attack['loot']} goods from carriages on the roads (not next to a wall or near a watchtower).")
     if "ruin" in attack:
         n = attack["ruin"]
         where = ""

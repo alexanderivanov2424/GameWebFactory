@@ -28,6 +28,11 @@
  *       else null. A new id makes `element` (the board) pulse with a badge (default "Your turn!")
  *       until the player clicks anything; the tab title gets a "▶ Your turn" prefix while it's
  *       their turn.
+ *   AppLobbyUI.endGameButton(lobby)               "End game" vote button, top right left of the Settings
+ *       gear (a shadow-DOM element, so page CSS can't break it). Shown to players while playing; each
+ *       click votes / takes the vote back (lobby.voteEnd), with "n/m" votes on it. When every player has
+ *       voted, the server sends everyone back to the lobby (gamekit/lobby.py). lobby.js calls this in
+ *       AppLobby.connect, so every game page gets it without code of its own.
  */
 (() => {
   const STYLE = `
@@ -311,7 +316,53 @@
     };
   }
 
+  const END_STYLE = `
+    :host { all: initial; }
+    button {
+      position: fixed; top: 16px; right: 68px; z-index: 2147483000;
+      height: 40px; padding: 0 14px; border: none; border-radius: 8px; cursor: pointer;
+      font: 600 14px/1 system-ui, sans-serif; white-space: nowrap;
+      background: #f1f1f5; color: #444; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+    }
+    button:hover { background: #e4e4ec; }
+    button.others { background: #fff4d6; color: #7a5200; }
+    button.others:hover { background: #ffe9ad; }
+    button.voted { background: #fdecec; color: #b4232a; }
+    button.voted:hover { background: #f9dcdc; }
+    button:focus-visible { outline: 3px solid #a9b3ff; outline-offset: 2px; }
+    [hidden] { display: none !important; }
+  `;
+
+  function endGameButton(lobby) {
+    const host = document.createElement("gwf-end-game");
+    const root = host.attachShadow({ mode: "open" });
+    root.innerHTML = `<style>${END_STYLE}</style><button type="button" hidden></button>`;
+    const button = root.querySelector("button");
+    document.body.append(host);
+    let voted = false;
+    button.addEventListener("click", () => lobby.voteEnd(!voted));
+
+    // The vote lives in the lobby part of the state, which only changes with full "state" messages.
+    lobby.on("state", (state) => {
+      const me = state.players.find((p) => p.id === state.you);
+      button.hidden = !me || state.phase !== "playing";
+      if (button.hidden) return;
+      voted = Boolean(me.endVote);
+      const votes = state.players.filter((p) => p.endVote).length;
+      const total = state.players.length;
+      const count = votes ? ` ${votes}/${total}` : "";
+      button.textContent = voted ? `Cancel end vote${count}` : `End game${count}`;
+      button.className = voted ? "voted" : votes ? "others" : "";
+      button.title = voted
+        ? "You voted to end this game. Click to take your vote back."
+        : votes
+          ? `${votes} of ${total} players voted to end this game. Vote too and everyone goes back to the lobby once all have.`
+          : "Vote to end this game early. Once every player has voted, everyone goes back to the lobby.";
+    });
+  }
+
   window.AppLobbyUI = {
     renderPlayers, renderStart, renderSpectators, connectionText, errorBox, turnAlert, lobbyButtons, settingsForm,
+    endGameButton,
   };
 })();

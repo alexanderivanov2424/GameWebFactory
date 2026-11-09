@@ -1,6 +1,6 @@
 /*
  * Block Blast client: the game page. Renders the state from the server (rules in ../server.py)
- * and sends place / patch / buy / market_remove / aim / remove / end_turn. Holds no rules: card rotations, the
+ * and sends place / patch / undo / buy / market_remove / aim / remove / end_turn. Holds no rules: card rotations, the
  * patch piece and the rule numbers come from the state (game.cards, game.rules), and the hover
  * ghost / "would clear" outline are only previews (the server decides).
  *
@@ -83,9 +83,13 @@
     const target = event.target;
     if (target.closest && target.closest("input, textarea, select, [contenteditable]")) return;
     if (document.querySelector("dialog[open]")) return; // a window is open: Esc closes it natively
-    if (!isMyTurn() || event.ctrlKey || event.metaKey || event.altKey) return;
+    if (!isMyTurn() || event.altKey) return;
     const key = event.key.toLowerCase();
-    if (key === "r") rotate();
+    if (event.ctrlKey || event.metaKey) {
+      if (key !== "z" || event.shiftKey) return;
+      undo();
+    } else if (key === "r") rotate();
+    else if (key === "u") undo();
     else if (key === "p") togglePatch();
     else if (key === "escape") cancel();
     else if (/^[1-9]$/.test(key) && hand()[Number(key) - 1]) select(hand()[Number(key) - 1].uid);
@@ -96,6 +100,14 @@
   $("rotate").addEventListener("click", rotate);
   $("patch").addEventListener("click", togglePatch);
   $("cancel").addEventListener("click", cancel);
+  $("undo").addEventListener("click", undo);
+
+  // Take back the last placement (the server checks it's still allowed: none since a clear).
+  function undo() {
+    if (!isMyTurn() || !game().undoable) return;
+    selection = null;
+    lobby.sendGame({ action: "undo" });
+  }
   $("end-turn").addEventListener("click", () => {
     selection = null;
     lobby.sendGame({ action: "end_turn" });
@@ -465,6 +477,7 @@
     $("patch").disabled = !selection;
     $("patch").classList.toggle("on", Boolean(selection && selection.patch));
     $("cancel").disabled = !selection;
+    $("undo").disabled = !myTurn || !g.undoable;
     $("end-turn").disabled = !myTurn;
   }
 

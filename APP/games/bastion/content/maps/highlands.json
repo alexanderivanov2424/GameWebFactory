@@ -33,27 +33,43 @@
     },
     {
       "structure": "road",
+      "x": 5,
+      "y": 5
+    },
+    {
+      "structure": "road",
+      "x": 6,
+      "y": 5
+    },
+    {
+      "structure": "road",
       "x": 8,
-      "y": 5,
-      "rotation": 0
+      "y": 5
+    },
+    {
+      "structure": "road",
+      "x": 9,
+      "y": 5
     },
     {
       "structure": "road",
       "x": 10,
-      "y": 5,
-      "rotation": 0
+      "y": 5
+    },
+    {
+      "structure": "road",
+      "x": 11,
+      "y": 5
     },
     {
       "structure": "road",
       "x": 12,
-      "y": 4,
-      "rotation": 1
+      "y": 4
     },
     {
       "structure": "road",
-      "x": 5,
-      "y": 5,
-      "rotation": 0
+      "x": 12,
+      "y": 5
     }
   ]
 }

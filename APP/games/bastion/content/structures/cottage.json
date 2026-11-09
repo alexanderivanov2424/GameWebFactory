@@ -10,6 +10,5 @@
     "stone": 1
   },
   "card": "villagers",
-  "text": "Homes for workers: adds a Villagers card to your deck, and every Haul moves 1 more good per cottage. Markets and chapels like cottages nearby; workshops and smithies are too noisy for them.",
-  "population": 1
+  "text": "Homes for workers: adds a Villagers card to your deck. Markets and chapels like cottages nearby; workshops and smithies are too noisy for them."
 }

@@ -9,10 +9,11 @@ are logged and skipped (logger "bastion"). Loaders: `logic/structures.py`, `logi
 Buildings, plus the `road` and `wall` tiles and the `keep` (start only).
 - `name`, `icon` (an emoji), `text` (shown in the inspector and on the blueprint)
 - `shape`: rows of `#` (filled) and `.` (empty), at most 4x4; players may turn it, never mirror it
-- `tile`: `"road"` or `"wall"` for tiles (cell sets, never worked); leave out for buildings
+- `tile`: `"road"` or `"wall"` for tiles (cell sets, never worked; shape `["#"]`); leave out for
+  buildings. Tiles have no blueprint card: players buy one tile at a time for its `cost` and
+  remove one for `REMOVE_COST` (`logic/tiles.py`), so `price` is ignored on them
 - `cost`: `{resource: n}` paid from the stockpile when built
 - `price`: gold for its blueprint (`plan-<id>`) in the market; leave out to never sell it
-- `reusable`: `true` keeps the blueprint in the deck after building (roads, walls)
 - `requires`: `[{"near": X, "min": n}]` all must hold where it's placed
 - `work`: `{"uses": {resource: n}, "makes": {output: n}}`, one output: a resource, `soldiers`,
   `keep` (heals it) or `cure` (cures that many plagued buildings)
@@ -23,8 +24,7 @@ Buildings, plus the `road` and `wall` tiles and the `keep` (start only).
   `road` / `wall` (tiles), or a structure id (counts distinct buildings of that kind)
 - `income`: `{resource: n}` made every round without a card (the keep's gold)
 - `depot`: buildings next to it deliver goods at once; roads haul to it
-- `protects`: radius (square) in which building tiles (and goods left on roads) are safe from raids
-- `population`: people living there (cottages: 1); every Haul moves 1 more good per person
+- `protects`: radius (square) in which building tiles (and carriages on roads) are safe from raids
 - `card`: the card id added to the builder's deck when built (chapel: `absolution`). Buildings with `work` get their
   crew card `crew-<id>` ("Work a <name>") unless `card` names another; `crew` names it.
 
@@ -34,9 +34,10 @@ Actions and enemy curses (blueprints and crew cards are made from the structure 
   never sell it), `text` (optional: generated from the fields otherwise)
 - Actions, any of: `cost` `{resource: n}` paid when played; one target: `work` (`"any"` or a
   list of structure ids) with optional `boost` and `unskilled: true` (base output and penalties,
-  no bonuses: Villagers), or `repair: true` (1 wood per ruined tile), or `cure: true`; plus
-  `haul` n goods (+1 per population) with `reach` (cells each good moves along roads, default 4;
-  goods that don't reach a depot are left on the road), `gain` `{resource or "soldiers": n}`,
+  no bonuses: Villagers), or `repair: true` (1 wood per ruined tile), or `cure: true`, or
+  `haul` n (a target too: a carriage takes every good stored in a building to a depot, n cells a
+  round along roads; the card rides along and returns on arrival; may be combined with `work`,
+  and the player then picks which, like Villagers); plus `gain` `{resource or "soldiers": n}`,
   `draw` n, `trash` n (remove up to n other cards in the hand from the deck; not curses),
   `adds` card id (put in the player's discard pile when played: Tax adds Unrest)
 - Curses: `pay` `{resource: n}` to play it (it then leaves the deck), `hurts: true` deals 1
@@ -50,8 +51,8 @@ Actions and enemy curses (blueprints and crew cards are made from the structure 
   curse cards paid off hurts it), `raze` n soldiers per lair tile (needs `lair`)
 - `lair`: `{"name", "icon", "shape"}` placed on empty grass when it arrives; its tiles are its health
 - `attacks`: 1-4 attacks made in turn, one per round. Each: `name`, optional `text`, and any of
-  `steal` `{resource | "most": n}`, `loot` n (goods left on road tiles that aren't next to a wall
-  or within a watchtower's reach), `ruin` n (+ `prefer` [structure ids]), `keep` n (+ `shield`:
+  `steal` `{resource | "most": n}`, `loot` n (goods from carriages on road tiles that aren't next
+  to a wall or within a watchtower's reach), `ruin` n (+ `prefer` [structure ids]), `keep` n (+ `shield`:
   each wall tile next to the keep blocks 1), `place` `{"name", "icon"}` + `count` (blight tiles:
   -1 output to buildings next to them), `curse` card id + `to` `"each"` | `"one"`, `plague` n,
   `freeze` n, `kill` n soldiers. Nothing: it rests.

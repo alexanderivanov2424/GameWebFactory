@@ -15,14 +15,14 @@ help window's legend reads tileTypes[code].help and game.symbolHelp (symbol name
 
 Setup: turn order is random. Everyone's deck is the starting deck (Square: a 2x2 with a shield
 in one corner, Hook: an L with an attack in its corner, Tee: a T with a coin on its left arm,
-a bar of 4 with a shield, a bar of 3 with an attack at one end and a bar of 2 with a coin
+a plain bar of 4, a bar of 3 with an attack at one end and a bar of 2 with a coin
 at one end), shuffled; everyone draws 3. Starting gold
 follows turn order: 1 for the first player, 2 for the second, and so on.
 
 Card packs: the host picks which packs of bonus cards make up the market's pool, the bonus deck
 (cards/packs/, logic/packs.py; at least one, all by default): Base cards (coins, attacks,
-shields), Chapel cards, Goblin cards and Siege cards. Most cards come in 2 copies, goblin and
-siege cards in 1.
+shields), Chapel cards, Goblin cards and Siege cards. Every card comes in 1 copy (copies
+are set per card in each pack file).
 
 Market: the shared pool of bonus cards, dealt face up from the shuffled bonus deck. Cards bought
 or removed never return to it. The host picks its type and each type's size (logic/market/):
@@ -45,6 +45,9 @@ On your turn, in any order (place and patch as often as you like):
   spoil those. Siege cards are grey. Lines a goblin completes clear too.
 - Buy (once per turn): take a market card for its price. Bought cards go to your discard pile.
   In the Cost Market, removing a card from the market instead counts as your buy.
+- Undo: take back your last placement or patch (the card returns to your hand, its tiles leave
+  the board), and the one before it, and so on, until a row or column clears: clears (and
+  everything before them) are final. The turn's end is final too. Buys are not undone.
 Played and patched cards go to your discard pile. After each placement, every full row and
 column on your board clears at once (a cell where a row and a column cross counts once). Each
 symbol on a cleared cell:
@@ -86,6 +89,8 @@ Game messages:
         in the state), with its top-left corner at (row, col); goblin cards add
         "player": "<public id>", the opponent whose board it goes on
     {"action": "patch", "uid": n, "row": r, "col": c}    discard a hand card for a 1x1 tile
+    {"action": "undo"}                                   take back your last place / patch this
+                                                         turn (none since a line cleared)
     {"action": "buy", "slot": n}                         0 to the market's size - 1
     {"action": "market_remove", "slot": n}               Cost Market: remove that card instead of
                                                          buying (uses the turn's buy)
@@ -143,6 +148,7 @@ class Game(LobbyGame):
     ACTIONS = {
         "place": "on_place",
         "patch": "on_patch",
+        "undo": "on_undo",
         "buy": "on_buy",
         "market_remove": "on_market_remove",
         "aim": "on_aim",
@@ -178,6 +184,9 @@ class Game(LobbyGame):
 
     def on_patch(self, member, data):
         self.match.patch(member.id, card_uid(data), position(data, "row", "Row"), position(data, "col", "Column"))
+
+    def on_undo(self, member, data):
+        self.match.undo(member.id)
 
     def on_buy(self, member, data):
         self.match.buy(member.id, market_slot(data))
