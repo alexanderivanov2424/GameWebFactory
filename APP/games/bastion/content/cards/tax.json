@@ -1,6 +1,7 @@
 {
   "name": "Tax",
   "gain": {
-    "gold": 1
-  }
+    "gold": 2
+  },
+  "adds": "unrest"
 }

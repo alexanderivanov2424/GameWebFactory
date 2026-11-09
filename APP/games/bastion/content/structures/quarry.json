@@ -2,7 +2,8 @@
   "name": "Quarry",
   "icon": "⛏️",
   "shape": [
-    "##"
+    "##.",
+    ".##"
   ],
   "price": 2,
   "cost": {

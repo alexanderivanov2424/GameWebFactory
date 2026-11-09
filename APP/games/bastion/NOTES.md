@@ -29,6 +29,12 @@ from it is ever needed (deterministic simulation sent as a compact replay).
   (steal, ruin, keep, place blights, curse cards into decks, plague, freeze, kill), and each
   enemy has its own `defeat` ways (soldiers, resources, cures, paying off its curses, razing its
   lair), so a new enemy is usually just JSON.
+- **Goods travelling on the board**: a haul moves each good a limited number of steps along
+  roads (`Board.road_distances` is a BFS from the depots; `toward_depot` walks it), so goods can
+  be left on road tiles (`board.cargo`) for the next haul, and enemy `loot` attacks take them
+  from unprotected tiles. Cargo reaches clients as `{"goods", "safe"}` per road cell.
+- **A card that picks other hand cards** (Absolution, `trash`): the play message lists their uids
+  in `remove`; the client has a pick mode in the hand bar with a confirm button.
 - **Card instances with extra fields**: curse cards an enemy adds carry `"from": enemy index`
   on the Deck instance, so paying one off can hurt its sender.
 
@@ -38,22 +44,25 @@ from it is ever needed (deterministic simulation sent as a compact replay).
   action. `SYNC = PatchState`.
 - `logic/match.py`: `Match` (constants at the top: `HAND_SIZE`, `START_STOCK`, `OVERTIME`,
   `COLORS`): `start_round` (reset worked flags, arrivals, refill hands), `end_turn` /
-  `check_all_done` -> `end_round` (income, attacks, loss checks), `play` -> `build` / `action` /
-  curse payment, `work`, `cure`, `strike`, `raze`, `hurt` (beaten: its blights and plague go;
+  `check_all_done` -> `end_round` (income, attacks, loss checks), `play` -> `build` / `action`
+  (`trashed` checks a trash card's picks) / curse payment, `population`, `work`, `cure`, `strike`, `raze`, `hurt` (beaten: its blights and plague go;
   all beaten wins), `buy`, `leave`, `end`.
 - `logic/views.py`: `public` (catalog cached on the match: `kinds`, `cards`, `icons`, terrain),
   `private` + `build_targets` / `action_targets`.
 - `logic/board.py`: `Structure` (uid, kind, cells, owner, ruined, plague, frozen, worked, store),
-  `Board` (placement `check` / `place`, `near`, `link` / `road_reach`, `protected`,
-  `raid_targets`, `ruin` / `repair`, blights, `public`).
-- `logic/economy.py`: `output`, `why_not`, `work`, `haul`, `repair_cost`, `STORE_CAP`.
+  `Board` (placement `check` / `place`: buildings may replace roads, `near`, `link` /
+  `road_distances` / `road_reach` / `toward_depot`, cargo, `protected`, `raid_targets`,
+  `ruin` / `repair`, blights, `public`).
+- `logic/economy.py`: `output` (`unskilled`: no bonuses), `amount` (with a card), `why_not`,
+  `work`, `haul` (distance-limited, leaves goods on roads), `repair_cost`, `STORE_CAP`.
 - `logic/foes.py`, `logic/attacks.py`, `logic/seat.py`, `logic/market.py`,
   `logic/structures.py`, `logic/cards.py`, `logic/enemies.py`, `logic/maps.py`: see
   `logic/__init__.py`.
-- `client/board.js` (`BastionBoard`): the grid (terrain, roads, walls, blights, buildings with
-  merged borders, owner stripe, output/store/flag badges), mouse events, hover marks.
+- `client/board.js` (`BastionBoard`): the grid (terrain, roads with cargo badges, walls, blights,
+  buildings with merged borders, owner stripe, output/store/flag badges), mouse events, hover marks.
 - `client/game.js`: status bar, enemy cards (strike buttons), hover (ghost / outlines / tips),
-  inspector, market, team, chronicle, hand bar, deck window.
+  inspector (buildings, blights, cargo), market, team, chronicle, hand bar (trash pick mode),
+  deck window.
 - `tests/`: `helpers.py` (`FixtureCase` installs small fixture structures, cards and enemies,
   parsed by the real loaders, into the shared registries per test; an 8x6 `MAP`; `new_match`,
   `give`, `build`, `foe`), `test_board.py` (placement, rotation, near, links, raids),
@@ -67,7 +76,12 @@ from it is ever needed (deterministic simulation sent as a compact replay).
 - PatchState: no `None` in dicts. Catalog views drop None fields (`structures.public`,
   `cards.public`); structure views use `""` / `false`.
 - Shapes whose rotations coincide (a domino turned twice) give identical target maps; harmless.
+- Building over roads: a road whose tiles a building covers is gone, which can cut the network
+  (and links) apart; `check` refuses road tiles holding cargo so goods are never lost silently.
+- Starting-town entries in the maps must fit the current shapes: changing a shape can silently
+  drop a start building (logged "doesn't fit"); check both maps after a shape change.
 - Numbers (costs, prices, outputs, enemy health, peaceful rounds) are a first pass reasoned from
-  the economy, not tuned by play. Rough budget: ~1 gold per player per round from Tax plus the
-  keep's 1; soldiers cost 1 food + 1 tool (2 wood) per 2 at a barracks; tier-1 enemies have
+  the economy, not tuned by play. Rough budget: the keep's 1 gold a round, Tax (2 gold + an
+  Unrest curse that costs 1 food to clear) and Sell (1 tool -> 3 gold; a workshop makes 1 tool
+  from 1 wood); soldiers cost 1 food + 1 tool (1 wood) per 2 at a barracks; tier-1 enemies have
   3-4 health x1.5 for 2 players.

@@ -2,14 +2,14 @@
   "name": "Chapel",
   "icon": "⛪",
   "shape": [
-    "##"
+    "###",
+    ".#."
   ],
   "price": 4,
   "cost": {
     "wood": 1,
     "stone": 3
   },
-  "crew": "Priests",
   "work": {
     "uses": {
       "gold": 1
@@ -30,5 +30,6 @@
       "bonus": 1
     }
   ],
-  "text": "Mends the keep. A congregation of cottages helps; so does a quiet garden around it."
+  "text": "Mends the keep (Villagers or a Foreman work it). Building it adds an Absolution card to your deck, which removes unwanted cards from it. A congregation of cottages helps; so does a quiet garden around it.",
+  "card": "absolution"
 }

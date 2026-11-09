@@ -1,0 +1,10 @@
+{
+  "name": "Sell",
+  "cost": {
+    "tools": 1
+  },
+  "gain": {
+    "gold": 3
+  },
+  "price": 2
+}

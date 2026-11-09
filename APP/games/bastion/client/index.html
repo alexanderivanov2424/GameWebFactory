@@ -7,7 +7,7 @@
   <!--
     Bastion's page: lobby (players, settings, rules), and the game: status bar (round, keep,
     stockpile), the enemy cards above the board, the board (board.js draws it), the side panel
-    (inspector, market, team, chronicle), the fixed bottom bar (your hand, End turn) and windows
+    (inspector, market, team, chronicle), the fixed bottom bar (your hand, confirm for trash cards, End turn) and windows
     (<dialog>): your deck, help. game.js renders everything from the state.
   -->
 
@@ -111,6 +111,8 @@
     .cell .out { right: 1px; bottom: 5px; background: #2f6f3e; color: #fff; }
     .cell .out.none { background: #8a7a5c; }
     .cell .store { left: 1px; top: 1px; background: #6b4f2e; color: #fff; }
+    .cell .cargo { left: 1px; top: 1px; font-size: 11px; background: #b03a2e; color: #fff; }
+    .cell .cargo.safe { background: #6b4f2e; }
     .cell .flags { right: 1px; top: 1px; font-size: 11px; background: none; padding: 0; }
     .cell .done { left: 2px; bottom: 5px; color: #2f6f3e; font-size: 12px; background: none; }
     .cell.hl { outline: 3px solid #ffd54a; outline-offset: -3px; z-index: 2; }
@@ -152,6 +154,8 @@
     .pcard.build { background: #f3f8ec; border-color: #8ab662; }
     .pcard.curse { background: #f3e6f7; border-color: #9b59b6; }
     .pcard.off { opacity: 0.55; }
+    .pcard.marked { border-color: #a33; box-shadow: 0 0 0 3px #e8a9a3; transform: translateY(-5px); }
+    .pcard.marked::after { content: "✕ remove"; position: absolute; left: 6px; bottom: 5px; color: #a33; font-weight: 700; }
     .pcard .name { font-weight: 700; font-size: 0.85rem; padding-right: 26px; }
     .pcard .kind { color: #8a7a5c; font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.04em; }
     .pcard .text { color: #4a3b28; line-height: 1.25; flex: 1; overflow: hidden; }
@@ -198,9 +202,10 @@
           lumbermill and a workshop, and a few <b>peaceful rounds</b> to grow before the first enemy arrives.</p>
         <p>Everyone plays at the same time from their own hand. <b>Blueprints</b> place buildings (turn them any way);
           each building cares about what's next to it (forest, mountains, water, roads, empty fields, other buildings),
-          gaining or losing output. <b>Work cards</b> make a building produce; goods reach the shared stockpile at once
-          next to the keep or a storage yard, or later by <b>Haul</b> along roads. Buy new cards in the market with the
-          team's gold.</p>
+          gaining or losing output. <b>Work cards</b> make a building produce (Villagers work anything, but without the
+          bonuses); goods reach the shared stockpile at once next to the keep or a storage yard, or are carried by
+          <b>Haul</b> along roads, a few cells at a time: goods left on a road can be looted. Turn tools into gold with
+          <b>Sell</b>, and buy new cards in the market with the team's gold.</p>
         <p><b>Enemies</b> are cards above the board, each with its own attacks (raids, plague, curses in your deck,
           blight on the board…) and its own way to be beaten: soldiers, cures, bonfires, razing its lair, paying it off.
           Beat them all to win; lose if the keep falls. Up to 4 players, or solo.</p>
@@ -230,6 +235,7 @@
   <div id="bar" hidden><div class="inner">
     <div class="info">
       <div id="bar-info"></div>
+      <button id="confirm" class="green" hidden>Remove them</button>
       <button id="end-turn" class="green">End turn</button>
       <button id="deck-button" class="plain small">Your deck</button>
     </div>
@@ -253,16 +259,23 @@
         you're done, click <b>End turn</b> (you can take it back until everyone is done). At the end of the round the
         keep makes 1 gold and every enemy makes its next attack (▶ on its card).</p>
       <p><b>Building:</b> click a blueprint, then the board. Turn it with <b>R</b> or the mouse wheel; right-click or
-        Esc cancels. The ghost shows whether it fits and what it would make there. Mines and quarries need a mountain
-        next to them, lumbermills a forest. The blueprint then leaves your deck (roads and walls stay) and the
-        building's crew card joins it.</p>
-      <p><b>Working:</b> a work card (crew cards, Villagers for any building) makes one building produce, once per
-        round. Hover a building to see its output and every bonus: what it likes or hates next to it. Enemy blight
-        next to a building costs it 1.</p>
+        Esc cancels. The ghost shows whether it fits and what it would make there. Buildings can go over roads (the
+        road under them is gone; build a new one around). Mines and quarries need a mountain next to them,
+        lumbermills a forest. The blueprint then leaves your deck (roads and walls stay) and the building's crew card
+        joins it.</p>
+      <p><b>Working:</b> a work card makes one building produce, once per round. Crew cards (Lumberjacks, Miners…)
+        get the full output; Villagers work any building but only make its base output (penalties still count).
+        Hover a building to see its output and every bonus: what it likes or hates next to it. Enemy blight next to a
+        building costs it 1.</p>
       <p><b>Goods:</b> buildings next to the keep or a 📦 storage yard deliver straight to the stockpile. Others keep
         their goods (the 📦n badge) until a <b>Haul</b> card carries them along a road that reaches the keep or a
-        storage yard. Workshops, smithies and the like take their inputs from the stockpile, so they need that link
-        too.</p>
+        storage yard. A Haul moves a number of goods (+1 per cottage 👥) a number of cells each: goods that don't
+        make it are left on the road (a red 📦n badge) and the next Haul carries them on first. Raiders can loot
+        goods on a road unless it's next to a wall or near a watchtower. Workshops, smithies and the like take
+        their inputs from the stockpile, so they need a link too.</p>
+      <p><b>Gold:</b> the keep makes 1 a round. <b>Sell</b> turns tools (from a workshop) into gold; <b>Tax</b> gives
+        gold now but puts an <b>Unrest</b> curse in your deck. Building a ⛪ chapel gives you <b>Absolution</b>: click
+        it, click up to 2 other cards in your hand, then confirm to remove them from your deck for good.</p>
       <p><b>Defence:</b> raids ruin building tiles 🔥 (a damaged building can't work until Masons repair it). Tiles
         next to a wall, or within 2 of a watchtower 🗼, are safe; when everything is safe, raids break walls instead.
         Barracks train soldiers 🗡️; spend them on an enemy's card, or click an enemy tile on the board to raze it.</p>

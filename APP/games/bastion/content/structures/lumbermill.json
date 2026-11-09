@@ -2,6 +2,7 @@
   "name": "Lumbermill",
   "icon": "🪓",
   "shape": [
+    "#.",
     "##"
   ],
   "price": 2,

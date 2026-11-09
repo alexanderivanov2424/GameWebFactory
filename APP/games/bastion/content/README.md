@@ -23,8 +23,9 @@ Buildings, plus the `road` and `wall` tiles and the `keep` (start only).
   `road` / `wall` (tiles), or a structure id (counts distinct buildings of that kind)
 - `income`: `{resource: n}` made every round without a card (the keep's gold)
 - `depot`: buildings next to it deliver goods at once; roads haul to it
-- `protects`: radius (square) in which building tiles can't be ruined by raids
-- `card`: the card id added to the builder's deck when built. Buildings with `work` get their
+- `protects`: radius (square) in which building tiles (and goods left on roads) are safe from raids
+- `population`: people living there (cottages: 1); every Haul moves 1 more good per person
+- `card`: the card id added to the builder's deck when built (chapel: `absolution`). Buildings with `work` get their
   crew card `crew-<id>` ("Work a <name>") unless `card` names another; `crew` names it.
 
 ## cards/<id>.json
@@ -32,8 +33,12 @@ Actions and enemy curses (blueprints and crew cards are made from the structure 
 - `name`, `kind`: `"action"` (default) or `"curse"`, `price` (gold in the market; leave out to
   never sell it), `text` (optional: generated from the fields otherwise)
 - Actions, any of: `cost` `{resource: n}` paid when played; one target: `work` (`"any"` or a
-  list of structure ids) with optional `boost`, or `repair: true` (1 wood per ruined tile), or
-  `cure: true`; plus `haul` n, `gain` `{resource or "soldiers": n}`, `draw` n
+  list of structure ids) with optional `boost` and `unskilled: true` (base output and penalties,
+  no bonuses: Villagers), or `repair: true` (1 wood per ruined tile), or `cure: true`; plus
+  `haul` n goods (+1 per population) with `reach` (cells each good moves along roads, default 4;
+  goods that don't reach a depot are left on the road), `gain` `{resource or "soldiers": n}`,
+  `draw` n, `trash` n (remove up to n other cards in the hand from the deck; not curses),
+  `adds` card id (put in the player's discard pile when played: Tax adds Unrest)
 - Curses: `pay` `{resource: n}` to play it (it then leaves the deck), `hurts: true` deals 1
   damage to the enemy that sent it (if that enemy has `defeat.cards`)
 
@@ -45,7 +50,8 @@ Actions and enemy curses (blueprints and crew cards are made from the structure 
   curse cards paid off hurts it), `raze` n soldiers per lair tile (needs `lair`)
 - `lair`: `{"name", "icon", "shape"}` placed on empty grass when it arrives; its tiles are its health
 - `attacks`: 1-4 attacks made in turn, one per round. Each: `name`, optional `text`, and any of
-  `steal` `{resource | "most": n}`, `ruin` n (+ `prefer` [structure ids]), `keep` n (+ `shield`:
+  `steal` `{resource | "most": n}`, `loot` n (goods left on road tiles that aren't next to a wall
+  or within a watchtower's reach), `ruin` n (+ `prefer` [structure ids]), `keep` n (+ `shield`:
   each wall tile next to the keep blocks 1), `place` `{"name", "icon"}` + `count` (blight tiles:
   -1 output to buildings next to them), `curse` card id + `to` `"each"` | `"one"`, `plague` n,
   `freeze` n, `kill` n soldiers. Nothing: it rests.

@@ -102,7 +102,7 @@ class HaulTests(helpers.FixtureCase):
         cut_off = build(match, "shop", 7, 5)
         big.store, small.store, cut_off.store = {"tools": 3}, {"food": 1}, {"tools": 4}
         match.stock.update(tools=0, food=0)
-        self.assertEqual(economy.haul(match.board, match.stock, 3), {"tools": 3})
+        self.assertEqual(economy.haul(match.board, match.stock, 3, 10), ({"tools": 3}, {}))
         self.assertEqual((big.store, small.store, cut_off.store), ({}, {"food": 1}, {"tools": 4}))
         self.assertEqual(match.stock["tools"], 3)
 
@@ -113,7 +113,7 @@ class HaulTests(helpers.FixtureCase):
         shop.store = {"tools": 2, "wood": 3}
         match.stock.update(tools=0, wood=0)
         # one good at a time from the biggest pile (ties: the earlier good)
-        self.assertEqual(economy.haul(match.board, match.stock, 4), {"wood": 3, "tools": 1})
+        self.assertEqual(economy.haul(match.board, match.stock, 4, 10), ({"wood": 3, "tools": 1}, {}))
         self.assertEqual(shop.store, {"tools": 1})
 
 

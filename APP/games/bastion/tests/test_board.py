@@ -24,7 +24,7 @@ class PlacementTests(helpers.FixtureCase):
         for x, y in ((3, 2), (0, 0), (5, 4), (7, 3)):  # keep, forest, mountain, off the edge
             with self.assertRaises(LobbyError):
                 board.check("ell", 0, x, y)
-        board.place("road", 0, 1, 3, "p1")  # (1,3) (2,3)
+        board.place("wall", 0, 1, 3, "p1")  # (1,3) (2,3); buildings may go over roads, not walls
         with self.assertRaisesRegex(LobbyError, "empty grass"):
             board.check("hut", 0, 2, 3)
 

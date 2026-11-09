@@ -1,5 +1,6 @@
 {
   "name": "Wagon Train",
-  "haul": 6,
-  "price": 4
+  "haul": 8,
+  "price": 4,
+  "reach": 10
 }
