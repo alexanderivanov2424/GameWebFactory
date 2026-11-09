@@ -1,0 +1,42 @@
+{
+  "name": "Nutrient Press",
+  "category": "food",
+  "w": 2,
+  "h": 2,
+  "cost": {
+    "metal": 200
+  },
+  "buildTime": 20,
+  "kind": "nutrient_press",
+  "floor": true,
+  "power": {
+    "use": 240
+  },
+  "powerPort": [
+    1,
+    1
+  ],
+  "pipeIn": [
+    0,
+    1
+  ],
+  "operated": true,
+  "accepts": {
+    "dirt": 300
+  },
+  "params": {
+    "dirt": 10,
+    "water": 10,
+    "work": 50,
+    "product": "nutrient_bar",
+    "productKg": 1.0,
+    "maxFood": 20
+  },
+  "heat": 1.0,
+  "decor": {
+    "value": -5,
+    "radius": 1
+  },
+  "description": "A colonist presses dirt and piped water into nutrient bars (800 kcal). Needs power.",
+  "rotatable": true
+}

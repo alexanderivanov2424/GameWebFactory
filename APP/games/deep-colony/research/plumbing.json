@@ -1,0 +1,13 @@
+{
+  "name": "Plumbing",
+  "cost": 10,
+  "requires": [],
+  "unlocks": [
+    "liquid_pump",
+    "liquid_vent",
+    "lavatory",
+    "wash_basin",
+    "nutrient_press"
+  ],
+  "description": "Pump, pipe and vent liquids; plumbed toilets, basins and the nutrient press."
+}

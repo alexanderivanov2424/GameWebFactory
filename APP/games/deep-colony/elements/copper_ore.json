@@ -1,0 +1,13 @@
+{
+  "name": "Copper Ore",
+  "phase": "solid",
+  "color": "#c46a3a",
+  "classes": [
+    "metal"
+  ],
+  "shc": 0.39,
+  "conductivity": 4.5,
+  "hardness": 2,
+  "defaultMass": 1000,
+  "decor": -10
+}

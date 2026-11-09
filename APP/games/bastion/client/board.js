@@ -1,6 +1,6 @@
 /*
- * Bastion: BastionBoard draws the shared board (terrain, roads, walls, enemy blights and
- * buildings with their badges) and reports the mouse. No rules here: outputs, links and flags
+ * Bastion: BastionBoard draws the shared board (terrain, roads with the goods a haul left on
+ * them, walls, enemy blights and buildings with their badges) and reports the mouse. No rules here: outputs, links and flags
  * all come from the state.
  *
  *   const board = BastionBoard.create(element, { onHover(x, y), onLeave(), onClick(x, y),
@@ -67,6 +67,11 @@ const BastionBoard = (() => {
           if (base === "grass" && (x + y) % 2) cell.classList.add("alt");
           cell.dataset.x = x;
           cell.dataset.y = y;
+          const cargo = (game.cargo || {})[key];
+          if (cargo) {
+            const n = Object.values(cargo.goods).reduce((a, b) => a + b, 0);
+            cell.append(el("span", { className: `badge cargo${cargo.safe ? " safe" : ""}`, textContent: `📦${n}` }));
+          }
           if (blight) {
             cell.classList.add("razeable");
             if (blight.lair) cell.classList.add("lair");

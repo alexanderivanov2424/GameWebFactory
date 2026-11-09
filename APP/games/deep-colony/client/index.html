@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<!--
+  Deep Colony page: lobby section (players, settings, rules) and game section (top bar, left
+  toolbar, canvas in a scrollable box, right panel). Scripts: shared components, gamekit, then
+  grid.js (row decoding), render2.js + render.js (canvas), tools.js (mouse/keys -> orders), panels.js (DOM
+  panels), game.js (lobby wiring). All share the small global window.DC.
+-->
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Deep Colony</title>
+
+  <script src="/shared/theme.js"></script>
+  <script src="/shared/home.js" defer></script>
+  <script src="/shared/settings.js" defer></script>
+  <script src="/shared/chat.js" defer></script>
+  <script src="/gamekit/dom.js" defer></script>
+  <script src="/gamekit/room.js" defer></script>
+  <script src="/gamekit/lobby.js" defer></script>
+  <script src="/gamekit/lobby-ui.js" defer></script>
+  <script src="/gamekit/realtime.js" defer></script>
+  <script src="grid.js" defer></script>
+  <script src="render2.js" defer></script>
+  <script src="render.js" defer></script>
+  <script src="tools.js" defer></script>
+  <script src="panels.js" defer></script>
+  <script src="panels2.js" defer></script>
+  <script src="game.js" defer></script>
+
+  <style>
+    :root { --gwf-main-width: 1500px; }
+    #game { --dc-bg: #14181f; --dc-panel: #1d232d; --dc-line: #333c4a; --dc-text: #dde3ec;
+            --dc-muted: #8d98a8; --dc-accent: #4aa3ff; color: var(--dc-text); }
+    #game .layout { display: grid; grid-template-columns: 170px minmax(0, 1fr) 300px; gap: 8px; align-items: start; }
+    #game .box { background: var(--dc-panel); border: 1px solid var(--dc-line); border-radius: 6px; padding: 8px; }
+    #game .muted { color: var(--dc-muted); }
+    #topbar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-bottom: 8px; }
+    #topbar .cycle { font-weight: bold; }
+    #daybar { width: 140px; height: 10px; background: #0d1015; border-radius: 5px; overflow: hidden; border: 1px solid var(--dc-line); }
+    #daybar > div { height: 100%; background: #ffd54f; width: 0; }
+    #res { display: flex; flex-wrap: wrap; gap: 4px 10px; margin-left: auto; font-size: 0.85rem; }
+    #res .r { display: inline-flex; align-items: center; gap: 4px; }
+    .sw { display: inline-block; width: 10px; height: 10px; border-radius: 2px; border: 1px solid rgba(255,255,255,0.3); }
+    #game button.t { background: #2b3342; color: var(--dc-text); border: 1px solid var(--dc-line); border-radius: 4px;
+                     padding: 4px 8px; font-size: 0.8rem; cursor: pointer; }
+    #game button.t:hover:not(:disabled) { background: #3a4558; }
+    #game button.t.on { background: var(--dc-accent); color: #fff; border-color: #fff; }
+    #toolbar button.t { display: block; width: 100%; text-align: left; margin-bottom: 4px; }
+    #toolbar h4, #side h4 { margin: 8px 0 4px; font-size: 0.75rem; text-transform: uppercase; color: var(--dc-muted); }
+    #prios { display: flex; gap: 2px; }
+    #prios button.t { padding: 3px 0; width: 100%; margin: 0; text-align: center; }
+    #buildmenu details { margin-bottom: 2px; }
+    #buildmenu summary { cursor: pointer; font-size: 0.8rem; color: var(--dc-muted); text-transform: capitalize; }
+    #buildmenu button.t { font-size: 0.75rem; padding: 3px 6px; }
+    #buildmenu .cost { display: block; color: var(--dc-muted); font-size: 0.68rem; }
+    #buildinfo { font-size: 0.72rem; color: var(--dc-muted); margin-top: 4px; }
+    .zoombar { margin-bottom: 4px; font-size: 0.8rem; color: var(--dc-muted); }
+    .zoombar button { padding: 0 8px; }
+    #canvasbox { overflow: auto; height: 680px; background: #05070a; border: 1px solid var(--dc-line); border-radius: 6px; }
+    #map { display: block; cursor: crosshair; }
+    #side { display: flex; flex-direction: column; gap: 8px; max-height: 700px; overflow-y: auto; font-size: 0.8rem; }
+    #side h4 { margin-top: 0; }
+    .dupe { margin-bottom: 6px; padding-bottom: 6px; border-bottom: 1px solid var(--dc-line); }
+    .dupe .nm { font-weight: bold; }
+    .dupe .warn { color: #ff9f43; font-weight: bold; }
+    #howto { margin-bottom: 8px; font-size: 0.85rem; } #howto summary { cursor: pointer; font-weight: bold; }
+    #howto li { margin: 2px 0; } #toolhint { font-size: 0.8rem; color: var(--dc-muted); margin-top: 4px; }
+    .dupe .sick { color: #ff6b6b; font-weight: bold; }
+    .bars { display: grid; grid-template-columns: repeat(5, 1fr); gap: 3px; margin: 3px 0; }
+    .bar { height: 7px; background: #0d1015; border-radius: 3px; overflow: hidden; }
+    .bar > div { height: 100%; }
+    #hover div { margin: 1px 0; }
+    #log div { margin: 2px 0; color: var(--dc-muted); }
+    #log div:first-child { color: var(--dc-text); }
+    #game details.box > summary { cursor: pointer; font-weight: bold; font-size: 0.75rem; text-transform: uppercase; color: var(--dc-muted); }
+    .tech { padding: 4px; margin: 4px 0; border: 1px solid var(--dc-line); border-radius: 4px; }
+    .tech.cur { border-color: var(--dc-accent); background: #243247; }
+    .sched { display: flex; gap: 1px; }
+    .blk { flex: 1; height: 16px; cursor: pointer; box-sizing: border-box; }
+    .blk.now { outline: 2px solid #fff; outline-offset: -2px; }
+    .filt { max-height: 140px; overflow-y: auto; } .filt label { display: block; }
+    #result { padding: 8px; margin-bottom: 8px; border-radius: 6px; background: #5a1f24; color: #fff; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Deep Colony</h1>
+    <p id="connection" class="muted">Connecting…</p>
+    <div id="error" hidden></div>
+
+    <section id="lobby" hidden>
+      <div class="card">
+        <div class="row" style="margin-bottom: 8px">
+          <h2 style="margin: 0">Players</h2>
+          <span class="spacer"></span>
+          <button id="join" class="green" hidden>Join game</button>
+          <button id="ready" class="green" hidden>Ready</button>
+          <button id="leave" class="red" hidden>Leave game</button>
+        </div>
+        <ul id="players"></ul>
+        <div id="start"></div>
+        <p id="spectators" class="muted"></p>
+      </div>
+      <div class="card">
+        <h2>Game settings</h2>
+        <div id="settings"></div>
+        <p>Run a colony together. Colonists dig, haul, build and look after themselves; you give the orders
+          (dig, build, deconstruct, priority) and everyone sees everyone's cursor and orders live.
+          Any player can pause or change the speed. Keep your colonists breathing, fed and clean. Hotkeys:
+          Space pause, 1/2/3 speed, G dig, C cancel, X deconstruct, P priority, I inspect, Esc/right-click cancel.</p>
+      </div>
+    </section>
+
+    <section id="game" hidden>
+      <div id="result" hidden></div>
+      <details id="howto" class="box" open>
+        <summary>How to play</summary>
+        <ul>
+          <li>Dig out rock with Dig (G): drag a rectangle. Colonists mine it and leave debris.</li>
+          <li>Debris is only hauled after you mark it with Sweep (W); put a Storage Bin down so it has somewhere to go. Storage filters are in the hover panel.</li>
+          <li>Build Ladders up from a floor so colonists can climb.</li>
+          <li>New buildings come from research: pick one in the Research panel. A Research Station needs a colonist, dirt and power.</li>
+          <li>Oxygen: build an Algae Oxygenator, powered by a Manual Generator joined to it with Wire.</li>
+          <li>Food: a Nutrient Press (dirt + piped water) or Fungus Beds.</li>
+          <li>Toilet: an Outhouse; add a Wash Basin to fight germs.</li>
+          <li>Colonists sleep in Cots during sleep hours. In the Schedules panel click blocks to change work / downtime / sleep.</li>
+          <li>R rotates buildings with ports before you place them. Ventilation buildings and gas pipes move gas.</li>
+          <li>Anyone can pause (Space) or change speed (1/2/3). Everyone sees everyone's plans in their colour.</li>
+          <li>Hotkeys: Space pause, 1/2/3 speed, G dig, C cancel, X deconstruct, P priority, I inspect, Esc/right-click cancel.</li>
+        </ul>
+      </details>
+      <div id="topbar" class="box">
+        <span class="cycle" id="cycle">Cycle 1</span>
+        <div id="daybar"><div></div></div>
+        <button id="pause" class="t">Pause</button>
+        <span id="speeds"></span>
+        <div id="res"></div>
+      </div>
+      <div class="layout">
+        <div id="toolbar" class="box">
+          <h4 style="margin-top:0">Tools</h4>
+          <div id="tools"></div>
+          <h4>Priority</h4>
+          <div id="prios"></div>
+          <h4>Build</h4>
+          <div id="rotbar" style="margin-bottom:4px"></div>
+          <div id="buildmenu"></div>
+          <div id="buildinfo"></div>
+          <h4>Overlay</h4>
+          <div id="overlays"></div>
+        </div>
+        <div>
+          <div class="zoombar"><button id="zoomOut" title="Zoom out (Ctrl+wheel)">&minus;</button> <span id="zoomLabel">16px</span> <button id="zoomIn" title="Zoom in (Ctrl+wheel)">+</button></div>
+          <div id="canvasbox"><canvas id="map" width="100" height="100"></canvas></div>
+          <div id="toolhint"></div>
+        </div>
+        <div id="side">
+          <div class="box"><h4>Players</h4><div id="plist"></div></div>
+          <details class="box" id="researchBox"><summary>Research</summary><div id="research"></div></details>
+          <details class="box" id="schedBox"><summary>Schedules</summary><div id="schedules"></div></details>
+          <div class="box"><h4>Colonists</h4><div id="dupes"></div></div>
+          <div class="box"><h4>Hover</h4><div id="hover" class="muted">Point at the map.</div><div id="hoverActions"></div></div>
+          <div class="box"><h4>Colony log</h4><div id="log"></div></div>
+          <div class="row">
+            <button id="end" class="red" hidden>End colony</button>
+            <button id="back" hidden>Back to lobby</button>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+</body>
+</html>

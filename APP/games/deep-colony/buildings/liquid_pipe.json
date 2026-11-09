@@ -1,0 +1,17 @@
+{
+  "name": "Liquid Pipe",
+  "category": "plumbing",
+  "w": 1,
+  "h": 1,
+  "cost": {
+    "raw": 100
+  },
+  "buildTime": 2,
+  "kind": "none",
+  "layer": "pipe",
+  "decor": {
+    "value": 0,
+    "radius": 0
+  },
+  "description": "Carries liquid between plumbing buildings."
+}

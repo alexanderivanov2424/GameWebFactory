@@ -1,0 +1,18 @@
+{
+  "name": "Cot",
+  "category": "base",
+  "w": 2,
+  "h": 1,
+  "cost": {
+    "raw": 200
+  },
+  "buildTime": 10,
+  "kind": "none",
+  "floor": true,
+  "bed": true,
+  "decor": {
+    "value": 0,
+    "radius": 0
+  },
+  "description": "A colonist sleeps here during sleep hours. Sleeping on the floor is slow and stressful."
+}

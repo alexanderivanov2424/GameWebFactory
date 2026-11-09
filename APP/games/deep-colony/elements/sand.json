@@ -1,0 +1,14 @@
+{
+  "name": "Sand",
+  "phase": "solid",
+  "color": "#e3cf8f",
+  "classes": [
+    "raw",
+    "filter"
+  ],
+  "shc": 0.83,
+  "conductivity": 2.0,
+  "hardness": 1,
+  "defaultMass": 1000,
+  "decor": -10
+}

@@ -1,0 +1,7 @@
+{
+  "name": "Unrest",
+  "kind": "curse",
+  "pay": {
+    "food": 1
+  }
+}

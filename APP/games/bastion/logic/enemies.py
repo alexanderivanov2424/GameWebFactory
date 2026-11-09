@@ -15,6 +15,7 @@ content/README.md. Bad files are logged (logger "bastion") and skipped.
         "lair":    None or {"name", "icon", "cells": [(dy, dx)]}: placed on empty grass on arrival
         "attacks": [attack], attack = {"name", "text" (generated), and any of:
                     "steal": {resource | "most": n}  ("most": the good the city has most of)
+                    "loot": n goods taken from unprotected road tiles (left there by hauls)
                     "ruin": n tiles, "prefer": [structure id] (those first)
                     "keep": damage, "shield": each wall tile next to the keep blocks 1
                     "place": {"name", "icon"}, "count": n   blight tiles on empty grass
@@ -35,7 +36,7 @@ from .structures import CONTENT, RESOURCE_IDS, STRUCTURES, amounts
 
 log = logging.getLogger("bastion")
 
-ATTACK_KEYS = ("steal", "ruin", "keep", "place", "curse", "plague", "freeze", "kill")
+ATTACK_KEYS = ("steal", "loot", "ruin", "keep", "place", "curse", "plague", "freeze", "kill")
 
 
 def blight(data, key):
@@ -51,7 +52,7 @@ def parse_attack(data, cards):
     attack = {"name": text(data, "name", 30, required=True)}
     if "steal" in data:
         attack["steal"] = amounts(data, "steal", RESOURCE_IDS + ["most"])
-    for key, high in (("ruin", 6), ("keep", 20), ("plague", 4), ("freeze", 4), ("kill", 10)):
+    for key, high in (("loot", 10), ("ruin", 6), ("keep", 20), ("plague", 4), ("freeze", 4), ("kill", 10)):
         if key in data:
             attack[key] = whole(data, key, 1, high)
     if "ruin" in attack:
@@ -84,6 +85,8 @@ def attack_text(attack, cards=CARDS):
             parts.append("Steals " + ("all gold" if steal.get("gold", 0) >= 20 and len(steal) == 1 else amount_text(steal)) + ".")
         if most:
             parts.append(f"Steals {most} of the good you have most of.")
+    if "loot" in attack:
+        parts.append(f"Loots {attack['loot']} goods left on roads (not next to a wall or near a watchtower).")
     if "ruin" in attack:
         n = attack["ruin"]
         where = ""

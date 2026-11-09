@@ -1,5 +1,6 @@
 {
   "name": "Villagers",
   "work": "any",
-  "price": 3
+  "price": 3,
+  "unskilled": true
 }

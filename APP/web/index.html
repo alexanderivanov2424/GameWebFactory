@@ -22,6 +22,7 @@
       gap: 16px;
     }
     .game {
+      position: relative;
       display: block;
       height: 100%;
       padding: 18px;
@@ -33,9 +34,25 @@
       transition: border-color 0.15s, box-shadow 0.15s;
     }
     .game:hover { border-color: var(--gwf-accent); box-shadow: 0 4px 16px rgba(74, 92, 255, 0.15); }
-    .game h2 { margin: 0 0 6px; font-size: 1.15rem; color: var(--gwf-accent); }
+    .game h2 { margin: 0 52px 6px 0; font-size: 1.15rem; color: var(--gwf-accent); }
     .game p { margin: 0; color: #555; }
     .message { color: #666; }
+    /* Player-count badge (games.json "players", from each game's MIN/MAX_PLAYERS). */
+    .players {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      display: inline-flex;
+      align-items: center;
+      gap: 3px;
+      padding: 2px 7px;
+      border-radius: 999px;
+      background: var(--gwf-soft);
+      color: var(--gwf-accent);
+      font-size: 0.8rem;
+      font-weight: 600;
+    }
+    .players svg { width: 12px; height: 12px; fill: currentColor; }
   </style>
 </head>
 <body>
@@ -46,6 +63,25 @@
   </main>
 
   <script>
+    // Little person icon + "2–4" style label, top right of a game card.
+    function playersBadge(label) {
+      const ns = "http://www.w3.org/2000/svg";
+      const icon = document.createElementNS(ns, "svg");
+      icon.setAttribute("viewBox", "0 0 16 16");
+      const head = document.createElementNS(ns, "circle");
+      head.setAttribute("cx", "8"); head.setAttribute("cy", "4.5"); head.setAttribute("r", "3.2");
+      const body = document.createElementNS(ns, "path");
+      body.setAttribute("d", "M1.5 15.5c0-3.8 2.9-6.3 6.5-6.3s6.5 2.5 6.5 6.3z");
+      icon.append(head, body);
+      const badge = document.createElement("span");
+      badge.className = "players";
+      badge.title = `${label} players`;
+      const text = document.createElement("span");
+      text.textContent = label;
+      badge.append(icon, text);
+      return badge;
+    }
+
     async function loadGames() {
       const message = document.getElementById("message");
       try {
@@ -67,6 +103,7 @@
           const description = document.createElement("p");
           description.textContent = game.description;
           link.append(title, description);
+          if (game.players) link.append(playersBadge(game.players));
 
           const item = document.createElement("li");
           item.append(link);

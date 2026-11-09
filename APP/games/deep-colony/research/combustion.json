@@ -1,0 +1,9 @@
+{
+  "name": "Combustion",
+  "cost": 15,
+  "requires": [],
+  "unlocks": [
+    "coal_generator"
+  ],
+  "description": "Burn coal for power."
+}

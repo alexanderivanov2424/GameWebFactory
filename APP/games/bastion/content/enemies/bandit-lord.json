@@ -18,7 +18,8 @@
       "name": "Toll",
       "steal": {
         "gold": 3
-      }
+      },
+      "loot": 3
     },
     {
       "name": "Ambush",

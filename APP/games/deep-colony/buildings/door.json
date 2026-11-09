@@ -1,0 +1,19 @@
+{
+  "name": "Door",
+  "category": "base",
+  "w": 1,
+  "h": 2,
+  "cost": {
+    "raw": 100
+  },
+  "buildTime": 6,
+  "kind": "none",
+  "solid": true,
+  "door": true,
+  "floor": true,
+  "decor": {
+    "value": 0,
+    "radius": 0
+  },
+  "description": "Colonists walk through; gas and liquid don't."
+}

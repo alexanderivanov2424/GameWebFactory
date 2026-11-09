@@ -1,0 +1,29 @@
+{
+  "name": "Space Heater",
+  "category": "climate",
+  "w": 1,
+  "h": 2,
+  "cost": {
+    "metal": 200
+  },
+  "buildTime": 10,
+  "kind": "heater",
+  "floor": true,
+  "power": {
+    "use": 120
+  },
+  "powerPort": [
+    0,
+    1
+  ],
+  "params": {
+    "heat": 18.0,
+    "maxTemp": 30
+  },
+  "decor": {
+    "value": -5,
+    "radius": 1
+  },
+  "description": "Heats its surroundings up to 30 C. Needs power.",
+  "rotatable": true
+}

@@ -1,0 +1,27 @@
+{
+  "name": "Manual Generator",
+  "category": "power",
+  "w": 2,
+  "h": 2,
+  "cost": {
+    "metal": 200
+  },
+  "buildTime": 15,
+  "kind": "manual_generator",
+  "floor": true,
+  "power": {
+    "gen": 400
+  },
+  "powerPort": [
+    1,
+    1
+  ],
+  "operated": true,
+  "heat": 1.0,
+  "decor": {
+    "value": -10,
+    "radius": 2
+  },
+  "description": "A colonist runs on a wheel to make power while the network needs it.",
+  "rotatable": true
+}

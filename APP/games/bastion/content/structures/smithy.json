@@ -2,7 +2,8 @@
   "name": "Smithy",
   "icon": "🔥",
   "shape": [
-    "###"
+    "###",
+    "#.."
   ],
   "price": 4,
   "cost": {

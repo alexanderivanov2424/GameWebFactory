@@ -2,7 +2,7 @@
   "name": "Apothecary",
   "icon": "⚗️",
   "shape": [
-    "#"
+    "##"
   ],
   "price": 3,
   "cost": {

@@ -1,0 +1,19 @@
+{
+  "name": "Storage Bin",
+  "category": "base",
+  "w": 1,
+  "h": 1,
+  "cost": {
+    "raw": 200
+  },
+  "buildTime": 5,
+  "kind": "storage",
+  "floor": true,
+  "capacity": 20000,
+  "decor": {
+    "value": -5,
+    "radius": 1
+  },
+  "description": "Colonists haul loose materials here.",
+  "filterable": true
+}

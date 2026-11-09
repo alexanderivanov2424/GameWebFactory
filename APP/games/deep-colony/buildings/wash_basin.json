@@ -1,0 +1,29 @@
+{
+  "name": "Wash Basin",
+  "category": "plumbing",
+  "w": 2,
+  "h": 2,
+  "cost": {
+    "metal": 100
+  },
+  "buildTime": 10,
+  "kind": "wash_basin",
+  "floor": true,
+  "pipeIn": [
+    0,
+    1
+  ],
+  "pipeOut": [
+    1,
+    0
+  ],
+  "params": {
+    "waterPerUse": 5
+  },
+  "decor": {
+    "value": 0,
+    "radius": 0
+  },
+  "description": "Colonists wash germs off here after using a toilet. Piped water in, polluted water out.",
+  "rotatable": true
+}

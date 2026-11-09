@@ -21,6 +21,7 @@ documented in content/README.md. Bad files are logged (logger "bastion") and ski
         "income":   {resource: n} made at the end of every round without a card (the keep)
         "depot":    goods made next to it go straight to the stockpile; roads deliver here
         "protects": radius (cells, square) of raid protection around it (0: none)
+        "population": people living there (cottages): each Haul moves 1 more good per person
         "card":     card id added to the builder's deck when built (None: none); buildings that
                     work get a crew card "crew-<id>" (named "crew") unless "card" names another
         "crew":     the crew card's name }
@@ -116,6 +117,7 @@ def parse_structure(structure_id, data):
         "income": amounts(data, "income", RESOURCE_IDS),
         "depot": flag(data, "depot"),
         "protects": whole(data, "protects", 0, 5, default=0),
+        "population": whole(data, "population", 0, 5, default=0),
         "card": card,
         "crew": text(data, "crew", 30) or f"{name} Crew",
     }
@@ -169,6 +171,7 @@ def public(s, structures):
         "work": s["work"],
         "bonuses": [[describe(c, structures), c.get("bonus", c.get("each"))] for c in s["bonuses"]],
         "income": s["income"], "depot": s["depot"], "protects": s["protects"], "card": s["card"],
+        "population": s["population"],
     }
     return {k: v for k, v in view.items() if v is not None}  # PatchState: no nulls in dicts
 

@@ -1,0 +1,14 @@
+{
+  "name": "Hydrogen Power",
+  "cost": 40,
+  "requires": [
+    "ventilation",
+    "combustion",
+    "plumbing"
+  ],
+  "unlocks": [
+    "electrolyzer",
+    "hydrogen_generator"
+  ],
+  "description": "Split water into oxygen and hydrogen, and burn the hydrogen."
+}

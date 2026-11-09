@@ -1,0 +1,28 @@
+{
+  "name": "Battery",
+  "category": "power",
+  "w": 1,
+  "h": 2,
+  "cost": {
+    "metal": 100
+  },
+  "buildTime": 10,
+  "kind": "battery",
+  "floor": true,
+  "power": {
+    "capacity": 10000
+  },
+  "powerPort": [
+    0,
+    1
+  ],
+  "params": {
+    "leak": 1.0
+  },
+  "heat": 0.25,
+  "decor": {
+    "value": -5,
+    "radius": 1
+  },
+  "description": "Stores 10 kJ of power for its network."
+}

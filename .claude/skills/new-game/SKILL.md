@@ -19,6 +19,7 @@ things are, and its pitfalls. Read only the one closest to your game:
 - `bastion`: co-op simultaneous turns, polyomino buildings with adjacency bonuses from JSON, enemy cards.
 - `gilded-trail`: hex map from a seed as SVG, deck-building market, pending choices inside a turn.
 - `arena`: real-time (`RealtimeGame`); start from it for continuous movement.
+- `deep-colony`: real-time co-op sim without player units: shared orders/pause/speed, live cursors, big grid as row strings.
 
 ## 1. Pin down the design (ask only about what's genuinely unclear)
 Map the request onto the shared lobby model before writing code:

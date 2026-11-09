@@ -1,9 +1,11 @@
 """Bastion: Match, one game from start to finish (no lobby, network or members).
 
     match = Match({"p1": "Ann", "p2": "Bob"}, settings)   # names fixed at the start
-    match.play(pid, uid, x=None, y=None, rotation=0)   play a hand card: a blueprint on x, y (its
-                                    top-left cell, turned `rotation` quarter turns), a targeted
-                                    action on the building covering x, y, anything else as is
+    match.play(pid, uid, x=None, y=None, rotation=0, remove=())   play a hand card: a blueprint
+                                    on x, y (its top-left cell, turned `rotation` quarter turns), a
+                                    targeted action on the building covering x, y, anything else as
+                                    is; `remove`: the hand uids a trash card removes from the deck
+    match.population()              cottages and the like (each Haul moves 1 more good per person)
     match.strike(pid, foe, way, times=1)   hurt an active enemy: way "soldiers" or "resources"
     match.raze(pid, x, y)           spend soldiers to remove an enemy blight tile
     match.buy(pid, slot)            a market card into your discard pile, for team gold
@@ -105,6 +107,9 @@ class Match:
     def plagued(self):
         return [s for s in self.board.structures.values() if s.plague is not None]
 
+    def population(self):
+        return sum(s.spec["population"] for s in self.board.structures.values() if not s.ruined)
+
     def last_arrival(self):
         return max((f.arrives for f in self.foes), default=0)
 
@@ -148,10 +153,12 @@ class Match:
 
     # --- playing cards ----------------------------------------------------------------------
 
-    def play(self, pid, uid, x=None, y=None, rotation=0):
+    def play(self, pid, uid, x=None, y=None, rotation=0, remove=()):
         seat = self.acting(pid)
         instance = seat.hand_card(uid)
         card = CARDS[instance["card"]]
+        if remove and not card["trash"]:
+            raise LobbyError(f"{card['name']} doesn't remove cards.")
         if card["kind"] == "build":
             self.build(seat, instance, card, x, y, rotation)
         elif card["kind"] == "curse":
@@ -162,7 +169,7 @@ class Match:
             if card["hurts"] and foe and foe.defeat.get("cards"):
                 self.hurt(foe, 1, seat)
         else:
-            self.action(seat, instance, card, x, y)
+            self.action(seat, instance, card, x, y, remove)
 
     def build(self, seat, instance, card, x, y, rotation):
         if x is None or y is None:
@@ -179,9 +186,21 @@ class Match:
         extra = f" (+ {CARDS[spec['card']]['name']} card)" if structure and spec["card"] else ""
         self.write(f"{seat.name} built {a(spec['name'])}{extra}.", seat.pid)
 
-    def action(self, seat, instance, card, x, y):
+    def trashed(self, seat, instance, card, remove):
+        """The hand instances a trash card removes (checked, nothing changed yet)."""
+        if len(set(remove)) != len(remove) or len(remove) > card["trash"]:
+            raise LobbyError(f"{card['name']} removes up to {card['trash']} different cards.")
+        picked = [seat.hand_card(uid) for uid in remove]
+        if instance in picked:
+            raise LobbyError(f"{card['name']} can't remove itself.")
+        if any(CARDS[c["card"]]["kind"] == "curse" for c in picked):
+            raise LobbyError("Curses can only be paid off.")
+        return picked
+
+    def action(self, seat, instance, card, x, y, remove=()):
         target = None
         cost = dict(card["cost"])
+        picked = self.trashed(seat, instance, card, remove) if card["trash"] else []
         if card["work"]:
             target = self.structure_at(x, y)
             if card["work"] != "any" and target.kind not in card["work"]:
@@ -189,6 +208,8 @@ class Match:
             reason = economy.why_not(self.board, target, self.stock, self.round, self.plagued())
             if reason:
                 raise LobbyError(reason)
+            if economy.amount(self.board, target, card) <= 0:
+                raise LobbyError(f"{card['name']} would make nothing there.")
             uses = target.spec["work"]["uses"]  # paid by economy.work, after the card's own cost
             if any(self.stock[k] < cost.get(k, 0) + uses.get(k, 0) for k in set(cost) | set(uses)):
                 raise LobbyError(f"The stockpile can't cover {card['name']} and the building's inputs.")
@@ -204,16 +225,25 @@ class Match:
         seat.take(instance)
         seat.deck.discard([instance])
         said = []
+        for removed in picked:
+            seat.take(removed)  # gone from the deck for good
+        if picked:
+            said.append("removed " + ", ".join(CARDS[c["card"]]["name"] for c in picked) + " from their deck")
+        elif card["trash"]:
+            said.append("removed nothing")
         if card["work"]:
-            said.append(self.work(target, card["boost"]))
+            said.append(self.work(target, card))
         if card["repair"]:
             self.board.repair(target)
             said.append(f"repaired the {target.spec['name']}")
         if card["cure"]:
             said.append(self.cure(target))
         if card["haul"]:
-            moved = economy.haul(self.board, self.stock, card["haul"])
-            said.append("hauled " + (amount_text(moved) if moved else "nothing"))
+            delivered, dropped = economy.haul(self.board, self.stock, card["haul"] + self.population(), card["reach"])
+            text = "hauled " + (amount_text(delivered) if delivered else "nothing") + " to the stockpile"
+            if dropped:
+                text += f" ({amount_text(dropped)} left on the roads)"
+            said.append(text)
         for k, n in card["gain"].items():
             if k == "soldiers":
                 self.soldiers += n
@@ -224,10 +254,13 @@ class Match:
         if card["draw"]:
             seat.draw(card["draw"])
             said.append(f"drew {card['draw']}")
+        if card["adds"]:
+            seat.deck.add(card["adds"])
+            said.append(f"took {a(CARDS[card['adds']]['name'])} card")
         self.write(f"{seat.name} played {card['name']}: {', '.join(said)}.", seat.pid)
 
-    def work(self, s, boost):
-        key, amount, where = economy.work(self.board, s, self.stock, boost)
+    def work(self, s, card):
+        key, amount, where = economy.work(self.board, s, self.stock, card)
         self.board.version += 1
         name = s.spec["name"]
         if key == "soldiers":

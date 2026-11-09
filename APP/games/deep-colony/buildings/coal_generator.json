@@ -1,0 +1,34 @@
+{
+  "name": "Coal Generator",
+  "category": "power",
+  "w": 2,
+  "h": 2,
+  "cost": {
+    "metal": 400
+  },
+  "buildTime": 30,
+  "kind": "coal_generator",
+  "floor": true,
+  "power": {
+    "gen": 600
+  },
+  "powerPort": [
+    1,
+    1
+  ],
+  "accepts": {
+    "coal": 600
+  },
+  "params": {
+    "coalRate": 1.0,
+    "co2Rate": 0.02,
+    "co2Temp": 110
+  },
+  "heat": 9.0,
+  "decor": {
+    "value": -15,
+    "radius": 3
+  },
+  "description": "Burns coal for power. Gives off CO2 and heat.",
+  "rotatable": true
+}

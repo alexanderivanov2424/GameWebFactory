@@ -1,0 +1,10 @@
+{
+  "name": "Interior Decor",
+  "cost": 10,
+  "requires": [],
+  "unlocks": [
+    "flower_pot",
+    "sculpture"
+  ],
+  "description": "Make the colony nicer to live in."
+}

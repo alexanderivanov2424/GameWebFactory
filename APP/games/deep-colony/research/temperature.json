@@ -1,0 +1,10 @@
+{
+  "name": "Temperature Control",
+  "cost": 15,
+  "requires": [],
+  "unlocks": [
+    "insulated_tile",
+    "space_heater"
+  ],
+  "description": "Keep heat in or out."
+}

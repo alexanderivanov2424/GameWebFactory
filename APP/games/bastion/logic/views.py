@@ -2,7 +2,8 @@
 
     public(match)     everything public: the catalog (static: "kinds" (structure files),
                       "cards", resources, icons, terrain; cached on the match), round, keep,
-                      stockpile, soldiers, board ("structures", roads, walls, blights), foes (face-down ones show only their arrival round), market, seats, log
+                      stockpile, soldiers, population, board ("structures", roads, walls, blights,
+                      cargo), foes (face-down ones show only their arrival round), market, seats, log
     private(match, pid)   {"hand", "targets"} (None for someone not seated)
     targets           {card uid: ...} for every playable hand card:
                       blueprint: {"<rotation>": {"x,y": output}} for each legal top-left cell
@@ -65,6 +66,7 @@ def public(match):
         "keepMax": match.keep_max,
         "stock": dict(match.stock),
         "soldiers": match.soldiers,
+        "population": match.population(),
         "deadline": last + OVERTIME if match.foes else 0,
         "structures": {str(uid): structure_view(match, s, reach) for uid, s in board.structures.items()},
         **board.public(),
@@ -107,7 +109,9 @@ def action_targets(match, card):
             if economy.why_not(board, s, match.stock, match.round, plagued):
                 continue
             key = next(iter(s.spec["work"]["makes"]))
-            amount = economy.output(board, s.kind, s.cells)[0] + card["boost"]
+            amount = economy.amount(board, s, card)
+            if amount <= 0:
+                continue
             stored = key in economy.GOODS and board.link(s) != "depot"
             found[str(uid)] = f"+{amount} {OUTPUT_NAMES[key]}" + (" (stored)" if stored else "")
         elif card["repair"] and s.ruined:

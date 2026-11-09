@@ -1,0 +1,37 @@
+{
+  "name": "Electrolyzer",
+  "category": "oxygen",
+  "w": 2,
+  "h": 2,
+  "cost": {
+    "metal": 200
+  },
+  "buildTime": 20,
+  "kind": "electrolyzer",
+  "floor": true,
+  "power": {
+    "use": 120
+  },
+  "powerPort": [
+    1,
+    1
+  ],
+  "pipeIn": [
+    0,
+    1
+  ],
+  "params": {
+    "inRate": 1.0,
+    "oxygen": 0.888,
+    "hydrogen": 0.112,
+    "outTemp": 70,
+    "maxPressure": 1.8
+  },
+  "heat": 1.25,
+  "decor": {
+    "value": -5,
+    "radius": 1
+  },
+  "description": "Splits piped water into oxygen and hydrogen. Needs power.",
+  "rotatable": true
+}

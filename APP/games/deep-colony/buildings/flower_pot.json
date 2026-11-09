@@ -1,0 +1,18 @@
+{
+  "name": "Flower Pot",
+  "category": "decor",
+  "w": 1,
+  "h": 1,
+  "cost": {
+    "raw": 50,
+    "dirt": 50
+  },
+  "buildTime": 8,
+  "kind": "none",
+  "floor": true,
+  "decor": {
+    "value": 8,
+    "radius": 2
+  },
+  "description": "A small potted plant that brightens the room."
+}

@@ -1,0 +1,25 @@
+{
+  "name": "Gas Vent",
+  "category": "ventilation",
+  "w": 1,
+  "h": 1,
+  "cost": {
+    "metal": 50
+  },
+  "buildTime": 8,
+  "kind": "gas_vent",
+  "gasIn": [
+    0,
+    0
+  ],
+  "params": {
+    "rate": 0.5,
+    "maxPressure": 2.0
+  },
+  "decor": {
+    "value": 0,
+    "radius": 0
+  },
+  "description": "Releases gas from its pipe into the room while the pressure here is low.",
+  "rotatable": true
+}

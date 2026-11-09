@@ -1,0 +1,19 @@
+{
+  "name": "Ration Box",
+  "category": "food",
+  "w": 1,
+  "h": 1,
+  "cost": {
+    "raw": 150
+  },
+  "buildTime": 5,
+  "kind": "ration_box",
+  "floor": true,
+  "capacity": 150,
+  "decor": {
+    "value": 0,
+    "radius": 0
+  },
+  "description": "Colonists store food here and eat from it.",
+  "filterable": true
+}

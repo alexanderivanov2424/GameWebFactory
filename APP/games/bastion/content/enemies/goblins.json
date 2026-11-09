@@ -17,6 +17,10 @@
     {
       "name": "Torch",
       "ruin": 1
+    },
+    {
+      "name": "Waylay",
+      "loot": 3
     }
   ]
 }

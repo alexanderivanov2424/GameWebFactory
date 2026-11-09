@@ -1,0 +1,10 @@
+{
+  "name": "Oxygen",
+  "phase": "gas",
+  "color": "#8fd3ff",
+  "shc": 1.0,
+  "conductivity": 0.1,
+  "density": 3,
+  "breathable": true,
+  "defaultMass": 1.8
+}

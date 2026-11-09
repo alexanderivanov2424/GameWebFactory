@@ -1,0 +1,33 @@
+{
+  "name": "Hydrogen Generator",
+  "category": "power",
+  "w": 2,
+  "h": 2,
+  "cost": {
+    "metal": 400
+  },
+  "buildTime": 30,
+  "kind": "hydrogen_generator",
+  "floor": true,
+  "power": {
+    "gen": 800
+  },
+  "powerPort": [
+    1,
+    1
+  ],
+  "gasIn": [
+    0,
+    1
+  ],
+  "params": {
+    "hydrogenRate": 0.1
+  },
+  "heat": 8.0,
+  "decor": {
+    "value": -10,
+    "radius": 2
+  },
+  "description": "Burns piped hydrogen for power. Gives off heat.",
+  "rotatable": true
+}
