@@ -1,0 +1,23 @@
+{
+ "name": "Road",
+ "icon": "",
+ "cells": [
+  [
+   0,
+   0
+  ]
+ ],
+ "cost": {
+  "wood": 1
+ },
+ "hp": 0,
+ "territory": 1,
+ "terrain": [
+  "grass",
+  "plains",
+  "forest",
+  "hills",
+  "desert"
+ ],
+ "text": "Connects structures to a Town Hall (only connected structures work). Units move twice as far on roads."
+}

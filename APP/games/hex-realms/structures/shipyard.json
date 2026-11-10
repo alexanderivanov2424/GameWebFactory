@@ -1,0 +1,23 @@
+{
+ "name": "Shipyard",
+ "icon": "SY",
+ "cells": [
+  [
+   0,
+   0
+  ],
+  [
+   1,
+   0
+  ]
+ ],
+ "cost": {
+  "wood": 6
+ },
+ "recruits": [
+  "galley"
+ ],
+ "requires": "sailing",
+ "coast": true,
+ "text": "Must touch water. Builds galleys."
+}

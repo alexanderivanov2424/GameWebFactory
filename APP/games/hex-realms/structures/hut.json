@@ -1,0 +1,16 @@
+{
+ "name": "Hut",
+ "icon": "h",
+ "cells": [
+  [
+   0,
+   0
+  ]
+ ],
+ "cost": {
+  "wood": 2
+ },
+ "housing": 2,
+ "home": true,
+ "text": "Housing for 2 people."
+}

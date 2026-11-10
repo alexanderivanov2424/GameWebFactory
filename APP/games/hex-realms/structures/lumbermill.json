@@ -1,0 +1,30 @@
+{
+ "name": "Lumbermill",
+ "icon": "L",
+ "cells": [
+  [
+   0,
+   0
+  ],
+  [
+   1,
+   0
+  ]
+ ],
+ "cost": {
+  "stone": 2,
+  "gold": 3
+ },
+ "jobs": 1,
+ "produce": {
+  "wood": 1
+ },
+ "perAdjacent": {
+  "terrain": "forest",
+  "gain": {
+   "wood": 1
+  },
+  "max": 4
+ },
+ "text": "+1 wood per forest cell next to it (up to 4)."
+}

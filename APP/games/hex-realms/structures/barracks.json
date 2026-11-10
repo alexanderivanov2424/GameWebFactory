@@ -1,0 +1,26 @@
+{
+ "name": "Barracks",
+ "icon": "B",
+ "cells": [
+  [
+   0,
+   0
+  ],
+  [
+   1,
+   0
+  ]
+ ],
+ "cost": {
+  "wood": 5,
+  "stone": 2
+ },
+ "hp": 6,
+ "recruits": [
+  "spearman",
+  "archer",
+  "swordsman"
+ ],
+ "heals": true,
+ "text": "Trains infantry. Units on or next to it heal fully."
+}

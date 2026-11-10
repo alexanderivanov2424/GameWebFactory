@@ -1,0 +1,15 @@
+{
+ "name": "Militia",
+ "icon": "m",
+ "cost": {
+  "food": 3,
+  "gold": 2
+ },
+ "attack": 1,
+ "defense": 2,
+ "hp": 2,
+ "move": 2,
+ "upkeep": {
+  "food": 1
+ }
+}

@@ -1,0 +1,19 @@
+{
+ "name": "Archer",
+ "icon": "Ar",
+ "cost": {
+  "wood": 3,
+  "gold": 4
+ },
+ "attack": 2,
+ "defense": 1,
+ "hp": 2,
+ "move": 2,
+ "range": 2,
+ "requires": "archery",
+ "upkeep": {
+  "food": 1,
+  "gold": 1
+ },
+ "text": "Shoots up to 2 cells away instead of moving; the target can't hit back."
+}

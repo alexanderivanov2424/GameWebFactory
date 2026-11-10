@@ -1,0 +1,21 @@
+{
+ "name": "Catapult",
+ "icon": "Ca",
+ "cost": {
+  "wood": 6,
+  "metal": 2,
+  "gold": 4
+ },
+ "attack": 2,
+ "defense": 0,
+ "hp": 2,
+ "move": 1,
+ "range": 2,
+ "siege": 3,
+ "requires": "engineering",
+ "upkeep": {
+  "food": 1,
+  "gold": 1
+ },
+ "text": "Each hit on a structure does 3 damage."
+}

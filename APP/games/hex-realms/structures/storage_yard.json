@@ -1,0 +1,27 @@
+{
+ "name": "Storage Yard",
+ "icon": "Y",
+ "cells": [
+  [
+   0,
+   0
+  ],
+  [
+   1,
+   0
+  ],
+  [
+   0,
+   1
+  ]
+ ],
+ "cost": {
+  "wood": 4
+ },
+ "store": {
+  "wood": 40,
+  "stone": 40,
+  "metal": 40
+ },
+ "text": "+40 wood, stone and metal storage."
+}

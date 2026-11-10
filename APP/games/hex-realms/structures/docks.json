@@ -1,0 +1,23 @@
+{
+ "name": "Docks",
+ "icon": "D",
+ "cells": [
+  [
+   0,
+   0
+  ]
+ ],
+ "cost": {
+  "wood": 4
+ },
+ "jobs": 1,
+ "produce": {
+  "food": 2,
+  "gold": 2
+ },
+ "requires": "sailing",
+ "terrain": [
+  "water"
+ ],
+ "text": "Built on water."
+}

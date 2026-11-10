@@ -1,0 +1,30 @@
+{
+ "name": "Trading Hall",
+ "icon": "$$",
+ "cells": [
+  [
+   0,
+   0
+  ],
+  [
+   1,
+   0
+  ],
+  [
+   0,
+   1
+  ]
+ ],
+ "cost": {
+  "wood": 4,
+  "stone": 6,
+  "gold": 10
+ },
+ "jobs": 2,
+ "produce": {
+  "gold": 4
+ },
+ "trade": 2,
+ "requires": "trade",
+ "text": "Lets you trade 2:1."
+}

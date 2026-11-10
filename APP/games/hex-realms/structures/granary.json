@@ -1,0 +1,22 @@
+{
+ "name": "Granary",
+ "icon": "G",
+ "cells": [
+  [
+   0,
+   0
+  ],
+  [
+   1,
+   0
+  ]
+ ],
+ "cost": {
+  "wood": 4
+ },
+ "store": {
+  "food": 40
+ },
+ "growth": 1,
+ "text": "+40 food storage. Population grows 1 faster."
+}

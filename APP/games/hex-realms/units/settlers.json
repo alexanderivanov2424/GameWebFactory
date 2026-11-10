@@ -1,0 +1,18 @@
+{
+ "name": "Settlers",
+ "icon": "Se",
+ "cost": {
+  "food": 8,
+  "wood": 4
+ },
+ "people": 2,
+ "attack": 0,
+ "defense": 0,
+ "hp": 1,
+ "move": 2,
+ "settler": true,
+ "upkeep": {
+  "food": 1
+ },
+ "text": "Founds a new Town Hall where it stands (at least 5 cells from any other)."
+}

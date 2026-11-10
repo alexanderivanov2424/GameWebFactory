@@ -1,0 +1,35 @@
+{
+ "name": "Market",
+ "icon": "$",
+ "cells": [
+  [
+   0,
+   0
+  ],
+  [
+   1,
+   0
+  ],
+  [
+   2,
+   0
+  ]
+ ],
+ "cost": {
+  "wood": 4,
+  "stone": 2
+ },
+ "jobs": 1,
+ "produce": {
+  "gold": 2
+ },
+ "perAdjacent": {
+  "home": true,
+  "gain": {
+   "gold": 1
+  },
+  "max": 4
+ },
+ "trade": 3,
+ "text": "+1 gold per Hut/House next to it (up to 4). Lets you trade 3:1."
+}

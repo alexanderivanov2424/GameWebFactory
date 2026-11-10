@@ -1,0 +1,23 @@
+{
+ "name": "College",
+ "icon": "C",
+ "cells": [
+  [
+   0,
+   0
+  ],
+  [
+   1,
+   0
+  ]
+ ],
+ "cost": {
+  "wood": 4,
+  "stone": 3,
+  "gold": 5
+ },
+ "jobs": 1,
+ "produce": {
+  "science": 2
+ }
+}

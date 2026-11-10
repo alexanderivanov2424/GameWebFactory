@@ -1,0 +1,33 @@
+{
+ "name": "University",
+ "icon": "U",
+ "cells": [
+  [
+   0,
+   0
+  ],
+  [
+   1,
+   0
+  ],
+  [
+   0,
+   1
+  ],
+  [
+   1,
+   1
+  ]
+ ],
+ "cost": {
+  "stone": 10,
+  "gold": 15,
+  "metal": 2
+ },
+ "jobs": 2,
+ "produce": {
+  "science": 5
+ },
+ "requires": "academics",
+ "score": 2
+}

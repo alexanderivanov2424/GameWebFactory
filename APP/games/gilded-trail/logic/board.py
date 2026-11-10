@@ -24,7 +24,8 @@ passable crossings (explorers can't fully jam a chokepoint).
 
 import random
 
-DIRS = [(1, 0), (1, -1), (0, -1), (-1, 0), (-1, 1), (0, 1)]
+from gamekit.hexes import DIRS, adjacent, distance, key, neighbors, parse  # noqa: F401  (re-exported)
+
 TILE_OFFSETS = [(7, -3), (3, 4), (-4, 7), (-7, 3), (-3, -4), (4, -7)]
 RANDOM_WEIGHTS = {"machete": 5, "paddle": 2.2, "coin": 2, "mountain": 1.5}
 FIRST_TILE_WEIGHTS = {"machete": 5, "paddle": 2, "coin": 2, "mountain": 0.6}
@@ -32,29 +33,6 @@ BLOCKADE_WEIGHTS = {"machete": 3, "paddle": 2, "coin": 2, "rubble": 2}
 START_SPACES = 4
 GOAL_SPACES = 3
 MIN_CROSSINGS = 3
-
-
-def key(q, r):
-    return f"{q},{r}"
-
-
-def parse(k):
-    q, r = k.split(",")
-    return int(q), int(r)
-
-
-def distance(a, b):
-    dq, dr = a[0] - b[0], a[1] - b[1]
-    return (abs(dq) + abs(dr) + abs(dq + dr)) // 2
-
-
-def neighbors(k):
-    q, r = parse(k)
-    return [key(q + dq, r + dr) for dq, dr in DIRS]
-
-
-def adjacent(a, b):
-    return distance(parse(a), parse(b)) == 1
 
 
 def pick_weighted(rng, weights):

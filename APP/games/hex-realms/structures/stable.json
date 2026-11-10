@@ -1,0 +1,27 @@
+{
+ "name": "Stable",
+ "icon": "S",
+ "cells": [
+  [
+   0,
+   0
+  ],
+  [
+   1,
+   0
+  ]
+ ],
+ "cost": {
+  "wood": 6,
+  "gold": 2
+ },
+ "recruits": [
+  "knight"
+ ],
+ "requires": "horsemanship",
+ "terrain": [
+  "grass",
+  "plains"
+ ],
+ "text": "Trains knights."
+}

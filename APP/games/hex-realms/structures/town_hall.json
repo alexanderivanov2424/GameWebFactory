@@ -1,0 +1,37 @@
+{
+ "name": "Town Hall",
+ "icon": "TH",
+ "cells": [
+  [
+   0,
+   0
+  ],
+  [
+   1,
+   0
+  ],
+  [
+   0,
+   1
+  ]
+ ],
+ "hp": 15,
+ "defense": 2,
+ "housing": 4,
+ "storage": 25,
+ "territory": 3,
+ "produce": {
+  "gold": 3,
+  "food": 3,
+  "wood": 1,
+  "stone": 1,
+  "science": 1,
+  "faith": 1
+ },
+ "recruits": [
+  "militia",
+  "settlers"
+ ],
+ "score": 4,
+ "text": "Heart of a city. Founded by Settlers. Lose every Town Hall and you are out."
+}
