@@ -214,7 +214,7 @@
     if (s) {
       const card = g.cards[s.kind];
       tip = `${card.icon} ${card.name} — ${nameOf(s.owner)}${s.pending ? " (being built)" : ""}\n${card.text}`;
-      if (s.pending && s.owner === you() && !priv().turn) tip += "\nRight-click to take it back.";
+      if (s.pending && s.owner === you() && priv() && !priv().turn) tip += "\nRight-click to take it back.";
     } else if (isSpot) {
       tip = `Place your ${place.name} here.`;
     }

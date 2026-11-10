@@ -215,6 +215,11 @@ Summary:
    never control a unit: shared orders tagged by player, shared pause/speed, live cursors as
    realtime input, a cell simulation (gas, liquid, heat, germs, decor) sent as row strings over
    `Snapshots`, power/pipe networks, and colonists choosing chores on their own.
+   `games/bastion2/` (`logic/` modules): Bastion as a deck-building city-builder (no units, no
+   terrain, enemies hidden): a play area with per-turn resource counters, upkeep cards that punish
+   being discarded, builds that complete at the end of the turn, structure actions, an unbounded
+   grid shown as a pannable/zoomable floating map with the HUD around the screen edges, and turns
+   either everyone at once or one at a time (a setting); `PatchState`.
 
 ## Lobby model (shared by all games)
 - Every connected tab is a **member**: a **spectator** until it joins, then a **player**. Players join and leave explicitly, and only in the lobby phase.
