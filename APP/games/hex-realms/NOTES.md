@@ -20,7 +20,7 @@ fields in `logic/content.py`). Tests: `tests/` (`python3 -I tools/run_tests.py h
 - **Multi-cell hex structures**: footprints are axial offsets; `gamekit.hexes.rotations`
   precomputes the 6 turns, sent in the content so the client draws ghosts.
 - **Road networks and workers** (`logic/economy.py`): only structures linked to a Town Hall by
-  touching structures/roads work; population fills jobs (food first, then oldest).
+  a chain of roads work (touching a structure doesn't count); population fills jobs (food first, then oldest).
 - **A turn timer**: `server.py` schedules a timeout per turn (checked against the turn number).
 
 ## Map

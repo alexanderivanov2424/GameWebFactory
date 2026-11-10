@@ -2,8 +2,10 @@
 
     territory(m)             {key: pid}: each cell within a structure's claim radius belongs to
                              the owner of the nearest structure cell (a tie between players = no one)
-    connected(m, pid)        set of pid's structure ids linked to one of their Town Halls through
-                             touching structures and roads (only these work)
+    connected(m, pid)        set of pid's structure ids linked to one of their Town Halls by roads
+                             (only these work): a Town Hall always is; roads chain from a road
+                             touching a Town Hall; any other structure counts once one of its cells
+                             touches a linked road (touching another structure isn't enough)
     effect(m, pid, name)     sum of an advance effect key over pid's advances
     report(m, pid)           this turn's forecast: {"income", "upkeep", "net", "staffed": [sid],
                              "workers", "idle", "housing", "caps", "growth", "tradeRate"}
@@ -41,15 +43,18 @@ def territory(m):
 
 
 def connected(m, pid):
-    own = {c: sid for c, sid in m.cell_structure.items() if m.structures[sid]["owner"] == pid}
-    todo = [c for c, sid in own.items() if m.structures[sid]["type"] == TOWN_HALL]
-    seen = set(todo)
+    own = [s for s in m.structures.values() if s["owner"] == pid]
+    roads = {c for s in own if s["type"] == ROAD for c in s["cells"]}
+    halls = [s for s in own if s["type"] == TOWN_HALL]
+    todo = [n for s in halls for c in s["cells"] for n in neighbors(c) if n in roads]
+    linked_roads = set(todo)
     while todo:
         for n in neighbors(todo.pop()):
-            if n in own and n not in seen:
-                seen.add(n)
+            if n in roads and n not in linked_roads:
+                linked_roads.add(n)
                 todo.append(n)
-    return {own[c] for c in seen}
+    return {s["id"] for s in own if s["type"] == TOWN_HALL or (s["cells"][0] in linked_roads if s["type"] == ROAD else
+            any(n in linked_roads for c in s["cells"] for n in neighbors(c)))}
 
 
 def effect(m, pid, name):

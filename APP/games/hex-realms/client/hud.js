@@ -163,7 +163,7 @@
         el("span", { className: "hr-bicon" }, d.icon || "▪"), el("span", { className: "hr-bname" }, d.name), el("span", { className: "hr-bcost small" }, why || costText(d.cost)));
     });
     box.replaceChildren(el("div", { className: "hr-buildgrid" }, items),
-      el("p", { className: "muted small" }, "Pick a structure, then click the map. R or right-click turns it, Esc cancels. It must touch your structures and sit in your territory."));
+      el("p", { className: "muted small" }, "Pick a structure, then click the map. R or right-click turns it, Esc cancels. It must touch your structures and sit in your territory, and it only works once a road links it to a Town Hall."));
   }
 
   window.HexHud = { topbar, players, selection, orders, trade, build, fmt: { costText, canPay, nameSpan, btn, cap } };

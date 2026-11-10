@@ -100,27 +100,47 @@ class EconomyTests(unittest.TestCase):
         from importlib import import_module
         return import_module("games.hex-realms.logic.economy").report(self.m, "p1")
 
-    def test_unconnected_structure_does_not_work(self):
+    def linked(self, stype, at, rot=0):
+        """A structure at `at` with a road from the hall (cells 0,0 1,0 0,1) at 2,-1 touching both."""
+        self.m.add_structure("p1", "road", "2,-1", 0)
+        return self.m.add_structure("p1", stype, at, rot)["id"]
+
+    def test_only_roads_link_structures(self):
         farm = self.m.add_structure("p1", "farm", "4,0", 0)["id"]
         self.assertNotIn(farm, self.report()["staffed"])
         for at in ("2,0", "3,0"):
             self.m.add_structure("p1", "road", at, 0)
         self.assertIn(farm, self.report()["staffed"])
 
+    def test_touching_the_hall_is_not_a_link(self):
+        touching = self.m.add_structure("p1", "farm", "2,0", 0)["id"]  # next to the hall's 1,0
+        self.assertNotIn(touching, self.report()["staffed"])
+        farm = self.m.add_structure("p1", "farm", "-3,0", 0)["id"]  # cells -3,0 -2,0 -3,1
+        self.m.add_structure("p1", "road", "-1,0", 0)  # touches the hall and the farm
+        self.assertIn(farm, self.report()["staffed"])
+
+    def test_roads_must_chain_to_a_hall(self):
+        self.m.add_structure("p1", "road", "5,0", 0)
+        farm = self.m.add_structure("p1", "farm", "6,0", 0)["id"]
+        self.assertNotIn(farm, self.report()["staffed"])
+        for at in ("2,0", "3,0", "4,0"):
+            self.m.add_structure("p1", "road", at, 0)
+        self.assertIn(farm, self.report()["staffed"])
+
     def test_jobs_need_people(self):
-        farm = self.m.add_structure("p1", "farm", "2,0", 0)["id"]
+        farm = self.linked("farm", "2,0")
         self.m.players["p1"]["pop"] = 0
         self.assertNotIn(farm, self.report()["staffed"])
 
     def test_switched_off_frees_workers(self):
-        farm = self.m.add_structure("p1", "farm", "2,0", 0)["id"]
+        farm = self.linked("farm", "2,0")
         self.m.act("p1", "toggle", farm)
         rep = self.report()
         self.assertNotIn(farm, rep["staffed"])
         self.assertEqual(rep["idle"], self.m.players["p1"]["pop"])
 
     def test_farm_gets_grass_bonus(self):
-        self.m.add_structure("p1", "farm", "2,0", 0)
+        self.linked("farm", "2,0")
         with_grass = self.report()["income"]["food"]
         for c in ("2,0", "3,0", "2,1"):
             self.m.cells[c] = "plains"
@@ -149,7 +169,7 @@ class EconomyTests(unittest.TestCase):
     def test_market_trade(self):
         with self.assertRaisesRegex(LobbyError, "Market"):
             self.m.act("p1", "trade", "wood", "stone")
-        self.m.add_structure("p1", "market", "2,0", 0)
+        self.linked("market", "2,0")
         wood, stone = self.m.players["p1"]["res"]["wood"], self.m.players["p1"]["res"]["stone"]
         self.m.act("p1", "trade", "wood", "stone")
         self.assertEqual((self.m.players["p1"]["res"]["wood"], self.m.players["p1"]["res"]["stone"]), (wood - 3, stone + 1))

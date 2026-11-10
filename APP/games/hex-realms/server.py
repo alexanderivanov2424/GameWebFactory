@@ -5,7 +5,7 @@ secret: place structures (multi-cell footprints, turned in 60-degree steps) insi
 territory, train units, order moves and attacks, research advances, trade at a market. When
 everyone has pressed End turn (or the turn timer runs out), all orders resolve together:
 units move one cell per step at the same time and fight with dice wherever they meet. Only
-structures linked to a Town Hall by roads (or by touching) work; structures with jobs need
+structures linked to a Town Hall by roads work (touching isn't enough); structures with jobs need
 people (population), who need food and housing. Lose every Town Hall and you are out. Last
 realm standing wins; otherwise the highest score after the last turn.
 Full rules: logic/match.py (turn order, score), logic/economy.py, logic/combat.py,

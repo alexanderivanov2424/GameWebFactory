@@ -1,0 +1,26 @@
+{
+ "name": "Bakery",
+ "icon": "b",
+ "cells": [
+  [
+   0,
+   0
+  ]
+ ],
+ "cost": {
+  "wood": 2,
+  "stone": 1
+ },
+ "jobs": 1,
+ "produce": {
+  "food": 1
+ },
+ "perAdjacent": {
+  "home": true,
+  "gain": {
+   "food": 1
+  },
+  "max": 4
+ },
+ "text": "+1 food, and +1 more per Hut or House next to it (up to 4)."
+}
