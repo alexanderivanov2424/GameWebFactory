@@ -12,8 +12,7 @@ Yard, Granary) and producers flagged "road" deliver them along road networks (ro
 realm standing wins; otherwise the highest score after the last turn.
 Full rules: logic/match.py (turn order, score), logic/economy.py, logic/combat.py,
 logic/movement.py, logic/orders.py, logic/logistics.py; content in structures/, units/,
-advances/ (fields in
-logic/content.py).
+advances/ (fields in logic/content.py).
 
 Player options:  none (colors by seat)
 Settings:        mapSize (small/normal/large), turns (turn limit), turnSeconds (0 = no timer),
