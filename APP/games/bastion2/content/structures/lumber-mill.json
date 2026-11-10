@@ -1,0 +1,6 @@
+{
+  "name": "Lumber Mill", "icon": "🪚", "market": "shop", "copies": 3,
+  "cost": {"wood": 2, "population": 1},
+  "on_build": {"add": [{"card": "wood-3"}]},
+  "action": {"name": "Saw wood", "actions": 0, "card": "wood"}
+}

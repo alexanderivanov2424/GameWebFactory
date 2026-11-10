@@ -1,0 +1,4 @@
+{
+  "deck": {"wood": 4, "stone": 3, "wheat": 3, "king": 1},
+  "after_first_hand": {"villager": 2}
+}

@@ -1,0 +1,5 @@
+{
+  "name": "Farm", "icon": "🚜", "market": "always",
+  "cost": {"wood": 2, "population": 1},
+  "on_build": {"add": [{"card": "wheat", "optional": true}]}
+}

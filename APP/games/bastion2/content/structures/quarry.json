@@ -1,0 +1,6 @@
+{
+  "name": "Quarry", "icon": "⛏️", "market": "shop", "copies": 3,
+  "cost": {"wood": 2, "population": 1},
+  "on_build": {"add": [{"card": "stone-3"}]},
+  "action": {"name": "Cut stone", "actions": 0, "card": "stone"}
+}

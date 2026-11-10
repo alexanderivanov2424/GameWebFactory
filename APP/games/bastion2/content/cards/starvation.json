@@ -1,0 +1,5 @@
+{
+  "name": "Starvation", "icon": "💀", "kind": "upkeep",
+  "pay": {"food": 3}, "paid_off": true,
+  "discarded": {"population": -1, "remove": true}
+}

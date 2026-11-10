@@ -1,0 +1,5 @@
+{
+  "name": "Hunger", "icon": "🥣", "kind": "upkeep",
+  "pay": {"food": 2}, "discard": 3, "paid_off": true,
+  "discarded": {"add": "starvation"}
+}

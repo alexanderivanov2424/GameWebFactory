@@ -1,0 +1,5 @@
+{
+  "name": "Hut", "icon": "🛖", "market": "always",
+  "cost": {"wood": 1, "stone": 1, "population": 1},
+  "on_build": {"population": 1, "add": [{"card": "villager"}]}
+}

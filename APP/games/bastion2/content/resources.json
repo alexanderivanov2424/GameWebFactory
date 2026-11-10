@@ -1,0 +1,6 @@
+{
+  "wood": {"name": "Wood", "icon": "🪵", "temporary": true},
+  "stone": {"name": "Stone", "icon": "🪨", "temporary": true},
+  "food": {"name": "Food", "icon": "🍞"},
+  "population": {"name": "Population", "icon": "🧑"}
+}

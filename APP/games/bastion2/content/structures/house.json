@@ -1,0 +1,5 @@
+{
+  "name": "House", "icon": "🏠", "market": "always",
+  "cost": {"wood": 2, "stone": 1, "population": 2},
+  "on_build": {"population": 2, "add": [{"card": "villager", "count": 2}]}
+}
