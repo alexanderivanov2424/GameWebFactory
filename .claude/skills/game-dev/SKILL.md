@@ -58,6 +58,11 @@ Games at a glance (details in each `NOTES.md`):
   (built at the end of the turn), upkeep cards Villager / Hunger / Starvation, structure actions once a turn, an
   always-for-sale market plus a shop row). Unbounded grid; full-screen page with a HUD
   (`client/map.js` pans/zooms). Enemies hidden. Content: `content/README.md`.
+- **hex-realms**: `logic/` modules; civilization game on a random hex map. Secret simultaneous
+  orders (build / recruit / move / shoot / hold / found / research / trade), resolved together in
+  `Match.resolve` (order in `logic/match.py`'s header); movement collisions in `logic/movement.py`,
+  dice in `logic/combat.py`, territory/roads/workers in `logic/economy.py`. Content JSON in
+  `structures/`, `units/`, `advances/` (fields in `logic/content.py`).
 - **block-blast**: `logic/` modules; 9x9 boards filled with rotatable shape cards (JSON in
   `cards/`) that place tiles (types with behaviours, `logic/tiles.py`) carrying symbols
   (`logic/symbols.py`, effects in `logic/effects.py`) as separate layers, row/column clears that pay gold or deal damage, a per-player `gamekit.Deck`, a

@@ -23,6 +23,7 @@ Modules (each header documents its API):
     choices.py   SecretChoices: hidden simultaneous picks, revealed together
     deck.py      Deck: shuffled draw pile + discard pile of card instances (uids), reshuffles
     shapes.py    Polyomino shapes: parse, rotate, the 4 rotations (from gamekit.shapes import ...)
+    hexes.py     Hex grid geometry: axial keys, distance, neighbours, disk/ring maps, 6 rotations
     data.py      Loading and validating JSON content files
     sim.py       Sim: drives a game through the real lobby for tests (no network)
 

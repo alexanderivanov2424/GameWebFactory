@@ -85,6 +85,7 @@ APP/
   gamekit/              Shared game library, server side (Python package `gamekit`). Games import only this.
     __init__.py         Re-exports: LobbyGame, LobbyError, PLAYING/FINISHED/LOBBY, Int, Choice, MultiChoice, TurnQueue, SecretChoices,
                         Deck, RealtimeGame, FullState, PatchState, Snapshots, turtle
+                        (gamekit.hexes and gamekit.shapes are imported directly)
     lobby.py            LobbyGame: spectators/players, host, ready, phases, end-game vote, public + private state sync,
                         SETTINGS, ACTIONS dispatch, game_number, schedule() timers, SYNC,
                         saved player data (load_data / save_data / account_name)
@@ -96,6 +97,7 @@ APP/
     choices.py          SecretChoices: hidden simultaneous picks (required + optional choosers), revealed all at once
     deck.py             Deck: shuffled draw pile + discard pile of card instances (uids), reshuffles when empty
     shapes.py           Polyomino shapes: parse rows of '#', turn them, list the 4 rotations (never mirrored)
+    hexes.py            Hex grid geometry (axial "q,r" keys): distance, neighbours, disk/ring maps, 6 rotations of hex shapes
     data.py             Loading JSON content files (cards, units...): bad files are logged and skipped
     sim.py              Sim: drives a game through the real lobby for tests (no network); also ticks and inputs
     tests/
@@ -220,6 +222,11 @@ Summary:
    being discarded, builds that complete at the end of the turn, structure actions, an unbounded
    grid shown as a pannable/zoomable floating map with the HUD around the screen edges, and turns
    either everyone at once or one at a time (a setting); `PatchState`.
+   `games/hex-realms/` (`logic/` modules): a civilization game on a random hex map (`gamekit.hexes`):
+   everyone plans in secret at once, then all orders resolve together (simultaneous step-by-step
+   movement where units that meet fight with dice, sieges, towers), multi-cell structures that
+   only work when road-connected to a Town Hall and staffed by population, territory, advances
+   bought with science or faith, an optional turn timer (`schedule`); `PatchState`.
 
 ## Lobby model (shared by all games)
 - Every connected tab is a **member**: a **spectator** until it joins, then a **player**. Players join and leave explicitly, and only in the lobby phase.

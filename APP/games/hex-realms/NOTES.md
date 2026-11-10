@@ -1,17 +1,69 @@
 # Hex Realms: developer notes
 
-Rules and the message list: the docstring at the top of `server.py`.
-Tests: `tests/` (`python3 -I tools/run_tests.py hex-realms`).
+Rules and the message list: the docstring at the top of `server.py`; resolution order and score
+in `logic/match.py`'s header. Content: `structures/`, `units/`, `advances/` (one JSON per item,
+fields in `logic/content.py`). Tests: `tests/` (`python3 -I tools/run_tests.py hex-realms`).
 
 ## Read this game to learn
-- TODO the patterns this game is a good example of (for whoever builds the next game).
+- **Simultaneous secret orders resolved together.** Everyone plans at once; orders live in
+  `Match.orders[pid]` (private state only) and are paid for when given (refunded on cancel or
+  failure), so nobody can over-order. Public stock is a start-of-turn snapshot (`Match.shown`)
+  so spending doesn't leak plans. `done` flags + "all alive players done" resolve the turn;
+  any new order clears your `done`.
+- **Simultaneous movement with collisions** (`logic/movement.py`): paths are fixed at order
+  time; resolution moves every unit one cell per step, with swaps, shared targets, chains of
+  followers and blocked units handled in a fixed order. Fighting stops both units, which keeps
+  the rules short (no "winner moves in" special cases).
+- **Dice combat** (`logic/combat.py`): d6 pools, 4+ to hit, 5+ against cover, up to 3 rounds;
+  every roll is in the event so the client can show it. Tests use `tests/helpers.FixedDice`
+  (every die shows one face) to make outcomes certain.
+- **Multi-cell hex structures**: footprints are axial offsets; `gamekit.hexes.rotations`
+  precomputes the 6 turns, sent in the content so the client draws ghosts.
+- **Road networks and workers** (`logic/economy.py`): only structures linked to a Town Hall by
+  touching structures/roads work; population fills jobs (food first, then oldest).
+- **A turn timer**: `server.py` schedules a timeout per turn (checked against the turn number).
 
 ## Map
-- `server.py`: the lobby side: `SETTINGS`, `ACTIONS`, player options, and thin action methods
-  that unpack each message and call `Match`. TODO timers, saved data.
-- `logic/match.py`: `Match`, the rules and state of one game. TODO where the main rules are.
-- `logic/`: TODO one line per extra module.
-- `client/game.js`: TODO its render functions / sections.
+- `server.py`: `SETTINGS`, `ACTIONS` (one thin method per message → `Match.act`), turn timer
+  (`start_timer` / `timeout` / `after_resolve`).
+- `logic/match.py`: `Match`: setup (map, halls, militia), state helpers used by the other modules
+  (`add_structure`, `remove_unit`, `move_unit`, `refresh` = territory cache), `act` / `set_done`,
+  `resolve` (+ `_found`, `_builds`, `_recruits`, `_heal`, `_eliminate`, `_check_end`), `score`,
+  `remove`, `public`, `private` (orders, economy forecast, unit reach, recruit reasons, valid
+  founding rotations).
+- `logic/orders.py`: one function per order; `site_problem` / `recruit_problem` /
+  `found_problem` are shared with resolution (re-checked then) and the private state.
+- `logic/movement.py`, `logic/combat.py`, `logic/economy.py`, `logic/mapgen.py`,
+  `logic/content.py`: see their headers.
+- `client/map.js`: `HexMap.create`: pan (drag) / zoom (wheel) SVG map; terrain layer rebuilt only
+  when `game.cells` changes, the rest per state; `setHighlights` / `setGhost` / `flash` only
+  touch overlays. `HexMap.util` has the client's hex maths (dist, neighbors, add).
+- `client/hud.js`: `HexHud`: top bar (stock + net, people, End turn), players, selection panel
+  (unit / structure actions, recruit buttons with the server's reasons), orders list, trade,
+  build menu. `client/panels.js`: `HexPanels`: advances, last-turn report (dice faces), log.
+- `client/game.js`: UI state (`ui.sel`, `ui.mode` build / shoot / found + rotation, tab), click
+  and key handling, highlights and the build ghost (its green/red is only a hint; the server
+  decides), the turn countdown (approximate: restarts on reload).
+- `tests/`: `test_rules.py` (Match on a blank all-grass map: `helpers.blank`, `hall`, `unit`,
+  `rich`), `test_lobby.py` (Sim: secrecy, done, timer, leaving).
+
+## Balance notes (reasoning, not simulation)
+- Start: 3 people, housing 4; the Town Hall alone nets +1 food, so you grow once, then need a
+  Hut (2 wood) or House. Three starting people can staff only three of farm / lumbermill /
+  mine, which is the opening choice.
+- Sieges are slow on purpose: a Swordsman does ~2 damage a turn to a 15 hp Town Hall and takes
+  ~1 back, so taking a city needs 3+ units or Catapults (3 damage per hit, from range, no reply,
+  but towers shoot them).
+- Score: population + units + 3 per advance + structure scores + gold // 10, so a peaceful
+  builder can win on the turn limit; conquest ends it early.
 
 ## Pitfalls seen here
-- TODO anything that bit you (and how it was solved).
+- Never use a `type` key in game messages: the lobby envelope is `{"type": "game", ...}` and
+  yours overwrites it (the message silently does nothing). Build/recruit say `kind`.
+- Unit ids sort as strings in `movement.resolve` ("u10" < "u9"): deterministic, but not by age;
+  use the `n` field when age matters (desertion, tower targets).
+- A player can be knocked out mid-resolution; loops over players use `self.alive()` again after
+  each stage, and `remove_unit` also clears that unit's orders.
+
+## Not done yet (ideas)
+- Fog of war, ships carrying land units, capturing (instead of destroying) cities, diplomacy.

@@ -14,23 +14,128 @@
   <script src="/gamekit/room.js" defer></script>
   <script src="/gamekit/lobby.js" defer></script>
   <script src="/gamekit/lobby-ui.js" defer></script>
+  <script src="map.js" defer></script>
+  <script src="hud.js" defer></script>
+  <script src="panels.js" defer></script>
   <script src="game.js" defer></script>
 
   <style>
-    /* Base styles (body, main with 72px top padding, .card, .row, buttons, inputs) come from
-       /shared/theme.js; player list and error banner from /gamekit/lobby-ui.js.
-       Restyle with variables, e.g. :root { --gwf-bg: #efe8da; --gwf-accent: #5d6873; } */
     :root { --gwf-main-width: 640px; }
-    /* TODO game styles */
+    #status { position: fixed; top: 10px; left: 50%; transform: translateX(-50%); z-index: 30; max-width: 460px; text-align: center; }
+    #status p { margin: 0; }
+
+    /* The game page: a full-screen dark map with the HUD floating around its edges. */
+    #game { position: fixed; inset: 0; z-index: 1; background: #12161d; color: #e7eaf0; overflow: hidden; }
+    #map { position: absolute; inset: 0; cursor: grab; }
+    .hr-svg { width: 100%; height: 100%; display: block; user-select: none; }
+    .hr-cell { stroke: rgba(0, 0, 0, 0.28); stroke-width: 1; }
+    .hr-glyph { fill: none; stroke: rgba(0, 0, 0, 0.28); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; pointer-events: none; }
+    .hr-territory, .hr-orders, .hr-units, .hr-structs { pointer-events: none; }
+    .hr-struct, .hr-unit, .hr-road { pointer-events: all; }
+    .hr-icon { fill: #fff; font: 700 15px sans-serif; text-anchor: middle; dominant-baseline: central; paint-order: stroke; stroke: #10131a; stroke-width: 3px; pointer-events: none; }
+    .hr-ghosttext { opacity: 0.8; }
+    .hr-idle polygon { opacity: 0.45; }
+    .hr-strike { stroke: #ff6a5a; stroke-width: 3; stroke-linecap: round; }
+    .hr-hpback { fill: #20242d; stroke: #000; stroke-width: 0.5; }
+    .hr-hpbar { fill: #5ccf6a; }
+    .hr-road-edge { stroke-width: 12; stroke-linecap: round; }
+    .hr-road-line { stroke: #d9c8a0; stroke-width: 7; stroke-linecap: round; }
+    .hr-road-dot { fill: #d9c8a0; stroke-width: 3; }
+    .hr-unit circle:first-child { stroke: #10131a; stroke-width: 2.5; }
+    .hr-mine circle:first-child { stroke: #fff; stroke-width: 3; }
+    .hr-uicon { fill: #fff; font: 700 12px sans-serif; text-anchor: middle; dominant-baseline: central; paint-order: stroke; stroke: #10131a; stroke-width: 2.5px; }
+    .hr-pip { fill: #20242d; stroke: #000; stroke-width: 0.6; }
+    .hr-pip.on { fill: #5ccf6a; }
+    .hr-path { fill: none; stroke: #fff; stroke-width: 4; stroke-opacity: 0.85; stroke-linejoin: round; stroke-linecap: round; stroke-dasharray: 1 8; }
+    .hr-arrow { fill: #fff; fill-opacity: 0.9; }
+    .hr-shot { stroke: #ff4a3a; stroke-width: 3; stroke-dasharray: 7 5; }
+    .hr-shotmark { fill: none; stroke: #ff4a3a; stroke-width: 3; }
+    .hr-hold { fill: #fff; stroke: #10131a; stroke-width: 1.5; }
+    .hr-hl-reach { fill: rgba(255, 255, 255, 0.22); stroke: #fff; stroke-width: 1.5; }
+    .hr-hl-attack { fill: rgba(255, 60, 40, 0.38); stroke: #ff5a48; stroke-width: 2.5; }
+    .hr-hl-range { fill: rgba(255, 200, 60, 0.18); stroke: #ffc83c; stroke-width: 1.2; }
+    .hr-hl-sel { fill: rgba(255, 255, 255, 0.1); stroke: #ffe36b; stroke-width: 3.5; }
+    .hr-ghost { pointer-events: none; }
+    .hr-ghost-ok { fill: rgba(80, 230, 110, 0.45); stroke: #6dff8a; stroke-width: 2.5; }
+    .hr-ghost-bad { fill: rgba(255, 70, 60, 0.45); stroke: #ff6a5a; stroke-width: 2.5; }
+    .hr-flashes { pointer-events: none; }
+    .hr-flash { fill: none; stroke-width: 5; transform-box: fill-box; transform-origin: center; animation: hr-pulse 0.8s ease-out 4; }
+    .hr-flash-battle { stroke: #ff5a48; } .hr-flash-siege { stroke: #ffb13c; } .hr-flash-shot { stroke: #ffe36b; }
+    @keyframes hr-pulse { from { transform: scale(0.5); opacity: 1; } to { transform: scale(1.7); opacity: 0; } }
+
+    /* HUD: a grid over the map; only the panels take the mouse. Bottom padding keeps the chat tab clear. */
+    #hud { position: absolute; inset: 60px 12px 12px; display: grid; grid-template-columns: 270px 1fr 320px;
+      grid-template-rows: auto 1fr; gap: 8px; pointer-events: none; }
+    #hud > * { pointer-events: auto; min-height: 0; }
+    .hr-panel, #topbar, #hint, #result { background: rgba(22, 27, 36, 0.93); color: #e7eaf0; border: 1px solid #364055; border-radius: 8px; padding: 8px 10px; box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4); }
+    #topbar { grid-column: 1 / 4; display: flex; align-items: center; gap: 14px; flex-wrap: wrap; pointer-events: auto; }
+    #col-left, #col-right { overflow-y: auto; display: flex; flex-direction: column; gap: 8px; pointer-events: none; padding-bottom: 8px; }
+    #col-left > *, #col-right > * { pointer-events: auto; flex: none; }
+    #col-right { grid-column: 3; padding-bottom: 96px; }
+    #hud h3 { margin: 0 0 6px; font-size: 0.95rem; color: #fff; }
+    #hud p { margin: 4px 0; }
+    #hud .muted { color: #98a2b6; }
+    .pos { color: #6fe08a; } .neg { color: #ff7d6d; }
+    .hr-turn { font-weight: 700; font-size: 1.05rem; }
+    .hr-timer { color: #ffd36b; font-variant-numeric: tabular-nums; }
+    .hr-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+    .hr-chip { background: #2a3243; border-radius: 6px; padding: 2px 8px; font-size: 0.85rem; white-space: nowrap; }
+    .hr-chip b { color: #fff; } .hr-chip small { color: #98a2b6; } .hr-chip.full b { color: #ffd36b; }
+    .hr-chip.hr-res-gold b { color: #ffd84a; } .hr-chip.hr-res-faith b { color: #d9a8ff; } .hr-chip.hr-res-science b { color: #7fd0ff; }
+    .hr-people { font-size: 0.85rem; }
+    #hud button, .hr-btn { font: inherit; font-size: 0.85rem; padding: 4px 10px; border-radius: 6px; border: 1px solid #4a566e; background: #2c3548; color: #e7eaf0; cursor: pointer; }
+    #hud button:hover:not(:disabled) { background: #3a4660; }
+    #hud button:disabled { opacity: 0.45; cursor: not-allowed; }
+    #hud button.on { background: #4a5cff; border-color: #8e9bff; }
+    #hud button.endturn { background: #2f9e52; border-color: #6fe08a; font-weight: 700; font-size: 1rem; padding: 7px 18px; }
+    #hud button.waiting { background: #7a5a1c; border-color: #ffd36b; font-size: 0.9rem; padding: 7px 14px; }
+    #hud button.danger { border-color: #a04a40; color: #ff9d90; }
+    .hr-btnrow { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+    .hr-stats { display: flex; flex-wrap: wrap; gap: 4px 10px; font-size: 0.85rem; color: #b8c1d4; }
+    .hr-stats b { color: #fff; }
+    .hr-pending { color: #ffd36b; font-size: 0.85rem; }
+    .hr-recruit { margin-top: 6px; padding-top: 6px; border-top: 1px solid #2f3748; }
+    .hr-recruit .small { margin-left: 8px; }
+    .hr-player { padding: 4px 0; border-bottom: 1px solid #2a3243; } .hr-player:last-child { border: none; }
+    .hr-player.out .hr-pname { text-decoration: line-through; opacity: 0.6; }
+    .hr-dot { width: 12px; height: 12px; border-radius: 50%; display: inline-block; margin-right: 6px; border: 1px solid #fff4; }
+    .hr-pname { font-weight: 600; overflow-wrap: anywhere; }
+    .hr-psub { font-size: 0.75rem; color: #98a2b6; }
+    .hr-tick { color: #6fe08a; font-weight: 700; margin-right: 8px; }
+    .hr-outtag { color: #ff7d6d; font-size: 0.75rem; margin-right: 8px; }
+    .hr-order { padding: 3px 0; gap: 6px; }
+    #hud select { font: inherit; background: #2c3548; color: #e7eaf0; border: 1px solid #4a566e; border-radius: 6px; padding: 3px 4px; }
+    #hud .row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; } #hud .spacer { flex: 1; }
+    #tabs { display: flex; gap: 4px; padding: 0; background: none; border: none; box-shadow: none; }
+    #tabs .hr-tab { flex: 1; border-radius: 8px 8px 0 0; }
+    #tab-body { border-radius: 0 0 8px 8px; margin-top: -8px; }
+    .hr-buildgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+    #hud button.hr-build { display: flex; flex-direction: column; align-items: flex-start; gap: 1px; text-align: left; padding: 5px 8px; }
+    .hr-bicon { font-weight: 700; color: #ffe36b; } .hr-bname { font-weight: 600; } .hr-bcost { color: #98a2b6; }
+    .hr-adv { padding: 6px 0; border-bottom: 1px solid #2a3243; } .hr-adv.owned { opacity: 0.6; }
+    .hr-ev { padding: 4px 0; border-bottom: 1px solid #2a3243; font-size: 0.85rem; }
+    .hr-cell-link { color: #8ab4ff; cursor: pointer; text-decoration: underline; }
+    .hr-round { margin-left: 8px; }
+    .hr-dice { display: inline-flex; gap: 2px; vertical-align: middle; }
+    .hr-die { display: inline-block; min-width: 18px; text-align: center; border-radius: 4px; background: #3a4256; color: #aab3c6; font-size: 0.8rem; font-weight: 700; }
+    .hr-die.hit { background: #d7463a; color: #fff; }
+    .hr-log { padding: 2px 0; color: #b8c1d4; }
+    #hint { position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%); max-width: 62vw; z-index: 5; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    #centre { position: absolute; left: 12px; bottom: 12px; z-index: 5; }
+    #result { position: absolute; top: 130px; left: 50%; transform: translateX(-50%); z-index: 6; min-width: 300px; text-align: center; }
+    #result .row { display: flex; gap: 12px; }
+    #game [hidden] { display: none !important; }
   </style>
 </head>
 <body>
-  <main>
-    <h1>Hex Realms</h1>
+  <div id="status">
     <p id="connection" class="muted">Connecting…</p>
     <div id="error" hidden></div>
+  </div>
 
+  <main>
     <section id="lobby" hidden>
+      <h1>Hex Realms</h1>
       <div class="card">
         <div class="row" style="margin-bottom: 8px">
           <h2 style="margin: 0">Players</h2>
@@ -43,20 +148,44 @@
         <div id="start"></div>
         <p id="spectators" class="muted"></p>
       </div>
-      <!-- TODO player options (e.g. a color picker) -->
       <div class="card">
         <h2>Game settings</h2>
         <div id="settings"></div>
-        <!-- TODO a short rules paragraph players read before starting -->
+      </div>
+      <div class="card">
+        <h2>How to play</h2>
+        <p>Everyone plans at the same time, in secret. Place structures inside your territory, train units, order moves and
+          attacks, research advances and trade, then press <b>End turn</b>. When all players are done (or the timer runs out)
+          every order resolves together.</p>
+        <p>Only structures linked to your Town Hall by roads (or by touching it) work, and structures with jobs need free
+          people, who eat food and need housing. Units fight with dice wherever they meet: each die that rolls 4 or more hits
+          (5 or more against a unit standing in forest, hills or mountains). Lose every Town Hall and you are out.</p>
+        <p>The last realm standing wins; if several survive to the turn limit, the highest score wins.</p>
       </div>
     </section>
-
-    <section id="game" hidden>
-      <div id="result" hidden></div>
-      <div id="board"></div>
-      <!-- TODO game UI -->
-      <button id="back" hidden>Back to lobby</button>
-    </section>
   </main>
+
+  <section id="game" hidden>
+    <div id="map"></div>
+    <div id="hud">
+      <div id="topbar"></div>
+      <div id="col-left">
+        <div id="p-players" class="hr-panel"></div>
+        <div id="p-selection" class="hr-panel"></div>
+        <div id="p-orders" class="hr-panel"></div>
+        <div id="p-trade" class="hr-panel" hidden></div>
+      </div>
+      <div id="col-right">
+        <div id="tabs"></div>
+        <div id="tab-body" class="hr-panel"></div>
+      </div>
+    </div>
+    <button id="centre" class="hr-btn" style="position:absolute" title="Centre the map on your Town Hall">Centre</button>
+    <div id="hint" hidden></div>
+    <div id="result" hidden>
+      <div id="result-text"></div>
+      <button id="back" hidden>Back to lobby</button>
+    </div>
+  </section>
 </body>
 </html>

@@ -18,6 +18,7 @@ things are, and its pitfalls. Read only the one closest to your game:
 - `marooned`: hidden role, secret votes, map built as it's explored.
 - `bastion`: per-player cities with trading: a turn-order setup phase, then simultaneous place / resolve (per-player prompt queues) / plan phases, owned one-tile buildings with build tokens, reach-limited worker placement, a two-half market.
 - `bastion2`: deck-building city-builder: play area with per-turn counters, upkeep cards, builds completed at end of turn, an unbounded pannable grid with a full-screen HUD layout.
+- `hex-realms`: simultaneous secret orders resolved together (step-by-step movement with collisions, dice combat), multi-cell hex structures, road connections, workers, turn timer.
 - `gilded-trail`: hex map from a seed as SVG, deck-building market, pending choices inside a turn.
 - `arena`: real-time (`RealtimeGame`); start from it for continuous movement.
 - `deep-colony`: real-time co-op sim without player units: shared orders/pause/speed, live cursors, big grid as row strings.
@@ -55,6 +56,8 @@ Map the request onto the shared lobby model before writing code:
   start or going back to the lobby. Re-check `self.stage` in `fn`.
 - **Decks of cards** (draw, discard, reshuffle; deck-building): `gamekit.Deck` keeps card
   instances `{"uid", "card"}` in a draw and a discard pile; hands and tables are the game's.
+- **Hex maps:** `gamekit.hexes` (axial "q,r" keys, `distance`/`dist`, `neighbors`, `disk`/`ring` for
+  hexagonal maps, `rotations` of multi-cell hex shapes in 60-degree steps).
 - **Shapes on a grid** (polyomino pieces, multi-cell buildings): `gamekit.shapes` parses rows of
   `#`, turns them and lists the 4 rotations (never mirrored); precompute them at load and send
   them in the game state so the client draws ghosts without geometry rules.
@@ -175,6 +178,8 @@ and `settings.py`. Hooks below are on `Game` in `server.py`; most delegate to `s
   once. `member.ping` is the player's round trip, for `game_state()`.
 
 Rules and pitfalls:
+- Game messages travel as `{"type": "game", ...data}`: never use a `type` key in your own
+  messages (it gets overwritten and the action silently does nothing); say `kind` instead.
 - Never trust the client. Clean text with `gamekit.validate.clean_text`.
 - JSON turns integer dict keys into strings. On the client, look them up with `String(index)`.
 - Snapshot names when the game starts, so the log still makes sense after someone leaves.
