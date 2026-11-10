@@ -23,5 +23,6 @@
   "stone": 40,
   "metal": 40
  },
- "text": "+40 wood, stone and metal storage."
+ "text": "Holds 40 wood, stone and metal. Navigable: structures touching it are on its roads.",
+ "navigable": true
 }

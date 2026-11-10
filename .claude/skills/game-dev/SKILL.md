@@ -61,7 +61,8 @@ Games at a glance (details in each `NOTES.md`):
 - **hex-realms**: `logic/` modules; civilization game on a random hex map. Secret simultaneous
   orders (build / recruit / move / shoot / hold / found / research / trade), resolved together in
   `Match.resolve` (order in `logic/match.py`'s header); movement collisions in `logic/movement.py`,
-  dice in `logic/combat.py`, territory/roads/workers in `logic/economy.py`. Content JSON in
+  dice in `logic/combat.py`, territory/workers in `logic/economy.py`, goods in stores and road
+  networks in `logic/logistics.py`. Content JSON in
   `structures/`, `units/`, `advances/` (fields in `logic/content.py`).
 - **block-blast**: `logic/` modules; 9x9 boards filled with rotatable shape cards (JSON in
   `cards/`) that place tiles (types with behaviours, `logic/tiles.py`) carrying symbols

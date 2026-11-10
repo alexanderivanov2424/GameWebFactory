@@ -5,7 +5,8 @@ Modules:
     orders.py    the orders a player gives while planning (validation, paying, refunds)
     movement.py  paths (reach, path) and simultaneous step-by-step movement with collisions
     combat.py    dice battles, ranged shots, sieges of structures, tower fire
-    economy.py   territory, road connections, workers, production, upkeep, growth
+    economy.py   territory, workers, production, upkeep, growth
+    logistics.py goods in stores, road networks (roads + navigable structures), spending, deliveries
     mapgen.py    the random hex map and fair starting spots
     content.py   loads structures/, units/, advances/ (JSON) and the terrain table
 """

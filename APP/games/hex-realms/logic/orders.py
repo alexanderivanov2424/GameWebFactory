@@ -1,6 +1,6 @@
 """Hex Realms: the orders a player gives while planning a turn (validated, nothing resolves yet).
 
-Costs are paid when an order is given and refunded when it's cancelled or fails at resolution,
+Costs are paid when an order is given (goods from the Town Halls and the stores linked to them) and refunded when it's cancelled or fails at resolution,
 so a player can never order more than they have. Orders are private until the turn resolves.
 
     build(m, pid, stype, at, rot)   structure footprint anchored at `at`, `rot` 60-degree turns
@@ -21,7 +21,8 @@ from gamekit import LobbyError
 from gamekit.hexes import dist, neighbors
 
 from .content import ADVANCES, STRUCTURES, TERRAIN, TOWN_HALL, UNITS, footprint
-from .economy import connected, report
+from . import logistics
+from .economy import report
 from .movement import path
 
 CITY_SPACING = 5
@@ -29,17 +30,12 @@ TRADE_GOODS = ["gold", "food", "wood", "stone", "metal"]
 
 
 def pay(m, pid, cost):
-    res = m.players[pid]["res"]
-    short = [r for r, n in cost.items() if res.get(r, 0) < n]
-    if short:
-        raise LobbyError(f"Not enough {', '.join(short)}.")
-    for r, n in cost.items():
-        res[r] -= n
+    """From the Town Halls and the stores linked to them (logistics.py), plus realm gold/faith/science."""
+    logistics.take(m, pid, cost)
 
 
 def refund(m, pid, cost):
-    for r, n in cost.items():
-        m.players[pid]["res"][r] += n
+    logistics.give(m, pid, cost)
 
 
 def own_unit(m, pid, uid):
@@ -112,11 +108,8 @@ def recruit_problem(m, pid, s, utype):
         return f"{sd['name']} can't train that."
     if ud["requires"] and ud["requires"] not in m.players[pid]["advances"]:
         return f"Research {ADVANCES[ud['requires']]['name']} first."
-    linked = connected(m, pid)
-    if s["id"] not in linked:
-        return f"Connect this {sd['name']} to a Town Hall with roads first."
-    if ud["needs"] and not any(m.structures[x]["type"] == ud["needs"] for x in linked):
-        return f"{ud['name']} needs a connected {STRUCTURES[ud['needs']]['name']}."
+    if ud["needs"] and not any(x["owner"] == pid and x["type"] == ud["needs"] for x in m.structures.values()):
+        return f"{ud['name']} needs a {STRUCTURES[ud['needs']]['name']}."
     if any(r["at"] == s["id"] for r in m.orders[pid]["recruits"]):
         return "One unit per structure per turn."
     return None
@@ -230,8 +223,10 @@ def trade(m, pid, give, get):
     rate = report(m, pid)["tradeRate"]
     if not rate:
         raise LobbyError("You need a working Market or Trading Hall.")
+    if get in logistics.GOODS and not logistics.room(m, pid, get):
+        raise LobbyError(f"No room left for {get} in your stores.")
     pay(m, pid, {give: rate})
-    m.players[pid]["res"][get] += 1
+    refund(m, pid, {get: 1})
 
 
 def toggle(m, pid, sid):

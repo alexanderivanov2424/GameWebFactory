@@ -19,5 +19,6 @@
  "terrain": [
   "water"
  ],
- "text": "Built on water."
+ "text": "Built on water.",
+ "road": true
 }

@@ -11,7 +11,7 @@
 Turn resolution, in order: research; ranged shots (positions before anyone moves); movement
 step by step with battles (movement.py); towers shoot; settlers found cities; builds (two
 players ordering the same cell both fail and get refunds); recruits appear on or next to their
-structure; production, upkeep and growth (economy.py); healing (+1 hp for units that didn't
+structure; production, deliveries along roads, eating, wages and growth (economy.py, logistics.py); healing (+1 hp for units that didn't
 fight, full on or next to an own Barracks); players without a Town Hall are out. The game ends
 when one player is left (if it started with 2 or more) or after the last turn: highest score wins.
 
@@ -19,8 +19,9 @@ Score = population + units + 3 per advance + structure scores (Town Hall 4, Univ
 Monument 10) + gold // 10.
 
 State: cells {key: terrain}; structures {sid: {"id", "n", "type", "owner", "at", "rot", "cells",
-"hp", "active"}} with cell_structure {key: sid}; units {uid: {"id", "n", "type", "owner", "at",
-"hp"}} with unit_at {key: uid}; players {pid: {"res", "pop", "advances", "done", "alive"}};
+"hp", "active", "stock" (goods in a store), "held" (goods a producer waits to deliver)}} with cell_structure {key: sid}; units {uid: {"id", "n", "type", "owner", "at",
+"hp"}} with unit_at {key: uid}; players {pid: {"res" (gold/faith/science only: goods live in
+stores, see logistics.py), "pop", "advances", "done", "alive"}};
 orders {pid: {"builds", "recruits", "research": [...], "moves": {uid: [keys]}, "shots": {uid: key},
 "holds": [uid], "found": {uid: rot}}}; events (the last resolution, for the client to replay).
 """
@@ -30,13 +31,14 @@ import random
 from gamekit import LobbyError
 from gamekit.hexes import neighbors
 
-from . import combat, movement, orders
+from . import combat, logistics, movement, orders
 from .content import ADVANCES, RESOURCES, STRUCTURES, TERRAIN, TOWN_HALL, UNITS, footprint
 from .economy import end_of_turn, report, territory
 from .mapgen import generate
 
 COLORS = ["#d9483b", "#3b7dd9", "#e0b030", "#3ba55d", "#a05cc8", "#e07b22"]
-START_RES = {"gold": 10, "food": 10, "wood": 12, "stone": 6, "metal": 0, "faith": 0, "science": 0}
+START_RES = {"gold": 10, "faith": 0, "science": 0}  # realm-wide
+START_GOODS = {"food": 10, "wood": 12, "stone": 6}  # in the first Town Hall
 START_POP = 3
 SIZES = {"small": -1, "normal": 0, "large": 2}
 ACTS = {name: getattr(orders, name) for name in
@@ -69,6 +71,7 @@ class Match:
         self.orders = {pid: empty_orders() for pid in self.seats}
         for pid, at in zip(self.seats, starts):
             hall = self.add_structure(pid, TOWN_HALL, at, 0)
+            hall["stock"] = dict(START_GOODS)
             spot = next(n for c in hall["cells"] for n in neighbors(c)
                         if n in self.cells and n not in self.cell_structure and TERRAIN[self.cells[n]]["move"])
             self.add_unit(pid, "militia", spot)
@@ -92,7 +95,7 @@ class Match:
         sid = self.new_id("s")
         cells = footprint(stype, at, rot)
         s = {"id": sid, "n": self.counter, "type": stype, "owner": owner, "at": at, "rot": rot, "cells": cells,
-             "hp": STRUCTURES[stype]["hp"], "active": True}
+             "hp": STRUCTURES[stype]["hp"], "active": True, "stock": {}, "held": {}}
         self.structures[sid] = s
         for c in cells:
             self.cell_structure[c] = sid
@@ -130,7 +133,7 @@ class Match:
 
     def snapshot(self):
         """What everyone sees of each player's stock during planning (their orders stay secret)."""
-        self.shown = {pid: {"res": dict(p["res"]), "pop": p["pop"]} for pid, p in self.players.items()}
+        self.shown = {pid: {"res": logistics.stock(self, pid), "pop": p["pop"]} for pid, p in self.players.items()}
 
     def alive(self):
         return [pid for pid in self.seats if self.players[pid]["alive"]]
@@ -333,6 +336,13 @@ class Match:
             "log": {str(i): line for i, line in enumerate(self.log)},
         }
 
+    def stores(self, pid):
+        """{sid: {"stock", "cap", "usable"}} for pid's storage structures."""
+        nets = logistics.networks(self, pid)
+        ok = {s["id"] for s in logistics.usable(self, pid, nets)}
+        return {s["id"]: {"stock": s["stock"], "cap": logistics.capacity(s), "usable": s["id"] in ok}
+                for s in self.structures.values() if s["owner"] == pid and logistics.capacity(s)}
+
     def private(self, pid):
         if pid not in self.players or not self.players[pid]["alive"] or self.result is not None:
             return None
@@ -342,7 +352,9 @@ class Match:
             if s["owner"] == pid and STRUCTURES[s["type"]]["recruits"]:
                 recruit[s["id"]] = {u: orders.recruit_problem(self, pid, s, u) or "" for u in STRUCTURES[s["type"]]["recruits"]}
         return {
-            "res": p["res"], "pop": p["pop"], "done": p["done"], "orders": self.orders[pid], "report": report(self, pid),
+            "res": logistics.stock(self, pid), "pop": p["pop"], "done": p["done"],
+            "stores": self.stores(pid), "held": {s["id"]: s["held"] for s in self.structures.values()
+                                                 if s["owner"] == pid and s["held"]}, "orders": self.orders[pid], "report": report(self, pid),
             "reach": {uid: sorted(movement.reach(self, uid)) for uid, u in self.units.items() if u["owner"] == pid},
             "recruit": recruit,
             "found": {uid: [r for r in range(6) if not orders.found_problem(self, pid, u, r)]

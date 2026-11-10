@@ -163,9 +163,9 @@
       for (const [sid, s] of Object.entries(game.structures)) for (const c of s.cells) cellStruct[c] = sid;
       const reasonFor = (sid, s, def) => {
         if (s.active === false) return "Switched off.";
-        if (s.owner === you && priv && !(priv.report.staffed || []).includes(sid)) return "No free workers (or not connected to a Town Hall by road).";
-        return "Not working: not connected to a Town Hall by road, no workers, or switched off.";
+        return "Not working: no free workers.";
       };
+      const stranded = new Set((priv && priv.report.stranded) || []);
       const roads = [];
       for (const [sid, s] of Object.entries(game.structures)) {
         const def = content.structures[s.type];
@@ -177,7 +177,9 @@
         let tip = `${def.name} (${nameOf(s.owner)})`;
         if (s.maxHp) tip += ` hp ${s.hp}/${s.maxHp}`;
         if (idle) tip += `\n${reasonFor(sid, s, def)}`;
-        const g = svg("g", { class: idle ? "hr-struct hr-idle" : "hr-struct" }, svg("title", {}, tip));
+        const cut = stranded.has(sid);
+        if (cut) tip += "\nNo road network leads to a store: its goods wait here (one turn's worth).";
+        const g = svg("g", { class: `hr-struct${idle ? " hr-idle" : ""}${cut ? " hr-stranded" : ""}` }, svg("title", {}, tip));
         g.append(s.cells.map((k) => hexAt(k, SIZE * 0.97, { fill: c, "fill-opacity": 0.88 })));
         const own = new Set(s.cells);
         g.append(borders(s.cells, (n) => own.has(n), { stroke: "#10131a", "stroke-width": 3, "stroke-linecap": "round" }));

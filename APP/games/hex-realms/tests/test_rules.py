@@ -7,7 +7,8 @@ import unittest
 from gamekit import LobbyError
 
 h = importlib.import_module("games.hex-realms.tests.helpers")
-Match, blank, hall, rich, unit = h.Match, h.blank, h.hall, h.rich, h.unit
+Match, blank, hall, rich, stock, unit = h.Match, h.blank, h.hall, h.rich, h.stock, h.unit
+economy = importlib.import_module("games.hex-realms.logic.economy")
 
 
 def end_turn(m):
@@ -44,9 +45,9 @@ class BuildTests(unittest.TestCase):
         hall(self.m, "p1", "-6,0"), hall(self.m, "p2", "6,0")
 
     def test_build_pays_and_appears_after_the_turn(self):
-        wood = self.m.players["p1"]["res"]["wood"]
+        wood = stock(self.m, "p1")["wood"]
         self.m.act("p1", "build", "road", "-7,0", 0)
-        self.assertEqual(self.m.players["p1"]["res"]["wood"], wood - 1)
+        self.assertEqual(stock(self.m, "p1")["wood"], wood - 1)
         self.assertNotIn("-7,0", self.m.cell_structure)
         end_turn(self.m)
         self.assertEqual(self.m.structures[self.m.cell_structure["-7,0"]]["type"], "road")
@@ -73,10 +74,10 @@ class BuildTests(unittest.TestCase):
             self.m.act("p1", "build", "mine", "-7,0", 0)
 
     def test_cancel_refunds(self):
-        wood = self.m.players["p1"]["res"]["wood"]
+        wood = stock(self.m, "p1")["wood"]
         self.m.act("p1", "build", "farm", "-8,1", 0)
         self.m.act("p1", "cancel", self.m.orders["p1"]["builds"][0]["id"])
-        self.assertEqual(self.m.players["p1"]["res"]["wood"], wood)
+        self.assertEqual(stock(self.m, "p1")["wood"], wood)
 
     def test_same_cell_by_two_players_fails_for_both(self):
         m = blank()
@@ -94,53 +95,32 @@ class BuildTests(unittest.TestCase):
 class EconomyTests(unittest.TestCase):
     def setUp(self):
         self.m = blank(players=1)
-        self.hall = hall(self.m, "p1", "0,0")
+        self.hall = hall(self.m, "p1", "0,0")  # cells 0,0 1,0 0,1
 
     def report(self):
-        from importlib import import_module
-        return import_module("games.hex-realms.logic.economy").report(self.m, "p1")
+        return economy.report(self.m, "p1")
 
-    def linked(self, stype, at, rot=0):
-        """A structure at `at` with a road from the hall (cells 0,0 1,0 0,1) at 2,-1 touching both."""
-        self.m.add_structure("p1", "road", "2,-1", 0)
-        return self.m.add_structure("p1", stype, at, rot)["id"]
+    def put(self, stype, at, rot=0):
+        return self.m.add_structure("p1", stype, at, rot)
 
-    def test_only_roads_link_structures(self):
-        farm = self.m.add_structure("p1", "farm", "4,0", 0)["id"]
-        self.assertNotIn(farm, self.report()["staffed"])
-        for at in ("2,0", "3,0"):
-            self.m.add_structure("p1", "road", at, 0)
-        self.assertIn(farm, self.report()["staffed"])
-
-    def test_touching_the_hall_is_not_a_link(self):
-        touching = self.m.add_structure("p1", "farm", "2,0", 0)["id"]  # next to the hall's 1,0
-        self.assertNotIn(touching, self.report()["staffed"])
-        farm = self.m.add_structure("p1", "farm", "-3,0", 0)["id"]  # cells -3,0 -2,0 -3,1
-        self.m.add_structure("p1", "road", "-1,0", 0)  # touches the hall and the farm
-        self.assertIn(farm, self.report()["staffed"])
-
-    def test_roads_must_chain_to_a_hall(self):
-        self.m.add_structure("p1", "road", "5,0", 0)
-        farm = self.m.add_structure("p1", "farm", "6,0", 0)["id"]
-        self.assertNotIn(farm, self.report()["staffed"])
-        for at in ("2,0", "3,0", "4,0"):
-            self.m.add_structure("p1", "road", at, 0)
+    def test_structures_work_without_roads(self):
+        farm = self.put("farm", "4,0")["id"]
         self.assertIn(farm, self.report()["staffed"])
 
     def test_jobs_need_people(self):
-        farm = self.linked("farm", "2,0")
+        farm = self.put("farm", "2,0")["id"]
         self.m.players["p1"]["pop"] = 0
         self.assertNotIn(farm, self.report()["staffed"])
 
     def test_switched_off_frees_workers(self):
-        farm = self.linked("farm", "2,0")
+        farm = self.put("farm", "2,0")["id"]
         self.m.act("p1", "toggle", farm)
         rep = self.report()
         self.assertNotIn(farm, rep["staffed"])
         self.assertEqual(rep["idle"], self.m.players["p1"]["pop"])
 
     def test_farm_gets_grass_bonus(self):
-        self.linked("farm", "2,0")
+        self.put("farm", "2,0")
         with_grass = self.report()["income"]["food"]
         for c in ("2,0", "3,0", "2,1"):
             self.m.cells[c] = "plains"
@@ -148,7 +128,7 @@ class EconomyTests(unittest.TestCase):
 
     def test_starving_loses_a_person(self):
         p = self.m.players["p1"]
-        p["res"]["food"], p["pop"] = 0, 10
+        self.m.structures[self.hall]["stock"]["food"], p["pop"] = 0, 10
         end_turn(self.m)
         self.assertEqual(p["pop"], 9)
 
@@ -161,18 +141,79 @@ class EconomyTests(unittest.TestCase):
         end_turn(self.m)
         self.assertEqual(p["pop"], self.report()["housing"])
 
-    def test_storage_caps(self):
-        self.m.players["p1"]["res"]["wood"] = 500
+    def test_stores_are_capped(self):
+        self.m.structures[self.hall]["stock"]["wood"] = 25
         end_turn(self.m)
-        self.assertEqual(self.m.players["p1"]["res"]["wood"], self.report()["caps"]["wood"])
+        self.assertEqual(stock(self.m, "p1")["wood"], 25)
 
     def test_market_trade(self):
         with self.assertRaisesRegex(LobbyError, "Market"):
             self.m.act("p1", "trade", "wood", "stone")
-        self.linked("market", "2,0")
-        wood, stone = self.m.players["p1"]["res"]["wood"], self.m.players["p1"]["res"]["stone"]
+        self.put("market", "2,0")
+        before = stock(self.m, "p1")
         self.m.act("p1", "trade", "wood", "stone")
-        self.assertEqual((self.m.players["p1"]["res"]["wood"], self.m.players["p1"]["res"]["stone"]), (wood - 3, stone + 1))
+        after = stock(self.m, "p1")
+        self.assertEqual((after["wood"], after["stone"]), (before["wood"] - 3, before["stone"] + 1))
+
+
+class LogisticsTests(unittest.TestCase):
+    """Goods travel along road networks (roads + navigable structures) to stores."""
+
+    def setUp(self):
+        self.m = blank(players=1)
+        self.hall = hall(self.m, "p1", "0,0")  # cells 0,0 1,0 0,1
+
+    def put(self, stype, at, rot=0):
+        return self.m.add_structure("p1", stype, at, rot)
+
+    def roads(self, *cells):
+        for c in cells:
+            self.put("road", c)
+
+    def test_without_a_road_goods_wait_in_the_producer(self):
+        farm = self.put("farm", "2,0")  # touches the hall, but touching isn't a road
+        made = economy.output(self.m, farm)["food"]
+        end_turn(self.m)
+        end_turn(self.m)
+        self.assertEqual(farm["held"], {"food": made})  # one turn's output at most
+        self.assertIn(farm["id"], economy.report(self.m, "p1")["stranded"])
+        self.roads("2,-1")  # touches the hall's 1,0 and the farm's 2,0
+        before = stock(self.m, "p1")["food"]
+        end_turn(self.m)
+        self.assertEqual(farm["held"], {})
+        self.assertGreater(stock(self.m, "p1")["food"], before)
+
+    def test_navigable_structures_extend_roads(self):
+        self.put("storage_yard", "3,0")  # navigable: 3,0 4,0 3,1
+        self.put("market", "5,0")  # navigable: 5,0 6,0 7,0
+        farm = self.put("farm", "8,0")  # B - A - A
+        self.assertIn(farm["id"], economy.report(self.m, "p1")["stranded"])  # no road in the chain yet
+        self.roads("2,0")  # hall - road - A - A - B
+        self.assertNotIn(farm["id"], economy.report(self.m, "p1")["stranded"])
+        end_turn(self.m)
+        self.assertEqual(farm["held"], {})
+
+    def test_unlinked_store_fills_but_cannot_be_spent(self):
+        mill = self.put("lumbermill", "6,0")  # 6,0 7,0
+        self.roads("8,0")
+        yard = self.put("storage_yard", "9,0")  # 9,0 10,0 9,1: on the road, not linked to the hall
+        wood = stock(self.m, "p1")["wood"]
+        end_turn(self.m)
+        made = yard["stock"]["wood"]
+        self.assertGreater(made, 0)
+        self.assertEqual(mill["held"], {})
+        self.assertEqual(economy.report(self.m, "p1")["unusable"]["wood"], made)
+        self.assertEqual(stock(self.m, "p1")["wood"], wood + 1)  # only the hall's own wood
+        self.roads(*[f"{q},-1" for q in range(1, 10)])  # from the hall's 1,0 to the yard's 9,0
+        self.assertEqual(stock(self.m, "p1")["wood"], wood + 1 + made)
+
+    def test_spending_uses_linked_stores_too(self):
+        self.m.structures[self.hall]["stock"]["wood"] = 0
+        self.roads("2,0")
+        yard = self.put("storage_yard", "3,0")
+        yard["stock"]["wood"] = 5
+        self.m.act("p1", "build", "hut", "-1,0", 0)
+        self.assertEqual(yard["stock"]["wood"], 3)
 
 
 class MovementTests(unittest.TestCase):

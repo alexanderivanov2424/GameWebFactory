@@ -25,5 +25,6 @@
    "metal": 2
   }
  },
- "text": "Hills: +2 stone +1 metal. Mountain: +1 stone +2 metal."
+ "text": "Hills: +2 stone +1 metal. Mountain: +1 stone +2 metal.",
+ "road": true
 }

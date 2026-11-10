@@ -19,8 +19,12 @@ fields in `logic/content.py`). Tests: `tests/` (`python3 -I tools/run_tests.py h
   (every die shows one face) to make outcomes certain.
 - **Multi-cell hex structures**: footprints are axial offsets; `gamekit.hexes.rotations`
   precomputes the 6 turns, sent in the content so the client draws ghosts.
-- **Road networks and workers** (`logic/economy.py`): only structures linked to a Town Hall by
-  a chain of roads work (touching a structure doesn't count); population fills jobs (food first, then oldest).
+- **Goods that travel** (`logic/logistics.py`): goods live in stores (per-structure `stock`);
+  producers flagged `road` keep a one-turn `held` buffer and deliver along road networks (roads
+  plus `navigable` structures; a network needs at least one road). Spending takes from Town
+  Halls and stores on a Town Hall's network only; an unlinked store still fills. Gold, faith and
+  science are realm-wide. Every structure works if staffed (`logic/economy.py`: jobs filled food
+  first, then oldest).
 - **A turn timer**: `server.py` schedules a timeout per turn (checked against the turn number).
 
 ## Map
@@ -33,7 +37,7 @@ fields in `logic/content.py`). Tests: `tests/` (`python3 -I tools/run_tests.py h
   founding rotations).
 - `logic/orders.py`: one function per order; `site_problem` / `recruit_problem` /
   `found_problem` are shared with resolution (re-checked then) and the private state.
-- `logic/movement.py`, `logic/combat.py`, `logic/economy.py`, `logic/mapgen.py`,
+- `logic/movement.py`, `logic/combat.py`, `logic/economy.py`, `logic/logistics.py`, `logic/mapgen.py`,
   `logic/content.py`: see their headers.
 - `client/map.js`: `HexMap.create`: pan (drag) / zoom (wheel) SVG map; terrain layer rebuilt only
   when `game.cells` changes, the rest per state; `setHighlights` / `setGhost` / `flash` only
@@ -44,12 +48,14 @@ fields in `logic/content.py`). Tests: `tests/` (`python3 -I tools/run_tests.py h
 - `client/game.js`: UI state (`ui.sel`, `ui.mode` build / shoot / found + rotation, tab), click
   and key handling, highlights and the build ghost (its green/red is only a hint; the server
   decides), the turn countdown (approximate: restarts on reload).
-- `tests/`: `test_rules.py` (Match on a blank all-grass map: `helpers.blank`, `hall`, `unit`,
-  `rich`), `test_lobby.py` (Sim: secrecy, done, timer, leaving).
+- `tests/`: `test_rules.py` (Match on a blank all-grass map: `helpers.blank`, `hall` (with the
+  starting goods), `unit`, `rich`, `stock` = what a player can spend), `test_lobby.py` (Sim: secrecy, done, timer, leaving).
 
 ## Balance notes (reasoning, not simulation)
-- Start: 3 people, housing 4; the Town Hall alone nets +1 food, so you grow once, then need a
-  Hut (2 wood) or House. Three starting people can staff only three of farm / lumbermill /
+- Start: 3 people, housing 4, and the goods in the Town Hall (25 of each at most); the hall
+  alone nets +1 food, so you grow once, then need a Hut (2 wood) or House. Every early producer
+  also needs a road (1 wood per cell) to the hall, and the hall's 25-cap makes a Storage Yard or
+  Granary on the network the next limit. Three starting people can staff only three of farm / lumbermill /
   mine, which is the opening choice.
 - Sieges are slow on purpose: a Swordsman does ~2 damage a turn to a 15 hp Town Hall and takes
   ~1 back, so taking a city needs 3+ units or Catapults (3 damage per hit, from range, no reply,
@@ -58,6 +64,8 @@ fields in `logic/content.py`). Tests: `tests/` (`python3 -I tools/run_tests.py h
   builder can win on the turn limit; conquest ends it early.
 
 ## Pitfalls seen here
+- Goods aren't in `players[pid]["res"]` (that's gold/faith/science only): read them with
+  `logistics.stock`, spend with `logistics.take` / `orders.pay`, refund with `give`.
 - Never use a `type` key in game messages: the lobby envelope is `{"type": "game", ...}` and
   yours overwrites it (the message silently does nothing). Build/recruit say `kind`.
 - Unit ids sort as strings in `movement.resolve` ("u10" < "u9"): deterministic, but not by age;

@@ -19,5 +19,5 @@
   "hills",
   "desert"
  ],
- "text": "Connects structures to a Town Hall (only connected structures work). Units move twice as far on roads."
+ "text": "Carries goods: producers on a road network deliver to the stores on it. Units move twice as far on roads."
 }

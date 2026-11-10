@@ -12,7 +12,10 @@ structures/<id>.json:
     onTerrain {terrain: {res: n}} (by the anchor's terrain, replaces produce), perAdjacent
     {"terrain"|"type"|"home": ..., "gain": {res: n}, "max": n} (per neighbouring forest cell /
     structure of that type / home structure), housing, home (counts as a home), storage (all
-    capped resources), store {res: n}, growth (extra growth per turn), territory (claim radius,
+    capped resources), store {res: n} (a structure with either is a store of goods: see
+    logistics.py), road (its goods must travel a road network to a store; required for anything
+    that makes food/wood/stone/metal and isn't a store), navigable (part of road networks: what
+    touches it is on its roads), growth (extra growth per turn), territory (claim radius,
     default 2), terrain [ids] (default every "build" terrain), coast (a cell must touch water),
     requires (advance id), recruits [unit ids], heals, shoots (dice) + range, trade (market
     rate: give n for 1), score, text.
@@ -36,7 +39,8 @@ log = logging.getLogger(__name__)
 HERE = Path(__file__).resolve().parent.parent
 
 RESOURCES = ["gold", "food", "wood", "stone", "metal", "faith", "science"]
-CAPPED = ["food", "wood", "stone", "metal"]
+CAPPED = ["food", "wood", "stone", "metal"]  # goods: kept in stores, moved by road (logistics.py)
+GLOBAL = ["gold", "faith", "science"]  # realm-wide, uncapped
 TERRAIN = {
     "grass": {"name": "Grassland", "move": 2, "cover": False, "build": True},
     "plains": {"name": "Plains", "move": 2, "cover": False, "build": True},
@@ -81,6 +85,8 @@ def parse_structure(sid, d):
         "heals": d.get("heals") is True, "shoots": whole(d, "shoots", 0, 9, default=0), "range": whole(d, "range", 0, 5, default=0),
         "trade": whole(d, "trade", 0, 9, default=0), "score": whole(d, "score", 0, 99, default=0), "text": text(d, "text", 300),
     }
+    s["road"] = d.get("road") is True
+    s["navigable"] = d.get("navigable") is True
     s["perCell"] = {t: res_map(d["perCell"], t) for t in d.get("perCell", {}) if t in TERRAIN}
     s["onTerrain"] = {t: res_map(d["onTerrain"], t) for t in d.get("onTerrain", {}) if t in TERRAIN}
     adj = d.get("perAdjacent")
@@ -90,6 +96,11 @@ def parse_structure(sid, d):
         s["perAdjacent"] = {"terrain": adj.get("terrain"), "type": adj.get("type"), "home": adj.get("home") is True,
                             "gain": res_map(adj, "gain"), "max": whole(adj, "max", 1, 9, default=4)}
     s["rotations"] = [[[q, r] for q, r in rot] for rot in rotations(cells)]
+    goods = set(s["produce"]) | {r for v in s["onTerrain"].values() for r in v} | {r for v in s["perCell"].values() for r in v}
+    if adj is not None:
+        goods |= set(s["perAdjacent"]["gain"])
+    if goods & set(CAPPED) and not (s["road"] or s["storage"] or s["store"]):
+        raise ValueError("makes goods, so it needs \"road\": true (or storage of its own)")
     return s
 
 

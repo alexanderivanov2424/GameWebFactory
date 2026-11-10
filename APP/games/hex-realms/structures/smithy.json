@@ -23,5 +23,6 @@
  "text": "+1 metal. Builds catapults; swordsmen and knights need one too.",
  "recruits": [
   "catapult"
- ]
+ ],
+ "road": true
 }

@@ -36,8 +36,9 @@
       const net = rep.net[r] || 0;
       const capped = rep.caps[r];
       const full = capped !== undefined && priv.res[r] >= capped;
-      return el("span", { className: `hr-chip hr-res-${r}${full ? " full" : ""}`, title: `${cap(r)}: income ${rep.income[r] || 0}, upkeep ${rep.upkeep[r] || 0}${capped !== undefined ? `, storage cap ${capped}` : ""}` },
+      return el("span", { className: `hr-chip hr-res-${r}${full ? " full" : ""}`, title: `${cap(r)}: income ${rep.income[r] || 0}, upkeep ${rep.upkeep[r] || 0}${capped !== undefined ? `, storage ${capped} in stores linked to a Town Hall` : ""}${(rep.held || {})[r] ? `, ${rep.held[r]} waiting in producers` : ""}${(rep.unusable || {})[r] ? `, ${rep.unusable[r]} in unlinked stores` : ""}` },
         r, " ", el("b", {}, String(priv.res[r])), capped !== undefined ? el("small", {}, `/${capped}`) : null,
+        (rep.unusable || {})[r] ? el("small", { className: "neg" }, ` +${rep.unusable[r]} cut off`) : null,
         el("span", { className: net < 0 ? "neg" : net > 0 ? "pos" : "" }, ` (${signed(net)})`));
     });
     const done = priv.done;
@@ -104,7 +105,19 @@
     const kids = [el("h3", {}, `${def.name} `, nameSpan(game, s.owner)),
       el("p", { className: "small" }, s.maxHp ? `HP ${s.hp}/${s.maxHp}. ` : "", def.text || "")];
     if (def.jobs || Object.keys(def.produce || {}).length) {
-      kids.push(el("p", { className: `small ${s.working ? "pos" : "neg"}` }, s.working ? "Working." : s.active === false ? "Switched off." : "Not working (needs a road link to a Town Hall and free workers)."));
+      kids.push(el("p", { className: `small ${s.working ? "pos" : "neg"}` }, s.working ? "Working." : s.active === false ? "Switched off." : "Not working: no free workers."));
+    }
+    if (own) {
+      const goods = (o) => Object.entries(o).filter(([, n]) => n).map(([r, n]) => `${r} ${n}`).join(", ") || "nothing";
+      const store = priv.stores[sel.id], held = priv.held[sel.id];
+      if (store) {
+        kids.push(el("p", { className: "small" }, `Holds ${Object.entries(store.cap).map(([r, n]) => `${r} ${store.stock[r] || 0}/${n}`).join(", ")}.`));
+        if (!store.usable) kids.push(el("p", { className: "small neg" }, "Not on a Town Hall's road network: its goods can't be spent until a road links them."));
+      }
+      if ((priv.report.stranded || []).includes(sel.id)) kids.push(el("p", { className: "small neg" }, "No road network leads from here to a store: goods wait here, and it holds only one turn's output."));
+      if (held) kids.push(el("p", { className: "small" }, `Waiting to be carried: ${goods(held)}.`));
+      if (def.road) kids.push(el("p", { className: "muted small" }, "Needs a road: its goods travel along roads (and navigable structures) to a store."));
+      if (def.navigable) kids.push(el("p", { className: "muted small" }, "Navigable: structures touching it count as being on its roads."));
     }
     if (own) {
       const recruits = priv.recruit[sel.id] || {};
@@ -155,7 +168,7 @@
       if (d.requires && !mine.has(d.requires)) why = `Needs ${content.advances[d.requires]?.name || d.requires}`;
       else if (!canPay(ctx, d.cost)) why = "Can't afford";
       const info = [d.text, d.jobs ? `Jobs: ${d.jobs}` : "", Object.keys(d.produce || {}).length ? `Produces: ${costText(d.produce)}` : "", d.housing ? `Housing: ${d.housing}` : "",
-        `Terrain: ${(d.terrain || []).map((t) => content.terrain[t]?.name || t).join(", ")}`, d.coast ? "Must touch water." : "", `${d.cells.length} cell${d.cells.length > 1 ? "s" : ""}`]
+        `Terrain: ${(d.terrain || []).map((t) => content.terrain[t]?.name || t).join(", ")}`, d.coast ? "Must touch water." : "", d.road ? "Needs a road to deliver its goods." : "", d.navigable ? "Navigable (extends roads)." : "", `${d.cells.length} cell${d.cells.length > 1 ? "s" : ""}`]
         .filter(Boolean).join("\n");
       const active = ui.mode?.type === "build" && ui.mode.kind === id;
       return el("button", { className: `hr-build${active ? " on" : ""}`, disabled: !!why, title: `${why ? `${why}\n` : ""}${info}`,
@@ -163,7 +176,7 @@
         el("span", { className: "hr-bicon" }, d.icon || "▪"), el("span", { className: "hr-bname" }, d.name), el("span", { className: "hr-bcost small" }, why || costText(d.cost)));
     });
     box.replaceChildren(el("div", { className: "hr-buildgrid" }, items),
-      el("p", { className: "muted small" }, "Pick a structure, then click the map. R or right-click turns it, Esc cancels. It must touch your structures and sit in your territory, and it only works once a road links it to a Town Hall."));
+      el("p", { className: "muted small" }, "Pick a structure, then click the map. R or right-click turns it, Esc cancels. It must touch your structures and sit in your territory. Producers marked "needs a road" deliver goods only along roads (or navigable structures) to a store; you spend only from Town Halls and stores linked to them."));
   }
 
   window.HexHud = { topbar, players, selection, orders, trade, build, fmt: { costText, canPay, nameSpan, btn, cap } };

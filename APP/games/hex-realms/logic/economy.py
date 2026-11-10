@@ -1,26 +1,30 @@
-"""Hex Realms: territory, road connections, workers, production, upkeep and growth.
+"""Hex Realms: territory, workers, production, upkeep and growth.
 
     territory(m)             {key: pid}: each cell within a structure's claim radius belongs to
                              the owner of the nearest structure cell (a tie between players = no one)
-    connected(m, pid)        set of pid's structure ids linked to one of their Town Halls by roads
-                             (only these work): a Town Hall always is; roads chain from a road
-                             touching a Town Hall; any other structure counts once one of its cells
-                             touches a linked road (touching another structure isn't enough)
     effect(m, pid, name)     sum of an advance effect key over pid's advances
+    output(m, s)             what structure s makes in a turn when it works
     report(m, pid)           this turn's forecast: {"income", "upkeep", "net", "staffed": [sid],
-                             "workers", "idle", "housing", "caps", "growth", "tradeRate"}
-    end_of_turn(m, pid, events)  applies the report: stock, caps, starvation, desertion, growth
+                             "stranded": [sid], "workers", "idle", "housing", "caps", "unusable",
+                             "held", "growth", "tradeRate"}
+    end_of_turn(m, pid, events)  production, deliveries, eating, wages, growth
 
-Rules: people (population) work structures with jobs, food producers first, then oldest first;
-a structure needs its full crew and a road connection to produce. Everyone eats: pop // 2 food,
-plus each unit's upkeep. Food below 0 starves 1 person (or disbands a unit); gold below 0 makes
-the newest paid unit desert. With food left over and free housing, population grows by 1 (+1 per
-working Granary). Food, wood, stone and metal are capped by storage; gold, faith, science aren't.
+Rules: every structure works, wherever it is, as long as it has its crew: people (population)
+fill jobs, food producers first, then oldest first. Gold, faith and science go straight to the
+realm. Goods (food, wood, stone, metal) go into the producer's own stock if it is a store (the
+Town Hall), else into its held buffer (one turn's output at most), and from there along road
+networks to stores (logistics.py). Only goods in usable stores (linked to a Town Hall) can be
+spent or eaten. "stranded" lists working road producers with no store on their networks.
+Everyone eats: pop // 2 food, plus each unit's upkeep. Not enough food starves 1 person (or
+disbands a unit); gold below 0 makes the newest paid unit desert. If more food reached usable
+stores this turn than was eaten and there is free housing, population grows by 1 (+1 per
+Granary).
 """
 
 from gamekit.hexes import disk, dist, neighbors, parse
 
-from .content import ADVANCES, CAPPED, RESOURCES, ROAD, STRUCTURES, TOWN_HALL, UNITS
+from . import logistics
+from .content import ADVANCES, CAPPED, RESOURCES, STRUCTURES, UNITS
 
 FOOD_FIRST = ("food",)
 
@@ -42,27 +46,11 @@ def territory(m):
     return {k: p for k, (d, p) in best.items() if p}
 
 
-def connected(m, pid):
-    own = [s for s in m.structures.values() if s["owner"] == pid]
-    roads = {c for s in own if s["type"] == ROAD for c in s["cells"]}
-    halls = [s for s in own if s["type"] == TOWN_HALL]
-    todo = [n for s in halls for c in s["cells"] for n in neighbors(c) if n in roads]
-    linked_roads = set(todo)
-    while todo:
-        for n in neighbors(todo.pop()):
-            if n in roads and n not in linked_roads:
-                linked_roads.add(n)
-                todo.append(n)
-    return {s["id"] for s in own if s["type"] == TOWN_HALL or (s["cells"][0] in linked_roads if s["type"] == ROAD else
-            any(n in linked_roads for c in s["cells"] for n in neighbors(c)))}
-
-
 def effect(m, pid, name):
     return sum(ADVANCES[a]["effect"].get(name, 0) for a in m.players[pid]["advances"] if a in ADVANCES)
 
 
 def output(m, s):
-    """What structure s makes in a turn when it works."""
     d = STRUCTURES[s["type"]]
     out = dict(d["onTerrain"].get(m.cells[s["at"]], {})) if d["onTerrain"] else dict(d["produce"])
     for c in s["cells"]:
@@ -83,11 +71,7 @@ def output(m, s):
         out["food"] = out.get("food", 0) + effect(m, s["owner"], "farmFood")
     if s["type"] == "chapel":
         out["gold"] = out.get("gold", 0) + effect(m, s["owner"], "chapelGold")
-    return out
-
-
-def makes_food(s):
-    return output_keys(s["type"]) & set(FOOD_FIRST)
+    return {r: n for r, n in out.items() if n}
 
 
 def output_keys(stype):
@@ -98,30 +82,42 @@ def output_keys(stype):
     return keys
 
 
+def staffing(m, pid):
+    """(working structures in job order, idle people)."""
+    own = sorted((s for s in m.structures.values() if s["owner"] == pid),
+                 key=lambda s: (not output_keys(s["type"]) & set(FOOD_FIRST), s["n"]))
+    left, working = m.players[pid]["pop"], []
+    for s in own:
+        jobs = STRUCTURES[s["type"]]["jobs"]
+        if jobs:
+            if not s["active"] or jobs > left:
+                continue
+            left -= jobs
+        working.append(s)
+    return working, left
+
+
 def report(m, pid):
     p = m.players[pid]
-    linked = connected(m, pid)
-    own = sorted((s for s in m.structures.values() if s["owner"] == pid), key=lambda s: (not makes_food(s), s["n"]))
-    workers = left = p["pop"]
+    nets = logistics.networks(m, pid)
+    stores = logistics.usable(m, pid, nets)
+    store_nets = set().union(*(nets[s["id"]] for s in m.structures.values() if s["owner"] == pid and logistics.capacity(s)))
+    working, left = staffing(m, pid)
     income = {r: 0 for r in RESOURCES}
-    staffed, caps, housing, growth, rates = [], {r: 0 for r in CAPPED}, 0, 0, []
+    stranded, growth, rates, housing = [], 0, [], 0
     home_bonus = effect(m, pid, "homeHousing")
-    for s in own:
+    for s in m.structures.values():
+        if s["owner"] == pid:
+            d = STRUCTURES[s["type"]]
+            housing += d["housing"] + (home_bonus if d["home"] else 0)
+            growth += d["growth"]
+    for s in working:
         d = STRUCTURES[s["type"]]
-        housing += d["housing"] + (home_bonus if d["home"] else 0)
-        if s["id"] not in linked:
-            continue
-        if d["jobs"]:
-            if not s["active"] or d["jobs"] > left:
-                continue
-            left -= d["jobs"]
-        if s["type"] != ROAD:
-            staffed.append(s["id"])
-        for r, n in output(m, s).items():
+        out = output(m, s)
+        for r, n in out.items():
             income[r] += n
-        for r in CAPPED:
-            caps[r] += d["storage"] + d["store"].get(r, 0)
-        growth += d["growth"]
+        if d["road"] and set(out) & set(CAPPED) and not nets[s["id"]] & store_nets:
+            stranded.append(s["id"])
         if d["trade"]:
             rates.append(d["trade"])
     upkeep = {r: 0 for r in RESOURCES}
@@ -130,32 +126,58 @@ def report(m, pid):
         if u["owner"] == pid:
             for r, n in UNITS[u["type"]]["upkeep"].items():
                 upkeep[r] += n
-    net = {r: income[r] - upkeep[r] for r in RESOURCES}
-    return {"income": income, "upkeep": upkeep, "net": net, "staffed": staffed, "workers": workers, "idle": left,
-            "housing": housing, "caps": caps, "growth": 1 + growth, "tradeRate": min(rates) if rates else 0}
+    caps = {r: sum(logistics.capacity(s).get(r, 0) for s in stores) for r in CAPPED}
+    usable_ids = {s["id"] for s in stores}
+    unusable, held = {r: 0 for r in CAPPED}, {r: 0 for r in CAPPED}
+    for s in m.structures.values():
+        if s["owner"] != pid:
+            continue
+        for r, n in s["held"].items():
+            held[r] += n
+        if s["id"] not in usable_ids:
+            for r, n in s["stock"].items():
+                unusable[r] += n
+    return {"income": income, "upkeep": upkeep, "net": {r: income[r] - upkeep[r] for r in RESOURCES},
+            "staffed": [s["id"] for s in working], "stranded": stranded, "workers": p["pop"], "idle": left,
+            "housing": housing, "caps": caps, "unusable": unusable, "held": held, "growth": 1 + growth,
+            "tradeRate": min(rates) if rates else 0}
 
 
 def end_of_turn(m, pid, events):
     p = m.players[pid]
     rep = report(m, pid)
-    res = p["res"]
-    for r in RESOURCES:
-        res[r] += rep["net"][r]
-    if res["food"] < 0:
-        res["food"] = 0
+    nets = logistics.networks(m, pid)
+    stores = logistics.usable(m, pid, nets)
+    usable_ids = {s["id"] for s in stores}
+    food_in = 0
+    working, _ = staffing(m, pid)
+    for s in working:
+        d = STRUCTURES[s["type"]]
+        for r, n in output(m, s).items():
+            if r not in CAPPED:
+                p["res"][r] += n
+            elif logistics.capacity(s):
+                left = logistics.fill(s, r, n)
+                if s["id"] in usable_ids and r == "food":
+                    food_in += n - left
+            elif d["road"]:
+                s["held"][r] = n  # a full buffer stays full: one turn's output at most
+    food_in += logistics.deliver(m, pid, nets)["food"]
+    eat = rep["upkeep"]["food"]
+    have = logistics.stock(m, pid, stores)["food"]
+    logistics.take(m, pid, {"food": min(eat, have)})
+    if have < eat:
         if p["pop"] > 0:
             p["pop"] -= 1
             events.append({"t": "starve", "owner": pid})
         else:
             _disband_newest(m, pid, lambda u: True, events)
-    if res["gold"] < 0:
-        res["gold"] = 0
+    p["res"]["gold"] -= rep["upkeep"]["gold"]
+    if p["res"]["gold"] < 0:
+        p["res"]["gold"] = 0
         _disband_newest(m, pid, lambda u: UNITS[u["type"]]["upkeep"].get("gold", 0) > 0, events)
-    for r in CAPPED:
-        res[r] = min(res[r], rep["caps"][r])
-    if rep["net"]["food"] > 0 and p["pop"] < rep["housing"]:
-        grow = min(rep["growth"], rep["housing"] - p["pop"])
-        p["pop"] += grow
+    if food_in > eat and p["pop"] < rep["housing"]:
+        p["pop"] += min(rep["growth"], rep["housing"] - p["pop"])
 
 
 def _disband_newest(m, pid, which, events):

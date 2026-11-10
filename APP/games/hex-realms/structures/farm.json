@@ -31,5 +31,6 @@
   "grass",
   "plains"
  ],
- "text": "+1 food for each of its cells on grassland."
+ "text": "+1 food for each of its cells on grassland.",
+ "road": true
 }

@@ -4,12 +4,15 @@ Each player starts with a Town Hall and a Militia. Every turn all players plan a
 secret: place structures (multi-cell footprints, turned in 60-degree steps) inside their
 territory, train units, order moves and attacks, research advances, trade at a market. When
 everyone has pressed End turn (or the turn timer runs out), all orders resolve together:
-units move one cell per step at the same time and fight with dice wherever they meet. Only
-structures linked to a Town Hall by roads work (touching isn't enough); structures with jobs need
-people (population), who need food and housing. Lose every Town Hall and you are out. Last
+units move one cell per step at the same time and fight with dice wherever they meet. Every
+structure works if it has its workers (people, who need food and housing). Gold, faith and
+science are realm-wide; goods (food, wood, stone, metal) sit in stores (Town Hall, Storage
+Yard, Granary) and producers flagged "road" deliver them along road networks (roads plus
+"navigable" structures); you spend only from Town Halls and the stores linked to them. Lose every Town Hall and you are out. Last
 realm standing wins; otherwise the highest score after the last turn.
 Full rules: logic/match.py (turn order, score), logic/economy.py, logic/combat.py,
-logic/movement.py, logic/orders.py; content in structures/, units/, advances/ (fields in
+logic/movement.py, logic/orders.py, logic/logistics.py; content in structures/, units/,
+advances/ (fields in
 logic/content.py).
 
 Player options:  none (colors by seat)

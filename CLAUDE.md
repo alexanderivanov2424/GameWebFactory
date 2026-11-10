@@ -224,8 +224,9 @@ Summary:
    either everyone at once or one at a time (a setting); `PatchState`.
    `games/hex-realms/` (`logic/` modules): a civilization game on a random hex map (`gamekit.hexes`):
    everyone plans in secret at once, then all orders resolve together (simultaneous step-by-step
-   movement where units that meet fight with dice, sieges, towers), multi-cell structures that
-   only work when road-connected to a Town Hall and staffed by population, territory, advances
+   movement where units that meet fight with dice, sieges, towers), multi-cell structures staffed
+   by population, goods kept in stores and carried along road networks (roads + navigable
+   structures; you spend only from stores linked to a Town Hall), territory, advances
    bought with science or faith, an optional turn timer (`schedule`); `PatchState`.
 
 ## Lobby model (shared by all games)
