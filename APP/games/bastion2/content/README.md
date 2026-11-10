@@ -32,7 +32,9 @@ from `deck`, then `after_first_hand` (2 Villagers) is shuffled into the draw pil
 ## structures/<id>.json
 - `name`, `icon`, optional `text`, `cost` {cost} to build it (next to one of your built
   structures; built at the end of the turn), `market` / `copies` as for cards (the castle has none:
-  it's only placed at setup).
+  it's only placed at setup). Buying a structure from the market pays its cost (plus the buy
+  action) and places it at once; it never becomes a card. A structure can still be a hand card
+  (e.g. in starting-deck.json): playing it pays the cost and places it the same way.
 - `provides`: `{"food_cap": n, "actions": n}` while it stands (the castle: 5 food, 1 action).
 - `on_build`: `{"population": n, "add": [{"card", "count"?, "optional"?}]}` once, when built
   (cards go to the discard pile; `optional` ones can be unticked in the play area).

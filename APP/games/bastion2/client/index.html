@@ -113,6 +113,7 @@
     .offer .body span { color: var(--gwf-muted); font-size: 0.72rem; }
     .offer button { padding: 4px 10px; font-size: 0.8rem; }
     .offer.empty { color: var(--gwf-muted); justify-content: center; }
+    .offer.on { box-shadow: 0 0 0 3px #ffd54a; }
     .seat { display: flex; flex-direction: column; gap: 2px; padding: 5px 0; border-top: 1px solid var(--gwf-line); font-size: 0.8rem; }
     .seat:first-of-type { border-top: none; }
     .seat .who { display: flex; align-items: center; gap: 6px; font-weight: 600; }
@@ -225,11 +226,10 @@
           until you all vote to end it.</p>
         <p><b>Setup:</b> place your Castle, then a House and a Farm next to it.</p>
         <p><b>Each turn</b> you hold 5 new cards (plus any you kept). Play <b>resource cards</b>
-          into your play area to fill this turn's counters (🪵 wood, 🪨 stone, 🌾 wheat). Your Farm turns 1 wheat a
+          into your play area to fill this turn's counters (🪵 wood, 🪨 stone, 🌾 wheat). Each Hut turns 1 wheat a
           turn into 🍞 food, which you keep (up to 5).
-          Play a <b>structure card</b> by paying its resources and 🧑 population, on a tile next to your buildings: it's
-          built at the end of your turn. <b>Buy</b> new structures from the market with your action (1 per turn); they
-          go to your discard pile.</p>
+          <b>Buy</b> a structure from the market with your action (1 per turn): pay its resources and 🧑 population
+          and place it on a tile next to your buildings. It's built at the end of your turn.</p>
         <p><b>Villagers</b> must be fed: pay 1 food or discard 2 cards. Discard one unfed and you get <b>Hunger</b>,
           then <b>Starvation</b>, which costs you population.</p>
       </div>
@@ -290,10 +290,12 @@
     <div class="body">
       <p><b>Map:</b> drag to pan, mouse wheel to zoom, C to centre on your castle. Hover a building to see what it does.</p>
       <p><b>Hand:</b> click a card to play it. Resource cards go to your play area and fill the counters at its top
-        right, under your permanent food and population (temporary: cleared at the end of your turn). Each Farm's
-        free action turns 1 🌾 wheat into 1 🍞 food, which you keep (up to your food storage). A <b>structure card</b> lights up the tiles next to your buildings: click one to build there (you pay
-        at once; it's built at the end of your turn; right-click it to take it back). <b>Upkeep cards</b> (Villager,
+        right, under your permanent food and population (temporary: cleared at the end of your turn). Each Hut's
+        free action turns 1 🌾 wheat into 1 🍞 food, which you keep (up to your food storage). <b>Upkeep cards</b> (Villager,
         Hunger, Starvation) ask how to pay. The 📌 on a card keeps it in your hand when your turn ends.</p>
+      <p><b>Building:</b> click Buy on a structure in the market (right) and the tiles next to your buildings light
+        up: click one to place it there. You pay its resources, population and 1 action at once; it's built at the
+        end of your turn. Until then, right-click it (or Take back in the play area) to undo and get everything back.</p>
       <p><b>Population</b> (🧑 available / total) is what your builds take this turn; it comes back every turn.
         <b>Actions</b> (the big circle): buying a card costs 1, the King costs 1, some structure actions cost 1 and
         some are free. Each structure's action works once per turn (the list on the left).</p>

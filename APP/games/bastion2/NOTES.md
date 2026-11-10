@@ -20,7 +20,9 @@ rewiring to seats either way).
 - **Temporary card instances** (`inst["temp"]`): made by actions, vanish instead of being
   discarded; they never count as owned (`views.owned_cards`).
 - **Pending placements that complete at end of turn**: on the board as `pending` (public,
-  reserving the tile), paid at once, refundable (`unbuild`) until the turn ends.
+  reserving the tile), paid at once, refundable (`unbuild`) until the turn ends. Market purchases
+  and hand cards share `effects.place`; a plan remembers what to undo (`actions`, the shop
+  `slot` and its `refill`, the hand `inst`), and `Market.put_back` restores the shop row.
 - **An unbounded board**: `Board.bounds()` (structures + MARGIN) is what's drawn and where
   the camera may go; `client/map.js` pans/zooms a transformed world and clamps the view centre.
 - **A full-screen game page with a HUD around the edges** (`client/index.html`):
@@ -62,9 +64,11 @@ rewiring to seats either way).
 - Build spots count only *built* structures, so taking back a pending build never strands
   another pending one.
 - Setup pieces give their population but not their `on_build` cards (the starting deck has them),
-  but they do give their actions (the setup Farm's Make food works from turn 1).
-- Wheat is a temporary resource like wood and stone; food only comes from the Farm's free
-  conversion (1 per Farm per turn), so food income scales with Farms.
+  but they do give their actions.
+- Wheat is a temporary resource like wood and stone; food only comes from the Hut's free
+  conversion (1 per Hut per turn). Setup has no Hut, so the first food needs a Hut bought.
+- Buying a structure goes straight to the map, so `private.buy` is per card id (cost, room and
+  actions), and the client's "buy" selection must be dropped when the shop slot changes.
 - `AppLobbyUI.turnAlert` used to force `position: relative` on its element, which pulled the
   absolutely positioned bottom HUD to the top of the screen every new turn. Its position rule
   now has zero specificity (`gamekit/lobby-ui.js`), so the page's own position wins.

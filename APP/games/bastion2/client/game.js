@@ -9,7 +9,8 @@
  * select for a map click, upkeep asks how to pay, picking cards for a discard payment or a bundle);
  * prompt line; End turn (with the cards marked 📌 to keep); windows (any player's deck, help).
  *
- * Interaction state: selection = null | {mode: "build", uid, card} | {mode: "upkeep", uid} |
+ * Interaction state: selection = null | {mode: "build", uid, card} | {mode: "buy", card, slot
+ * (shop slot, or undefined for always-for-sale)} | {mode: "upkeep", uid} |
  * {mode: "discard", uid, picks: [uid]} | {mode: "bundle", cell: "x,y", picks: [uid]}; cleared
  * when it's no longer your turn or the card is gone. keep: uids marked 📌 (per game number).
  */
@@ -54,6 +55,11 @@
   const hud = Bastion2Hud.create({
     game, priv, you, seat, send, nameOf,
     selection: () => selection,
+    startBuy(card, slot) {
+      const same = selection && selection.mode === "buy" && selection.card === card && selection.slot === slot;
+      selection = same ? null : { mode: "buy", card, slot };
+      renderGame();
+    },
     startBundle(cell) {
       selection = selection && selection.mode === "bundle" && selection.cell === cell ? null : { mode: "bundle", cell, picks: [] };
       renderGame();
@@ -143,6 +149,10 @@
     if (!myTurn()) selection = null;
     else if (selection.uid !== undefined && !handCard(selection.uid)) selection = null;
     else if (selection.mode === "bundle" && !(priv().uses[selection.cell] && !priv().uses[selection.cell].why)) selection = null;
+    else if (selection.mode === "buy") {
+      const onSale = selection.slot === undefined ? game().market.always.includes(selection.card) : game().market.slots[selection.slot] === selection.card;
+      if (!onSale || priv().buy[selection.card]) selection = null;
+    }
     if (selection && selection.picks) selection.picks = selection.picks.filter((uid) => handCard(uid));
   }
 
@@ -191,7 +201,9 @@
     const p = priv();
     if (!p || state.phase !== "playing") return null;
     if (p.setup) return { icon: game().cards[p.setup].icon, name: game().cards[p.setup].name };
-    if (selection && selection.mode === "build") return { icon: game().cards[selection.card].icon, name: game().cards[selection.card].name };
+    if (selection && (selection.mode === "build" || selection.mode === "buy")) {
+      return { icon: game().cards[selection.card].icon, name: game().cards[selection.card].name };
+    }
     return null;
   }
 
@@ -236,6 +248,12 @@
     if (selection && selection.mode === "build") {
       if (!p.spots.includes(key)) return showError("Build next to one of your buildings (the glowing tiles).");
       send({ action: "play", uid: selection.uid, x, y });
+      selection = null;
+      renderGame();
+    } else if (selection && selection.mode === "buy") {
+      if (!p.spots.includes(key)) return showError("Build next to one of your buildings (the glowing tiles).");
+      const where = selection.slot === undefined ? { card: selection.card } : { slot: selection.slot };
+      send({ action: "buy", ...where, x, y });
       selection = null;
       renderGame();
     }
@@ -331,6 +349,10 @@
     if (selection && selection.mode === "build") {
       const card = g.cards[selection.card];
       parts.push(el("span", { textContent: `Building a ${card.name} (${hud.amounts(card.cost)}): click a glowing tile next to your buildings.` }), cancelButton());
+    } else if (selection && selection.mode === "buy") {
+      const card = g.cards[selection.card];
+      const cost = [`${g.buyActions}${g.icons.actions}`, hud.amounts(card.cost)].filter(Boolean).join(" ");
+      parts.push(el("span", { textContent: `Buying a ${card.name} (${cost}): click a glowing tile next to your buildings. It's built at the end of your turn.` }), cancelButton());
     } else if (selection && selection.mode === "upkeep") {
       const c = handCard(selection.uid);
       const card = g.cards[c.card];

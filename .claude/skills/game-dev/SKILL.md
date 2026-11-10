@@ -54,8 +54,8 @@ Games at a glance (details in each `NOTES.md`):
   per-player prompts one by one), planning (royal decrees, blueprints, Tax / Orders / Trade, a
   two-half persistent market). Playtest bots are disabled (`tests/playtest.py` exits).
 - **bastion2**: `logic/` modules; Bastion redone as deck-building (draw 5, resource cards fill
-  per-turn counters in a play area, structure cards built next to your own at the end of the
-  turn, upkeep cards Villager / Hunger / Starvation, structure actions once a turn, an
+  per-turn counters in a play area, structures bought, paid and placed next to your own at once
+  (built at the end of the turn), upkeep cards Villager / Hunger / Starvation, structure actions once a turn, an
   always-for-sale market plus a shop row). Unbounded grid; full-screen page with a HUD
   (`client/map.js` pans/zooms). Enemies hidden. Content: `content/README.md`.
 - **block-blast**: `logic/` modules; 9x9 boards filled with rotatable shape cards (JSON in

@@ -16,8 +16,11 @@ Actions (raise LobbyError when not allowed):
     unbuild(pid, cell) / choose(pid, cell, index, on)   take back a pending build / toggle one of
                                              its optional "when built" cards
     use(pid, cell, uids)                     a built structure's action
-    buy(pid, card=..., slot=...)             a market card (always-for-sale card id, or a shop
-                                             slot) into your discard pile, for BUY_ACTIONS actions
+    buy(pid, card=..., slot=..., cell=...)   a market card (always-for-sale card id, or a shop
+                                             slot) for BUY_ACTIONS actions: a structure is paid
+                                             for and placed on `cell` at once (pending, built at
+                                             the end of the turn; no card); other cards go to
+                                             your discard pile
     end_turn(pid, keep)                      builds complete, the play area and every hand card
                                              not in `keep` are discarded, temporary resources are
                                              cleared, then you draw HAND_SIZE cards
@@ -167,21 +170,34 @@ class Match:
     def use(self, pid, cell, uids=()):
         effects.use(self, self.acting(pid), cell, uids)
 
-    def buy_reason(self, seat):
-        return "No actions left." if seat.actions < BUY_ACTIONS else ""
+    def buy_reason(self, seat, card, cell=None):
+        if seat.actions < BUY_ACTIONS:
+            return "No actions left."
+        if CARDS[card]["kind"] == "structure":
+            return effects.place_reason(self, seat, card, cell)
+        return ""
 
-    def buy(self, pid, card=None, slot=None):
+    def buy(self, pid, card=None, slot=None, cell=None):
         seat = self.acting(pid)
-        why = self.buy_reason(seat)
-        if why:
-            raise LobbyError(why)
         if card is not None:
             if card not in self.market.always:
                 raise LobbyError("That card isn't for sale.")
         else:
-            card = self.market.take(slot)
-        seat.actions -= BUY_ACTIONS
-        seat.deck.add(card)
+            card = self.market.peek(slot)
+        structure = CARDS[card]["kind"] == "structure"
+        if structure and cell is None:
+            raise LobbyError("Pick a tile to build on.")
+        why = self.buy_reason(seat, card, cell)
+        if why:
+            raise LobbyError(why)
+        if slot is not None:
+            self.market.take(slot)
+        if structure:
+            refill = self.market.slots[slot] if slot is not None else ""
+            effects.place(self, seat, card, cell, actions=BUY_ACTIONS, slot=-1 if slot is None else slot, refill=refill)
+        else:
+            seat.actions -= BUY_ACTIONS
+            seat.deck.add(card)
         self.note(f"{seat.name} bought a {CARDS[card]['name']}.", pid)
 
     def end_turn(self, pid, keep=()):

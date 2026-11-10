@@ -17,8 +17,10 @@ private(match, pid) = {
     "spots": ["x,y"] where the selected structure / next setup piece may go,
     "setup": the next setup piece or "",
     "uses": {"x,y": {"why"}} your structures with an action ("" = usable now),
-    "pending": {"x,y": {"uid", "card", "skip" [optional add indexes turned off]}},
-    "buy": why buying is refused now ("" = allowed), "turn": why you can't act now ("" = you can),
+    "pending": {"x,y": {"card", "bought" (from the market, not a hand card), "skip" [optional add
+               indexes turned off]}},
+    "buy": {card id: why buying it is refused now ("" = allowed)} for every card on sale,
+    "turn": why you can't act now ("" = you can),
     "discardPile": [card id] (yours, newest last) }
 """
 
@@ -64,7 +66,7 @@ def catalog(match):
 def owned_cards(seat):
     counts = {}
     piles = (seat.deck.draw_pile, seat.deck.discard_pile, seat.hand, seat.play,
-             [p["inst"] for p in seat.pending.values()])
+             [p["inst"] for p in seat.pending.values() if p["inst"] is not None])
     for pile in piles:
         for inst in pile:
             if not inst.get("temp"):
@@ -124,8 +126,9 @@ def private(match, pid):
     return {
         "hand": hand, "spots": [key(c) for c in spots], "setup": match.setup_piece(pid) or "",
         "uses": uses,
-        "pending": {key(c): {"uid": p["inst"]["uid"], "card": p["inst"]["card"], "skip": sorted(p["skip"])}
+        "pending": {key(c): {"card": p["kind"], "bought": p["inst"] is None, "skip": sorted(p["skip"])}
                     for c, p in seat.pending.items()},
-        "buy": turn or match.buy_reason(seat), "turn": turn,
+        "buy": {cid: turn or match.buy_reason(seat, cid) for cid in set(match.market.always + match.market.slots) if cid},
+        "turn": turn,
         "discardPile": [inst["card"] for inst in seat.deck.discard_pile],
     }

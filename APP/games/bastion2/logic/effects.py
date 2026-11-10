@@ -8,7 +8,11 @@
         structure  -> cell: an empty tile next to one of your built structures; pays its cost
                       (temporary resources, food, available population) and goes on the board as
                       pending, built at the end of your turn
-    unbuild(match, seat, cell)            take back a pending build: refund, card back to hand
+    place_reason(match, seat, kind, cell) why that structure can't be placed (cell None: anywhere)
+    place(match, seat, kind, cell, ...)   pay and put a pending structure there (hand cards and
+                                          market purchases both come here)
+    unbuild(match, seat, cell)            take back a pending build: refund the cost and the
+                                          action, the card back to the hand or the shop
     use(match, seat, cell, uids)          a built structure's action, once a turn (bundle: uids)
     apply(match, seat, effect)            pay / gain / temporary card / draw
     discard(match, seat, inst)            a card leaves the hand unplayed: temporary cards vanish,
@@ -70,10 +74,7 @@ def play_reason(match, seat, inst, option=""):
         reasons = [play_reason(match, seat, inst, o) for o in ("pay", "discard")]
         return "" if "" in reasons else reasons[0]
     if kind == "structure":
-        why = seat.missing(STRUCTURES[card["structure"]]["cost"])
-        if not why and not match.board.build_spots(seat.pid):
-            why = "No room next to your buildings."
-        return why
+        return place_reason(match, seat, card["structure"])
     return ""
 
 
@@ -125,21 +126,38 @@ def pay_upkeep(match, seat, inst, option, uids):
         seat.play.append(inst)
 
 
+def place_reason(match, seat, kind, cell=None):
+    why = seat.missing(STRUCTURES[kind]["cost"])
+    if why:
+        return why
+    if cell is None:
+        return "" if match.board.build_spots(seat.pid) else "No room next to your buildings."
+    if cell in match.board.structures:
+        return "That tile is taken."
+    if cell not in match.board.build_spots(seat.pid):
+        return "Build next to one of your buildings."
+    return ""
+
+
+def place(match, seat, kind, cell, inst=None, actions=0, slot=-1, refill=""):
+    """Pay for `kind` and put it on `cell` as pending. Callers check place_reason first.
+    inst: the hand card it came from; actions / slot / refill: what a market purchase cost and
+    which shop slot it came from (both undone by unbuild)."""
+    seat.pay(STRUCTURES[kind]["cost"])
+    seat.actions -= actions
+    seat.pending[cell] = {"kind": kind, "inst": inst, "paid": dict(STRUCTURES[kind]["cost"]), "actions": actions,
+                          "slot": slot, "refill": refill, "skip": set()}
+    match.board.add(cell, kind, seat.pid, pending=True)
+
+
 def build(match, seat, inst, cell):
-    structure = STRUCTURES[inst["card"]]
     if cell is None:
         raise LobbyError("Pick a tile to build on.")
-    why = seat.missing(structure["cost"])
+    why = place_reason(match, seat, inst["card"], cell)
     if why:
         raise LobbyError(why)
-    if cell in match.board.structures:
-        raise LobbyError("That tile is taken.")
-    if cell not in match.board.build_spots(seat.pid):
-        raise LobbyError("Build next to one of your buildings.")
     seat.hand.remove(inst)
-    seat.pay(structure["cost"])
-    seat.pending[cell] = {"inst": inst, "paid": dict(structure["cost"]), "skip": set()}
-    match.board.add(cell, structure["id"], seat.pid, pending=True)
+    place(match, seat, inst["card"], cell, inst=inst)
 
 
 def unbuild(match, seat, cell):
@@ -148,14 +166,18 @@ def unbuild(match, seat, cell):
         raise LobbyError("You have no build planned there.")
     match.board.remove(cell)
     seat.refund(plan["paid"])
-    seat.hand.append(plan["inst"])
+    seat.actions += plan["actions"]
+    if plan["inst"] is not None:
+        seat.hand.append(plan["inst"])
+    if plan["slot"] >= 0:
+        match.market.put_back(plan["slot"], plan["kind"], plan["refill"])
 
 
 def choose(seat, cell, index, on):
     plan = seat.pending.get(cell)
     if plan is None:
         raise LobbyError("You have no build planned there.")
-    adds = STRUCTURES[plan["inst"]["card"]]["on_build"]["add"]
+    adds = STRUCTURES[plan["kind"]]["on_build"]["add"]
     if not 0 <= index < len(adds) or not adds[index]["optional"]:
         raise LobbyError("That isn't a choice.")
     (plan["skip"].discard if on else plan["skip"].add)(index)
@@ -256,7 +278,7 @@ def lose_population(match, seat, n):
 def complete(match, seat, adds=True):
     """Pending builds are built. adds=False (setup pieces) skips the cards they add."""
     for cell, plan in list(seat.pending.items()):
-        structure = STRUCTURES[plan["inst"]["card"]]
+        structure = STRUCTURES[plan["kind"]]
         match.board.add(cell, structure["id"], seat.pid)
         seat.population += structure["on_build"]["population"]
         if adds:

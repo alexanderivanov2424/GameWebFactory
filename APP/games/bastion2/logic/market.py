@@ -8,7 +8,11 @@ A bought shop card is replaced from the shop deck; once it's empty the slot stay
     market.always          [card id]
     market.slots           [card id or ""]
     market.left()          cards left in the shop deck
+    market.peek(slot)      the card in that slot, or raises LobbyError
     market.take(slot)      the card in that slot (refilled), or raises LobbyError
+    market.put_back(slot, card, refill)   undo a take: the card goes back to its slot if the slot
+                           still shows `refill` (which goes back on top of the shop deck), else on
+                           top of the shop deck
 """
 
 from gamekit.validate import LobbyError
@@ -29,9 +33,20 @@ class Market:
     def left(self):
         return len(self.deck)
 
-    def take(self, slot):
+    def peek(self, slot):
         if not 0 <= slot < len(self.slots) or not self.slots[slot]:
             raise LobbyError("That shop slot is empty.")
-        card = self.slots[slot]
+        return self.slots[slot]
+
+    def take(self, slot):
+        card = self.peek(slot)
         self.slots[slot] = self.deck.pop() if self.deck else ""
         return card
+
+    def put_back(self, slot, card, refill):
+        if 0 <= slot < len(self.slots) and self.slots[slot] == refill:
+            if refill:
+                self.deck.append(refill)
+            self.slots[slot] = card
+        else:
+            self.deck.append(card)

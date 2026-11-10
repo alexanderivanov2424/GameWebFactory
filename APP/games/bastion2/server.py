@@ -20,15 +20,17 @@ Your turn (everyone at once, or one player at a time: the Turns setting):
   it leaves your deck); Starvation: 3 food (then it leaves). Discarding one unplayed (at the end
   of your turn, or to pay for another): Villager adds a Hunger to your deck, Hunger adds a
   Starvation, Starvation costs 1 population and a Villager card (and leaves).
-- Structure cards: pay the cost (resources and population) and pick an empty tile next to one of
-  your built structures; it's built at the end of your turn (take it back with right-click until
-  then). When built it may add cards to your discard pile and give population.
-- Structure actions, once each per turn: Farm (free): turn 1 wheat into 1 food; Storage Yard (1 action): bundle resource cards of one kind
+- Buy a structure from the market (1 action): pay its cost (resources and population) and place it
+  at once on an empty tile next to one of your built structures (no card). It's built at the end
+  of your turn; until then take it back (right-click) for a full refund, action included, and it
+  returns to the market. When built it may add cards to your discard pile and give population.
+  (Structure cards in hand, if content ever adds some, play the same way minus the action.)
+- Structure actions, once each per turn: Hut (free): turn 1 wheat into 1 food; Storage Yard (1 action): bundle resource cards of one kind
   worth exactly 3 or 5 into one card of that value (the bundled cards leave your deck); Quarry /
   Lumber Mill (free): take a Stone / Wood card into your hand (gone once played or discarded).
-- Buy from the market (1 action): Farm, Hut and House are always for sale; the shop shows 3
-  cards from a shared shop deck (Storage Yard, Quarry, Lumber Mill), refilled when bought. Bought
-  cards go to your discard pile.
+- The market: Farm, Hut and House are always for sale; the shop shows 3 cards from a shared shop
+  deck (Storage Yard, Quarry, Lumber Mill), refilled when bought. Bought non-structure cards (none
+  yet) go to your discard pile.
 - Actions: 1 per turn (the Castle).
 - End turn: pick cards to keep in hand; the rest and your play area are discarded, temporary
   resources clear, population is free again, and you draw 5 new cards.
@@ -50,7 +52,8 @@ Game messages (x, y: whole numbers, any sign):
   {"action": "unbuild", "x", "y"}                   take back a build you played this turn
   {"action": "choose", "x", "y", "index", "on"}     toggle an optional card of a pending build
   {"action": "use", "x", "y", "cards"?: [uid]}      a structure's action (Bundle: cards)
-  {"action": "buy", "card"?: id, "slot"?: n}        an always-for-sale card, or a shop slot (0-based)
+  {"action": "buy", "card"?: id, "slot"?: n, "x"?, "y"?}   an always-for-sale card, or a shop slot
+                                                    (0-based); structures need x, y
   {"action": "end", "keep"?: [uid]}                 end your turn, keeping those hand cards
 
 Code: this file connects the game to the lobby and type-checks message fields. The rules live
@@ -139,10 +142,11 @@ class Game(LobbyGame):
         self.match.use(member.id, cell(data), uids(data, "cards"))
 
     def on_buy(self, member, data):
+        where = cell(data, required=False)
         if data.get("card") is not None:
-            self.match.buy(member.id, card=text(data, "card"))
+            self.match.buy(member.id, card=text(data, "card"), cell=where)
         else:
-            self.match.buy(member.id, slot=whole_number(data.get("slot"), "Slot", 0, 20, clamp=False))
+            self.match.buy(member.id, slot=whole_number(data.get("slot"), "Slot", 0, 20, clamp=False), cell=where)
 
     def on_end(self, member, data):
         self.match.end_turn(member.id, uids(data, "keep"))

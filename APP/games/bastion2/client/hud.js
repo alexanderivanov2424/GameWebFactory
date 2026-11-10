@@ -4,12 +4,13 @@
  *
  *   const hud = Bastion2Hud.create(ctx)
  *     ctx: { game(), priv(), you(), seat(), send(message), nameOf(pid), selection(),
- *            startBundle(cell), hoverCell(key or null), showDeck(pid) }
+ *            startBundle(cell), startBuy(card, slot), hoverCell(key or null), showDeck(pid) }
  *   hud.cardEl(id, {off, temp, selected, picked, kept, why})   a card face (hand, play area, deck
  *                          window); resource cards show only their icon, once per point of value
  *   hud.amounts(obj)       "2🪵 1🧑"
  *   hud.uses()             left: your structures' actions (once a turn each; Bundle starts a pick)
- *   hud.market()           right: always-for-sale cards and the shop row, with Buy buttons
+ *   hud.market()           right: always-for-sale cards and the shop row, with Buy buttons (a
+ *                          structure starts placing it: ctx.startBuy; other cards are bought at once)
  *   hud.seats()            right: every player (colour, name, turn / done / setup, resources, a
  *                          Deck button)
  *   hud.log()              right: the chronicle, newest first
@@ -80,11 +81,20 @@ const Bastion2Hud = (() => {
       }));
     }
 
-    function offer(id, why, onBuy) {
+    function offer(id, slot) {
       const card = game().cards[id];
-      const button = el("button", { textContent: "Buy", disabled: Boolean(why), title: why || `Costs ${game().buyActions} action` });
-      button.addEventListener("click", onBuy);
-      const node = el("div", { className: "offer", title: card.text },
+      const p = priv();
+      const why = p ? p.buy[id] || "" : "";
+      const sel = ctx.selection();
+      const on = Boolean(sel && sel.mode === "buy" && sel.card === id && sel.slot === slot);
+      const cost = `${game().buyActions}${icon("actions")}${card.kind === "structure" && amounts(card.cost) ? ` + ${amounts(card.cost)}` : ""}`;
+      const button = el("button", { textContent: on ? "Cancel" : "Buy", disabled: Boolean(why) && !on,
+        title: why || (card.kind === "structure" ? `Pay ${cost} and place it now (built at the end of your turn)` : `Costs ${cost}`) });
+      button.addEventListener("click", () => {
+        if (card.kind === "structure") ctx.startBuy(id, slot);
+        else ctx.send(slot === undefined ? { action: "buy", card: id } : { action: "buy", slot });
+      });
+      const node = el("div", { className: `offer${on ? " on" : ""}`, title: card.text },
         el("span", { className: "ico", textContent: card.icon }),
         el("div", { className: "body" }, el("b", { textContent: card.name }),
           el("span", { textContent: card.kind === "structure" ? `Build: ${amounts(card.cost) || "free"}` : KIND_NAMES[card.kind] })),
@@ -94,11 +104,8 @@ const Bastion2Hud = (() => {
 
     function market() {
       const g = game();
-      const why = priv() ? priv().buy : "";
-      const always = g.market.always.map((id) => offer(id, why, () => ctx.send({ action: "buy", card: id })));
-      const shop = g.market.slots.map((id, slot) => (id
-        ? offer(id, why, () => ctx.send({ action: "buy", slot }))
-        : el("div", { className: "offer empty", textContent: "Sold out" })));
+      const always = g.market.always.map((id) => offer(id));
+      const shop = g.market.slots.map((id, slot) => (id ? offer(id, slot) : el("div", { className: "offer empty", textContent: "Sold out" })));
       $("market").replaceChildren(
         el("div", { className: "muted small", textContent: "Always for sale" }),
         el("div", { className: "offers" }, always),
@@ -153,7 +160,7 @@ const Bastion2Hud = (() => {
           const card = g.cards[plan.card];
           const node = cardEl(plan.card);
           node.classList.add("building");
-          node.title = "Built at the end of your turn.";
+          node.title = `Built at the end of your turn.${plan.bought ? " Bought from the market." : ""}`;
           node.append(el("span", { className: "badge", textContent: "Building" }));
           const [x, y] = key.split(",").map(Number);
           const opts = el("div", { className: "opts" });
@@ -164,7 +171,8 @@ const Bastion2Hud = (() => {
             opts.append(el("label", { title: "Add this card to your discard pile when it's built" }, box, `+${cardName(add.card)}`));
           });
           if (!p.turn) {
-            const back = el("button", { className: "plain small", textContent: "↶ Take back", title: "Refund it and return the card to your hand" });
+            const back = el("button", { className: "plain small", textContent: "↶ Take back",
+              title: plan.bought ? "Refund it (resources and action) and put it back in the market" : "Refund it and return the card to your hand" });
             back.addEventListener("click", () => ctx.send({ action: "unbuild", x, y }));
             opts.append(back);
           }
