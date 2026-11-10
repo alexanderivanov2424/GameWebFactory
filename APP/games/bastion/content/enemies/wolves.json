@@ -2,7 +2,7 @@
   "name": "Wolf Pack",
   "icon": "🐺",
   "tier": 1,
-  "hp": 20,
+  "hp": 10,
   "defeat": {
     "soldiers": 1
   },
@@ -23,7 +23,7 @@
     {
       "name": "Prowl",
       "steal": {
-        "wheat": 2
+        "food": 2
       }
     }
   ]

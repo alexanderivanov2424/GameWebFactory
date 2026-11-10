@@ -1,37 +1,16 @@
 {
   "name": "Farm",
   "icon": "🌾",
-  "shape": [
-    "##"
-  ],
   "price": 2,
-  "bundle": 3,
   "cost": {
+    "decrees": 1,
     "wood": 1
   },
+  "build": 1,
   "work": {
     "makes": {
-      "wheat": 1
+      "food": 2
     }
   },
-  "bonuses": [
-    {
-      "near": "farm",
-      "each": 1,
-      "max": 2
-    },
-    {
-      "near": "water",
-      "bonus": 1
-    },
-    {
-      "near": "mine",
-      "bonus": -1
-    },
-    {
-      "near": "quarry",
-      "bonus": -1
-    }
-  ],
-  "text": "Grows wheat: +1 for every farm next to it (up to 2), so fields work best in clusters. Likes water; hates the dust of mines and quarries."
+  "text": "Makes 2 food every round a unit works it."
 }

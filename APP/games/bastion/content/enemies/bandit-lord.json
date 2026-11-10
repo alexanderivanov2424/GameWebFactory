@@ -2,7 +2,7 @@
   "name": "Bandit Lord",
   "icon": "🏴",
   "tier": 2,
-  "hp": 16,
+  "hp": 8,
   "defeat": {
     "soldiers": 2,
     "cards": true

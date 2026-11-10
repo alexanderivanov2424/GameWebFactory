@@ -2,7 +2,7 @@
   "name": "Siege Ogre",
   "icon": "👹",
   "tier": 2,
-  "hp": 40,
+  "hp": 16,
   "defeat": {
     "soldiers": 1
   },

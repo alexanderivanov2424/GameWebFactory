@@ -1,35 +1,17 @@
 {
   "name": "Quarry",
   "icon": "⛏️",
-  "shape": [
-    "##.",
-    ".##"
-  ],
-  "price": 2,
+  "price": 3,
   "cost": {
-    "wood": 2
+    "decrees": 1,
+    "wood": 2,
+    "stone": 1
   },
-  "requires": [
-    {
-      "near": "mountain"
-    }
-  ],
+  "build": 1,
   "work": {
     "makes": {
-      "stone": 2
+      "stone": 3
     }
   },
-  "bonuses": [
-    {
-      "near": "mountain",
-      "min": 3,
-      "bonus": 1
-    },
-    {
-      "near": "storage-yard",
-      "bonus": 1
-    }
-  ],
-  "text": "Cuts stone from the mountain next to it; a storage yard next to it speeds it up.",
-  "bundle": 2
+  "text": "Can be planned anywhere. Makes 3 stone every round a unit works it."
 }

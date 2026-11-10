@@ -19,7 +19,7 @@
     {
       "name": "Gnaw",
       "steal": {
-        "wheat": 1,
+        "food": 1,
         "wood": 1
       }
     }

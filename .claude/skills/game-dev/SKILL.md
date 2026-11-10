@@ -46,13 +46,13 @@ Games at a glance (details in each `NOTES.md`):
 - **smugglers**: built with `logic/` modules; graph board from JSON maps (SVG), Interpol vs.
   smugglers, deck-building (`gamekit.Deck`), inspections that interrupt a turn, `PatchState`.
   Content files: `content/README.md`.
-- **bastion**: `logic/` modules; co-op worker-placement city-builder: houses give population,
-  which becomes units each round (place phase together with ready flags, then an act phase in
-  turn order where units resolve), food upkeep (wheat/bread), polyomino buildings placed with
-  rotation whose output comes from adjacency conditions in JSON (`content/structures/`), goods
-  stored in buildings and hauled to depots by units, a deck per player of blueprints (bought in
-  bundles) and action cards, enemy cards with cycling attacks and their own defeat rules
-  (`content/enemies/`), server-computed targets, test-only playtest bots (`tests/playtest.py`).
+- **bastion**: `logic/` modules; each player runs their own city (one-tile owned buildings, own
+  resources, units and soldiers) and trades with the others; endless for now (enemy modules
+  `foes.py` / `attacks.py` / `combat.py` / `enemies.py` are dormant). Setup in turn order (keep,
+  house, farm), then simultaneous phases: place units within reach (build tokens on planned
+  buildings, stationed workers, gathering, road or scavenge), resolution (automatic jobs, then
+  per-player prompts one by one), planning (royal decrees, blueprints, Tax / Orders / Trade, a
+  two-half persistent market). Playtest bots are disabled (`tests/playtest.py` exits).
 - **block-blast**: `logic/` modules; 9x9 boards filled with rotatable shape cards (JSON in
   `cards/`) that place tiles (types with behaviours, `logic/tiles.py`) carrying symbols
   (`logic/symbols.py`, effects in `logic/effects.py`) as separate layers, row/column clears that pay gold or deal damage, a per-player `gamekit.Deck`, a

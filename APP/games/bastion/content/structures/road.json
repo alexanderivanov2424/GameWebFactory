@@ -1,12 +1,6 @@
 {
   "name": "Road",
   "icon": "🛤️",
-  "shape": [
-    "#"
-  ],
   "tile": "road",
-  "cost": {
-    "gold": 1
-  },
-  "text": "Links buildings to the keep and storage yards so their stored goods can be hauled and their inputs fetched. Bought 3 at a time; removing one is free."
+  "text": "Built by a unit on empty grass. Roads extend how far your units can go (3 tiles from your buildings and roads)."
 }

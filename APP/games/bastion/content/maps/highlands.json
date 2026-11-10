@@ -23,47 +23,5 @@
     "MMMM......FFFF........~~~~~...FF",
     "MMMMM......FF..........~~~...FFF",
     "MMMMMM...................MMMMMMM"
-  ],
-  "start": [
-    {
-      "structure": "keep",
-      "x": 11,
-      "y": 9
-    },
-    {
-      "structure": "house",
-      "x": 11,
-      "y": 8
-    },
-    {
-      "structure": "farm",
-      "x": 9,
-      "y": 9
-    },
-    {
-      "structure": "lumbermill",
-      "x": 12,
-      "y": 10
-    },
-    {
-      "structure": "road",
-      "x": 12,
-      "y": 9
-    },
-    {
-      "structure": "road",
-      "x": 13,
-      "y": 9
-    },
-    {
-      "structure": "road",
-      "x": 11,
-      "y": 10
-    },
-    {
-      "structure": "road",
-      "x": 11,
-      "y": 11
-    }
   ]
 }

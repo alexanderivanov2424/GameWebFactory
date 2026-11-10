@@ -1,38 +1,12 @@
 {
   "name": "Barracks",
   "icon": "🛡️",
-  "shape": [
-    "#.#",
-    "###"
-  ],
-  "price": 4,
+  "price": 3,
   "cost": {
-    "stone": 3,
-    "tools": 1
+    "decrees": 1,
+    "stone": 2
   },
-  "work": {
-    "uses": {
-      "wheat": 1,
-      "tools": 1
-    },
-    "makes": {
-      "soldiers": 2
-    }
-  },
-  "bonuses": [
-    {
-      "near": "wall",
-      "min": 2,
-      "bonus": 1
-    },
-    {
-      "near": "smithy",
-      "bonus": 1
-    },
-    {
-      "near": "keep",
-      "bonus": 1
-    }
-  ],
-  "text": "Trains soldiers from wheat and tools. Soldiers beat most enemies and raze what they build."
+  "build": 1,
+  "trains": true,
+  "text": "A unit placed here becomes a soldier for good. Soldiers are placed like units (on towers) and return to your soldier pool at the end of every round."
 }

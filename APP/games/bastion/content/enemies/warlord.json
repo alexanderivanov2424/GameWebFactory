@@ -2,7 +2,7 @@
   "name": "Orc Warlord",
   "icon": "⚔️",
   "tier": 3,
-  "hp": 34,
+  "hp": 16,
   "defeat": {
     "soldiers": 2
   },

@@ -2,6 +2,7 @@
   "name": "Ransom Note",
   "kind": "curse",
   "pay": {
+    "decrees": 1,
     "gold": 3
   },
   "hurts": true

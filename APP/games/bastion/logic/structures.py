@@ -1,35 +1,34 @@
 """Bastion: loading the structure files (content/structures/*.json) when the game is imported.
 
-A structure is anything placed on the board: buildings (one or more cells; units work some of
-them for goods, houses give the city its people) and the two tile kinds, roads and walls (cell
-sets, never worked). Structures belong to nobody: the whole team uses them. Fields are
-documented in content/README.md. Bad files are logged (logger "bastion") and skipped.
+A structure is anything placed on the board: buildings (one tile each; each belongs to the
+player who placed it) and road tiles (built by units, also owned). Fields are documented in
+content/README.md. Bad files are logged (logger "bastion") and skipped.
 
-    RESOURCES    [(id, name, icon)] in display order. GOODS (everything but gold) are stored in
-                 buildings and hauled; gold is paid straight into the stockpile. Wheat and bread
-                 are food (food.py).
-    OUTPUTS      what a building's work may make: GOODS + gold, soldiers, keep (health), cure
+    RESOURCES    [(id, name, icon)] in display order: each player's own stock (Seat.stock)
+    COST_KEYS    what a cost may name: RESOURCE_IDS + "decrees" (royal decrees: each player's
+                 per-planning-phase allowance, Seat.decrees)
+    GOODS        resources but gold (the dormant enemy attacks steal/loot these)
     TERRAIN      {code letter: terrain name} for map rows; BUILDABLE terrain is "grass"
+    GATHER       {terrain: resource} a unit on that terrain gathers 1 of (forest: wood, mountain: stone)
     STRUCTURES   {id: structure}, structure = {
         "id", "name", "icon", "text",
-        "tile":     None for buildings, "road" or "wall" for tiles (one cell each, placed and
-                    removed one at a time; "cost" buys a batch of tiles.BATCH: tiles.py; never
-                    sold as blueprints)
-        "pieces":   4 rotations (gamekit.shapes), each [(dy, dx)]; "sizes": [(h, w)] each
-        "cost":     {resource: n} paid from the stockpile to build it
-        "price":    gold for its blueprint in the market (None: never sold; always None for tiles)
-        "bundle":   copies of the blueprint one market purchase adds (1+)
-        "requires": [condition] that must all hold where it's placed
-        "work":     None or {"uses": {resource: n}, "makes": {output: n}} (one output)
-        "bonuses":  [condition with "bonus" (min) or "each" (per thing, up to "max")]
-        "income":   {resource: n} made at the end of every round without a card (the keep)
-        "depot":    goods made next to it go straight to the stockpile; roads deliver here
-        "protects": radius (cells, square) of raid protection around it (0: none)
-        "population": people living there (houses, the keep; ruined ones still count)
-        "carriage": each undamaged one makes one haul a round carry hauling.BIG goods
-        "card":     card id added to the builder's deck when built (None: none) }
-    condition = {"near": terrain | "empty" | "road" | "wall" | structure id, "min": n, ...}
-    describe(condition)   readable text ("next to ≥3 forest", "per House next to it (max 3)")
+        "tile":     None for buildings, "road" for road tiles (built by units: resolution.py)
+        "pieces":   [[(0, 0)]] (every structure is one tile; kept as rotations for board.py)
+        "cost":     {resource or "decrees": n} paid when its blueprint is played
+        "price":    gold for its blueprint in the market (None: never sold)
+        "build":    build tokens it is planned with (each unit building it removes one; 0 = at once)
+        "requires": [condition] that must all hold where it's planned
+        "work":     None, or what a unit stationed there does every round:
+                    {"makes": {resource: n}}                     automatic
+                    {"uses": {resource: n}, "makes": {...}}      the owner is asked (convert)
+                    {"choices": [{"uses"?, "makes"}, ...]}       the owner picks one (or none)
+        "trains":   a worker placed here becomes a soldier (barracks)
+        "staff":    who may be placed here: "worker" (default), "soldier" or "none" (the keep)
+        "units":    workers it adds to its owner's pool when built (house 2, keep 1)
+        "income":   {resource: n} its owner gets at the end of every round (the keep)
+        "decrees":  royal decrees it grants its owner each planning phase (the keep: 3) }
+    condition = {"near": terrain | "empty" | "road" | structure id, "min": n}
+    describe(condition)   readable text ("next to a forest", "next to ≥2 mountains")
     load_structures(folder) -> STRUCTURES (tests feed temporary folders)
 """
 
@@ -37,23 +36,23 @@ import logging
 from pathlib import Path
 
 from gamekit.data import flag, load_json_dir, text, whole
-from gamekit.shapes import parse, rotations
 
 log = logging.getLogger("bastion")
 
 CONTENT = Path(__file__).resolve().parent.parent / "content"
 RESOURCES = [("gold", "Gold", "💰"), ("wood", "Wood", "🪵"), ("stone", "Stone", "🪨"),
-             ("ore", "Ore", "⛓️"), ("wheat", "Wheat", "🌾"), ("bread", "Bread", "🍞"),
-             ("tools", "Tools", "🔨")]
+             ("metal", "Metal", "⛓️"), ("food", "Food", "🍞"), ("tools", "Tools", "🔨")]
 RESOURCE_IDS = [r[0] for r in RESOURCES]
+COST_KEYS = RESOURCE_IDS + ["decrees"]
 GOODS = [r for r in RESOURCE_IDS if r != "gold"]
-OUTPUTS = RESOURCE_IDS + ["soldiers", "keep", "cure"]
-OUTPUT_NAMES = {**{r[0]: r[1].lower() for r in RESOURCES}, "soldiers": "soldiers", "keep": "keep health",
-                "cure": "plague cured"}
+OUTPUT_NAMES = {**{r[0]: r[1].lower() for r in RESOURCES}, "decrees": "decrees", "soldiers": "soldiers"}
+ICONS = {**{r[0]: r[2] for r in RESOURCES}, "decrees": "📜", "units": "🧍", "soldiers": "⚔️"}
 TERRAIN = {".": "grass", "F": "forest", "M": "mountain", "~": "water"}
 BUILDABLE = "grass"
-TILES = ("road", "wall")
-SPECIAL_NEAR = ("empty", "road", "wall")
+GATHER = {"forest": "wood", "mountain": "stone"}
+TILES = ("road",)
+STAFF = ("worker", "soldier", "none")
+SPECIAL_NEAR = ("empty", "road")
 MAX_AMOUNT = 20
 
 
@@ -64,64 +63,59 @@ def amounts(data, key, allowed):
     return {k: whole(value, k, 1, MAX_AMOUNT) for k in allowed if k in value}
 
 
-def condition(data, with_bonus):
+def condition(data):
     if not isinstance(data, dict) or not isinstance(data.get("near"), str):
         raise ValueError("each condition needs a 'near' string")
-    cond = {"near": data["near"], "min": whole(data, "min", 1, 8, default=1)}
-    if with_bonus:
-        if "each" in data:
-            cond["each"] = whole(data, "each", -5, 5)
-            cond["max"] = whole(data, "max", 1, 8, default=8)
-        else:
-            cond["bonus"] = whole(data, "bonus", -5, 5)
-    return cond
+    return {"near": data["near"], "min": whole(data, "min", 1, 8, default=1)}
 
 
-def conditions(data, key, with_bonus):
-    value = data.get(key, [])
-    if not isinstance(value, list):
-        raise ValueError(f"{key} must be a list")
-    return [condition(c, with_bonus) for c in value]
+def parse_work(data):
+    if not isinstance(data, dict):
+        raise ValueError("work must be an object")
+
+    def option(value):
+        if not isinstance(value, dict):
+            raise ValueError("each work option must be an object")
+        makes = amounts(value, "makes", RESOURCE_IDS)
+        if not makes:
+            raise ValueError("work needs 'makes'")
+        return {"uses": amounts(value, "uses", RESOURCE_IDS), "makes": makes}
+
+    if "choices" in data:
+        choices = data["choices"]
+        if not isinstance(choices, list) or not 2 <= len(choices) <= 4:
+            raise ValueError("work.choices must list 2 to 4 options")
+        return {"choices": [option(c) for c in choices]}
+    return option(data)
 
 
 def parse_structure(structure_id, data):
-    cells, height, width = parse(data.get("shape"), max_size=4)
-    pieces, sizes = rotations(cells, height, width)
     tile = data.get("tile")
     if tile is not None and tile not in TILES:
         raise ValueError(f"tile must be one of {TILES}")
-    work = None
-    if "work" in data:
-        if not isinstance(data["work"], dict):
-            raise ValueError("work must be an object")
-        makes = amounts(data["work"], "makes", OUTPUTS)
-        if len(makes) != 1:
-            raise ValueError("work.makes needs exactly one output")
-        work = {"uses": amounts(data["work"], "uses", RESOURCE_IDS), "makes": makes}
-    name = text(data, "name", 30, required=True)
-    card = data.get("card")
-    if card is not None and not isinstance(card, str):
-        raise ValueError("card must be a card id")
+    requires = data.get("requires", [])
+    if not isinstance(requires, list):
+        raise ValueError("requires must be a list")
+    staff = data.get("staff", "worker")
+    if staff not in STAFF:
+        raise ValueError(f"staff must be one of {STAFF}")
     return {
         "id": structure_id,
-        "name": name,
+        "name": text(data, "name", 30, required=True),
         "icon": text(data, "icon", 8),
         "text": text(data, "text", 300),
         "tile": tile,
-        "pieces": pieces,
-        "sizes": sizes,
-        "cost": amounts(data, "cost", RESOURCE_IDS),
+        "pieces": [[(0, 0)]] * 4,
+        "cost": amounts(data, "cost", COST_KEYS),
         "price": whole(data, "price", 0, 30) if "price" in data and not tile else None,
-        "bundle": whole(data, "bundle", 1, 5, default=1),
-        "requires": conditions(data, "requires", False),
-        "work": work,
-        "bonuses": conditions(data, "bonuses", True) if work else [],
+        "build": whole(data, "build", 0, 5, default=1),
+        "requires": [condition(c) for c in requires],
+        "work": parse_work(data["work"]) if "work" in data else None,
+        "trains": flag(data, "trains"),
+        "staff": "none" if tile else staff,
+        "units": whole(data, "units", 0, 10, default=0),
         "income": amounts(data, "income", RESOURCE_IDS),
-        "depot": flag(data, "depot"),
-        "protects": whole(data, "protects", 0, 5, default=0),
-        "population": whole(data, "population", 0, 10, default=0),
-        "carriage": flag(data, "carriage"),
-        "card": card,
+        "decrees": whole(data, "decrees", 0, 10, default=0),
     }
 
 
@@ -129,7 +123,7 @@ def check_names(structures):
     """Drop structures whose conditions name something unknown (logged)."""
     known = set(TERRAIN.values()) | set(SPECIAL_NEAR) | set(structures)
     for sid, s in list(structures.items()):
-        bad = [c["near"] for c in s["requires"] + s["bonuses"] if c["near"] not in known]
+        bad = [c["near"] for c in s["requires"] if c["near"] not in known]
         if bad:
             log.error("Structure %s: unknown 'near' %s", sid, bad)
             del structures[sid]
@@ -146,36 +140,31 @@ def a(name):
 
 
 def thing_name(near, structures, plural=False):
-    if near in TILES or near not in structures:
+    if near not in structures:
         name = {"empty": "empty grass"}.get(near, near)
-        return name + ("s" if plural and near in ("road", "wall", "mountain") else "")
+        return name + ("s" if plural and near in ("road", "mountain", "forest") else "")
     return structures[near]["name"] + ("s" if plural else "")
 
 
 def describe(cond, structures):
     near, low = cond["near"], cond["min"]
-    if "each" in cond:
-        return f"per {thing_name(near, structures)} next to it (max {cond['max']})"
     if low > 1:
         return f"next to ≥{low} {thing_name(near, structures, plural=True)}"
-    if near in structures or near in ("road", "wall", "mountain"):
+    if near in structures or near in ("road", "mountain", "forest"):
         return f"next to {a(thing_name(near, structures))}"
     return f"next to {thing_name(near, structures)}"
 
 
 def public(s, structures):
-    """What clients get (the catalog): shapes as rotations of [dx, dy] plus text to show."""
+    """What clients get (the catalog). PatchState: no nulls in dicts."""
     view = {
-        "name": s["name"], "icon": s["icon"], "text": s["text"], "tile": s["tile"],
-        "rotations": [[[dx, dy] for dy, dx in piece] for piece in s["pieces"]],
-        "cost": s["cost"], "price": s["price"], "bundle": s["bundle"],
+        "name": s["name"], "icon": s["icon"], "text": s["text"], "tile": s["tile"] or "",
+        "cost": s["cost"], "price": s["price"] if s["price"] is not None else -1, "build": s["build"],
         "requires": [describe(c, structures) for c in s["requires"]],
-        "work": s["work"],
-        "bonuses": [[describe(c, structures), c.get("bonus", c.get("each"))] for c in s["bonuses"]],
-        "income": s["income"], "depot": s["depot"], "protects": s["protects"], "card": s["card"],
-        "population": s["population"], "carriage": s["carriage"],
+        "work": s["work"] or {}, "trains": s["trains"], "staff": s["staff"], "units": s["units"],
+        "income": s["income"], "decrees": s["decrees"],
     }
-    return {k: v for k, v in view.items() if v is not None}  # PatchState: no nulls in dicts
+    return view
 
 
 STRUCTURES = load_structures(CONTENT / "structures")

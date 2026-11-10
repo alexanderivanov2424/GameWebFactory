@@ -200,12 +200,13 @@ Summary:
    secret objectives (JSON with a `check` key -> scoring function), hidden picks that only work
    like a physical game (secret die rolls you may under-report, a Secret Hitler style card
    hand-off between two players), a nightly secret vote with only the tally shown, `PatchState`.
-   `games/bastion/` (`logic/` modules): a co-op worker-placement city-builder (population from
-   houses becomes units each round, placed together then resolved in turn order, food upkeep),
-   polyomino buildings (`gamekit.shapes`) whose output comes from adjacency conditions in JSON,
-   goods hauled to depots by units, server-computed placement targets with output previews,
-   enemy cards with cycling attacks and their own ways to be beaten, and test-only playtest
-   bots (`tests/bots.py`, `tests/playtest.py`) the user asked for; `PatchState`.
+   `games/bastion/` (`logic/` modules): a city-builder where each player runs their own city and
+   trades with the others (endless for now; enemy modules kept but dormant): a setup phase in
+   turn order, then simultaneous phases each round (place units on owned one-tile buildings,
+   build tokens, gathering tiles; resolution with automatic jobs plus per-player prompts answered
+   one by one; planning with royal decrees, blueprints, Orders and Trade), a two-half persistent
+   market, per-player resources and upkeep, reach-limited placement; `PatchState`. Its playtest
+   bots (`tests/bots.py`, `tests/playtest.py`) are disabled until rewritten for the redesign.
    `games/gilded-trail/` (`logic/` modules): a hex map generated from a seed (preset JSON maps
    or a random one) drawn as SVG, deck-building with a shared market and reserve (`Deck` per
    player), action cards that leave a pending choice inside the turn, and the server sending

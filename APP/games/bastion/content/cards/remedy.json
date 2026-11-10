@@ -1,8 +1,0 @@
-{
-  "name": "Remedy",
-  "cure": true,
-  "cost": {
-    "gold": 1
-  },
-  "price": 2
-}

@@ -16,7 +16,7 @@ things are, and its pitfalls. Read only the one closest to your game:
 - `smugglers`: the first `logic/`-module game; graph board as SVG, deck-building, `PatchState`.
 - `block-blast`: grid placement with rotations, hover ghost, swappable market (`Choice`/`MultiChoice`).
 - `marooned`: hidden role, secret votes, map built as it's explored.
-- `bastion`: co-op worker placement (simultaneous placing, turn-order resolving), polyomino buildings with adjacency bonuses from JSON, enemy cards.
+- `bastion`: per-player cities with trading: a turn-order setup phase, then simultaneous place / resolve (per-player prompt queues) / plan phases, owned one-tile buildings with build tokens, reach-limited worker placement, a two-half market.
 - `gilded-trail`: hex map from a seed as SVG, deck-building market, pending choices inside a turn.
 - `arena`: real-time (`RealtimeGame`); start from it for continuous movement.
 - `deep-colony`: real-time co-op sim without player units: shared orders/pause/speed, live cursors, big grid as row strings.

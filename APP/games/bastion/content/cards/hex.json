@@ -2,6 +2,7 @@
   "name": "Hex",
   "kind": "curse",
   "pay": {
+    "decrees": 1,
     "gold": 2
   }
 }
