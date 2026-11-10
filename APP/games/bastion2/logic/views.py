@@ -9,7 +9,7 @@ public(match) = {
     "market": {"always": [card id], "slots": [card id or ""], "left": n},
     "seats" {pid: {"name", "color", "food", "foodCap", "population", "popUsed", "actions",
                    "temp" {res: n}, "play" [card id], "hand", "draw", "discard", "deck" (cards
-                   owned), "done", "setup" (pieces placed)}},
+                   owned), "deckList" {card id: copies owned}, "done", "setup" (pieces placed)}},
     "log" {index: {"text", "pid", "round"}}, "logCount" }
 private(match, pid) = {
     "hand": [{"uid", "card", "temp", "why", "pay", "discard"}]  why: "" if it can be played now
@@ -19,7 +19,7 @@ private(match, pid) = {
     "uses": {"x,y": {"why"}} your structures with an action ("" = usable now),
     "pending": {"x,y": {"uid", "card", "skip" [optional add indexes turned off]}},
     "buy": why buying is refused now ("" = allowed), "turn": why you can't act now ("" = you can),
-    "discardPile": [card id] (yours, newest last), "deckList": {card id: copies you own} }
+    "discardPile": [card id] (yours, newest last) }
 """
 
 from .content import CARDS, ICONS, RESOURCES, STRUCTURES, TEMPORARY, card_text, effect_text
@@ -78,7 +78,8 @@ def seat_public(match, seat):
         "population": seat.population, "popUsed": seat.pop_used, "actions": seat.actions,
         "temp": {k: n for k, n in seat.temp.items() if n}, "play": [inst["card"] for inst in seat.play],
         "hand": len(seat.hand), "draw": len(seat.deck.draw_pile), "discard": len(seat.deck.discard_pile),
-        "deck": sum(owned_cards(seat).values()), "done": seat.done, "setup": seat.setup,
+        "deck": sum(owned_cards(seat).values()), "deckList": owned_cards(seat), "done": seat.done,
+        "setup": seat.setup,
     }
 
 
@@ -127,5 +128,4 @@ def private(match, pid):
                     for c, p in seat.pending.items()},
         "buy": turn or match.buy_reason(seat), "turn": turn,
         "discardPile": [inst["card"] for inst in seat.deck.discard_pile],
-        "deckList": owned_cards(seat),
     }

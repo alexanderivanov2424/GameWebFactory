@@ -25,6 +25,10 @@ rewiring to seats either way).
   the camera may go; `client/map.js` pans/zooms a transformed world and clamps the view centre.
 - **A full-screen game page with a HUD around the edges** (`client/index.html`):
   `body.in-game` hides `<main>` (except the error banner) and shows the fixed `#game` layer.
+  The play area is a scrolling row of card faces (shrunk with CSS `zoom`) next to a fixed
+  counters column (permanent food / population, a separator, then the temporary resources).
+- **Public deck lists**: every seat's owned cards as counts (`deckList`), so the players list has
+  a Deck button for everyone; only your own discard pile is private.
 - **Turn mode as a setting**: "together" (each seat has `done`; the round ends when all are
   done) or "order" (`Match.turn_index`); both share `end_turn` and `turn_reason`.
 
@@ -40,8 +44,9 @@ rewiring to seats either way).
 - `logic/board.py`, `logic/seat.py`, `logic/market.py`, `logic/content.py`, `logic/views.py`:
   see `logic/__init__.py`.
 - `client/map.js` (`Bastion2Map`: ground, structures, pulsing spots, ghost, hover, camera),
-  `client/hud.js` (`Bastion2Hud`: card faces, city, structure actions, market, players,
-  chronicle, play area, actions circle, deck window), `client/game.js` (controller: selection
+  `client/hud.js` (`Bastion2Hud`: card faces (resource cards show only their icon, once per
+  point of value), structure actions, market, players with Deck buttons, chronicle, play area
+  with counters, actions circle, any player's deck window), `client/game.js` (controller: selection
   modes, hand clicks, prompt line, End turn with 📌 kept cards); see their headers.
 
 ## Adding content
@@ -56,7 +61,13 @@ rewiring to seats either way).
   stay larger than `CASTLE_GAP` or the second castle has nowhere to go.
 - Build spots count only *built* structures, so taking back a pending build never strands
   another pending one.
-- Setup pieces give their population but not their `on_build` cards (the starting deck has them).
+- Setup pieces give their population but not their `on_build` cards (the starting deck has them),
+  but they do give their actions (the setup Farm's Make food works from turn 1).
+- Wheat is a temporary resource like wood and stone; food only comes from the Farm's free
+  conversion (1 per Farm per turn), so food income scales with Farms.
+- `AppLobbyUI.turnAlert` used to force `position: relative` on its element, which pulled the
+  absolutely positioned bottom HUD to the top of the screen every new turn. Its position rule
+  now has zero specificity (`gamekit/lobby-ui.js`), so the page's own position wins.
 - PatchState: no `None` in dicts; cells are `"x,y"` strings; the chronicle is a dict keyed by
   index plus `logCount`.
 

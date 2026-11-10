@@ -7,10 +7,12 @@
   <!--
     Bastion 2's page. Lobby: players, settings, how to play (inside <main>). Game: a full-screen
     layer (#game) with the map (map.js: a pannable, zoomable grid) filling it and the HUD floating
-    around the edges: status bar (top centre), your city + structure actions (left), market +
-    players + log (right), and the bottom bar: the prompt line, the play area (played cards,
-    pending builds, temporary resource counters top right), the actions circle, your hand and the
-    End turn button. Windows (<dialog>): your deck, help. game.js renders from the state, hud.js
+    around the edges: status bar (top centre), structure actions (left), market + players + log
+    (right), and the bottom bar: the prompt line, the play area (played cards and pending builds as
+    card faces; counters top right: permanent resources, a separator, then this turn's temporary
+    ones), the actions circle, your hand and the
+    End turn button; the Centre button sits in the map's corner between the left and bottom panels.
+    Windows (<dialog>): a player's deck (Deck in the players list), help. game.js renders from the state, hud.js
     draws the panels.
   -->
 
@@ -44,7 +46,7 @@
       --hud-line: #cdbd9c;
       --left-w: 250px;
       --right-w: 280px;
-      --bottom-h: 282px;
+      --bottom-h: 372px;
     }
     h1 { font-family: Georgia, "Times New Roman", serif; letter-spacing: 0.02em; }
     .lead { font-size: 0.95rem; line-height: 1.45; }
@@ -90,11 +92,11 @@
     #right { right: 12px; top: 64px; width: var(--right-w); bottom: calc(var(--bottom-h) + 12px); overflow-y: auto; }
     #bottom { left: 12px; right: 110px; bottom: 10px; height: var(--bottom-h); display: flex; flex-direction: column; overflow: hidden; }
 
-    /* Left: your city */
-    .perm { display: flex; gap: 8px; }
-    .perm .res { flex: 1; text-align: center; background: #fff; border: 1px solid var(--gwf-line); border-radius: 10px; padding: 6px 4px; }
-    .perm .res .big { font-size: 1.25rem; font-weight: 700; }
-    .perm .res .lbl { font-size: 0.72rem; color: var(--gwf-muted); }
+    #center-button { left: calc(var(--left-w) + 22px); bottom: calc(var(--bottom-h) + 20px); width: 44px; height: 44px; padding: 0;
+      border-radius: 50%; font-size: 1.4rem; color: #6b4f2e; background: var(--hud); }
+    #center-button:hover { background: #fff; }
+
+    /* Left: structure actions */
     .uses { display: flex; flex-direction: column; gap: 6px; }
     .use { display: flex; flex-direction: column; gap: 2px; text-align: left; white-space: normal; padding: 7px 9px; font-size: 0.82rem; }
     .use .head { display: flex; justify-content: space-between; gap: 6px; font-weight: 700; }
@@ -116,6 +118,7 @@
     .seat .who { display: flex; align-items: center; gap: 6px; font-weight: 600; }
     .seat .dot { width: 12px; height: 12px; border-radius: 50%; flex: none; }
     .seat .flag { margin-left: auto; font-size: 0.72rem; font-weight: 600; color: #1a6a3a; }
+    .seat .deck { padding: 1px 8px; font-size: 0.72rem; }
     .seat.now { background: #fff3cf; margin: 0 -12px; padding: 5px 12px; }
     #log { font-size: 0.76rem; line-height: 1.35; max-height: 220px; overflow-y: auto; }
     #log p { margin: 0 0 3px; }
@@ -125,16 +128,21 @@
       font-size: 0.86rem; border-radius: 12px 12px 0 0; }
     #prompt.idle { background: transparent; color: var(--gwf-muted); }
     #prompt button { padding: 4px 12px; font-size: 0.82rem; }
-    #playarea { position: relative; display: flex; align-items: center; gap: 6px; padding: 6px 12px; min-height: 56px; border-bottom: 1px dashed var(--hud-line);
-      background: rgba(140, 110, 60, 0.08); overflow-x: auto; padding-right: 230px; }
-    #playarea .label { font-size: 0.72rem; color: var(--gwf-muted); text-transform: uppercase; letter-spacing: 0.06em; flex: none; }
-    .chip { flex: none; display: inline-flex; align-items: center; gap: 4px; background: #fff; border: 1px solid var(--gwf-line); border-radius: 999px;
-      padding: 3px 9px; font-size: 0.78rem; }
-    .chip.pending { border-style: dashed; border-color: #1a6a3a; }
-    .chip label { display: inline-flex; gap: 3px; align-items: center; color: #1a6a3a; cursor: pointer; }
-    #played { display: contents; }
-    #counters { position: absolute; top: 6px; right: 10px; display: flex; gap: 6px; }
-    #counters .counter { min-width: 52px; text-align: center; background: #fff; border: 2px solid #8a5a2b; border-radius: 8px; padding: 2px 6px; }
+    #playarea { flex: none; height: 142px; display: flex; align-items: stretch; gap: 10px; padding: 6px 10px 6px 12px; border-bottom: 1px dashed var(--hud-line);
+      background: rgba(140, 110, 60, 0.08); }
+    #played { flex: 1; min-width: 0; display: flex; align-items: center; gap: 6px; overflow-x: auto; overflow-y: hidden; }
+    #played .pcard { zoom: 0.8; cursor: default; }
+    #played .pcard:hover { transform: none; }
+    .pcard.building { border-style: dashed; border-color: #1a6a3a; }
+    .pcard .badge { position: absolute; top: -1px; right: -1px; background: #1a6a3a; color: #fff; font-size: 0.6rem; padding: 1px 5px; border-radius: 0 8px 0 6px; }
+    .pcard .opts { margin-top: auto; display: flex; flex-direction: column; gap: 3px; }
+    .pcard .opts label { display: flex; gap: 3px; align-items: center; color: #1a6a3a; cursor: pointer; font-weight: 600; }
+    .pcard .opts button { padding: 2px 6px; font-size: 0.68rem; }
+    #counters { flex: none; align-self: flex-start; display: flex; flex-direction: column; gap: 5px; }
+    #counters .row { gap: 6px; flex-wrap: nowrap; justify-content: flex-end; }
+    #counters .sep { height: 0; border-top: 2px solid #b39a6c; margin: 1px 2px; }
+    #counters .counter { min-width: 56px; text-align: center; background: #fff; border: 2px solid #8a5a2b; border-radius: 8px; padding: 2px 6px; white-space: nowrap; }
+    #counters .perm .counter { border-color: #2f6f3e; }
     #counters .counter b { font-size: 1.05rem; }
     #counters .counter.zero { opacity: 0.45; border-color: var(--gwf-line); }
     #handrow { flex: 1; display: flex; align-items: center; gap: 12px; padding: 8px 12px; min-height: 0; }
@@ -157,6 +165,9 @@
     .pcard .icon { font-size: 1.7rem; text-align: center; line-height: 1.2; }
     .pcard .cost { font-weight: 600; }
     .pcard .text { color: #4a3d28; line-height: 1.25; overflow: hidden; }
+    .pcard .icons { flex: 1; display: flex; flex-wrap: wrap; align-content: center; justify-content: center; gap: 2px 6px; font-size: 3.4rem; line-height: 1.1; }
+    .pcard .icons.some { font-size: 2.1rem; }
+    .pcard .icons.many { font-size: 1.7rem; }
     .pcard.resource { background: #f4fbe9; border-color: #7fa75a; }
     .pcard.upkeep { background: #fbeeee; border-color: #b46a6a; }
     .pcard.action { background: #eef3fb; border-color: #6a86b4; }
@@ -180,6 +191,8 @@
     .cardgrid { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 12px; }
     .cardgrid .pcard { cursor: default; }
     .cardgrid .pcard:hover { transform: none; }
+    .deckcard { position: relative; }
+    .deckcard .count { position: absolute; left: -6px; top: -8px; background: #6b4f2e; color: #fff; font-weight: 700; font-size: 0.8rem; border-radius: 999px; padding: 1px 7px; }
     #result { margin-top: 8px; font-weight: 600; }
   </style>
 </head>
@@ -211,8 +224,9 @@
         <p>Grow your own city with a <b>deck of cards</b>. Up to 4 players, or solo. No enemies yet: the game goes on
           until you all vote to end it.</p>
         <p><b>Setup:</b> place your Castle, then a House and a Farm next to it.</p>
-        <p><b>Each turn</b> you hold 5 new cards (plus any you kept). Play <b>resource cards</b> (🪵 wood, 🪨 stone)
-          into your play area to fill this turn's counters, and <b>Wheat</b> for 🍞 food, which you keep (up to 5).
+        <p><b>Each turn</b> you hold 5 new cards (plus any you kept). Play <b>resource cards</b>
+          into your play area to fill this turn's counters (🪵 wood, 🪨 stone, 🌾 wheat). Your Farm turns 1 wheat a
+          turn into 🍞 food, which you keep (up to 5).
           Play a <b>structure card</b> by paying its resources and 🧑 population, on a tile next to your buildings: it's
           built at the end of your turn. <b>Buy</b> new structures from the market with your action (1 per turn); they
           go to your discard pile.</p>
@@ -229,19 +243,14 @@
 
     <div id="left" class="hud">
       <div class="section">
-        <h3>Your city</h3>
-        <div class="perm" id="perm"></div>
-      </div>
-      <div class="section">
         <h3>Actions</h3>
         <div class="uses" id="uses"></div>
       </div>
       <div class="section">
-        <button id="deck-button" class="plain small">Your deck</button>
         <button id="help-button" class="plain small">How to play</button>
-        <button id="center-button" class="plain small" title="Centre the map on your castle (C)">⌖ Centre</button>
       </div>
     </div>
+    <button id="center-button" class="hud" title="Centre the map on your castle (C)">⌖</button>
 
     <div id="right" class="hud">
       <div class="section"><h3>Market</h3><div id="market"></div></div>
@@ -254,7 +263,7 @@
 
     <div id="bottom" class="hud">
       <div id="prompt" class="idle"></div>
-      <div id="playarea"><span class="label">Play area</span><span id="played"></span><div id="counters"></div></div>
+      <div id="playarea"><div id="played"></div><div id="counters"></div></div>
       <div id="handrow">
         <div id="actions-circle" title="Actions left this turn"></div>
         <div id="hand"></div>
@@ -271,8 +280,8 @@
     <div class="head"><h2 id="deck-title">Your deck</h2><span class="spacer"></span><span id="deck-note" class="muted small"></span>
       <button class="plain small" data-close>Close</button></div>
     <div class="body">
-      <h3>Every card you own</h3><div id="deck-cards" class="cardgrid"></div>
-      <h3>Discard pile</h3><div id="discard-cards" class="cardgrid"></div>
+      <h3>Every card they own</h3><div id="deck-cards" class="cardgrid"></div>
+      <div id="discard-section"><h3>Your discard pile</h3><div id="discard-cards" class="cardgrid"></div></div>
     </div>
   </dialog>
 
@@ -281,8 +290,8 @@
     <div class="body">
       <p><b>Map:</b> drag to pan, mouse wheel to zoom, C to centre on your castle. Hover a building to see what it does.</p>
       <p><b>Hand:</b> click a card to play it. Resource cards go to your play area and fill the counters at its top
-        right (temporary: cleared at the end of your turn). Wheat gives 🍞 food, which you keep (up to your food
-        storage). A <b>structure card</b> lights up the tiles next to your buildings: click one to build there (you pay
+        right, under your permanent food and population (temporary: cleared at the end of your turn). Each Farm's
+        free action turns 1 🌾 wheat into 1 🍞 food, which you keep (up to your food storage). A <b>structure card</b> lights up the tiles next to your buildings: click one to build there (you pay
         at once; it's built at the end of your turn; right-click it to take it back). <b>Upkeep cards</b> (Villager,
         Hunger, Starvation) ask how to pay. The 📌 on a card keeps it in your hand when your turn ends.</p>
       <p><b>Population</b> (🧑 available / total) is what your builds take this turn; it comes back every turn.

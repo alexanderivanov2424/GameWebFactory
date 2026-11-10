@@ -27,7 +27,7 @@
  *       with an id for the current turn when it's this player's turn (e.g. `${gameNumber}:${step}`),
  *       else null. A new id makes `element` (the board) pulse with a badge (default "Your turn!")
  *       until the player clicks anything; the tab title gets a "▶ Your turn" prefix while it's
- *       their turn.
+ *       their turn. The element gets position: relative only if the page doesn't position it itself.
  *   AppLobbyUI.endGameButton(lobby)               "End game" vote button, top right left of the Settings
  *       gear (a shadow-DOM element, so page CSS can't break it). Shown to players while playing; each
  *       click votes / takes the vote back (lobby.voteEnd), with "n/m" votes on it. When every player has
@@ -58,7 +58,9 @@
     }
     .gwf-start-btn:hover:not(:disabled) { background: #146e3b; }
     .gwf-start-btn:disabled { opacity: 0.45; cursor: default; }
-    .gwf-turn-alert { position: relative; animation: gwf-turn-pulse 1.2s ease-in-out infinite; }
+    /* Zero specificity for position: a page that already positions the element (absolute, fixed) keeps it. */
+    :where(.gwf-turn-alert) { position: relative; }
+    .gwf-turn-alert { animation: gwf-turn-pulse 1.2s ease-in-out infinite; }
     .gwf-turn-alert::before {
       content: attr(data-gwf-alert); position: absolute; top: -12px; left: 50%; transform: translateX(-50%);
       background: #1a8a4a; color: #fff; font-weight: 700; font-size: 0.85rem; white-space: nowrap;

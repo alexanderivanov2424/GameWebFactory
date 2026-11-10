@@ -6,15 +6,15 @@ Setup (everyone at once): place your Castle (inside the shown map, at least 5 ti
 players' cities), then a House and a Farm next to your buildings. Setup buildings give their
 population (the House: 2) but not their "when built" cards; the starting deck covers those.
 
-Resources: temporary ones (wood, stone) are counters in your play area, cleared at the end of
-every turn. Permanent ones: food (kept between turns, at most your food storage: the Castle's 5)
+Resources: temporary ones (wood, stone, wheat) are counters in your play area, cleared at the end
+of every turn. Permanent ones: food (kept between turns, at most your food storage: the Castle's 5)
 and population (each build takes some of it for the turn; shown as available / total).
 
 Starting deck: 4 Wood, 3 Stone, 3 Wheat, 1 King; after your first hand of 5 is dealt, 2 Villagers
 are shuffled into your draw pile.
 
 Your turn (everyone at once, or one player at a time: the Turns setting):
-- Play resource cards into your play area (Wood +1 wood, Wheat +1 food; Timber is worth 3...).
+- Play resource cards into your play area (Wood +1 wood, Wheat +1 wheat; Timber is worth 3...).
 - King (1 action): draw 2 cards.
 - Upkeep cards: Villager: pay 1 food or discard 2 other cards; Hunger: 2 food or discard 3 (then
   it leaves your deck); Starvation: 3 food (then it leaves). Discarding one unplayed (at the end
@@ -23,7 +23,7 @@ Your turn (everyone at once, or one player at a time: the Turns setting):
 - Structure cards: pay the cost (resources and population) and pick an empty tile next to one of
   your built structures; it's built at the end of your turn (take it back with right-click until
   then). When built it may add cards to your discard pile and give population.
-- Structure actions, once each per turn: Storage Yard (1 action): bundle resource cards of one kind
+- Structure actions, once each per turn: Farm (free): turn 1 wheat into 1 food; Storage Yard (1 action): bundle resource cards of one kind
   worth exactly 3 or 5 into one card of that value (the bundled cards leave your deck); Quarry /
   Lumber Mill (free): take a Stone / Wood card into your hand (gone once played or discarded).
 - Buy from the market (1 action): Farm, Hut and House are always for sale; the shop shows 3
@@ -36,7 +36,8 @@ Your turn (everyone at once, or one player at a time: the Turns setting):
 Content (one JSON file per item, documented in content/README.md): content/cards/,
 content/structures/, content/resources.json, content/starting-deck.json.
 
-Hidden: your hand, deck order and discard pile. Public: everything else.
+Hidden: your hand, deck order and discard pile. Public: everything else (each player's whole deck
+as card counts).
 Leaving mid-game: the player's built structures stay, their pending builds go; the turn moves on.
 
 Player options:  none

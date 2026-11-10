@@ -9,7 +9,7 @@ Costs (`cost`, `pay`) may name temporary resources, `food` and `population` (ava
 population this turn). Gains (`gain`) may name temporary resources and `food`.
 
 ## resources.json
-`{id: {"name", "icon", "temporary": true}}`. Temporary resources (wood, stone) are play-area
+`{id: {"name", "icon", "temporary": true}}`. Temporary resources (wood, stone, wheat) are play-area
 counters, cleared at the end of every turn. `food` and `population` are permanent and always
 exist (food is capped by food storage; population is spent per turn by builds).
 

@@ -4,18 +4,21 @@
  *
  *   const hud = Bastion2Hud.create(ctx)
  *     ctx: { game(), priv(), you(), seat(), send(message), nameOf(pid), selection(),
- *            startBundle(cell), hoverCell(key or null), showTip(text, event), hideTip() }
- *   hud.cardEl(id, {off, temp, selected, picked, kept, why})   a card face (hand, deck window)
+ *            startBundle(cell), hoverCell(key or null), showDeck(pid) }
+ *   hud.cardEl(id, {off, temp, selected, picked, kept, why})   a card face (hand, play area, deck
+ *                          window); resource cards show only their icon, once per point of value
  *   hud.amounts(obj)       "2🪵 1🧑"
- *   hud.perm()             left: food (n / storage) and population (available / total)
  *   hud.uses()             left: your structures' actions (once a turn each; Bundle starts a pick)
  *   hud.market()           right: always-for-sale cards and the shop row, with Buy buttons
- *   hud.seats()            right: every player (colour, name, turn / done / setup, resources)
+ *   hud.seats()            right: every player (colour, name, turn / done / setup, resources, a
+ *                          Deck button)
  *   hud.log()              right: the chronicle, newest first
- *   hud.playArea()         bottom: played cards, pending builds (optional cards as checkboxes),
- *                          temporary resource counters (top right)
+ *   hud.playArea()         bottom: played cards and pending builds as card faces (optional cards
+ *                          as checkboxes, Take back), and the counters top right: permanent
+ *                          resources (food n / storage, population free / total), a separator,
+ *                          then this turn's temporary resources
  *   hud.actionsCircle()    bottom left: actions left this turn
- *   hud.deckWindow()       fill the deck window (every card you own, your discard pile)
+ *   hud.deckWindow(pid)    fill the deck window: every card that player owns (+ your discard pile)
  */
 const Bastion2Hud = (() => {
   const { $, el } = AppDom;
@@ -30,27 +33,20 @@ const Bastion2Hud = (() => {
     function cardEl(id, { off = false, temp = false, selected = false, picked = false, kept = false, why = "" } = {}) {
       const card = game().cards[id];
       const cls = ["pcard", card.kind, off && "off", temp && "temp", selected && "sel", picked && "picked", kept && "kept"];
-      const node = el("div", { className: cls.filter(Boolean).join(" "), title: why || card.text });
+      const node = el("div", { className: cls.filter(Boolean).join(" "), title: why || `${card.name}: ${card.text}` });
+      if (card.kind === "resource") {
+        const many = card.value > 1 ? (card.value > 3 ? " many" : " some") : "";
+        node.append(el("div", { className: `icons${many}` },
+          Array.from({ length: card.value }, () => el("span", { textContent: card.icon || icon(card.resource) }))));
+        return node;
+      }
       node.append(el("div", { className: "name", textContent: card.name }));
       node.append(el("div", { className: "kind", textContent: `${KIND_NAMES[card.kind] || card.kind}${temp ? " · temporary" : ""}` }));
       node.append(el("div", { className: "icon", textContent: card.icon || "" }));
       if (card.kind === "structure" && card.cost) node.append(el("div", { className: "cost", textContent: `Build: ${amounts(card.cost) || "free"}` }));
-      if (card.kind === "resource") node.append(el("div", { className: "cost", textContent: `+${card.value}${icon(card.resource)}` }));
       if (card.kind === "action" && card.actions) node.append(el("div", { className: "cost", textContent: `${card.actions}${icon("actions")}` }));
       node.append(el("div", { className: "text", textContent: card.text }));
       return node;
-    }
-
-    function perm() {
-      const s = seat();
-      if (!s) return $("perm").replaceChildren(el("span", { className: "muted small", textContent: "You're watching." }));
-      const box = (key, big, label) => el("div", { className: "res" },
-        el("div", { className: "big", textContent: `${icon(key)} ${big}` }),
-        el("div", { className: "lbl", textContent: label }));
-      $("perm").replaceChildren(
-        box("food", `${s.food} / ${s.foodCap}`, "Food (kept)"),
-        box("population", `${Math.max(0, s.population - s.popUsed)} / ${s.population}`, "Population free"),
-      );
     }
 
     function uses() {
@@ -122,9 +118,11 @@ const Bastion2Hud = (() => {
         const now = g.stage === "play" && (g.mode === "order" ? g.current === pid : !s.done);
         const dot = el("span", { className: "dot" });
         dot.style.background = s.color;
+        const deck = el("button", { className: "plain small deck", textContent: "Deck", title: `See ${pid === you() ? "your" : `${s.name}'s`} deck` });
+        deck.addEventListener("click", () => ctx.showDeck(pid));
         return el("div", { className: `seat${now ? " now" : ""}` },
           el("div", { className: "who" }, dot, el("span", { textContent: `${s.name}${pid === you() ? " (you)" : ""}` }),
-            el("span", { className: "flag", textContent: flag })),
+            el("span", { className: "flag", textContent: flag }), deck),
           el("div", { textContent: `${icon("food")} ${s.food}/${s.foodCap} · ${icon("population")} ${Math.max(0, s.population - s.popUsed)}/${s.population} · ${icon("actions")} ${s.actions}` }),
           el("div", { className: "muted", textContent: `Hand ${s.hand} · draw ${s.draw} · discard ${s.discard} · ${s.deck} cards${amounts(s.temp) ? ` · now ${amounts(s.temp)}` : ""}` }));
       }));
@@ -148,34 +146,51 @@ const Bastion2Hud = (() => {
       const g = game();
       const s = seat();
       const p = priv();
-      const chips = [];
+      const cards = [];
       if (s) {
-        for (const id of s.play) chips.push(el("span", { className: "chip", title: g.cards[id].text, textContent: `${g.cards[id].icon} ${cardName(id)}` }));
+        for (const id of s.play) cards.push(cardEl(id));
         for (const [key, plan] of Object.entries((p && p.pending) || {})) {
           const card = g.cards[plan.card];
-          const chip = el("span", { className: "chip pending", title: "Built at the end of your turn. Right-click it on the map to take it back." },
-            `${card.icon} ${card.name} (building)`);
+          const node = cardEl(plan.card);
+          node.classList.add("building");
+          node.title = "Built at the end of your turn.";
+          node.append(el("span", { className: "badge", textContent: "Building" }));
+          const [x, y] = key.split(",").map(Number);
+          const opts = el("div", { className: "opts" });
           (card.adds || []).forEach((add, index) => {
             if (!add.optional) return;
             const box = el("input", { type: "checkbox", checked: !plan.skip.includes(index), disabled: Boolean(p.turn) });
-            box.addEventListener("change", () => {
-              const [x, y] = key.split(",").map(Number);
-              ctx.send({ action: "choose", x, y, index, on: box.checked });
-            });
-            chip.append(el("label", { title: "Add this card to your discard pile when it's built" }, box, `+${cardName(add.card)}`));
+            box.addEventListener("change", () => ctx.send({ action: "choose", x, y, index, on: box.checked }));
+            opts.append(el("label", { title: "Add this card to your discard pile when it's built" }, box, `+${cardName(add.card)}`));
           });
-          chip.addEventListener("mouseenter", () => ctx.hoverCell(key));
-          chip.addEventListener("mouseleave", () => ctx.hoverCell(null));
-          chips.push(chip);
+          if (!p.turn) {
+            const back = el("button", { className: "plain small", textContent: "↶ Take back", title: "Refund it and return the card to your hand" });
+            back.addEventListener("click", () => ctx.send({ action: "unbuild", x, y }));
+            opts.append(back);
+          }
+          node.append(opts);
+          node.addEventListener("mouseenter", () => ctx.hoverCell(key));
+          node.addEventListener("mouseleave", () => ctx.hoverCell(null));
+          cards.push(node);
         }
       }
-      if (!chips.length) chips.push(el("span", { className: "muted small", textContent: "Cards you play land here." }));
-      $("played").replaceChildren(...chips);
-      $("counters").replaceChildren(...g.temporary.map((r) => {
+      if (!cards.length) cards.push(el("span", { className: "muted small", textContent: "Play area: cards you play land here." }));
+      $("played").replaceChildren(...cards);
+      const counter = (key, value, title, dim) => el("div", { className: `counter${dim ? " zero" : ""}`, title },
+        el("b", { textContent: `${icon(key)} ${value}` }));
+      const perm = s ? [
+        counter("food", `${s.food}/${s.foodCap}`, "Food (kept between turns, up to your food storage)", !s.food),
+        counter("population", `${Math.max(0, s.population - s.popUsed)}/${s.population}`, "Population free this turn / total", s.popUsed >= s.population),
+      ] : [];
+      const temp = g.temporary.map((r) => {
         const n = (s && s.temp[r]) || 0;
-        return el("div", { className: `counter${n ? "" : " zero"}`, title: `${g.resources[r].name} this turn` },
-          el("b", { textContent: `${icon(r)} ${n}` }));
-      }));
+        return counter(r, n, `${g.resources[r].name} this turn (cleared when your turn ends)`, !n);
+      });
+      $("counters").replaceChildren(
+        el("div", { className: "row perm" }, perm),
+        el("div", { className: "sep" }),
+        el("div", { className: "row" }, temp),
+      );
     }
 
     function actionsCircle() {
@@ -185,24 +200,27 @@ const Bastion2Hud = (() => {
       $("actions-circle").replaceChildren(el("div", {}, el("b", { textContent: String(n) }), el("span", { textContent: n === 1 ? "action" : "actions" })));
     }
 
-    function deckWindow() {
-      const p = priv();
-      if (!p) return;
-      const s = seat();
-      const total = Object.values(p.deckList).reduce((a, b) => a + b, 0);
-      $("deck-note").textContent = `${total} cards · ${s.hand} in hand · ${s.draw} to draw · ${s.discard} discarded`;
+    function deckWindow(pid) {
+      const g = game();
+      const s = g.seats[pid];
+      if (!s) return;
+      const mine = pid === you() && priv();
+      $("deck-title").textContent = mine ? "Your deck" : `${s.name}'s deck`;
+      $("deck-note").textContent = `${s.deck} cards · ${s.hand} in hand · ${s.draw} to draw · ${s.discard} discarded`;
       const faces = (counts) => Object.entries(counts).sort().map(([id, n]) => {
-        const node = cardEl(id);
-        if (n > 1) node.querySelector(".name").textContent += ` ×${n}`;
+        const node = el("div", { className: "deckcard" }, cardEl(id));
+        if (n > 1) node.append(el("span", { className: "count", textContent: `×${n}` }));
         return node;
       });
-      $("deck-cards").replaceChildren(...faces(p.deckList));
+      $("deck-cards").replaceChildren(...faces(s.deckList));
+      $("discard-section").hidden = !mine;
+      if (!mine) return;
       const discards = {};
-      for (const id of p.discardPile) discards[id] = (discards[id] || 0) + 1;
-      $("discard-cards").replaceChildren(...(p.discardPile.length ? faces(discards) : [el("span", { className: "muted", textContent: "Empty." })]));
+      for (const id of priv().discardPile) discards[id] = (discards[id] || 0) + 1;
+      $("discard-cards").replaceChildren(...(priv().discardPile.length ? faces(discards) : [el("span", { className: "muted", textContent: "Empty." })]));
     }
 
-    return { cardEl, amounts, perm, uses, market, seats, log, playArea, actionsCircle, deckWindow };
+    return { cardEl, amounts, uses, market, seats, log, playArea, actionsCircle, deckWindow };
   }
 
   return { create };

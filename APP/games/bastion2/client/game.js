@@ -7,7 +7,7 @@
  * and ghost, clicks: setup piece or the selected structure card; right-click: take back a pending
  * build or cancel); hand (renderHand, clickCard: resources and actions play at once, structures
  * select for a map click, upkeep asks how to pay, picking cards for a discard payment or a bundle);
- * prompt line; End turn (with the cards marked 📌 to keep); windows.
+ * prompt line; End turn (with the cards marked 📌 to keep); windows (any player's deck, help).
  *
  * Interaction state: selection = null | {mode: "build", uid, card} | {mode: "upkeep", uid} |
  * {mode: "discard", uid, picks: [uid]} | {mode: "bundle", cell: "x,y", picks: [uid]}; cleared
@@ -57,6 +57,10 @@
     startBundle(cell) {
       selection = selection && selection.mode === "bundle" && selection.cell === cell ? null : { mode: "bundle", cell, picks: [] };
       renderGame();
+    },
+    showDeck(pid) {
+      hud.deckWindow(pid);
+      $("deck-window").showModal();
     },
     hoverCell(key) {
       if (key) map.setHover(...cellOf(key));
@@ -113,7 +117,6 @@
     map.build(g, you());
     recentre();
     renderStatus();
-    hud.perm();
     hud.uses();
     hud.market();
     hud.seats();
@@ -440,10 +443,6 @@
   });
 
   $("center-button").addEventListener("click", () => recentre(true));
-  $("deck-button").addEventListener("click", () => {
-    hud.deckWindow();
-    $("deck-window").showModal();
-  });
   $("help-button").addEventListener("click", () => $("help-window").showModal());
   for (const close of document.querySelectorAll("[data-close]")) {
     close.addEventListener("click", () => close.closest("dialog").close());
