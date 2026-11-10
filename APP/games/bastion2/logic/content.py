@@ -279,7 +279,7 @@ def card_text(card):
         if hit["remove"]:
             harm.append("it leaves your deck")
         if harm:
-            out += f" If discarded unplayed: {', '.join(harm)}."
+            out += f" If discarded unplayed: {' and '.join(harm)}."
         return out
     if kind == "structure":
         return structure_text(STRUCTURES[card["structure"]])
@@ -294,8 +294,9 @@ def structure_text(s):
     if s["on_build"]["population"]:
         built.append(f"+{s['on_build']['population']}{ICONS['population']}")
     for a in s["on_build"]["add"]:
-        count = f"{a['count']} " if a["count"] > 1 else "a "
-        built.append(f"{'you may add' if a['optional'] else 'add'} {count}{CARDS[a['card']]['name']} to your discard")
+        name = CARDS[a["card"]]["name"]
+        what = f"{a['count']} {name}s" if a["count"] > 1 else f"a {name}"
+        built.append(f"{'you may add' if a['optional'] else 'add'} {what} to your discard")
     if built:
         parts.append(f"When built: {', '.join(built)}.")
     if s["provides"]["food_cap"]:
