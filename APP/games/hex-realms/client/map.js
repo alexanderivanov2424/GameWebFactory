@@ -65,11 +65,45 @@
     return null;
   }
 
+  // Roads, drawn under the structures in one colour whoever owns them: a line between touching
+  // roads of the same owner, and from each group of connected roads one line into each
+  // structure of that owner it touches (so it disappears under the structure's edge).
+  function roadLinks(roads, cellStruct, structures) {
+    const roadAt = {};
+    for (const s of roads) roadAt[s.at] = s;
+    const links = [], seen = new Set();
+    for (const start of roads) {
+      if (seen.has(start.at)) continue;
+      const group = [], queue = [start.at];
+      seen.add(start.at);
+      while (queue.length) {
+        const k = queue.shift();
+        group.push(k);
+        for (const n of neighbors(k)) {
+          const r = roadAt[n];
+          if (!r || r.owner !== start.owner) continue;
+          if (n > k) links.push([k, n]);
+          if (!seen.has(n)) { seen.add(n); queue.push(n); }
+        }
+      }
+      const joined = new Set();
+      for (const k of group.sort()) {
+        for (const n of neighbors(k)) {
+          const sid = cellStruct[n], t = sid && structures[sid];
+          if (!t || t.type === "road" || t.owner !== start.owner || joined.has(sid)) continue;
+          joined.add(sid);
+          links.push([k, n]);
+        }
+      }
+    }
+    return links;
+  }
+
   function create(element, handlers = {}) {
     const root = svg("svg", { class: "hr-svg" });
     const world = svg("g");
     const layer = (name) => { const g = svg("g", { class: `hr-${name}` }); put(world, g); return g; };
-    const terrainG = layer("terrain"), territoryG = layer("territory"), structG = layer("structs"), dimG = layer("dim"), hlG = layer("hl");
+    const terrainG = layer("terrain"), territoryG = layer("territory"), roadG = layer("roads"), structG = layer("structs"), dimG = layer("dim"), hlG = layer("hl");
     const orderG = layer("orders"), unitG = layer("units"), ghostG = layer("ghost"), flashG = layer("flashes");
     hlG.style.pointerEvents = "none";
     put(root, world);
@@ -153,6 +187,20 @@
       }
     }
 
+    function drawRoads(roads, cellStruct, structures, nameOf) {
+      const byCell = {};
+      for (const s of roads) {
+        const [x, y] = center(s.at);
+        byCell[s.at] = svg("g", { class: "hr-road" }, svg("title", {}, `Road (${nameOf(s.owner)})`),
+          svg("circle", { cx: x, cy: y, r: 4, class: "hr-road-dot" }));
+      }
+      for (const [a, b] of roadLinks(roads, cellStruct, structures)) {
+        const [x1, y1] = center(a), [x2, y2] = center(b);
+        put(byCell[a], svg("line", { x1, y1, x2, y2, class: "hr-road-line" }));
+      }
+      put(roadG, Object.values(byCell));
+    }
+
     function draw(game, you, priv) {
       const gkey = game.seats.join() + game.radius;
       if (game.cells !== cells) {
@@ -164,7 +212,7 @@
       const players = game.players, content = game.content;
       const color = (pid) => players[pid]?.color || "#888";
       const nameOf = (pid) => players[pid]?.name || pid;
-      for (const g of [territoryG, structG, orderG, unitG]) fill(g);
+      for (const g of [territoryG, roadG, structG, orderG, unitG]) fill(g);
       // Explored but not seen right now: dimmed (enemy units there aren't shown).
       fill(dimG, (game.dim || []).map((k) => hexAt(k, SIZE, { class: "hr-dim" })));
 
@@ -209,17 +257,7 @@
         }
         put(structG, g);
       }
-      for (const s of roads) {
-        const k = s.at;
-        const links = neighbors(k).filter((n) => cellStruct[n] && game.structures[cellStruct[n]].owner === s.owner
-          && (game.structures[cellStruct[n]].type !== "road" || n > k));
-        const [x, y] = center(k);
-        const g = svg("g", { class: "hr-road" }, svg("title", {}, `Road (${nameOf(s.owner)})`));
-        for (const n of links) { const [nx, ny] = center(n); put(g, svg("line", { x1: x, y1: y, x2: nx, y2: ny, stroke: color(s.owner), class: "hr-road-edge" })); }
-        for (const n of links) { const [nx, ny] = center(n); put(g, svg("line", { x1: x, y1: y, x2: nx, y2: ny, class: "hr-road-line" })); }
-        put(g, svg("circle", { cx: x, cy: y, r: 8, stroke: color(s.owner), class: "hr-road-dot" }));
-        put(structG, g);
-      }
+      drawRoads(roads, cellStruct, game.structures, nameOf);
 
       // Units.
       for (const [uid, u] of Object.entries(game.units)) {

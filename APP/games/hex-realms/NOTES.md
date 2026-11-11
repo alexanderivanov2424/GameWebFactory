@@ -50,7 +50,8 @@ fields in `logic/content.py`). Tests: `tests/` (`python3 -I tools/run_tests.py h
 - `logic/movement.py`, `logic/combat.py`, `logic/economy.py`, `logic/logistics.py`, `logic/mapgen.py`,
   `logic/content.py`: see their headers.
 - `client/map.js`: `HexMap.create`: pan (drag) / zoom (wheel) SVG map; terrain layer rebuilt only
-  when `game.cells` changes, the rest per state; `setHighlights` / `setGhost` / `flash` only
+  when `game.cells` changes, the rest per state; roads in their own layer under the structures,
+  one colour for everyone, and `roadLinks` draws one line per (connected road group, structure); `setHighlights` / `setGhost` / `flash` only
   touch overlays. `HexMap.util` has the client's hex maths (dist, neighbors, add).
 - `client/hud.js`: `HexHud`: top bar (stock + net, people, End turn), players, selection panel
   (unit / structure actions, recruit buttons with the server's reasons), orders list, trade,
