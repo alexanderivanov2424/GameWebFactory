@@ -135,7 +135,7 @@
       for (const [k, terrain] of Object.entries(game.cells)) {
         const [x, y] = center(k);
         put(terrainG, svg("polygon", { points: pts(x, y), fill: COLORS[terrain] || "#777", class: "hr-cell" }), glyph(terrain, x, y));
-        hl[k] = svg("polygon", { points: pts(x, y, SIZE - 1) });
+        hl[k] = svg("polygon", { points: pts(x, y, SIZE - 1), class: "hr-hlcell" }); // transparent until highlighted (SVG fills black by default)
         put(hlG, hl[k]);
       }
     }
@@ -269,10 +269,10 @@
     }
 
     function setHighlights(next) {
-      for (const k of Object.keys(hlClass)) if (!(k in next)) { hl[k]?.removeAttribute("class"); delete hlClass[k]; }
+      for (const k of Object.keys(hlClass)) if (!(k in next)) { hl[k]?.setAttribute("class", "hr-hlcell"); delete hlClass[k]; }
       for (const [k, c] of Object.entries(next)) {
         if (hlClass[k] === c || !hl[k]) continue;
-        hl[k].setAttribute("class", `hr-hl-${c}`);
+        hl[k].setAttribute("class", `hr-hlcell hr-hl-${c}`);
         hlClass[k] = c;
       }
     }

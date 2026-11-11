@@ -64,6 +64,9 @@ fields in `logic/content.py`). Tests: `tests/` (`python3 -I tools/run_tests.py h
   builder can win on the turn limit; conquest ends it early.
 
 ## Pitfalls seen here
+- SVG shapes without a fill are black: the highlight overlay (one polygon per cell, above the
+  terrain) once painted the whole map black. Overlays get the `hr-hlcell` class (fill: none)
+  until highlighted.
 - A stray double quote inside a double-quoted string in `client/hud.js` stopped the file
   loading: the map drew but every panel stayed empty. `tools/jscheck.py` now flags a string
   followed by a word on the same line.
