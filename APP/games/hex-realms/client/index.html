@@ -46,10 +46,12 @@
     .hr-hpbar { fill: #5ccf6a; }
     .hr-unit circle:first-child { stroke: #10131a; stroke-width: 2.5; }
     .hr-mine circle:first-child { stroke: #fff; stroke-width: 3; }
+    .hr-unit.hr-ordered { opacity: 0.5; filter: grayscale(0.85); }
     .hr-uicon { fill: #fff; font: 700 12px sans-serif; text-anchor: middle; dominant-baseline: central; paint-order: stroke; stroke: #10131a; stroke-width: 2.5px; }
     .hr-pip { fill: #20242d; stroke: #000; stroke-width: 0.6; }
     .hr-pip.on { fill: #5ccf6a; }
     .hr-path { fill: none; stroke: #fff; stroke-width: 4; stroke-opacity: 0.85; stroke-linejoin: round; stroke-linecap: round; stroke-dasharray: 1 8; }
+    .hr-travel { stroke-width: 2; stroke-opacity: 0.6; stroke-dasharray: 6 6; }
     .hr-arrow { fill: #fff; fill-opacity: 0.9; }
     .hr-shot { stroke: #ff4a3a; stroke-width: 3; stroke-dasharray: 7 5; }
     .hr-shotmark { fill: none; stroke: #ff4a3a; stroke-width: 3; }
@@ -62,6 +64,7 @@
     .hr-hl-range { fill: rgba(255, 200, 60, 0.18); stroke: #ffc83c; stroke-width: 1.2; }
     .hr-hl-claim { fill: rgba(120, 230, 120, 0.2); stroke: #7be07b; stroke-width: 1.5; }
     .hr-hl-sel { fill: rgba(255, 255, 255, 0.1); stroke: #ffe36b; stroke-width: 3.5; }
+    .hr-hl-goal { fill: rgba(255, 227, 107, 0.25); stroke: #ffe36b; stroke-width: 2.5; stroke-dasharray: 5 4; }
     .hr-ghost { pointer-events: none; }
     .hr-ghost-ok { fill: rgba(80, 230, 110, 0.45); stroke: #6dff8a; stroke-width: 2.5; }
     .hr-ghost-bad { fill: rgba(255, 70, 60, 0.45); stroke: #ff6a5a; stroke-width: 2.5; }
@@ -174,7 +177,11 @@
           <b>Extend territory</b> (Build tab): gold claims an explored cell next to your land, with its free
           neighbours, at the end of the turn. Land is first come, first served: it stays yours, and cells two realms
           reach in the same turn (by claims or new structures) go to nobody.
-          A unit told to <b>Explore</b> walks on its own every turn to clear the fog.
+          Nothing can be built where an enemy unit stands, and a construction site with an enemy unit on it gets no work.
+          Units keep a standing order across turns until you give them another: <b>Explore</b> (clear the fog),
+          <b>Fight</b> (attack the nearest enemy unit in sight) or <b>Pillage</b> (attack the nearest enemy structure in
+          sight, fighting enemy units that come close first); click a cell beyond a unit's reach to walk there over
+          several turns. Your own units pass through each other. Units with orders are greyed out.
           Units fight with dice wherever they meet: each die that rolls 4 or more hits (5 or more against a unit standing
           in forest, hills or mountains, or on its own structure). Lose every Town Hall and you are out.</p>
         <p>The last realm standing wins; if several survive to the turn limit, the highest score wins. The host can add

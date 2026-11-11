@@ -94,20 +94,28 @@
       const own = u.owner === ctx.you, o = priv.orders;
       const kids = [el("h3", {}, `${def.name} `, nameSpan(game, u.owner)), unitStats(def), el("p", { className: "small" }, `HP ${u.hp}/${u.maxHp}. ${def.text || ""}`)];
       if (own) {
-        const exploring = (priv.exploring || []).includes(sel.id);
-        const pending = exploring ? "Exploring (walks on its own each turn; any other order stops it)" : o.moves[sel.id] ? `Moving to ${o.moves[sel.id][o.moves[sel.id].length - 1]}` : o.shots[sel.id] ? `Shooting at ${o.shots[sel.id]}`
+        const auto = priv.auto?.[sel.id] || null, mode = auto?.mode;
+        const standing = { explore: "Exploring (walks on its own each turn)", fight: "Fighting (attacks the nearest enemy unit it sees; holds when none)",
+          pillage: "Pillaging (attacks the nearest enemy structure it sees, fighting enemy units that come close first; holds when none)",
+          travel: `Travelling to ${auto?.goal} over several turns` };
+        const pending = mode ? `${standing[mode]}; any other order stops it` : o.moves[sel.id] ? `Moving to ${o.moves[sel.id][o.moves[sel.id].length - 1]}` : o.shots[sel.id] ? `Shooting at ${o.shots[sel.id]}`
           : sel.id in o.found ? "Founding a city" : o.holds.includes(sel.id) ? "Holding position" : "No orders";
-        const hold = o.holds.includes(sel.id);
+        const hold = o.holds.includes(sel.id) && !mode;
         const found = priv.found[sel.id] || [];
+        // A command deselects the unit (Clear orders keeps it selected to give a new one).
+        const command = (msg) => { act.send(msg); act.select(null); };
+        const autoBtn = (m, label, title) => btn(mode === m ? `${label} (on)` : label, () => command({ action: "auto", unit: sel.id, mode: m }), { cls: mode === m ? "on" : "", title });
         const row = el("div", { className: "hr-btnrow" },
-          btn(hold ? "Hold (on)" : "Hold", () => act.send({ action: "hold", unit: sel.id }), { cls: hold ? "on" : "", title: "Roll one extra defence die this turn instead of moving." }),
-          game.fog && !def.settler ? btn(exploring ? "Explore (on)" : "Explore", () => act.send({ action: "explore", unit: sel.id }), { cls: exploring ? "on" : "", title: "Walk around on its own every turn to clear the fog, until you give it another order." }) : null,
+          btn(hold ? "Hold (on)" : "Hold", () => command({ action: "hold", unit: sel.id }), { cls: hold ? "on" : "", title: "Roll one extra defence die this turn instead of moving." }),
+          game.fog && !def.settler ? autoBtn("explore", "Explore", "Walk around on its own every turn to clear the fog, until you give it another order.") : null,
+          !def.settler ? autoBtn("fight", "Fight", "Every turn, attack the nearest enemy unit you can see (hold when there's none), until you give it another order.") : null,
+          !def.settler ? autoBtn("pillage", "Pillage", "Every turn, attack the nearest enemy structure you can see, but fight enemy units that come close first (hold when there's nothing), until you give it another order.") : null,
           def.range ? btn("Shoot", () => act.setMode({ type: "shoot", unit: sel.id }), { cls: ui.mode?.type === "shoot" ? "on" : "", title: `Shoot a unit or structure up to ${def.range} cells away.` }) : null,
           def.settler ? btn("Found city", () => act.setMode({ type: "found", unit: sel.id, rot: found[0] }), { disabled: !found.length, cls: ui.mode?.type === "found" ? "on" : "", title: found.length ? "Found a Town Hall here." : "Can't found a city here." }) : null,
           btn("Clear orders", () => act.send({ action: "move", unit: sel.id, to: u.at })),
           btn("Disband", () => { if (confirm(`Disband this ${def.name}?`)) act.send({ action: "disband", unit: sel.id }); }, { cls: "danger" }));
         kids.push(el("p", { className: "hr-pending" }, pending), row,
-          el("p", { className: "muted small" }, "Click a highlighted cell to move there (red = attack). Click the unit again to clear."));
+          el("p", { className: "muted small" }, "Click a highlighted cell to move there (red = attack), or any cell further away to walk there over several turns. Click the unit again to clear."));
       }
       return fill(box, ...kids);
     }

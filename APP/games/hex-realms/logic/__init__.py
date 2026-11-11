@@ -8,7 +8,8 @@ Modules:
     economy.py   territory, workers, production, upkeep, growth
     logistics.py goods in the realm's stores: stock, spending, refunds, filling
     construction.py  construction sites: build turns and builders (idle people), finishing structures
-    explore.py   the Explore order: where a unit walks on its own to clear fog (bots scout with it)
+    standing.py  standing orders kept across turns: Explore, Fight, Pillage, Travel (multi-turn moves)
+    explore.py   where an exploring unit walks to clear fog (bots scout with it)
     vision.py    fog of war: what each player sees, has explored and remembers; their map view
     bots.py      computer players: plan a turn through the same orders as people (fog applies)
     mapgen.py    the random hex map and fair starting spots

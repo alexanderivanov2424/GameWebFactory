@@ -20,14 +20,14 @@ when one player is left (if it started with 2 or more) or after the last turn: h
 Solo games (1 player) are a sandbox: they end at the turn limit with your score, or when you lose
 your last Town Hall. Bots plan as each turn starts (and are done at once); once no person is
 left in the game, it ends with the highest score winning. As each turn's planning starts, units on
-an Explore order get their move (explore.py), then bots plan.
+a standing order (Explore, Fight, Pillage, Travel) get this turn's order (standing.py), then bots plan.
 
 Score = population + units + 3 per advance + structure scores (Town Hall 4, University 2,
 Monument 10) + gold // 10.
 
 State: cells {key: terrain}; structures {sid: {"id", "n", "type", "owner", "at", "rot", "cells",
 "hp", "active", "stock" (goods in a store)}} with cell_structure {key: sid}; units {uid: {"id", "n", "type", "owner", "at",
-"hp", "explore" (set while on an Explore order)}} with unit_at {key: uid}; sites {cid: {"id", "n", "type", "owner", "at", "rot", "cells", "cost",
+"hp", "auto" (a standing order: standing.py), "goal" (where a Travel order goes)}} with unit_at {key: uid}; sites {cid: {"id", "n", "type", "owner", "at", "rot", "cells", "cost",
 "done" (turns of work so far)}} with cell_site {key: cid} (construction.py); claims {key: pid} (land
 bought with gold: orders.claim, economy.territory); territory {key: pid} (first come, first served:
 economy.territory); players {pid: {"res" (gold/faith/science only: goods live in
@@ -41,7 +41,7 @@ import random
 from gamekit import LobbyError
 from gamekit.hexes import neighbors
 
-from . import bots, combat, construction, explore, logistics, movement, orders, vision
+from . import bots, combat, construction, logistics, movement, orders, standing, vision
 from .content import ADVANCES, CATEGORIES, RESOURCE_INFO, RESOURCES, STRUCTURES, TERRAIN, TOWN_HALL, UNITS, footprint
 from .economy import CLAIM_RADIUS, end_of_turn, report, staffing, territory
 from .mapgen import generate
@@ -53,7 +53,7 @@ START_UNIT = "settlers"
 START_POP = 3
 SIZES = {"small": -3, "normal": 0, "large": 4, "huge": 8}
 ACTS = {name: getattr(orders, name) for name in
-        ("build", "claim", "recruit", "move", "shoot", "hold", "explore", "found", "research", "cancel", "trade", "toggle",
+        ("build", "claim", "recruit", "move", "shoot", "hold", "auto", "found", "research", "cancel", "trade", "toggle",
          "staff", "demolish", "disband")}
 
 
@@ -104,12 +104,6 @@ class Match:
         self.refresh()
         self.snapshot()
         self.plan_bots()
-
-    def plan_explorers(self):
-        """Units on an Explore order get this turn's move (explore.py); done ones stop exploring."""
-        for uid, u in sorted(self.units.items()):
-            if u.get("explore") and self.result is None and not explore.step(self, uid):
-                u.pop("explore", None)
 
     def plan_bots(self):
         for pid in self.bots:
@@ -225,7 +219,7 @@ class Match:
             self.players[pid]["done"] = False
         self.snapshot()
         self._check_end()
-        self.plan_explorers()
+        standing.plan_all(self)
         self.plan_bots()
 
     def _found(self, ev):
@@ -401,13 +395,19 @@ class Match:
             "log": {str(i): line for i, line in enumerate(self.log)},
         }
 
+    def ordered(self, pid):
+        """pid's units that have an order this turn or a standing order (greyed out on the map)."""
+        o = self.orders[pid]
+        busy = set(o["moves"]) | set(o["shots"]) | set(o["holds"]) | set(o["found"])
+        return sorted(uid for uid, u in self.units.items() if u["owner"] == pid and (uid in busy or u.get("auto")))
+
     def stores(self, pid):
         """{sid: {"stock", "cap"}} for pid's storage structures."""
         return {s["id"]: {"stock": s["stock"], "cap": logistics.capacity(s)} for s in logistics.stores(self, pid)}
 
     def private(self, pid):
         """{"view": the map as pid sees it} for everyone (pid None = a spectator: the whole map),
-        plus pid's stock, orders, forecast (economy report; "building" = construction.forecast) and
+        plus pid's stock, orders, standing orders ("auto"), units with orders ("ordered"), forecast (economy report; "building" = construction.forecast) and
         planning help while they're still playing."""
         staffed = {s["id"] for x in self.alive() for s in staffing(self, x)[0]}
         out = {"view": vision.view(self, pid, staffed)}
@@ -422,7 +422,9 @@ class Match:
             **out,
             "res": logistics.stock(self, pid), "pop": p["pop"], "done": p["done"],
             "stores": self.stores(pid), "orders": self.orders[pid], "report": report(self, pid),
-            "exploring": sorted(uid for uid, u in self.units.items() if u["owner"] == pid and u.get("explore")),
+            "auto": {uid: {"mode": u["auto"], "goal": u.get("goal")} for uid, u in self.units.items()
+                     if u["owner"] == pid and u.get("auto")},
+            "ordered": self.ordered(pid),
             "building": construction.forecast(self, pid),
             "reach": {uid: sorted(movement.reach(self, uid)) for uid, u in self.units.items() if u["owner"] == pid},
             "recruit": recruit,

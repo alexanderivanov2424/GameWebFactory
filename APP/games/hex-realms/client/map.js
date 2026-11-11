@@ -1,10 +1,10 @@
 /*
  * Hex Realms: the pannable, zoomable SVG hex map (terrain, territory, structures, units,
- * your pending orders, highlights, build ghost, event flashes). No game rules here.
+ * your pending orders (Travel goals dashed; units with orders greyed out), highlights, build ghost, event flashes). No game rules here.
  *
  *   const map = HexMap.create(element, { onCell(key), onHover(key|null), onRightClick(key) });
  *   map.draw(game, you, priv)   rebuild the dynamic layers from state (terrain only if the map changed)
- *   map.setHighlights({key: "reach"|"attack"|"range"|"sel"|"claim"})   toggle classes on pre-made cell overlays
+ *   map.setHighlights({key: "reach"|"attack"|"range"|"sel"|"claim"|"goal"})   toggle classes on pre-made cell overlays
  *   map.setGhost({cells, ok, label} | null)   footprint preview under the mouse (small, rebuilt per hover)
  *   map.flash([{at, kind}])     brief pulsing markers (battle/siege cells)
  *   map.centre(key)             pan to a cell;  map.fit() resets the zoom
@@ -263,11 +263,12 @@
           svg("text", { x: mx, y: my + 17, class: "hr-site-text" }, `${x.done}/${x.turns}`)));
       }
 
-      // Units.
+      // Units (yours that have an order this turn, or a standing order, greyed out).
+      const ordered = new Set(priv?.ordered || []);
       for (const [uid, u] of Object.entries(game.units)) {
         const def = content.units[u.type];
         const [x, y] = center(u.at);
-        const g = svg("g", { class: u.owner === you ? "hr-unit hr-mine" : "hr-unit" },
+        const g = svg("g", { class: u.owner === you ? `hr-unit hr-mine${ordered.has(uid) ? " hr-ordered" : ""}` : "hr-unit" },
           svg("title", {}, `${def?.name || u.type} (${nameOf(u.owner)}) hp ${u.hp}/${u.maxHp}`),
           svg("circle", { cx: x, cy: y, r: SIZE * 0.42, fill: color(u.owner) }),
           svg("text", { x, y: y + 1, class: "hr-uicon" }, def?.icon || u.type.slice(0, 2)));
@@ -308,6 +309,13 @@
           const back = (off) => `${(x2 - 11 * Math.cos(a + off)).toFixed(1)},${(y2 - 11 * Math.sin(a + off)).toFixed(1)}`;
           put(orderG, svg("polygon", { points: `${x2.toFixed(1)},${y2.toFixed(1)} ${back(0.5)} ${back(-0.5)}`, class: "hr-arrow" }));
         }
+      }
+      for (const [uid, a] of Object.entries(priv.auto || {})) {  // Travel orders: the rest of the way, dashed
+        const u = game.units[uid];
+        if (!u || !a.goal) continue;
+        const path = o.moves[uid] || [];
+        const [x1, y1] = center(path.length ? path[path.length - 1] : u.at), [x2, y2] = center(a.goal);
+        put(orderG, svg("line", { x1, y1, x2, y2, class: "hr-path hr-travel" }), svg("text", { x: x2, y: y2 + 1, class: "hr-icon hr-ghosttext" }, "⚑"));
       }
       for (const [uid, at] of Object.entries(o.shots)) {
         const u = game.units[uid];

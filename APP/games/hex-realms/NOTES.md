@@ -35,9 +35,19 @@ fields in `logic/content.py`). Tests: `tests/` (`python3 -I tools/run_tests.py h
   a cell stays its owner's while they still reach it, a free cell goes to the only player reaching
   it, and to nobody while two or more do (same-turn expansion). Land only changes as structures
   and claims appear or vanish, which is at resolution (demolish frees land at once).
-- **Explore** (`logic/explore.py`): a flag on the unit (`u["explore"]`) survives the per-turn order
-  reset; `Match.plan_explorers` gives each flagged unit a move as planning starts, and any other
-  order for the unit (`orders.clear_unit`) clears it. Bots scout with the same `target`.
+- **Standing orders** (`logic/standing.py`, 2026-11-11 feedback): `u["auto"]` (explore / fight /
+  pillage / travel, plus `u["goal"]` for travel) survives the per-turn order reset; `standing.plan_all`
+  gives each such unit this turn's ordinary order (move / shoot / hold) as planning starts, and any
+  other order for the unit (`orders.clear_unit`) ends it. Fight and Pillage pick targets the owner
+  sees and never end on their own (they hold when there's nothing); Pillage fights enemy units within
+  `ALERT` first. A move to a cell out of reach is a Travel order: `movement.route` (no budget, any
+  number of turns) cut to this turn by `movement.this_turn`. Explore's cell choice is
+  `explore.target` (bots scout with it too). Units with an order this turn or a standing order are
+  listed in `private.ordered` and greyed out on the map; the client deselects a unit once commanded.
+- **Own units pass through each other** (`movement.pass_friends` and the swap in step 5): a unit
+  blocked by its own side hops over it (and any friends behind) to the next free cell of its path,
+  paying for every cell crossed; two of your units moving into each other's cells swap. A path that
+  ends on a friend still stops.
 - **Fog of war as per-viewer private state** (`logic/vision.py`): the public state has no map;
   each member's private state carries `view` (explored cells, dimmed cells, structures as last
   seen, units in sight, filtered events). Planning uses only what the player knows (unexplored
@@ -52,7 +62,8 @@ fields in `logic/content.py`). Tests: `tests/` (`python3 -I tools/run_tests.py h
   unfinished buildings. Each turn of work (`buildTurns`) needs `builders` people without a job,
   counted before production and spent after it, oldest site first; jobs are filled first, so
   players free builders with Switch off / Jobs off (`staff`) / Demolish. Sites show in `view.sites`
-  (own always, others' only while seen; not remembered under fog).
+  (own always, others' only while seen; not remembered under fog). An enemy unit on any cell of a
+  site stops its work (`construction.blocked`); building where a seen enemy unit stands is refused.
 - **A turn timer**: `server.py` schedules a timeout per turn (checked against the turn number).
 - **Bots in the seats** (the user asked for them): the `bots` setting adds seats `b1`... to the
   `Match` (not lobby members). `logic/bots.py` plans each bot's turn as the turn starts
@@ -71,7 +82,8 @@ fields in `logic/content.py`). Tests: `tests/` (`python3 -I tools/run_tests.py h
   `found_problem` are shared with resolution (re-checked then) and the private state.
 - `logic/construction.py`: `start` / `progress` (resolution), `plan` / `forecast` (who builds what this
   turn: `private.building`), `remove` (demolish).
-- `logic/explore.py`: `target` / `step`.
+- `logic/standing.py`: `start` / `plan` / `plan_all` / `stop`, one helper per mode (`travel`, `attack`).
+- `logic/explore.py`: `target` (where an exploring unit goes).
 - `logic/bots.py`: `plan(m, pid)`: the bot strategy (header lists it; constants at the top).
 - `logic/vision.py`: `update` (after every change via `Match.refresh`), `known_at`, `view`.
 - `logic/movement.py`, `logic/combat.py`, `logic/economy.py`, `logic/logistics.py`, `logic/mapgen.py`,
@@ -128,6 +140,8 @@ fields in `logic/content.py`). Tests: `tests/` (`python3 -I tools/run_tests.py h
   use the `n` field when age matters (desertion, tower targets).
 - A new kind of thing on the map that takes cells must also be checked in `orders.site_problem`
   (sites are: `m.cell_site`), the bots' `taken` / `free_cells`, and the client's `buildOk`.
+- Standing orders re-plan through `orders.clear_unit(..., keep_auto=True)`; a plain `clear_unit` ends the
+  standing order, so call it only for a new order from the player.
 - A player can be knocked out mid-resolution; loops over players use `self.alive()` again after
   each stage, and `remove_unit` also clears that unit's orders.
 

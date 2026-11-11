@@ -13,13 +13,17 @@ without a job (switch structures off, all at once, or demolish them to free peop
 science are realm-wide; goods (food, wood, stone, metal) go straight into the realm's stores (Town
 Hall, Storage Yard, Granary) up to their room. Structures go anywhere inside your territory;
 gold buys more (claim an explored cell next to it, with its neighbours). Land is first come, first
-served: it stays yours, and cells two realms reach in the same turn go to no one. No roads. Units on
-an Explore order walk on their own to clear the fog.
+served: it stays yours, and cells two realms reach in the same turn go to no one. No roads. Units can be
+given standing orders kept across turns: Explore (clear the fog), Fight (attack the nearest enemy
+unit in sight), Pillage (attack the nearest enemy structure in sight, fighting enemy units that
+come close first) or a far-away destination (walk there over several turns). Your own units pass
+through each other while moving. Nothing can be built where an enemy unit stands, and a
+construction site with an enemy unit on it gets no work.
 Lose every Town Hall and you are out. Last
 realm standing wins; otherwise the highest score after the last turn.
 Full rules: logic/match.py (turn order, score), logic/economy.py, logic/combat.py,
 logic/movement.py, logic/orders.py, logic/logistics.py, logic/construction.py,
-logic/explore.py; content in structures/, units/,
+logic/explore.py, logic/standing.py; content in structures/, units/,
 advances/ (fields in logic/content.py).
 
 Player options:  none (colors by seat)
@@ -36,7 +40,13 @@ the lobby envelope owns it):
     {"action": "move", "unit": uid, "to": "q,r"}      (to = own cell clears the unit's orders)
     {"action": "shoot", "unit": uid, "at": "q,r"}
     {"action": "hold", "unit": uid}                    (toggle)
-    {"action": "explore", "unit": uid}                 (toggle; kept across turns, any other order stops it)
+    {"action": "move", ...} to a cell out of reach      a Travel standing order: it walks there over turns
+    {"action": "auto", "unit": uid, "mode": m}          (toggle a standing order, kept across turns; any other
+                                                        order for the unit stops it): "explore" (clear fog),
+                                                        "fight" (attack the nearest enemy unit you see, hold
+                                                        when none), "pillage" (attack the nearest enemy
+                                                        structure you see, fighting enemy units that come
+                                                        close first; hold when none)
     {"action": "found", "unit": uid, "rot": 0-5}
     {"action": "research", "advance": aid}
     {"action": "cancel", "order": oid}                 (a build / claim / recruit / research order)
@@ -78,7 +88,7 @@ class Game(LobbyGame):
         "seed": Int("Map seed", default=0, low=0, high=999999, hint="0 = a new random map"),
     }
     ACTIONS = {name: name for name in
-               ("build", "claim", "recruit", "move", "shoot", "hold", "explore", "found", "research", "cancel", "trade", "toggle", "staff", "demolish",
+               ("build", "claim", "recruit", "move", "shoot", "hold", "auto", "found", "research", "cancel", "trade", "toggle", "staff", "demolish",
                 "disband", "done")}
 
     def __init__(self, room):
@@ -150,8 +160,8 @@ class Game(LobbyGame):
     def hold(self, member, data):
         self.order(member, "hold", text_id(data, "unit"))
 
-    def explore(self, member, data):
-        self.order(member, "explore", text_id(data, "unit"))
+    def auto(self, member, data):
+        self.order(member, "auto", text_id(data, "unit"), text_id(data, "mode"))
 
     def found(self, member, data):
         self.order(member, "found", text_id(data, "unit"), whole_number(data.get("rot", 0), "Rotation", 0, 5))

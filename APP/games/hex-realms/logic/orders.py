@@ -6,13 +6,16 @@ so a player can never order more than they have. Orders are private until the tu
     build(m, pid, stype, at, rot)   structure footprint anchored at `at`, `rot` 60-degree turns
     recruit(m, pid, sid, utype)     train a unit at a working structure (1 per structure per turn)
     move(m, pid, uid, to)           move along the cheapest path; ending on an enemy = attack;
-                                    `to` = the unit's own cell clears its orders
+                                    `to` = the unit's own cell clears its orders; a cell out of
+                                    this turn's reach starts a Travel standing order (standing.py)
     shoot(m, pid, uid, at)          ranged unit: shoot a cell instead of moving
     hold(m, pid, uid)               toggle: stay put and defend with 1 more die
     claim(m, pid, at)               for CLAIM_COST (gold): at resolution, an unowned explored cell next
                                     to your territory becomes yours with its free neighbours
                                     (economy.territory); cancel refunds it
-    explore(m, pid, uid)            toggle: the unit walks on its own each turn to clear fog (explore.py)
+    auto(m, pid, uid, mode)         toggle a standing order kept across turns (standing.py): explore
+                                    (clear fog), fight (nearest enemy unit) or pillage (nearest enemy
+                                    structure, fighting enemy units that come close)
     found(m, pid, uid, rot)         settlers found a Town Hall where they stand (instead of moving)
     research(m, pid, aid)           buy an advance (takes effect at the start of resolution)
     cancel(m, pid, oid)             undo a build / claim / recruit / research order (refund)
@@ -28,7 +31,7 @@ from gamekit import LobbyError
 from gamekit.hexes import dist, neighbors
 
 from .content import ADVANCES, STRUCTURES, TERRAIN, TOWN_HALL, UNITS, footprint
-from . import construction, explore as exploring, logistics, vision
+from . import construction, logistics, standing, vision
 from .economy import report
 from .movement import path
 
@@ -60,10 +63,10 @@ def own_structure(m, pid, sid):
     return s
 
 
-def clear_unit(m, pid, uid, exploring=False):
-    """Drop the unit's orders for this turn (and its Explore order, unless `exploring`)."""
-    if not exploring and uid in m.units:
-        m.units[uid].pop("explore", None)
+def clear_unit(m, pid, uid, keep_auto=False):
+    """Drop the unit's orders for this turn (and its standing order, unless `keep_auto`)."""
+    if not keep_auto and uid in m.units:
+        standing.stop(m.units[uid])
     o = m.orders[pid]
     o["moves"].pop(uid, None)
     o["shots"].pop(uid, None)
@@ -146,7 +149,12 @@ def move(m, pid, uid, to):
         return
     p = path(m, uid, to)
     if p is None:
-        raise LobbyError("It can't get there this turn.")
+        if to not in m.cells:
+            raise LobbyError("That's off the map.")
+        clear_unit(m, pid, uid)
+        if not standing.start(m, uid, "travel", to):
+            raise LobbyError("It can't get there (no way you know of).")
+        return
     clear_unit(m, pid, uid)
     m.orders[pid]["moves"][uid] = p
 
@@ -197,18 +205,20 @@ def claim(m, pid, at):
     m.orders[pid]["claims"].append({"id": m.new_id("o"), "at": at, "cost": dict(CLAIM_COST)})
 
 
-def explore(m, pid, uid):
+def auto(m, pid, uid, mode):
     u = own_unit(m, pid, uid)
-    if u.get("explore"):
+    if mode not in ("explore", "fight", "pillage"):
+        raise LobbyError("Unknown order.")
+    if u.get("auto") == mode:
         clear_unit(m, pid, uid)
         return
-    if not m.fog:
+    if mode == "explore" and not m.fog:
         raise LobbyError("There's no fog of war to clear.")
     if UNITS[u["type"]]["settler"]:
-        raise LobbyError("Settlers don't explore.")
-    if not exploring.step(m, uid):
+        raise LobbyError("Settlers don't explore or fight." if mode != "explore" else "Settlers don't explore.")
+    clear_unit(m, pid, uid)
+    if not standing.start(m, uid, mode):
         raise LobbyError("Nothing left to explore from here.")
-    u["explore"] = True
 
 
 def found_problem(m, pid, u, rot, planning=True):

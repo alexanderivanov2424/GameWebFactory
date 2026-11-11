@@ -4,7 +4,8 @@
  * panels.js) from the state. The server validates everything; the ghost colours here are only a hint.
  *
  * ui.mode: null | {type: "build", kind, rot} | {type: "shoot", unit} | {type: "found", unit, rot}
- * (Escape cancels; R or right-click turns). ui.sel: null | {kind: "unit"|"structure", id}.
+ * (Escape cancels; R or right-click turns). ui.sel: null | {kind: "unit"|"structure", id}; giving a unit a
+ * command deselects it (clearing its orders keeps it selected).
  * render() runs on each new state (redraws the map); refresh() on UI-only changes (no map redraw).
  */
 (() => {
@@ -182,6 +183,8 @@
       } else if (!ui.mode) {
         for (const k of c.priv.reach[sel.id] || []) h[k] = isEnemy(c, k) ? "attack" : "reach";
       }
+      const goal = c.priv.auto?.[sel.id]?.goal;
+      if (goal && !(goal in h)) h[goal] = "goal";
     } else if (sel?.kind === "structure" || sel?.kind === "site") {
       for (const k of (sel.kind === "site" ? c.game.sites : c.game.structures)[sel.id].cells) h[k] = "sel";
     } else if (sel?.kind === "unit") h[c.game.units[sel.id].at] = "sel";
@@ -191,7 +194,8 @@
   function buildOk(c, def, cells) {
     const pending = new Set(c.priv.orders.builds.flatMap((b) => b.cells));
     const g = c.game;
-    return cells.every((k) => k in g.cells && g.territory[k] === c.you && (def.terrain || []).includes(g.cells[k]) && !idx.structAt[k] && !idx.siteAt[k] && !pending.has(k))
+    const enemyUnit = (k) => idx.unitAt[k] && g.units[idx.unitAt[k]].owner !== c.you;
+    return cells.every((k) => k in g.cells && g.territory[k] === c.you && (def.terrain || []).includes(g.cells[k]) && !idx.structAt[k] && !idx.siteAt[k] && !pending.has(k) && !enemyUnit(k))
       && (!def.coast || cells.some((k) => U.neighbors(k).some((n) => g.cells[n] === "water")));
   }
 
@@ -224,6 +228,7 @@
     const m = ui.mode;
     if (m?.type !== "found") return;
     act.send({ action: "found", unit: m.unit, rot: m.rot });
+    ui.sel = null;
     act.setMode(null);
   }
 
@@ -236,7 +241,7 @@
       return;
     }
     if (m?.type === "claim") { act.send({ action: "claim", at: k }); return; }  // stays on: claim several
-    if (m?.type === "shoot") { act.send({ action: "shoot", unit: m.unit, at: k }); act.setMode(null); return; }
+    if (m?.type === "shoot") { act.send({ action: "shoot", unit: m.unit, at: k }); ui.sel = null; act.setMode(null); return; }
     if (m?.type === "found") {
       const u = c.game.units[m.unit];
       if (u && c.content.structures.town_hall.rotations[m.rot].some((d) => U.add(u.at, d) === k)) confirmFound();
@@ -245,8 +250,11 @@
     const sel = ui.sel;
     if (sel?.kind === "unit" && c.game.units[sel.id]?.owner === c.you) {
       const u = c.game.units[sel.id];
-      if (k === u.at) { act.send({ action: "move", unit: sel.id, to: k }); return; }
-      if ((c.priv.reach[sel.id] || []).includes(k)) { act.send({ action: "move", unit: sel.id, to: k }); return; }
+      if (k === u.at) { act.send({ action: "move", unit: sel.id, to: k }); return; }  // clear (stays selected)
+      // In reach: move (or attack) this turn. Further away (except onto another of your units, which
+      // selects it): walk there over several turns. Either way the unit is deselected.
+      const own = idx.unitAt[k] && c.game.units[idx.unitAt[k]].owner === c.you;
+      if ((c.priv.reach[sel.id] || []).includes(k) || !own) { act.send({ action: "move", unit: sel.id, to: k }); act.select(null); return; }
     }
     selectAt(k);
   }

@@ -182,8 +182,7 @@ class MovementTests(unittest.TestCase):
 
     def test_path_cost(self):
         u = unit(self.m, "p1", "militia", "0,0")
-        with self.assertRaisesRegex(LobbyError, "can't get there"):
-            self.m.act("p1", "move", u, "3,0")
+        self.assertNotIn("3,0", movement.reach(self.m, u))  # out of reach this turn
         self.m.act("p1", "move", u, "2,0")
 
     def test_moves_happen_together(self):
@@ -234,20 +233,26 @@ class MovementTests(unittest.TestCase):
         end_turn(self.m)
         self.assertIn(b, self.m.units)
 
-    def test_friend_in_the_way_stops(self):
+    def test_friend_on_the_last_cell_stops(self):
+        a = unit(self.m, "p1", "militia", "0,0")
+        unit(self.m, "p1", "militia", "1,0")
+        self.m.act("p1", "move", a, "1,0")
+        end_turn(self.m)
+        self.assertEqual(self.m.units[a]["at"], "0,0")
+
+    def test_passing_through_a_friend(self):
         a = unit(self.m, "p1", "militia", "0,0")
         unit(self.m, "p1", "militia", "1,0")
         self.m.act("p1", "move", a, "2,0")
         end_turn(self.m)
-        self.assertEqual(self.m.units[a]["at"], "0,0")
+        self.assertEqual(self.m.units[a]["at"], "2,0")
 
     def test_no_moving_through_enemy_structures(self):
         a = unit(self.m, "p1", "militia", "0,0")
         self.m.add_structure("p2", "hut", "1,0", 0)
         self.m.add_structure("p2", "hut", "1,-1", 0)
         self.m.add_structure("p2", "hut", "0,1", 0)
-        with self.assertRaisesRegex(LobbyError, "can't get there"):
-            self.m.act("p1", "move", a, "2,0")
+        self.assertNotIn("2,0", movement.reach(self.m, a))
         self.m.act("p1", "move", a, "1,0")  # attacking it is fine
 
     def test_hold_adds_a_defense_die(self):

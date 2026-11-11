@@ -20,7 +20,8 @@ one that can't get all its builders waits this turn, and a later site that needs
 get them. Each idle person works on one site a turn, so you build only as much as you have people
 for. Work happens at the end of resolution with the people idle this turn (after production), so a
 1-turn Hut ordered now stands next turn and a finished structure starts working the turn after. A
-finished site with an enemy unit on it waits (without builders) until the unit has gone.
+site with an enemy unit on any of its cells gets no work (its builders go to other sites) and
+doesn't finish until the unit has gone.
 """
 
 from .content import STRUCTURES
@@ -52,7 +53,7 @@ def plan(m, pid, idle):
     out = []
     for site in sorted((x for x in m.sites.values() if x["owner"] == pid), key=lambda x: x["n"]):
         need = STRUCTURES[site["type"]]["builders"]
-        works = not finished(site) and need <= idle
+        works = not finished(site) and need <= idle and not blocked(m, site)
         if works:
             idle -= need
         out.append((site, works))
