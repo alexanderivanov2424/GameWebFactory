@@ -11,13 +11,13 @@ structure works if it has its workers (people, who need food and housing). Order
 become construction sites that take a few turns of work, each turn needing builders: people
 without a job (switch structures off, all at once, or demolish them to free people). Gold, faith and
 science are realm-wide; goods (food, wood, stone, metal) go straight into the realm's stores (Town
-Hall, Storage Yard, Granary) up to their room. Roads are free (one builder, one turn), speed up
-units, and people still idle after the sites lay them on their own to link buildings to stores
-and Town Halls to each other. Units on an Explore order walk on their own to clear the fog.
+Hall, Storage Yard, Granary) up to their room. Structures go anywhere inside your territory;
+1 wood extends it (an explored cell next to it, with its neighbours). There are no roads. Units on
+an Explore order walk on their own to clear the fog.
 Lose every Town Hall and you are out. Last
 realm standing wins; otherwise the highest score after the last turn.
 Full rules: logic/match.py (turn order, score), logic/economy.py, logic/combat.py,
-logic/movement.py, logic/orders.py, logic/logistics.py, logic/construction.py, logic/roads.py,
+logic/movement.py, logic/orders.py, logic/logistics.py, logic/construction.py,
 logic/explore.py; content in structures/, units/,
 advances/ (fields in logic/content.py).
 
@@ -30,6 +30,7 @@ units, construction sites, territory, events as they see them; spectators see ev
 Game messages (all only while planning; any order un-readies you; never use a "type" key,
 the lobby envelope owns it):
     {"action": "build", "kind": stype, "at": "q,r", "rot": 0-5}
+    {"action": "claim", "at": "q,r"}                   (at once: 1 wood, the cell and its neighbours join your territory)
     {"action": "recruit", "structure": sid, "kind": utype}
     {"action": "move", "unit": uid, "to": "q,r"}      (to = own cell clears the unit's orders)
     {"action": "shoot", "unit": uid, "at": "q,r"}
@@ -76,7 +77,7 @@ class Game(LobbyGame):
         "seed": Int("Map seed", default=0, low=0, high=999999, hint="0 = a new random map"),
     }
     ACTIONS = {name: name for name in
-               ("build", "recruit", "move", "shoot", "hold", "explore", "found", "research", "cancel", "trade", "toggle", "staff", "demolish",
+               ("build", "claim", "recruit", "move", "shoot", "hold", "explore", "found", "research", "cancel", "trade", "toggle", "staff", "demolish",
                 "disband", "done")}
 
     def __init__(self, room):
@@ -132,6 +133,9 @@ class Game(LobbyGame):
 
     def build(self, member, data):
         self.order(member, "build", text_id(data, "kind"), text_id(data, "at"), whole_number(data.get("rot", 0), "Rotation", 0, 5))
+
+    def claim(self, member, data):
+        self.order(member, "claim", text_id(data, "at"))
 
     def recruit(self, member, data):
         self.order(member, "recruit", text_id(data, "structure"), text_id(data, "kind"))

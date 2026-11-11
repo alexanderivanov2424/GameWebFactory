@@ -22,7 +22,7 @@
   "mountain"
  ],
  "text": "Blocks enemy units until knocked down.",
- "category": "roads",
+ "category": "defense",
  "buildTurns": 1,
  "builders": 1
 }

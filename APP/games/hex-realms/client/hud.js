@@ -54,7 +54,7 @@
       el("span", { className: "hr-turn" }, `Turn ${game.turn} / ${game.turnLimit}`),
       game.turnSeconds > 0 ? el("span", { id: "hr-timer", className: "hr-timer" }) : null,
       el("span", { className: "hr-chips" }, chips),
-      el("span", { className: "hr-people", title: `Population ${priv.pop}, housing ${rep.housing}: ${rep.workers} in jobs, ${rep.builders} building, ${rep.idle} idle. Idle people lay roads on their own to link your buildings.${rep.growth ? "" : `\nNo growth this turn: ${rep.growthWhy}`}` },
+      el("span", { className: "hr-people", title: `Population ${priv.pop}, housing ${rep.housing}: ${rep.workers} in jobs, ${rep.builders} building, ${rep.idle} idle.${rep.growth ? "" : `\nNo growth this turn: ${rep.growthWhy}`}` },
         el("span", { className: "hr-ricon" }, resIcon("people")), " ", el("b", {}, String(priv.pop)), ` / ${rep.housing} (jobs ${rep.workers}`,
         rep.builders ? `, building ${rep.builders}` : "", `, idle ${rep.idle})`,
         rep.growth ? el("span", { className: "pos" }, ` growth +${rep.growth}`) : null),
@@ -123,7 +123,6 @@
     if (own) {
       const store = priv.stores[sel.id];
       if (store) kids.push(el("p", { className: "small" }, `Holds ${Object.entries(store.cap).map(([r, n]) => `${r} ${store.stock[r] || 0}/${n}`).join(", ")}.`));
-      if (def.navigable) kids.push(el("p", { className: "muted small" }, "Navigable: links the roads that touch it."));
     }
     if (own) {
       const recruits = priv.recruit[sel.id] || {};
@@ -204,16 +203,20 @@
       if (d.requires && !mine.has(d.requires)) why = `Needs ${content.advances[d.requires]?.name || d.requires}`;
       const poor = !why && !canPay(ctx, d.cost);
       const info = [d.text, `Build: ${d.buildTurns} turn${d.buildTurns > 1 ? "s" : ""}, ${d.builders} builder${d.builders > 1 ? "s" : ""} each turn`, d.jobs ? `Jobs: ${d.jobs}` : "", Object.keys(d.produce || {}).length ? `Produces: ${costText(d.produce)}` : "", d.housing ? `Housing: ${d.housing}` : "",
-        `Terrain: ${(d.terrain || []).map((t) => content.terrain[t]?.name || t).join(", ")}`, d.coast ? "Must touch water." : "", d.navigable ? "Navigable (links roads)." : "", `${d.cells.length} cell${d.cells.length > 1 ? "s" : ""}`]
+        `Terrain: ${(d.terrain || []).map((t) => content.terrain[t]?.name || t).join(", ")}`, d.coast ? "Must touch water." : "", `${d.cells.length} cell${d.cells.length > 1 ? "s" : ""}`]
         .filter(Boolean).join("\n");
       const active = ui.mode?.type === "build" && ui.mode.kind === id;
       return el("button", { className: `hr-build${active ? " on" : ""}`, disabled: !!why || poor, title: `${why ? `${why}\n` : poor ? "Can't afford\n" : ""}${info}`,
         onclick: () => (active ? act.setMode(null) : act.setMode({ type: "build", kind: id, rot: ui.lastRot || 0 })) },
         el("span", { className: "hr-bicon" }, d.icon || "▪"), el("span", { className: "hr-bname" }, d.name), el("span", { className: "hr-bcost small" }, why || costText(d.cost)));
     });
-    fill(box, tabs,
+    const claiming = ui.mode?.type === "claim", claimCost = content.claim?.cost || {};
+    const claim = btn(claiming ? "Extending territory… (Esc)" : `Extend territory (${costText(claimCost)})`,
+      () => act.setMode(claiming ? null : { type: "claim" }),
+      { cls: claiming ? "on" : "", disabled: !claiming && !canPay(ctx, claimCost), title: "Claim an explored cell next to your land, with its neighbours, to build further out." });
+    fill(box, el("div", { className: "hr-btnrow" }, claim), tabs,
       ui.buildCat ? el("div", { className: "hr-buildgrid" }, items) : el("p", { className: "muted small" }, "Pick a category, then a structure."),
-      el("p", { className: "muted small" }, "Click the map to place it. R or right-click turns it, Esc cancels. It must touch your structures (or sites) and sit in your territory. It becomes a construction site that idle people build over a few turns. Goods go straight to your stores; people left idle lay roads on their own to link your buildings."));
+      el("p", { className: "muted small" }, "Click the map to place it. R or right-click turns it, Esc cancels. It goes anywhere inside your territory and becomes a construction site that idle people build over a few turns. Goods go straight to your stores."));
   }
 
   window.HexHud = { topbar, players, selection, orders, trade, build, fmt: { costText, canPay, nameSpan, btn, cap, setResources, resIcon, resName } };

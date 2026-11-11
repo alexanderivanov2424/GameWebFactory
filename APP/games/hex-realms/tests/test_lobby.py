@@ -36,7 +36,7 @@ class LobbyTests(unittest.TestCase):
 
     def test_bad_messages_are_refused(self):
         sim = Sim(GAME, players=2, settings={"seed": 3})
-        sim.fails(0, {"action": "build", "kind": "road", "at": 5, "rot": 0}, "Missing at")
+        sim.fails(0, {"action": "build", "kind": "hut", "at": 5, "rot": 0}, "Missing at")
         sim.fails(0, {"action": "move", "unit": "u999", "to": "0,0"}, "not your unit")
         theirs = next(u for u, x in sim.game.match.units.items() if x["owner"] == sim.pid(1))
         sim.fails(0, {"action": "disband", "unit": theirs}, "not your unit")

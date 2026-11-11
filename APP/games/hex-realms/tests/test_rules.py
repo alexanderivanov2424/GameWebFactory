@@ -44,7 +44,7 @@ class StartTests(unittest.TestCase):
         m = blank()
         hall(m, "p1", "-6,0"), hall(m, "p2", "6,0")
         m.set_done("p1", True)
-        m.act("p1", "build", "road", "-7,0", 0)
+        m.act("p1", "build", "hut", "-7,0", 0)
         self.assertFalse(m.players["p1"]["done"])
 
 
@@ -64,14 +64,6 @@ class BuildTests(unittest.TestCase):
     def test_outside_territory_is_refused(self):
         with self.assertRaisesRegex(LobbyError, "territory"):
             self.m.act("p1", "build", "hut", "0,0", 0)
-
-    def test_must_touch_own_structure(self):
-        with self.assertRaisesRegex(LobbyError, "touch"):
-            self.m.act("p1", "build", "hut", "-8,0", 0)
-
-    def test_chain_of_pending_builds(self):
-        self.m.act("p1", "build", "road", "-7,0", 0)
-        self.m.act("p1", "build", "road", "-8,0", 0)
 
     def test_advance_required(self):
         rich(self.m, "p1")
@@ -188,13 +180,11 @@ class MovementTests(unittest.TestCase):
         self.m = blank(face=1)  # dice never hit unless a test says so
         hall(self.m, "p1", "-8,0"), hall(self.m, "p2", "8,0")
 
-    def test_path_cost_and_roads(self):
+    def test_path_cost(self):
         u = unit(self.m, "p1", "militia", "0,0")
         with self.assertRaisesRegex(LobbyError, "can't get there"):
             self.m.act("p1", "move", u, "3,0")
-        for at in ("1,0", "2,0", "3,0"):
-            self.m.add_structure("p1", "road", at, 0)
-        self.m.act("p1", "move", u, "3,0")
+        self.m.act("p1", "move", u, "2,0")
 
     def test_moves_happen_together(self):
         a = unit(self.m, "p1", "militia", "0,0")

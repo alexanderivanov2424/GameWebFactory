@@ -151,6 +151,7 @@
     const cancel = HexHud.fmt.btn("Cancel (Esc)", () => act.setMode(null));
     const names = c.content;
     if (m.type === "build") fill(box, `Placing ${names.structures[m.kind].name}: click to build, R or right-click to turn, Esc to stop. `, cancel);
+    else if (m.type === "claim") fill(box, `Extending territory: click a green cell to claim it and its neighbours (${HexHud.fmt.costText(names.claim.cost)} each). Esc to stop. `, cancel);
     else if (m.type === "shoot") fill(box, "Click an enemy unit or structure in range. ", cancel);
     else fill(box, "Found a city here: R turns the footprint, click it (or Confirm) to place. ",
       HexHud.fmt.btn("Confirm", confirmFound, { cls: "endturn" }), cancel);
@@ -161,9 +162,17 @@
     return (u && c.game.units[u].owner !== c.you) || (s && c.game.structures[s].owner !== c.you && c.content.structures[c.game.structures[s].type].hp > 0);
   };
 
+  // Cells you could claim (the server decides): explored, nobody's, next to your territory.
+  function claimable(c) {
+    const g = c.game;
+    return Object.keys(g.cells).filter((k) => !(k in g.territory) && U.neighbors(k).some((n) => g.territory[n] === c.you));
+  }
+
   function highlights(c) {
     const h = {}, sel = ui.sel;
-    if (c.priv && sel?.kind === "unit" && c.game.units[sel.id]?.owner === c.you) {
+    if (c.priv && ui.mode?.type === "claim") {
+      for (const k of claimable(c)) h[k] = "claim";
+    } else if (c.priv && sel?.kind === "unit" && c.game.units[sel.id]?.owner === c.you) {
       const u = c.game.units[sel.id];
       h[u.at] = "sel";
       if (ui.mode?.type === "shoot" && ui.mode.unit === sel.id) {
@@ -179,12 +188,9 @@
   }
 
   function buildOk(c, def, cells) {
-    const mine = new Set(), pending = new Set(c.priv.orders.builds.flatMap((b) => b.cells));
-    for (const s of [...Object.values(c.game.structures), ...Object.values(c.game.sites || {})]) if (s.owner === c.you) s.cells.forEach((k) => mine.add(k));
-    pending.forEach((k) => mine.add(k));
+    const pending = new Set(c.priv.orders.builds.flatMap((b) => b.cells));
     const g = c.game;
     return cells.every((k) => k in g.cells && g.territory[k] === c.you && (def.terrain || []).includes(g.cells[k]) && !idx.structAt[k] && !idx.siteAt[k] && !pending.has(k))
-      && cells.some((k) => U.neighbors(k).some((n) => mine.has(n)))
       && (!def.coast || cells.some((k) => U.neighbors(k).some((n) => g.cells[n] === "water")));
   }
 
@@ -225,9 +231,10 @@
     const c = ctx(), m = ui.mode;
     if (m?.type === "build") {
       act.send({ action: "build", kind: m.kind, at: k, rot: m.rot });
-      if (m.kind !== "road") act.setMode(null);
+      act.setMode(null);
       return;
     }
+    if (m?.type === "claim") { act.send({ action: "claim", at: k }); return; }  // stays on: claim several
     if (m?.type === "shoot") { act.send({ action: "shoot", unit: m.unit, at: k }); act.setMode(null); return; }
     if (m?.type === "found") {
       const u = c.game.units[m.unit];

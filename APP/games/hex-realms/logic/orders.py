@@ -9,6 +9,8 @@ so a player can never order more than they have. Orders are private until the tu
                                     `to` = the unit's own cell clears its orders
     shoot(m, pid, uid, at)          ranged unit: shoot a cell instead of moving
     hold(m, pid, uid)               toggle: stay put and defend with 1 more die
+    claim(m, pid, at)               at once, for CLAIM_COST: an unowned explored cell next to your
+                                    territory becomes yours with its neighbours (economy.territory)
     explore(m, pid, uid)            toggle: the unit walks on its own each turn to clear fog (explore.py)
     found(m, pid, uid, rot)         settlers found a Town Hall where they stand (instead of moving)
     research(m, pid, aid)           buy an advance (takes effect at the start of resolution)
@@ -30,6 +32,7 @@ from .economy import report
 from .movement import path
 
 CITY_SPACING = 5
+CLAIM_COST = {"wood": 1}
 TRADE_GOODS = ["gold", "food", "wood", "stone", "metal"]
 
 
@@ -102,11 +105,7 @@ def build(m, pid, stype, at, rot):
     if problem:
         raise LobbyError(problem)
     if any(m.territory.get(c) != pid for c in cells):
-        raise LobbyError("Build inside your territory.")
-    mine = {c for c, sid in m.cell_structure.items() if m.structures[sid]["owner"] == pid} | pending
-    mine |= {c for c, cid in m.cell_site.items() if m.sites[cid]["owner"] == pid}
-    if not any(n in mine for c in cells for n in neighbors(c)):
-        raise LobbyError("It must touch one of your structures, roads or sites.")
+        raise LobbyError("Build inside your territory (extend it with wood).")
     pay(m, pid, d["cost"])
     o["builds"].append({"id": m.new_id("o"), "type": stype, "at": at, "rot": rot % 6, "cells": cells, "cost": dict(d["cost"])})
 
@@ -174,6 +173,25 @@ def hold(m, pid, uid):
     clear_unit(m, pid, uid)
     if not holding:
         m.orders[pid]["holds"].append(uid)
+
+
+def claim_problem(m, pid, at):
+    """Why pid can't claim cell `at` now (None if they can), as far as pid knows."""
+    if at not in m.cells or (m.fog and at not in m.explored[pid]):
+        return "Claim a cell you have explored."
+    if at in m.territory:
+        return "That cell already belongs to a realm." if m.territory[at] != pid else "That's your land already."
+    if not any(m.territory.get(n) == pid for n in neighbors(at)):
+        return "Claim a cell next to your territory."
+    return None
+
+
+def claim(m, pid, at):
+    problem = claim_problem(m, pid, at)
+    if problem:
+        raise LobbyError(problem)
+    pay(m, pid, CLAIM_COST)
+    m.claims[at] = pid
 
 
 def explore(m, pid, uid):

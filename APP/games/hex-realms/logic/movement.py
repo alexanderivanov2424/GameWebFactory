@@ -1,9 +1,9 @@
 """Hex Realms: unit paths and simultaneous movement.
 
 Movement points are in half steps: a unit with move 2 has 4. Entering a cell costs its
-terrain's "move" (grass 2, forest 4...), or ROAD_MOVE (1) on any road; naval units move on
-water only (2 per cell). Mountains and water stop land units. Own structures can be crossed;
-enemy roads too. A cell with an enemy unit or enemy structure (not a road) can only be the last
+terrain's "move" (grass 2, forest 4...); naval units move on water only (2 per cell).
+Mountains and water stop land units. Own structures can be crossed. A cell with an enemy unit
+or enemy structure can only be the last
 cell of a path: moving into it is an attack (it costs one step, 2).
 
     reach(m, uid)          {key: previous key} for every cell the unit can end on this turn, as its
@@ -29,14 +29,14 @@ from gamekit.hexes import neighbors
 
 from . import vision
 from .combat import battle, siege
-from .content import ROAD, ROAD_MOVE, TERRAIN, UNITS
+from .content import TERRAIN, UNITS
 
 ATTACK_COST = 2
 
 
 def enemy_structure(m, pid, k):
     sid = m.cell_structure.get(k)
-    return sid is not None and m.structures[sid]["owner"] != pid and m.structures[sid]["type"] != ROAD
+    return sid is not None and m.structures[sid]["owner"] != pid
 
 
 def step_cost(m, u, k):
@@ -46,9 +46,6 @@ def step_cost(m, u, k):
     terrain = m.cells[k]
     if UNITS[u["type"]]["naval"]:
         return 2 if terrain == "water" else None
-    sid = m.cell_structure.get(k)
-    if sid is not None and m.structures[sid]["type"] == ROAD:
-        return ROAD_MOVE
     return TERRAIN[terrain]["move"]
 
 
@@ -67,8 +64,6 @@ def planned_cost(m, u, k, known):
         return 2
     if UNITS[u["type"]]["naval"]:
         return 2 if m.cells[k] == "water" else None
-    if structures.get(k, (None, None))[1] == ROAD:
-        return ROAD_MOVE
     return TERRAIN[m.cells[k]]["move"]
 
 
@@ -79,7 +74,7 @@ def is_target(m, u, k, known):
     if occ is not None and m.units[occ]["owner"] != u["owner"] and k in visible:
         return True
     owner, stype = structures.get(k, (None, None))
-    return owner is not None and owner != u["owner"] and stype != ROAD
+    return owner is not None and owner != u["owner"]
 
 
 def reach(m, uid):

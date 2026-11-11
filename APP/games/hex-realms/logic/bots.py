@@ -13,9 +13,9 @@ A simple strategy, in this order each turn:
      that doesn't make food (once nothing is waiting, switch everything back on). Then build by
      need (at most MAX_BUILDS a turn, only with idle people left over for builders): homes when
      nearly full, farms when food is short, a lumbermill and a mine per city, storage when goods
-     are near the cap, then Barracks, Market, Chapel, College, Smithy, Towers, more farms. If a
-     farm / lumbermill / mine finds no land it needs, it lays a road (from the Town Hall or its
-     roads) towards such land, which grows its territory. (Roads between buildings come by themselves.)
+     are near the cap, then Barracks, Market, Chapel, College, Smithy, Towers, more farms, anywhere
+     in its territory (near the Town Hall preferred). If a farm / lumbermill / mine finds no land
+     it needs, it buys land (orders.claim, up to MAX_CLAIMS a turn) towards the nearest such terrain.
   4. Recruit Settlers until it has 3 cities, then an army that grows with the turn number.
   5. Units: ranged ones shoot what's in range; everyone attacks enemies near its structures;
      the oldest unit scouts (explore.target, like the Explore order) until a war needs it; from ATTACK_TURN an army of
@@ -30,11 +30,11 @@ from gamekit import LobbyError
 from gamekit.hexes import disk, dist, neighbors, parse
 
 from . import construction, economy, explore, logistics, movement, orders, vision
-from .content import ADVANCES, ROAD, STRUCTURES, TOWN_HALL, UNITS, footprint
+from .content import ADVANCES, STRUCTURES, TOWN_HALL, UNITS, footprint
 from .economy import report, staffing
 
 MAX_BUILDS = 3
-MAX_ROADS = 2
+MAX_CLAIMS = 2
 CITIES = 3
 CITY_RANGE = 10
 ATTACK_TURN = 20
@@ -185,7 +185,7 @@ class Bot:
             return
         wants, idle = self.wants()
         idle -= sum(STRUCTURES[x["type"]]["builders"] for x in self.sites if not construction.finished(x))
-        built = roads = 0
+        built = claims = 0
         for stype in wants:
             d = STRUCTURES[stype]
             if built >= MAX_BUILDS or idle < 1:
@@ -194,22 +194,12 @@ class Bot:
                 continue
             site = self.site(stype)
             if site is None:
-                if stype in NEED_TERRAIN and roads < MAX_ROADS and self.lay_road(stype):
-                    roads += 1
-                    idle -= STRUCTURES[ROAD]["builders"]
+                if stype in NEED_TERRAIN and claims < MAX_CLAIMS and self.claim_land(stype):
+                    claims += 1
                 continue
             if try_act(self.m, self.pid, "build", stype, site[0], site[1]):
                 built += 1
                 idle -= d["jobs"] + d["builders"]
-
-    def taken(self):
-        """Cells of pid's structures and pending builds, and the ones that count as its roads."""
-        m = self.m
-        pending = [b for b in m.orders[self.pid]["builds"]]
-        cells = {c for s in self.mine + self.sites for c in s["cells"]} | {c for b in pending for c in b["cells"]}
-        roads = {c for s in self.mine if s["type"] == ROAD or STRUCTURES[s["type"]]["navigable"] for c in s["cells"]}
-        roads |= {c for b in pending + self.sites if b["type"] == ROAD for c in b["cells"]}
-        return cells, roads, {c for b in pending for c in b["cells"]}
 
     def free_cells(self):
         m = self.m
@@ -219,7 +209,7 @@ class Bot:
     def site(self, stype):
         """(at, rot) of the best place for stype, or None."""
         m, pid, d = self.m, self.pid, STRUCTURES[stype]
-        cells_taken, roads, pending = self.taken()
+        pending = {c for b in m.orders[pid]["builds"] for c in b["cells"]}
         best = None
         for at in self.free_cells():
             for rot in range(6 if len(d["cells"]) > 1 else 1):
@@ -229,8 +219,6 @@ class Bot:
                 if orders.site_problem(m, pid, stype, cells, pending, m.visible[pid]):
                     continue
                 touching = {n for c in cells for n in neighbors(c)} - set(cells)
-                if not touching & cells_taken:
-                    continue
                 value = self.value(stype, cells, touching) - 0.3 * self.near_hall(at) + self.rng.random() * 0.1
                 if best is None or value > best[0]:
                     best = (value, at, rot)
@@ -246,27 +234,17 @@ class Bot:
             return sum(1 for n in touching if self.m.structures.get(self.m.cell_structure.get(n), {}).get("type") == "farm")
         return 0
 
-    def lay_road(self, stype):
-        """One road from the Town Hall or a road towards land where stype could go."""
+    def claim_land(self, stype):
+        """Buy one cell of land (orders.claim) on the way to the nearest known land stype needs."""
         m, pid = self.m, self.pid
-        cells_taken, roads, pending = self.taken()
-        start = roads | set(self.hall_cells)
         want = NEED_TERRAIN.get(stype)
-        free = self.free_cells()
-        targets = [k for k in free if want is None or m.cells[k] in want]
-        if not targets:
+        known = m.explored[pid] if m.fog else m.cells
+        targets = [k for k in known if m.cells[k] in want and m.territory.get(k) != pid]
+        options = [k for k in sorted(known) if not orders.claim_problem(m, pid, k)]
+        if not targets or not options:
             return False
-        best = None
-        for k in free:
-            if k in pending or not any(n in start for n in neighbors(k)):
-                continue
-            if orders.site_problem(m, pid, ROAD, [k], pending, m.visible[pid]):
-                continue
-            value = min(dist(k, t) for t in targets if t != k) if len(targets) > 1 or targets[0] != k else 0
-            value += self.rng.random() * 0.1
-            if best is None or value < best[0]:
-                best = (value, k)
-        return best is not None and try_act(m, pid, "build", ROAD, best[1], 0)
+        best = min(options, key=lambda k: (min(dist(k, t) for t in targets), self.near_hall(k), k))
+        return try_act(m, pid, "claim", best)
 
     # --- Recruiting ----------------------------------------------------------------------------
 
@@ -302,7 +280,7 @@ class Bot:
 
     def threats(self):
         m = self.m
-        homes = [c for s in self.mine if s["type"] != ROAD for c in s["cells"]]
+        homes = [c for s in self.mine for c in s["cells"]]
         return [u["at"] for u in m.units.values() if u["owner"] != self.pid and vision.sees(m, self.pid, u["at"])
                 and any(dist(u["at"], h) <= 5 for h in homes)]
 
@@ -311,7 +289,7 @@ class Bot:
         known = self.known
         threats = self.threats()
         army = [u for u in self.units if not UNITS[u["type"]]["settler"] and not UNITS[u["type"]]["naval"]]
-        enemy = [c for c, (owner, stype) in known.items() if owner != pid and stype != ROAD]
+        enemy = [c for c, (owner, stype) in known.items() if owner != pid]
         halls = [c for c in enemy if known[c][1] == TOWN_HALL]
         target = None
         if enemy and m.turn >= ATTACK_TURN and len(army) >= ATTACK_ARMY and self.hall_cells:

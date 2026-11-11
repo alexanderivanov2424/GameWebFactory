@@ -32,7 +32,7 @@ def roll(m, n):
 def need(m, u):
     """The roll needed to hit unit u."""
     sid = m.cell_structure.get(u["at"])
-    own = sid is not None and m.structures[sid]["owner"] == u["owner"] and m.structures[sid]["type"] != "road"
+    own = sid is not None and m.structures[sid]["owner"] == u["owner"]
     return COVER_HIT if own or TERRAIN[m.cells[u["at"]]]["cover"] else HIT
 
 

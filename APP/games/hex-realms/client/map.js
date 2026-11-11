@@ -1,10 +1,10 @@
 /*
- * Hex Realms: the pannable, zoomable SVG hex map (terrain, territory, structures, roads, units,
+ * Hex Realms: the pannable, zoomable SVG hex map (terrain, territory, structures, units,
  * your pending orders, highlights, build ghost, event flashes). No game rules here.
  *
  *   const map = HexMap.create(element, { onCell(key), onHover(key|null), onRightClick(key) });
  *   map.draw(game, you, priv)   rebuild the dynamic layers from state (terrain only if the map changed)
- *   map.setHighlights({key: "reach"|"attack"|"range"|"sel"})   toggle classes on pre-made cell overlays
+ *   map.setHighlights({key: "reach"|"attack"|"range"|"sel"|"claim"})   toggle classes on pre-made cell overlays
  *   map.setGhost({cells, ok, label} | null)   footprint preview under the mouse (small, rebuilt per hover)
  *   map.flash([{at, kind}])     brief pulsing markers (battle/siege cells)
  *   map.centre(key)             pan to a cell;  map.fit() resets the zoom
@@ -67,45 +67,11 @@
     return null;
   }
 
-  // Roads, drawn under the structures in one colour whoever owns them: a line between touching
-  // roads of the same owner, and from each group of connected roads one line into each
-  // structure of that owner it touches (so it disappears under the structure's edge).
-  function roadLinks(roads, cellStruct, structures) {
-    const roadAt = {};
-    for (const s of roads) roadAt[s.at] = s;
-    const links = [], seen = new Set();
-    for (const start of roads) {
-      if (seen.has(start.at)) continue;
-      const group = [], queue = [start.at];
-      seen.add(start.at);
-      while (queue.length) {
-        const k = queue.shift();
-        group.push(k);
-        for (const n of neighbors(k)) {
-          const r = roadAt[n];
-          if (!r || r.owner !== start.owner) continue;
-          if (n > k) links.push([k, n]);
-          if (!seen.has(n)) { seen.add(n); queue.push(n); }
-        }
-      }
-      const joined = new Set();
-      for (const k of group.sort()) {
-        for (const n of neighbors(k)) {
-          const sid = cellStruct[n], t = sid && structures[sid];
-          if (!t || t.type === "road" || t.owner !== start.owner || joined.has(sid)) continue;
-          joined.add(sid);
-          links.push([k, n]);
-        }
-      }
-    }
-    return links;
-  }
-
   function create(element, handlers = {}) {
     const root = svg("svg", { class: "hr-svg" });
     const world = svg("g");
     const layer = (name) => { const g = svg("g", { class: `hr-${name}` }); put(world, g); return g; };
-    const terrainG = layer("terrain"), territoryG = layer("territory"), roadG = layer("roads"), structG = layer("structs"), dimG = layer("dim"), hlG = layer("hl");
+    const terrainG = layer("terrain"), territoryG = layer("territory"), structG = layer("structs"), dimG = layer("dim"), hlG = layer("hl");
     const orderG = layer("orders"), unitG = layer("units"), ghostG = layer("ghost"), flashG = layer("flashes");
     hlG.style.pointerEvents = "none";
     put(root, world);
@@ -189,20 +155,6 @@
       }
     }
 
-    function drawRoads(roads, cellStruct, structures, nameOf) {
-      const byCell = {};
-      for (const s of roads) {
-        const [x, y] = center(s.at);
-        byCell[s.at] = svg("g", { class: "hr-road" }, svg("title", {}, `Road (${nameOf(s.owner)})`),
-          svg("circle", { cx: x, cy: y, r: 4, class: "hr-road-dot" }));
-      }
-      for (const [a, b] of roadLinks(roads, cellStruct, structures)) {
-        const [x1, y1] = center(a), [x2, y2] = center(b);
-        put(byCell[a], svg("line", { x1, y1, x2, y2, class: "hr-road-line" }));
-      }
-      put(roadG, Object.values(byCell));
-    }
-
     function draw(game, you, priv) {
       const gkey = game.seats.join() + game.radius;
       if (game.cells !== cells) {
@@ -214,7 +166,7 @@
       const players = game.players, content = game.content;
       const color = (pid) => players[pid]?.color || "#888";
       const nameOf = (pid) => players[pid]?.name || pid;
-      for (const g of [territoryG, roadG, structG, orderG, unitG]) fill(g);
+      for (const g of [territoryG, structG, orderG, unitG]) fill(g);
       // Explored but not seen right now: dimmed (enemy units there aren't shown).
       fill(dimG, (game.dim || []).map((k) => hexAt(k, SIZE, { class: "hr-dim" })));
 
@@ -226,17 +178,13 @@
       }
 
       // Structures.
-      const cellStruct = {};
-      for (const [sid, s] of Object.entries(game.structures)) for (const c of s.cells) cellStruct[c] = sid;
       const reasonFor = (sid, s, def) => {
         if (s.active === false) return "Switched off.";
         return "Not working: no free workers.";
       };
-      const roads = [];
       for (const [sid, s] of Object.entries(game.structures)) {
         const def = content.structures[s.type];
         if (!def) continue;
-        if (s.type === "road") { roads.push(s); continue; }
         const c = color(s.owner);
         const needsWork = (def.jobs > 0) || Object.keys(def.produce || {}).length > 0;
         const idle = !s.working && needsWork;
@@ -244,8 +192,8 @@
         if (s.maxHp) tip += ` hp ${s.hp}/${s.maxHp}`;
         if (idle) tip += `\n${reasonFor(sid, s, def)}`;
         const g = svg("g", { class: `hr-struct${idle ? " hr-idle" : ""}` }, svg("title", {}, tip));
-        // Solid structures get a light owner tint, navigable ones none (outlines are drawn after all structures).
-        put(g, s.cells.map((k) => hexAt(k, SIZE, def.navigable ? { class: "hr-sfill hr-nav" } : { class: "hr-sfill", fill: c })));
+        // A light owner tint (outlines are drawn after all structures).
+        put(g, s.cells.map((k) => hexAt(k, SIZE, { class: "hr-sfill", fill: c })));
         const [x, y] = middle(s.cells);
         put(g, svg("text", { x, y: y + 1, class: "hr-icon" }, def.icon || def.name.slice(0, 2)));
         if (idle) put(g, svg("line", { x1: x - 14, y1: y + 12, x2: x + 14, y2: y - 12, class: "hr-strike" }));
@@ -257,13 +205,12 @@
       }
       // Ownership: one outline around each group of touching structures of the same owner.
       const owned = {};
-      for (const s of Object.values(game.structures)) if (s.type !== "road") for (const k of s.cells) owned[k] = s.owner;
+      for (const s of Object.values(game.structures)) for (const k of s.cells) owned[k] = s.owner;
       for (const pid of new Set(Object.values(owned))) {
         const mine = Object.keys(owned).filter((k) => owned[k] === pid);
         put(structG, borders(mine, (n) => owned[n] === pid, { class: "hr-sline-back" }),
           borders(mine, (n) => owned[n] === pid, { class: "hr-sline", stroke: color(pid) }));
       }
-      drawRoads(roads, cellStruct, game.structures, nameOf);
       // Construction sites: dashed owner outline, faded icon, turns of work done.
       const working = new Set((priv && priv.building?.works) || []);
       for (const [cid, x] of Object.entries(game.sites || {})) {

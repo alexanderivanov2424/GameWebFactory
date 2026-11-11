@@ -1,7 +1,8 @@
 """Hex Realms: territory, workers, production, upkeep and growth.
 
-    territory(m)             {key: pid}: each cell within a structure's claim radius belongs to
-                             the owner of the nearest structure cell (a tie between players = no one)
+    territory(m)             {key: pid}: each cell within a structure's claim radius (or within
+                             CLAIM_RADIUS of a claimed cell, m.claims) belongs to the owner of the
+                             nearest such cell (a tie between players = no one)
     effect(m, pid, name)     sum of an advance effect key over pid's advances
     output(m, s)             what structure s makes in a turn when it works
     staffing(m, pid)         (working structures in job order, people without a job)
@@ -14,8 +15,7 @@
 
 Rules: every structure works, wherever it is, as long as it has its crew: people (population)
 fill jobs, food producers first, then oldest first. Gold, faith and science go straight to the
-realm; goods (food, wood, stone, metal) go straight into the realm's stores (logistics.py: no
-roads needed), and what doesn't fit is lost. Everyone eats: pop // 2 food, plus each unit's
+realm; goods (food, wood, stone, metal) go straight into the realm's stores (logistics.py), and what doesn't fit is lost. Everyone eats: pop // 2 food, plus each unit's
 upkeep. Not enough food starves 1 person (or disbands a unit); gold below 0 makes the newest paid
 unit desert. If the realm makes more food this turn than it eats (whether or not it all fits in
 the stores) and there is free housing, population grows by 1 (+1 per Granary). People without a
@@ -29,22 +29,23 @@ from . import construction, logistics
 from .content import ADVANCES, CAPPED, RESOURCES, STRUCTURES, TOWN_HALL, UNITS
 
 FOOD_FIRST = ("food",)
+CLAIM_RADIUS = 1  # a claimed cell (orders.claim) holds itself and its neighbours, like a 1-radius structure
 
 
 def territory(m):
     best = {}
-    for s in m.structures.values():
-        radius = STRUCTURES[s["type"]]["territory"]
-        for c in s["cells"]:
-            for k in disk(radius, parse(c)):
-                if k not in m.cells:
-                    continue
-                d = dist(k, c)
-                cur = best.get(k)
-                if cur is None or d < cur[0]:
-                    best[k] = (d, s["owner"])
-                elif d == cur[0] and cur[1] != s["owner"]:
-                    best[k] = (d, None)
+    sources = [(c, STRUCTURES[s["type"]]["territory"], s["owner"]) for s in m.structures.values() for c in s["cells"]]
+    sources += [(c, CLAIM_RADIUS, owner) for c, owner in m.claims.items()]
+    for c, radius, owner in sources:
+        for k in disk(radius, parse(c)):
+            if k not in m.cells:
+                continue
+            d = dist(k, c)
+            cur = best.get(k)
+            if cur is None or d < cur[0]:
+                best[k] = (d, owner)
+            elif d == cur[0] and cur[1] != owner:
+                best[k] = (d, None)
     return {k: p for k, (d, p) in best.items() if p}
 
 

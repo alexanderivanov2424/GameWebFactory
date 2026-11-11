@@ -13,8 +13,7 @@ Turn resolution, in order: research; ranged shots (positions before anyone moves
 step by step with battles (movement.py); towers shoot; settlers found cities; builds (two
 players ordering the same cell both fail and get refunds; the rest become construction sites); recruits appear on or next to their
 structure; production into the stores, eating, wages and growth (economy.py, logistics.py);
-construction by the people who were idle this turn, and roads laid by the ones left over
-(construction.py, roads.py); healing (+1 hp for units that didn't
+construction by the people who were idle this turn (construction.py); healing (+1 hp for units that didn't
 fight, full on or next to an own Barracks); players without a Town Hall are out. The game ends
 when one player is left (if it started with 2 or more) or after the last turn: highest score wins.
 Solo games (1 player) are a sandbox: they end at the turn limit with your score, or when you lose
@@ -28,7 +27,8 @@ Monument 10) + gold // 10.
 State: cells {key: terrain}; structures {sid: {"id", "n", "type", "owner", "at", "rot", "cells",
 "hp", "active", "stock" (goods in a store)}} with cell_structure {key: sid}; units {uid: {"id", "n", "type", "owner", "at",
 "hp", "explore" (set while on an Explore order)}} with unit_at {key: uid}; sites {cid: {"id", "n", "type", "owner", "at", "rot", "cells", "cost",
-"done" (turns of work so far)}} with cell_site {key: cid} (construction.py); players {pid: {"res" (gold/faith/science only: goods live in
+"done" (turns of work so far)}} with cell_site {key: cid} (construction.py); claims {key: pid} (land
+bought with wood: orders.claim, economy.territory); players {pid: {"res" (gold/faith/science only: goods live in
 stores, see logistics.py), "pop", "advances", "done", "alive"}};
 orders {pid: {"builds", "recruits", "research": [...], "moves": {uid: [keys]}, "shots": {uid: key},
 "holds": [uid], "found": {uid: rot}}}; events (the last resolution, for the client to replay).
@@ -41,7 +41,7 @@ from gamekit.hexes import neighbors
 
 from . import bots, combat, construction, explore, logistics, movement, orders, vision
 from .content import ADVANCES, CATEGORIES, RESOURCE_INFO, RESOURCES, STRUCTURES, TERRAIN, TOWN_HALL, UNITS, footprint
-from .economy import end_of_turn, report, staffing, territory
+from .economy import CLAIM_RADIUS, end_of_turn, report, staffing, territory
 from .mapgen import generate
 
 COLORS = ["#d9483b", "#3b7dd9", "#e0b030", "#3ba55d", "#a05cc8", "#e07b22"]
@@ -51,7 +51,7 @@ START_UNIT = "settlers"
 START_POP = 3
 SIZES = {"small": -3, "normal": 0, "large": 4, "huge": 8}
 ACTS = {name: getattr(orders, name) for name in
-        ("build", "recruit", "move", "shoot", "hold", "explore", "found", "research", "cancel", "trade", "toggle",
+        ("build", "claim", "recruit", "move", "shoot", "hold", "explore", "found", "research", "cancel", "trade", "toggle",
          "staff", "demolish", "disband")}
 
 
@@ -78,6 +78,7 @@ class Match:
         self.counter = 0
         self.structures, self.cell_structure, self.units, self.unit_at = {}, {}, {}, {}
         self.sites, self.cell_site = {}, {}
+        self.claims = {}  # {key: pid}: land bought with wood (orders.claim), part of territory
         self.players = {pid: {"res": dict(START_RES), "pop": START_POP, "advances": [], "done": False, "alive": True,
                               "color": COLORS[i % len(COLORS)], "startGoods": dict(START_GOODS)}
                         for i, pid in enumerate(self.seats)}
@@ -172,7 +173,7 @@ class Match:
             raise LobbyError("You're not playing.")
         ACTS[name](self, pid, *args)
         self.players[pid]["done"] = False
-        if name in ("disband", "demolish"):
+        if name in ("disband", "demolish", "claim"):
             self.refresh()
 
     def set_done(self, pid, done):
@@ -311,6 +312,7 @@ class Match:
             self.remove_structure(sid)
         for cid in [c for c, x in self.sites.items() if x["owner"] == pid]:
             construction.remove(self, cid)
+        self.claims = {k: p for k, p in self.claims.items() if p != pid}
         self.orders[pid] = empty_orders()
 
     def _check_end(self):
@@ -369,6 +371,7 @@ class Match:
             "seats": self.seats, "fog": self.fog, "bots": self.bots,
             "content": {"structures": STRUCTURES, "units": UNITS, "advances": ADVANCES, "terrain": TERRAIN,
                         "resources": RESOURCES, "categories": CATEGORIES,
+                        "claim": {"cost": orders.CLAIM_COST, "radius": CLAIM_RADIUS},
                         "resourceInfo": {r: {"name": n, "icon": i} for r, (n, i) in RESOURCE_INFO.items()}},
             "players": {pid: {"name": self.names[pid], "color": p["color"], "res": self.shown[pid]["res"],
                               "pop": self.shown[pid]["pop"], "advances": p["advances"], "done": p["done"],

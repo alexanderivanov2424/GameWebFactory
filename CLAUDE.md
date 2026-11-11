@@ -226,7 +226,7 @@ Summary:
    everyone plans in secret at once, then all orders resolve together (simultaneous step-by-step
    movement where units that meet fight with dice, sieges, towers), multi-cell structures staffed
    by population and built over several turns by idle people (construction sites), goods kept in
-   stores, roads laid automatically by people left idle, an Explore order that persists across turns, fog of war sent as each
+   stores, no roads (territory extended with wood), an Explore order that persists across turns, fog of war sent as each
    member's private map view, a Settlers start (found your own first city), territory, advances
    bought with science or faith, an optional turn timer (`schedule`), bots in extra seats (a
    setting; the user asked for them) planning through the same orders; `PatchState`.

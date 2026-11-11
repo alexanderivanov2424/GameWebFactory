@@ -2,9 +2,9 @@
 
 Gold, faith and science are realm-wide (players[pid]["res"], never stored anywhere). Goods live in
 structures: each storage structure (Town Hall, Storage Yard, Granary: content "storage" / "store")
-has a "stock" up to its capacity. Every store counts wherever it is: goods need no roads, so what a
-working structure makes goes straight into the stores with room (Town Halls first, then oldest),
-and anything that doesn't fit is lost. Roads only speed up movement (roads.py).
+has a "stock" up to its capacity. Every store counts wherever it is: what a working structure makes goes
+straight into the stores with room (Town Halls first, then oldest), and anything that doesn't fit
+is lost.
 
     stores(m, pid)            pid's storage structures (Town Halls first, then oldest)
     stock(m, pid)             {res: amount} pid can spend now: goods in stores + gold/faith/science

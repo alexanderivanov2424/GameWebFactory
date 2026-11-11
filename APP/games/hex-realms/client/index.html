@@ -30,11 +30,10 @@
     .hr-svg { width: 100%; height: 100%; display: block; user-select: none; }
     .hr-cell { stroke: rgba(0, 0, 0, 0.28); stroke-width: 1; }
     .hr-glyph { fill: none; stroke: rgba(0, 0, 0, 0.28); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; pointer-events: none; }
-    .hr-territory, .hr-orders, .hr-units, .hr-structs, .hr-roads { pointer-events: none; }
-    .hr-struct, .hr-unit, .hr-road { pointer-events: all; }
+    .hr-territory, .hr-orders, .hr-units, .hr-structs { pointer-events: none; }
+    .hr-struct, .hr-unit { pointer-events: all; }
     .hr-icon { fill: #fff; font: 700 20px sans-serif; text-anchor: middle; dominant-baseline: central; pointer-events: none; }
     .hr-sfill { fill-opacity: 0.3; }
-    .hr-sfill.hr-nav { fill: none; }
     .hr-sline { stroke-width: 3.5; stroke-linecap: round; pointer-events: none; }
     .hr-sline-back { stroke: #10131a; stroke-opacity: 0.55; stroke-width: 6.5; stroke-linecap: round; pointer-events: none; }
     .hr-ghosttext { opacity: 0.8; }
@@ -45,8 +44,6 @@
     .hr-strike { stroke: #ff6a5a; stroke-width: 3; stroke-linecap: round; }
     .hr-hpback { fill: #20242d; stroke: #000; stroke-width: 0.5; }
     .hr-hpbar { fill: #5ccf6a; }
-    .hr-road-line { stroke: #c9b48a; stroke-width: 8; stroke-linecap: round; }
-    .hr-road-dot { fill: #c9b48a; }
     .hr-unit circle:first-child { stroke: #10131a; stroke-width: 2.5; }
     .hr-mine circle:first-child { stroke: #fff; stroke-width: 3; }
     .hr-uicon { fill: #fff; font: 700 12px sans-serif; text-anchor: middle; dominant-baseline: central; paint-order: stroke; stroke: #10131a; stroke-width: 2.5px; }
@@ -63,6 +60,7 @@
     .hr-hl-reach { fill: rgba(255, 255, 255, 0.22); stroke: #fff; stroke-width: 1.5; }
     .hr-hl-attack { fill: rgba(255, 60, 40, 0.38); stroke: #ff5a48; stroke-width: 2.5; }
     .hr-hl-range { fill: rgba(255, 200, 60, 0.18); stroke: #ffc83c; stroke-width: 1.2; }
+    .hr-hl-claim { fill: rgba(120, 230, 120, 0.2); stroke: #7be07b; stroke-width: 1.5; }
     .hr-hl-sel { fill: rgba(255, 255, 255, 0.1); stroke: #ffe36b; stroke-width: 3.5; }
     .hr-ghost { pointer-events: none; }
     .hr-ghost-ok { fill: rgba(80, 230, 110, 0.45); stroke: #6dff8a; stroke-width: 2.5; }
@@ -172,9 +170,9 @@
           Storage Yards, Granaries) up to their room. You grow when you make more food than you eat and have free housing.
           Structures take time to build: each needs a few turns of work, and every turn of work needs its builders,
           people without a job (oldest site first). Switch structures off (or all at once with <b>Jobs off</b>) or
-          demolish them to free people for building. Roads are free: people still idle after that lay them on their own,
-          linking your buildings to the nearest store and your Town Halls to each other, and units move twice as far on
-          them. A unit told to <b>Explore</b> walks on its own every turn to clear the fog.
+          demolish them to free people for building. You can build anywhere in your territory; to build further out,
+          <b>Extend territory</b> (Build tab): 1 wood claims an explored cell next to your land, with its neighbours.
+          A unit told to <b>Explore</b> walks on its own every turn to clear the fog.
           Units fight with dice wherever they meet: each die that rolls 4 or more hits (5 or more against a unit standing
           in forest, hills or mountains, or on its own structure). Lose every Town Hall and you are out.</p>
         <p>The last realm standing wins; if several survive to the turn limit, the highest score wins. The host can add

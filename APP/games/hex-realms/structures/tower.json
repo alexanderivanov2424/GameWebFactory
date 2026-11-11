@@ -26,7 +26,7 @@
   "mountain"
  ],
  "text": "Shoots the nearest enemy unit within 2 after movement.",
- "category": "roads",
+ "category": "defense",
  "vision": 5,
  "buildTurns": 2,
  "builders": 2

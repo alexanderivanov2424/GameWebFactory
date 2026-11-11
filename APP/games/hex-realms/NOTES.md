@@ -22,16 +22,16 @@ fields in `logic/content.py`). Tests: `tests/` (`python3 -I tools/run_tests.py h
 - **Goods in stores** (`logic/logistics.py`): goods live in stores (per-structure `stock`), all
   usable wherever they are; production fills them (Town Halls first) and the rest is lost. Gold,
   faith and science are realm-wide. Every structure works if staffed (`logic/economy.py`: jobs
-  filled food first, then oldest). Goods used to travel along roads (held buffers, stranded
-  producers); the user dropped that for automatic roads (2026-11-11).
+  filled food first, then oldest).
 - **Honest forecasts** (`economy.report`): `net` is what you will really gain (goods capped by the
   room in your stores, `wasted` = the rest), `growth` is the people you will really gain (0 with a
   reason in `growthWhy`), and `idle` excludes builders. Growth needs more food made than eaten,
   not food that fits in the stores.
-- **Roads that lay themselves** (`logic/roads.py`): people still idle after the sites lay one road
-  cell each per turn, along a 0-1 BFS route (existing roads free) from each unlinked structure to
-  its nearest store (stores to a Town Hall, Town Halls to each other), only in own territory and
-  explored cells. Roads now only speed movement and link things.
+- **No roads; land is bought** (2026-11-11, the user's call): roads (first carrying goods, then laid
+  automatically) were removed. Structures go anywhere in your territory, with no "must touch"
+  rule; `orders.claim` spends 1 wood (`CLAIM_COST`) to add a claim point (`m.claims`) that
+  `economy.territory` treats like a 1-radius structure (nearest owner wins, ties = no one). Claims
+  happen at once, so you can build on the land the same turn.
 - **Explore** (`logic/explore.py`): a flag on the unit (`u["explore"]`) survives the per-turn order
   reset; `Match.plan_explorers` gives each flagged unit a move as planning starts, and any other
   order for the unit (`orders.clear_unit`) clears it. Bots scout with the same `target`.
@@ -68,16 +68,14 @@ fields in `logic/content.py`). Tests: `tests/` (`python3 -I tools/run_tests.py h
   `found_problem` are shared with resolution (re-checked then) and the private state.
 - `logic/construction.py`: `start` / `progress` (resolution), `plan` / `forecast` (who builds what this
   turn: `private.building`), `remove` (demolish).
-- `logic/roads.py`: `networks`, `goals` (who should link to what), `route`, `lay` (end of resolution,
-  from `construction.progress`). `logic/explore.py`: `target` / `step`.
+- `logic/explore.py`: `target` / `step`.
 - `logic/bots.py`: `plan(m, pid)`: the bot strategy (header lists it; constants at the top).
 - `logic/vision.py`: `update` (after every change via `Match.refresh`), `known_at`, `view`.
 - `logic/movement.py`, `logic/combat.py`, `logic/economy.py`, `logic/logistics.py`, `logic/mapgen.py`,
   `logic/content.py`: see their headers.
 - `client/map.js`: `HexMap.create`: pan (drag) / zoom (wheel) SVG map; terrain layer rebuilt only
-  when `game.cells` changes, the rest per state; roads in their own layer under the structures,
-  one colour for everyone, and `roadLinks` draws one line per (connected road group, structure);
-  structures are a light owner tint (none if navigable) with one owner-coloured outline per group of
+  when `game.cells` changes, the rest per state;
+  structures are a light owner tint with one owner-coloured outline per group of
   touching structures, and the icon (emoji from the content, placeholder for art) at their middle; `setHighlights` / `setGhost` / `flash` only
   touch overlays. `HexMap.util` has the client's hex maths (dist, neighbors, add).
 - `client/hud.js`: `HexHud`: top bar (stock + net, people: jobs / building / idle, growth only when
@@ -98,8 +96,8 @@ fields in `logic/content.py`). Tests: `tests/` (`python3 -I tools/run_tests.py h
   you grow once, then need a Hut (2 wood) or House. Building takes turns and idle people (Farm 2
   turns x 1 builder, House 2 x 2, University 4 x 3, Monument 5 x 3), and every worker in a job is
   one builder fewer, so the opening is a choice between producing and building. The hall's 25-cap
-  makes a Storage Yard or Granary the next limit. Roads cost nothing but idle people's time, so a
-  realm with spare people links itself up; one with everyone busy doesn't.
+  makes a Storage Yard or Granary the next limit. Territory grows with structures (radius 2, the hall
+  3) or 1 wood per claimed cell, so wood also buys room to expand.
 - Sieges are slow on purpose: a Swordsman does ~2 damage a turn to a 15 hp Town Hall and takes
   ~1 back, so taking a city needs 3+ units or Catapults (3 damage per hit, from range, no reply,
   but towers shoot them).

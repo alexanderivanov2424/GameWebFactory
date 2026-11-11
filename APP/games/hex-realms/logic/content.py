@@ -8,14 +8,13 @@ RESOURCES    stock resources in display order; "people" is separate (population)
 RESOURCE_INFO  {res: (name, icon)} for the client, people included
 structures/<id>.json:
     name, icon (an emoji or short text drawn on the map; placeholder for art), cells [[q, r], ...] (axial offsets, first = anchor),
-    cost {res: n}, hp (0 = can't be attacked; roads), defense (dice it rolls back at attackers),
+    cost {res: n}, hp (0 = can't be attacked), defense (dice it rolls back at attackers),
     jobs (people needed to work), produce {res: n}, perCell {terrain: {res: n}} (per own cell),
     onTerrain {terrain: {res: n}} (by the anchor's terrain, replaces produce), perAdjacent
     {"terrain"|"type"|"home": ..., "gain": {res: n}, "max": n} (per neighbouring forest cell /
     structure of that type / home structure), housing, home (counts as a home), storage (all
     capped resources), store {res: n} (a structure with either is a store of goods: see
-    logistics.py), navigable (part of road networks: roads that touch it are linked through it,
-    roads.py), growth (extra growth per turn), territory (claim radius,
+    logistics.py), growth (extra growth per turn), territory (claim radius,
     default 2), terrain [ids] (default every "build" terrain), coast (a cell must touch water),
     requires (advance id), recruits [unit ids], heals, shoots (dice) + range, trade (market
     rate: give n for 1), score, buildTurns (turns of work to build it, default 1), builders (idle
@@ -57,8 +56,7 @@ TERRAIN = {
     "mountain": {"name": "Mountains", "move": None, "cover": True, "build": False},
     "water": {"name": "Water", "move": None, "cover": False, "build": False},
 }
-ROAD_MOVE = 1  # half steps per road cell
-CATEGORIES = {"roads": "Roads & Defense", "homes": "Homes", "food": "Food", "industry": "Industry", "trade": "Trade",
+CATEGORIES = {"defense": "Defense", "homes": "Homes", "food": "Food", "industry": "Industry", "trade": "Trade",
               "military": "Military", "culture": "Learning & Faith", "city": "City"}  # build menu tabs, in order
 EFFECTS = {"towerDice", "farmFood", "homeHousing", "defendDice", "chapelGold", "attackDice"}
 
@@ -99,7 +97,6 @@ def parse_structure(sid, d):
     s["category"] = d.get("category", "city")
     if s["category"] not in CATEGORIES:
         raise ValueError(f"category must be one of {sorted(CATEGORIES)}")
-    s["navigable"] = d.get("navigable") is True
     s["perCell"] = {t: res_map(d["perCell"], t) for t in d.get("perCell", {}) if t in TERRAIN}
     s["onTerrain"] = {t: res_map(d["onTerrain"], t) for t in d.get("onTerrain", {}) if t in TERRAIN}
     adj = d.get("perAdjacent")
@@ -139,7 +136,6 @@ STRUCTURES = load_json_dir(HERE / "structures", parse_structure, log)
 UNITS = load_json_dir(HERE / "units", parse_unit, log)
 ADVANCES = load_json_dir(HERE / "advances", parse_advance, log)
 TOWN_HALL = "town_hall"
-ROAD = "road"
 
 
 def footprint(stype, at, rot):
