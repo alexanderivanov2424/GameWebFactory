@@ -4,7 +4,8 @@
  * Not included by pages: settings.js loads it once the "Enable Admin Mode" setting (Settings ->
  * Settings) holds a password. It keeps a /ws/admin socket open (server/admin.py), sends that
  * password to be checked on the server, and while it's accepted shows an "Admin view" button
- * below the settings gear. The button opens a dialog with four read-only tabs:
+ * in the top-right row, left of the settings gear (it sets --gwf-top-right-offset on <html> so
+ * the End game button in lobby-ui.js moves left of it). The button opens a dialog with four read-only tabs:
  *   Accounts  every account; click one to see its saved data (never its password)
  *   Feedback  feedback files grouped by game; click one to read it
  *   Sessions  every server session (guest or account), its connections and rooms; click for details
@@ -289,7 +290,7 @@
     button { font: inherit; cursor: pointer; border: none; border-radius: 6px; }
     .icon-btn { background: transparent; color: #444; padding: 6px; line-height: 0; }
     .icon-btn:hover { background: rgba(0, 0, 0, 0.07); }
-    .open-btn { position: fixed; top: 60px; right: 16px; z-index: 2147483000; color: #b00020; }
+    .open-btn { position: fixed; top: 16px; right: 68px; z-index: 2147483000; color: #b00020; }
     .open-btn svg { width: 28px; height: 28px; }
     .backdrop {
       position: fixed; inset: 0; z-index: 2147483001; background: rgba(0, 0, 0, 0.45);
@@ -402,6 +403,9 @@
     draw() {
       const on = state.status === "on";
       this.openBtn.hidden = !on;
+      // Make room in the top-right row: Settings (right 16px), this button (68px), End game after it.
+      if (on) document.documentElement.style.setProperty("--gwf-top-right-offset", "120px");
+      else document.documentElement.style.removeProperty("--gwf-top-right-offset");
       if (!on && !this.backdrop.hidden) this.close();
     }
 

@@ -476,7 +476,7 @@
 
   const ADMIN_STATUS_TEXT = {
     checking: ["hint", "Checking..."],
-    on: ["hint ok", "Admin mode is on. The admin view button is below the settings button."],
+    on: ["hint ok", "Admin mode is on. The admin view button is left of the settings button."],
     wrong: ["error", "Wrong password."],
     offline: ["error", "Couldn't reach the server."],
   };
