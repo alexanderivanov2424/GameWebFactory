@@ -27,5 +27,7 @@
  ],
  "text": "Shoots the nearest enemy unit within 2 after movement.",
  "category": "roads",
- "vision": 5
+ "vision": 5,
+ "buildTurns": 2,
+ "builders": 2
 }

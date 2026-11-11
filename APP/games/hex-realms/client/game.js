@@ -66,10 +66,12 @@
     }
     const key = `${state.gameNumber}:${game.turn}:${game.step}`;
     if (key !== ui.key) { ui.key = key; ui.mode = null; ui.turnStart = Date.now(); }
-    idx = { unitAt: {}, structAt: {} };
+    idx = { unitAt: {}, structAt: {}, siteAt: {} };
     for (const [id, u] of Object.entries(game.units)) idx.unitAt[u.at] = id;
     for (const [id, s] of Object.entries(game.structures)) for (const c of s.cells) idx.structAt[c] = id;
-    if (ui.sel && !(ui.sel.kind === "unit" ? game.units : game.structures)[ui.sel.id]) { ui.sel = null; ui.mode = null; }
+    for (const [id, s] of Object.entries(game.sites || {})) for (const c of s.cells) idx.siteAt[c] = id;
+    const pools = { unit: game.units, structure: game.structures, site: game.sites || {} };
+    if (ui.sel && !pools[ui.sel.kind]?.[ui.sel.id]) { ui.sel = null; ui.mode = null; }
     map.draw(game, state.you, priv);
 
     const flashKey = `${state.gameNumber}:${game.step}`;
@@ -170,18 +172,18 @@
       } else if (!ui.mode) {
         for (const k of c.priv.reach[sel.id] || []) h[k] = isEnemy(c, k) ? "attack" : "reach";
       }
-    } else if (sel?.kind === "structure") {
-      for (const k of c.game.structures[sel.id].cells) h[k] = "sel";
+    } else if (sel?.kind === "structure" || sel?.kind === "site") {
+      for (const k of (sel.kind === "site" ? c.game.sites : c.game.structures)[sel.id].cells) h[k] = "sel";
     } else if (sel?.kind === "unit") h[c.game.units[sel.id].at] = "sel";
     map.setHighlights(h);
   }
 
   function buildOk(c, def, cells) {
     const mine = new Set(), pending = new Set(c.priv.orders.builds.flatMap((b) => b.cells));
-    for (const s of Object.values(c.game.structures)) if (s.owner === c.you) s.cells.forEach((k) => mine.add(k));
+    for (const s of [...Object.values(c.game.structures), ...Object.values(c.game.sites || {})]) if (s.owner === c.you) s.cells.forEach((k) => mine.add(k));
     pending.forEach((k) => mine.add(k));
     const g = c.game;
-    return cells.every((k) => k in g.cells && g.territory[k] === c.you && (def.terrain || []).includes(g.cells[k]) && !idx.structAt[k] && !pending.has(k))
+    return cells.every((k) => k in g.cells && g.territory[k] === c.you && (def.terrain || []).includes(g.cells[k]) && !idx.structAt[k] && !idx.siteAt[k] && !pending.has(k))
       && cells.some((k) => U.neighbors(k).some((n) => mine.has(n)))
       && (!def.coast || cells.some((k) => U.neighbors(k).some((n) => g.cells[n] === "water")));
   }
@@ -244,6 +246,7 @@
   function selectAt(k) {
     if (idx.unitAt[k]) act.select("unit", idx.unitAt[k]);
     else if (idx.structAt[k]) act.select("structure", idx.structAt[k]);
+    else if (idx.siteAt[k]) act.select("site", idx.siteAt[k]);
     else act.select(null);
   }
 

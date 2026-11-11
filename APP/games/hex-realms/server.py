@@ -7,13 +7,15 @@ secret: place structures (multi-cell footprints, turned in 60-degree steps) insi
 territory, train units, order moves and attacks, research advances, trade at a market. When
 everyone has pressed End turn (or the turn timer runs out), all orders resolve together:
 units move one cell per step at the same time and fight with dice wherever they meet. Every
-structure works if it has its workers (people, who need food and housing). Gold, faith and
+structure works if it has its workers (people, who need food and housing). Ordered structures
+become construction sites that take a few turns of work, each turn needing builders: people
+without a job (switch structures off, all at once, or demolish them to free people). Gold, faith and
 science are realm-wide; goods (food, wood, stone, metal) sit in stores (Town Hall, Storage
 Yard, Granary) and producers flagged "road" deliver them along road networks (roads plus
 "navigable" structures); you spend only from Town Halls and the stores linked to them. Lose every Town Hall and you are out. Last
 realm standing wins; otherwise the highest score after the last turn.
 Full rules: logic/match.py (turn order, score), logic/economy.py, logic/combat.py,
-logic/movement.py, logic/orders.py, logic/logistics.py; content in structures/, units/,
+logic/movement.py, logic/orders.py, logic/logistics.py, logic/construction.py; content in structures/, units/,
 advances/ (fields in logic/content.py).
 
 Player options:  none (colors by seat)
@@ -21,7 +23,7 @@ Settings:        mapSize (small/normal/large/huge), turns (turn limit), turnSeco
                  fog (on/off), bots (computer players added to the seats; logic/bots.py),
                  seed (0 = random map)
 State: the public part has no map; each member's private state has "view" (cells, dim, structures,
-units, territory, events as they see them; spectators see everything).
+units, construction sites, territory, events as they see them; spectators see everything).
 Game messages (all only while planning; any order un-readies you; never use a "type" key,
 the lobby envelope owns it):
     {"action": "build", "kind": stype, "at": "q,r", "rot": 0-5}
@@ -34,6 +36,9 @@ the lobby envelope owns it):
     {"action": "cancel", "order": oid}                 (a build / recruit / research order)
     {"action": "trade", "give": res, "get": res}
     {"action": "toggle", "structure": sid}
+    {"action": "staff", "on": true|false}              (switch every structure with jobs on / off)
+    {"action": "demolish", "structure": sid}           (a structure, no refund, not a Town Hall; or a
+                                                        construction site id, cost refunded)
     {"action": "disband", "unit": uid}
     {"action": "done", "done": true|false}             (End turn / take it back)
 
@@ -67,7 +72,8 @@ class Game(LobbyGame):
         "seed": Int("Map seed", default=0, low=0, high=999999, hint="0 = a new random map"),
     }
     ACTIONS = {name: name for name in
-               ("build", "recruit", "move", "shoot", "hold", "found", "research", "cancel", "trade", "toggle", "disband", "done")}
+               ("build", "recruit", "move", "shoot", "hold", "found", "research", "cancel", "trade", "toggle", "staff", "demolish",
+                "disband", "done")}
 
     def __init__(self, room):
         super().__init__(room)
@@ -149,6 +155,12 @@ class Game(LobbyGame):
 
     def toggle(self, member, data):
         self.order(member, "toggle", text_id(data, "structure"))
+
+    def staff(self, member, data):
+        self.order(member, "staff", data.get("on") is True)
+
+    def demolish(self, member, data):
+        self.order(member, "demolish", text_id(data, "structure"))
 
     def disband(self, member, data):
         self.order(member, "disband", text_id(data, "unit"))

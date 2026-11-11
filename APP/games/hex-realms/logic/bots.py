@@ -9,7 +9,9 @@ A simple strategy, in this order each turn:
      explored site within CITY_RANGE that it knows is free (about CITY_SPACING + 2 from its own
      cities), or wander.
   2. Research the cheapest advance it can afford.
-  3. Build by need (at most MAX_BUILDS a turn): homes when nearly full, farms when food is short,
+  3. Builders: if a construction site gets no builders, switch off its newest working structure
+     that doesn't make food (once nothing is waiting, switch everything back on). Then build by
+     need (at most MAX_BUILDS a turn, only with idle people left over for builders): homes when nearly full, farms when food is short,
      a lumbermill and a mine per city, storage when goods are near the cap, then Barracks,
      Market, Chapel, College, Smithy, Towers, more farms. Producers and stores go next to its
      roads; if there's no such site, it lays a road (from the Town Hall or its roads) towards
@@ -27,9 +29,9 @@ from collections import Counter
 from gamekit import LobbyError
 from gamekit.hexes import disk, dist, neighbors, parse
 
-from . import logistics, movement, orders, vision
+from . import construction, economy, logistics, movement, orders, vision
 from .content import ADVANCES, ROAD, STRUCTURES, TOWN_HALL, UNITS, footprint
-from .economy import report
+from .economy import report, staffing
 
 MAX_BUILDS = 3
 MAX_ROADS = 2
@@ -54,6 +56,7 @@ def plan(m, pid):
     bot = Bot(m, pid)
     bot.settlers()
     bot.research()
+    bot.builders()
     bot.build()
     bot.recruit()
     bot.army()
@@ -65,6 +68,7 @@ class Bot:
         self.m, self.pid = m, pid
         self.rng = random.Random(f"{m.settings.get('seed')}-{pid}-{m.turn}")
         self.mine = [s for s in m.structures.values() if s["owner"] == pid]
+        self.sites = [x for x in m.sites.values() if x["owner"] == pid]
         self.halls = [s for s in self.mine if s["type"] == TOWN_HALL]
         self.hall_cells = [c for s in self.halls for c in s["cells"]]
         self.units = [u for u in m.units.values() if u["owner"] == pid]
@@ -133,7 +137,7 @@ class Bot:
     def wants(self):
         m, pid = self.m, self.pid
         rep, stock = report(m, pid), logistics.stock(m, pid)
-        have = Counter(s["type"] for s in self.mine)
+        have = Counter(s["type"] for s in self.mine + self.sites)
         adv = set(m.players[pid]["advances"])
         cities = len(self.halls)
         full = lambda r: rep["caps"].get(r, 0) - stock.get(r, 0) <= 4
@@ -163,38 +167,54 @@ class Bot:
             out.append("farm")
         return out, rep["idle"]
 
+    def builders(self):
+        m, pid = self.m, self.pid
+        waiting = [x for x in self.sites if x["id"] not in construction.forecast(m, pid)["works"]
+                   and not construction.finished(x)]
+        if not waiting:
+            if any(not s["active"] for s in self.mine):
+                try_act(m, pid, "staff", True)
+            return
+        working = staffing(m, pid)[0]
+        jobs = [s for s in working if STRUCTURES[s["type"]]["jobs"] and not economy.output_keys(s["type"]) & {"food"}]
+        if jobs:
+            try_act(m, pid, "toggle", max(jobs, key=lambda s: s["n"])["id"])
+
     def build(self):
         if not self.halls:
             return
         wants, idle = self.wants()
+        idle -= sum(STRUCTURES[x["type"]]["builders"] for x in self.sites if not construction.finished(x))
         built = roads = 0
         for stype in wants:
             d = STRUCTURES[stype]
-            if built >= MAX_BUILDS:
+            if built >= MAX_BUILDS or idle < 1:
                 break
-            if d["jobs"] > idle:
+            if d["jobs"] + d["builders"] > idle:
                 continue
             site = self.site(stype)
             if site is None:
                 if d["road"] and roads < MAX_ROADS and self.lay_road(stype):
                     roads += 1
+                    idle -= STRUCTURES[ROAD]["builders"]
                 continue
             if try_act(self.m, self.pid, "build", stype, site[0], site[1]):
                 built += 1
-                idle -= d["jobs"]
+                idle -= d["jobs"] + d["builders"]
 
     def taken(self):
         """Cells of pid's structures and pending builds, and the ones that count as its roads."""
         m = self.m
         pending = [b for b in m.orders[self.pid]["builds"]]
-        cells = {c for s in self.mine for c in s["cells"]} | {c for b in pending for c in b["cells"]}
+        cells = {c for s in self.mine + self.sites for c in s["cells"]} | {c for b in pending for c in b["cells"]}
         roads = {c for s in self.mine if s["type"] == ROAD or STRUCTURES[s["type"]]["navigable"] for c in s["cells"]}
-        roads |= {c for b in pending if b["type"] == ROAD for c in b["cells"]}
+        roads |= {c for b in pending + self.sites if b["type"] == ROAD for c in b["cells"]}
         return cells, roads, {c for b in pending for c in b["cells"]}
 
     def free_cells(self):
         m = self.m
-        return sorted(k for k, owner in m.territory.items() if owner == self.pid and k not in m.cell_structure)
+        return sorted(k for k, owner in m.territory.items() if owner == self.pid and k not in m.cell_structure
+                      and k not in m.cell_site)
 
     def site(self, stype):
         """(at, rot) of the best place for stype, or None."""

@@ -1,10 +1,13 @@
 /*
  * Hex Realms: the HUD panels around the map, all built from the state (no rules here).
  *
- *   HexHud.topbar(el, ctx)      turn, countdown (#hr-timer, ticked by game.js), resources (+net), people, End turn
+ *   HexHud.topbar(el, ctx)      turn, countdown (#hr-timer, ticked by game.js), resources (+net), people and
+ *                               builders, Jobs off / Jobs on (every structure with workers), End turn
  *   HexHud.players(el, ctx)     colour, name, score, done tick, out, public resource snapshot
- *   HexHud.selection(el, ctx)   the selected unit / structure: stats, orders, Recruit/Hold/Shoot/Found/Disband
- *   HexHud.orders(el, ctx)      your pending builds / recruits / research, each with a cancel button
+ *   HexHud.selection(el, ctx)   the selected unit / structure / construction site: stats, orders,
+ *                               Recruit/Hold/Shoot/Found/Disband/Switch off/Demolish
+ *   HexHud.orders(el, ctx)      your pending builds / recruits / research, each with a cancel button, and your
+ *                               construction sites (progress, whether builders work there this turn, demolish)
  *   HexHud.trade(el, ctx)       give/get selects (only when the market rate is > 0)
  *   HexHud.build(el, ctx)       one button per buildable structure (starts build mode)
  *   HexHud.fmt                  small text helpers shared with panels.js (cost, nameSpan, resource icons);
@@ -53,8 +56,11 @@
       game.turnSeconds > 0 ? el("span", { id: "hr-timer", className: "hr-timer" }) : null,
       el("span", { className: "hr-chips" }, chips),
       el("span", { className: "hr-people", title: `Population ${priv.pop}, housing ${rep.housing}, workers in jobs ${rep.workers}` },
-        el("span", { className: "hr-ricon" }, resIcon("people")), " ", el("b", {}, String(priv.pop)), ` (idle ${rep.idle}) / housing ${rep.housing}`,
+        el("span", { className: "hr-ricon" }, resIcon("people")), " ", el("b", {}, String(priv.pop)), ` (idle ${rep.idle}`,
+        priv.building?.builders ? `, ${priv.building.builders} building` : "", `) / housing ${rep.housing}`,
         rep.growth ? ` growth +${rep.growth}` : ""),
+      btn("Jobs off", () => ctx.act.send({ action: "staff", on: false }), { cls: "small", title: "Switch off every structure with workers: they become idle and build your construction sites." }),
+      btn("Jobs on", () => ctx.act.send({ action: "staff", on: true }), { cls: "small", title: "Switch every structure with workers back on." }),
       el("span", { className: "spacer" }), end);
   }
 
@@ -104,6 +110,7 @@
       }
       return fill(box, ...kids);
     }
+    if (sel.kind === "site") return site(box, ctx);
     const s = game.structures[sel.id], def = s && content.structures[s.type];
     if (!def) return fill(box);
     const own = s.owner === ctx.you;
@@ -134,9 +141,28 @@
           el("span", { className: "small" }, costText(ud.cost)),
           el("div", { className: "muted small" }, `atk ${ud.attack} def ${ud.defense} hp ${ud.hp} move ${ud.move}${ud.range ? ` range ${ud.range}` : ""}${why ? ` — ${why}` : ""}`)));
       }
-      if (def.jobs > 0) kids.push(btn(s.active === false ? "Switch on" : "Switch off", () => act.send({ action: "toggle", structure: sel.id }), { title: "Switched-off structures don't use workers." }));
+      const row = el("div", { className: "hr-btnrow" },
+        def.jobs > 0 ? btn(s.active === false ? "Switch on" : "Switch off", () => act.send({ action: "toggle", structure: sel.id }), { title: "Switched-off structures don't use workers." }) : null,
+        s.type !== "town_hall" ? btn("Demolish", () => { if (confirm(`Demolish this ${def.name}? No refund, and goods stored in it are lost.`)) act.send({ action: "demolish", structure: sel.id }); }, { cls: "danger", title: "Remove it now (no refund)." }) : null);
+      kids.push(row);
     }
     fill(box, ...kids);
+  }
+
+  function siteText(ctx, cid, x) {
+    const works = (ctx.priv.building?.works || []).includes(cid);
+    return `${x.done}/${x.turns} turns, ${x.builders} builder${x.builders > 1 ? "s" : ""} a turn — ${x.done >= x.turns ? "finishing (blocked by an enemy unit)" : works ? "building this turn" : "waiting for idle people"}`;
+  }
+
+  function site(box, ctx) {
+    const { game, content, ui, act } = ctx;
+    const x = game.sites[ui.sel.id], def = x && content.structures[x.type];
+    if (!def) return fill(box);
+    const own = x.owner === ctx.you;
+    fill(box, el("h3", {}, `${def.name} (under construction) `, nameSpan(game, x.owner)),
+      el("p", { className: "small" }, own ? siteText(ctx, ui.sel.id, x) : `${x.done}/${x.turns} turns of work done.`),
+      own ? el("p", { className: "muted small" }, "Each turn of work needs its builders: people without a job, given to the oldest site first. Switch structures off to free them.") : null,
+      own ? btn("Demolish", () => act.send({ action: "demolish", structure: ui.sel.id }), { cls: "danger", title: "Take the site down and get its cost back." }) : null);
   }
 
   function orders(box, ctx) {
@@ -147,9 +173,14 @@
       ...o.recruits.map((r) => [r.id, `Recruit ${content.units[r.type]?.name || r.type} at ${content.structures[game.structures[r.at]?.type]?.name || "?"}`, r.cost]),
       ...o.research.map((r) => [r.id, `Research ${content.advances[r.advance]?.name || r.advance}`, r.cost]),
     ];
+    const sites = Object.entries(game.sites || {}).filter(([, x]) => x.owner === ctx.you);
     fill(box, el("h3", {}, "Orders"), rows.length ? rows.map(([id, text, cost]) =>
       el("div", { className: "row hr-order" }, el("span", { className: "small" }, text, el("span", { className: "muted" }, ` (${costText(cost)})`)),
-        el("span", { className: "spacer" }), btn("✕", () => act.send({ action: "cancel", order: id }), { cls: "small", title: "Cancel and refund" }))) : el("p", { className: "muted small" }, "Nothing queued."));
+        el("span", { className: "spacer" }), btn("✕", () => act.send({ action: "cancel", order: id }), { cls: "small", title: "Cancel and refund" }))) : el("p", { className: "muted small" }, "Nothing queued."),
+      sites.length ? el("h3", {}, "Construction") : null,
+      sites.map(([cid, x]) => el("div", { className: "row hr-order" },
+        el("span", { className: "small", style: "cursor:pointer", onclick: () => act.select("site", cid) }, content.structures[x.type]?.name || x.type, el("span", { className: "muted" }, ` ${siteText(ctx, cid, x)}`)),
+        el("span", { className: "spacer" }), btn("✕", () => act.send({ action: "demolish", structure: cid }), { cls: "small", title: "Demolish the site and get its cost back" }))));
   }
 
   function trade(box, ctx) {
@@ -178,7 +209,7 @@
       let why = "";
       if (d.requires && !mine.has(d.requires)) why = `Needs ${content.advances[d.requires]?.name || d.requires}`;
       else if (!canPay(ctx, d.cost)) why = "Can't afford";
-      const info = [d.text, d.jobs ? `Jobs: ${d.jobs}` : "", Object.keys(d.produce || {}).length ? `Produces: ${costText(d.produce)}` : "", d.housing ? `Housing: ${d.housing}` : "",
+      const info = [d.text, `Build: ${d.buildTurns} turn${d.buildTurns > 1 ? "s" : ""}, ${d.builders} builder${d.builders > 1 ? "s" : ""} each turn`, d.jobs ? `Jobs: ${d.jobs}` : "", Object.keys(d.produce || {}).length ? `Produces: ${costText(d.produce)}` : "", d.housing ? `Housing: ${d.housing}` : "",
         `Terrain: ${(d.terrain || []).map((t) => content.terrain[t]?.name || t).join(", ")}`, d.coast ? "Must touch water." : "", d.road ? "Needs a road to deliver its goods." : "", d.navigable ? "Navigable (extends roads)." : "", `${d.cells.length} cell${d.cells.length > 1 ? "s" : ""}`]
         .filter(Boolean).join("\n");
       const active = ui.mode?.type === "build" && ui.mode.kind === id;
@@ -188,7 +219,7 @@
     });
     fill(box, tabs,
       ui.buildCat ? el("div", { className: "hr-buildgrid" }, items) : el("p", { className: "muted small" }, "Pick a category, then a structure."),
-      el("p", { className: "muted small" }, "Click the map to place it. R or right-click turns it, Esc cancels. It must touch your structures and sit in your territory. Producers marked 'needs a road' deliver goods only along roads (or navigable structures) to a store; you spend only from Town Halls and stores linked to them."));
+      el("p", { className: "muted small" }, "Click the map to place it. R or right-click turns it, Esc cancels. It must touch your structures (or sites) and sit in your territory. It becomes a construction site that idle people build over a few turns. Producers marked 'needs a road' deliver goods only along roads (or navigable structures) to a store; you spend only from Town Halls and stores linked to them."));
   }
 
   window.HexHud = { topbar, players, selection, orders, trade, build, fmt: { costText, canPay, nameSpan, btn, cap, setResources, resIcon, resName } };

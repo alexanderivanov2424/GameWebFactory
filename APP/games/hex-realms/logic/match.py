@@ -11,8 +11,9 @@
 
 Turn resolution, in order: research; ranged shots (positions before anyone moves); movement
 step by step with battles (movement.py); towers shoot; settlers found cities; builds (two
-players ordering the same cell both fail and get refunds); recruits appear on or next to their
-structure; production, deliveries along roads, eating, wages and growth (economy.py, logistics.py); healing (+1 hp for units that didn't
+players ordering the same cell both fail and get refunds; the rest become construction sites); recruits appear on or next to their
+structure; production, deliveries along roads, eating, wages and growth (economy.py, logistics.py);
+construction by the people who were idle this turn (construction.py); healing (+1 hp for units that didn't
 fight, full on or next to an own Barracks); players without a Town Hall are out. The game ends
 when one player is left (if it started with 2 or more) or after the last turn: highest score wins.
 Solo games (1 player) are a sandbox: they end at the turn limit with your score, or when you lose
@@ -24,7 +25,8 @@ Monument 10) + gold // 10.
 
 State: cells {key: terrain}; structures {sid: {"id", "n", "type", "owner", "at", "rot", "cells",
 "hp", "active", "stock" (goods in a store), "held" (goods a producer waits to deliver)}} with cell_structure {key: sid}; units {uid: {"id", "n", "type", "owner", "at",
-"hp"}} with unit_at {key: uid}; players {pid: {"res" (gold/faith/science only: goods live in
+"hp"}} with unit_at {key: uid}; sites {cid: {"id", "n", "type", "owner", "at", "rot", "cells", "cost",
+"done" (turns of work so far)}} with cell_site {key: cid} (construction.py); players {pid: {"res" (gold/faith/science only: goods live in
 stores, see logistics.py), "pop", "advances", "done", "alive"}};
 orders {pid: {"builds", "recruits", "research": [...], "moves": {uid: [keys]}, "shots": {uid: key},
 "holds": [uid], "found": {uid: rot}}}; events (the last resolution, for the client to replay).
@@ -35,7 +37,7 @@ import random
 from gamekit import LobbyError
 from gamekit.hexes import neighbors
 
-from . import bots, combat, logistics, movement, orders, vision
+from . import bots, combat, construction, logistics, movement, orders, vision
 from .content import ADVANCES, CATEGORIES, RESOURCE_INFO, RESOURCES, STRUCTURES, TERRAIN, TOWN_HALL, UNITS, footprint
 from .economy import end_of_turn, report, staffing, territory
 from .mapgen import generate
@@ -47,7 +49,8 @@ START_UNIT = "settlers"
 START_POP = 3
 SIZES = {"small": -3, "normal": 0, "large": 4, "huge": 8}
 ACTS = {name: getattr(orders, name) for name in
-        ("build", "recruit", "move", "shoot", "hold", "found", "research", "cancel", "trade", "toggle", "disband")}
+        ("build", "recruit", "move", "shoot", "hold", "found", "research", "cancel", "trade", "toggle", "staff",
+         "demolish", "disband")}
 
 
 def map_radius(players, size):
@@ -72,6 +75,7 @@ class Match:
         self.rng.shuffle(starts)
         self.counter = 0
         self.structures, self.cell_structure, self.units, self.unit_at = {}, {}, {}, {}
+        self.sites, self.cell_site = {}, {}
         self.players = {pid: {"res": dict(START_RES), "pop": START_POP, "advances": [], "done": False, "alive": True,
                               "color": COLORS[i % len(COLORS)], "startGoods": dict(START_GOODS)}
                         for i, pid in enumerate(self.seats)}
@@ -160,7 +164,7 @@ class Match:
             raise LobbyError("You're not playing.")
         ACTS[name](self, pid, *args)
         self.players[pid]["done"] = False
-        if name == "disband":
+        if name in ("disband", "demolish"):
             self.refresh()
 
     def set_done(self, pid, done):
@@ -192,8 +196,11 @@ class Match:
         self._builds(ev)
         self._recruits(ev)
         self.refresh()
+        idle = {pid: staffing(self, pid)[1] for pid in self.alive()}  # this turn's builders
         for pid in self.alive():
             end_of_turn(self, pid, ev)
+        for pid in self.alive():
+            construction.progress(self, pid, idle[pid], ev)
         self._heal()
         self._eliminate(ev)
         self.refresh()
@@ -242,8 +249,8 @@ class Match:
                     orders.refund(self, pid, b["cost"])
                     ev.append({"t": "failed", "owner": pid, "what": b["type"], "at": b["at"], "why": problem})
                 else:
-                    self.add_structure(pid, b["type"], b["at"], b["rot"])
-                    ev.append({"t": "built", "owner": pid, "type": b["type"], "at": b["at"]})
+                    construction.start(self, pid, b)
+                    ev.append({"t": "site", "owner": pid, "type": b["type"], "at": b["at"]})
 
     def spawn_cell(self, pid, s, utype):
         naval = UNITS[utype]["naval"]
@@ -293,6 +300,8 @@ class Match:
             self.remove_unit(uid)
         for sid in [s for s, x in self.structures.items() if x["owner"] == pid]:
             self.remove_structure(sid)
+        for cid in [c for c, x in self.sites.items() if x["owner"] == pid]:
+            construction.remove(self, cid)
         self.orders[pid] = empty_orders()
 
     def _check_end(self):
@@ -367,7 +376,8 @@ class Match:
 
     def private(self, pid):
         """{"view": the map as pid sees it} for everyone (pid None = a spectator: the whole map),
-        plus pid's stock, orders, forecast and planning help while they're still playing."""
+        plus pid's stock, orders, forecast (economy report; "building" = construction.forecast) and
+        planning help while they're still playing."""
         staffed = {s["id"] for x in self.alive() for s in staffing(self, x)[0]}
         out = {"view": vision.view(self, pid, staffed)}
         if pid not in self.players or not self.players[pid]["alive"] or self.result is not None:
@@ -382,6 +392,7 @@ class Match:
             "res": logistics.stock(self, pid), "pop": p["pop"], "done": p["done"],
             "stores": self.stores(pid), "held": {s["id"]: s["held"] for s in self.structures.values()
                                                  if s["owner"] == pid and s["held"]}, "orders": self.orders[pid], "report": report(self, pid),
+            "building": construction.forecast(self, pid),
             "reach": {uid: sorted(movement.reach(self, uid)) for uid, u in self.units.items() if u["owner"] == pid},
             "recruit": recruit,
             "found": {uid: [r for r in range(6) if not orders.found_problem(self, pid, u, r)]

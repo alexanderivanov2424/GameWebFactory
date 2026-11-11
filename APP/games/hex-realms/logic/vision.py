@@ -9,7 +9,8 @@ With the "fog" setting off, or for spectators and players who are out, everythin
     update(m)                 recompute m.visible / m.explored / m.memory for every player
     sees(m, pid, k)           pid sees cell k right now
     known_at(m, pid)          {key: (owner, type)} for the structures pid knows of (own + remembered)
-    view(m, pid, staffed)     the map part of the state for pid (pid None = everything)
+    view(m, pid, staffed)     the map part of the state for pid (pid None = everything); construction
+                              sites ("sites") show to their owner, and to others only while seen
 
 Planning uses only what the player knows (movement.reach, orders.*); resolution uses the truth,
 so a unit that walks into a hidden enemy fights it, and one that meets unknown rough terrain
@@ -89,10 +90,17 @@ def event_cells(e):
     return [c for c in cells if c]
 
 
+def _sites(m, keep):
+    return {cid: {"type": x["type"], "owner": x["owner"], "at": x["at"], "cells": x["cells"], "done": x["done"],
+                  "turns": STRUCTURES[x["type"]]["buildTurns"], "builders": STRUCTURES[x["type"]]["builders"]}
+            for cid, x in m.sites.items() if keep(x)}
+
+
 def view(m, pid, staffed):
     structures = {sid: snapshot(m, s, sid in staffed) for sid, s in m.structures.items()}
     if sees_all(m, pid):
         return {"cells": m.cells, "dim": [], "structures": structures, "units": _units(m, lambda u: True),
+                "sites": _sites(m, lambda x: True),
                 "territory": m.territory, "events": {str(i): e for i, e in enumerate(m.events)}}
     explored, vis = m.explored[pid], m.visible[pid]
     before = m.vis_before.get(pid, set())
@@ -106,6 +114,7 @@ def view(m, pid, staffed):
         "dim": sorted(explored - vis),
         "structures": shown,
         "units": _units(m, lambda u: u["owner"] == pid or u["at"] in vis),
+        "sites": _sites(m, lambda x: x["owner"] == pid or any(c in vis for c in x["cells"])),
         "territory": {k: p for k, p in m.territory.items() if k in explored},
         "events": {str(i): e for i, e in enumerate(events)},
     }

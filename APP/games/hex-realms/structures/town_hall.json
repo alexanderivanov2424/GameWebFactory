@@ -21,12 +21,8 @@
  "storage": 25,
  "territory": 3,
  "produce": {
-  "gold": 3,
-  "food": 3,
-  "wood": 1,
-  "stone": 1,
-  "science": 1,
-  "faith": 1
+  "gold": 1,
+  "food": 2
  },
  "recruits": [
   "militia",

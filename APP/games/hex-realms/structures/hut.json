@@ -13,5 +13,7 @@
  "housing": 2,
  "home": true,
  "text": "Housing for 2 people.",
- "category": "homes"
+ "category": "homes",
+ "buildTurns": 1,
+ "builders": 1
 }

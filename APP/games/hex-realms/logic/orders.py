@@ -14,6 +14,9 @@ so a player can never order more than they have. Orders are private until the tu
     cancel(m, pid, oid)             undo a build / recruit / research order (refund)
     trade(m, pid, give, get)        market: give `rate` of one resource for 1 of another, at once
     toggle(m, pid, sid)             switch a structure with jobs off/on (frees its workers)
+    staff(m, pid, on)               switch every structure with jobs off (on=False) or on at once
+    demolish(m, pid, sid)           at once: a construction site (cost refunded) or a structure (no
+                                    refund, its goods are lost, recruits there cancelled); never a Town Hall
     disband(m, pid, uid)            remove one of your units at once (its people come home)
 """
 
@@ -21,7 +24,7 @@ from gamekit import LobbyError
 from gamekit.hexes import dist, neighbors
 
 from .content import ADVANCES, STRUCTURES, TERRAIN, TOWN_HALL, UNITS, footprint
-from . import logistics, vision
+from . import construction, logistics, vision
 from .economy import report
 from .movement import path
 
@@ -70,7 +73,7 @@ def site_problem(m, pid, stype, cells, pending=(), seen=None):
             return "That doesn't fit on the map."
         if m.cells[c] not in d["terrain"]:
             return f"{d['name']} can't be built on {TERRAIN[m.cells[c]]['name'].lower()}."
-        if c in m.cell_structure or c in pending:
+        if c in m.cell_structure or c in m.cell_site or c in pending:
             return "Something is already built there."
         occ = m.unit_at.get(c)
         if occ is not None and m.units[occ]["owner"] != pid and (seen is None or c in seen):
@@ -97,8 +100,9 @@ def build(m, pid, stype, at, rot):
     if any(m.territory.get(c) != pid for c in cells):
         raise LobbyError("Build inside your territory.")
     mine = {c for c, sid in m.cell_structure.items() if m.structures[sid]["owner"] == pid} | pending
+    mine |= {c for c, cid in m.cell_site.items() if m.sites[cid]["owner"] == pid}
     if not any(n in mine for c in cells for n in neighbors(c)):
-        raise LobbyError("It must touch one of your structures or roads.")
+        raise LobbyError("It must touch one of your structures, roads or sites.")
     pay(m, pid, d["cost"])
     o["builds"].append({"id": m.new_id("o"), "type": stype, "at": at, "rot": rot % 6, "cells": cells, "cost": dict(d["cost"])})
 
@@ -241,6 +245,30 @@ def toggle(m, pid, sid):
     if not STRUCTURES[s["type"]]["jobs"]:
         raise LobbyError("That structure has no workers to send home.")
     s["active"] = not s["active"]
+
+
+def staff(m, pid, on):
+    own = [s for s in m.structures.values() if s["owner"] == pid and STRUCTURES[s["type"]]["jobs"]]
+    if not own:
+        raise LobbyError("You have no structures with workers.")
+    for s in own:
+        s["active"] = bool(on)
+
+
+def demolish(m, pid, sid):
+    site = m.sites.get(sid)
+    if site is not None:
+        if site["owner"] != pid:
+            raise LobbyError("That's not your construction site.")
+        construction.remove(m, sid)
+        refund(m, pid, site["cost"])
+        return
+    s = own_structure(m, pid, sid)
+    if s["type"] == TOWN_HALL:
+        raise LobbyError("A Town Hall can't be demolished.")
+    for r in [r for r in m.orders[pid]["recruits"] if r["at"] == sid]:
+        cancel(m, pid, r["id"])
+    m.remove_structure(sid)
 
 
 def disband(m, pid, uid):

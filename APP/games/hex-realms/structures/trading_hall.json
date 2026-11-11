@@ -28,5 +28,7 @@
  "requires": "trade",
  "text": "Lets you trade 2:1. Navigable: structures touching it are on its roads.",
  "navigable": true,
- "category": "trade"
+ "category": "trade",
+ "buildTurns": 4,
+ "builders": 2
 }

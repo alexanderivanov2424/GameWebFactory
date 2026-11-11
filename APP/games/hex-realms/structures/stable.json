@@ -24,5 +24,7 @@
   "plains"
  ],
  "text": "Trains knights.",
- "category": "military"
+ "category": "military",
+ "buildTurns": 3,
+ "builders": 2
 }

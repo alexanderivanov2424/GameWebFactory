@@ -7,6 +7,7 @@ Modules:
     combat.py    dice battles, ranged shots, sieges of structures, tower fire
     economy.py   territory, workers, production, upkeep, growth
     logistics.py goods in stores, road networks (roads + navigable structures), spending, deliveries
+    construction.py  construction sites: build turns and builders (idle people), finishing structures
     vision.py    fog of war: what each player sees, has explored and remembers; their map view
     bots.py      computer players: plan a turn through the same orders as people (fog applies)
     mapgen.py    the random hex map and fair starting spots

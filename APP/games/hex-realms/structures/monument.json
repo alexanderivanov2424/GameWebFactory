@@ -30,5 +30,7 @@
  "score": 10,
  "hp": 10,
  "text": "+10 score.",
- "category": "culture"
+ "category": "culture",
+ "buildTurns": 5,
+ "builders": 3
 }

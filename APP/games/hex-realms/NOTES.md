@@ -34,6 +34,12 @@ fields in `logic/content.py`). Tests: `tests/` (`python3 -I tools/run_tests.py h
 - **A free first city**: everyone starts with Settlers; the starting goods wait in
   `players[pid]["startGoods"]` until the first Town Hall. Players are out only with no Town
   Hall *and* no Settlers; a realm without a hall skips eating and growth.
+- **Construction by idle people** (`logic/construction.py`): a resolved build order becomes a site
+  (`m.sites`, cells in `m.cell_site`), kept apart from `m.structures` so nothing else has to skip
+  unfinished buildings. Each turn of work (`buildTurns`) needs `builders` people without a job,
+  counted before production and spent after it, oldest site first; jobs are filled first, so
+  players free builders with Switch off / Jobs off (`staff`) / Demolish. Sites show in `view.sites`
+  (own always, others' only while seen; not remembered under fog).
 - **A turn timer**: `server.py` schedules a timeout per turn (checked against the turn number).
 - **Bots in the seats** (the user asked for them): the `bots` setting adds seats `b1`... to the
   `Match` (not lobby members). `logic/bots.py` plans each bot's turn as the turn starts
@@ -50,6 +56,8 @@ fields in `logic/content.py`). Tests: `tests/` (`python3 -I tools/run_tests.py h
   founding rotations).
 - `logic/orders.py`: one function per order; `site_problem` / `recruit_problem` /
   `found_problem` are shared with resolution (re-checked then) and the private state.
+- `logic/construction.py`: `start` / `progress` (resolution), `plan` / `forecast` (who builds what this
+  turn: `private.building`), `remove` (demolish).
 - `logic/bots.py`: `plan(m, pid)`: the bot strategy (header lists it; constants at the top).
 - `logic/vision.py`: `update` (after every change via `Match.refresh`), `known_at`, `view`.
 - `logic/movement.py`, `logic/combat.py`, `logic/economy.py`, `logic/logistics.py`, `logic/mapgen.py`,
@@ -71,10 +79,13 @@ fields in `logic/content.py`). Tests: `tests/` (`python3 -I tools/run_tests.py h
 
 ## Balance notes
 - Map radius = 9 + 3 per realm (bots count) + map size (small -3, large +4, huge +8), 2 less solo.
-- Bot-only test games (scratch, 80 turns): bots reach 2-3 cities, ~12 units, fight and siege from
+- Bot-only test games (scratch, 80 turns, before build times and the weaker Town Hall): bots reach 2-3 cities, ~12 units, fight and siege from
   turn ~20 but rarely take a city; a turn with 5 bots takes under 0.2 s.
-- Start: 3 people, housing 4, and the goods in the Town Hall (25 of each at most); the hall
-  alone nets +1 food, so you grow once, then need a Hut (2 wood) or House. Every early producer
+- Start: 3 people, housing 4, and the goods in the Town Hall (25 of each at most); the hall makes
+  only 1 gold and 2 food (no wood, stone, science or faith: the early game is slow on purpose), so
+  you grow once, then need a Hut (2 wood) or House. Building takes turns and idle people (Farm 2
+  turns x 1 builder, House 2 x 2, University 4 x 3, Monument 5 x 3), and every worker in a job is
+  one builder fewer, so the opening is a choice between producing and building. Every early producer
   also needs a road (1 wood per cell) to the hall, and the hall's 25-cap makes a Storage Yard or
   Granary on the network the next limit. Three starting people can staff only three of farm / lumbermill /
   mine, which is the opening choice.
@@ -102,6 +113,8 @@ fields in `logic/content.py`). Tests: `tests/` (`python3 -I tools/run_tests.py h
   yours overwrites it (the message silently does nothing). Build/recruit say `kind`.
 - Unit ids sort as strings in `movement.resolve` ("u10" < "u9"): deterministic, but not by age;
   use the `n` field when age matters (desertion, tower targets).
+- A new kind of thing on the map that takes cells must also be checked in `orders.site_problem`
+  (sites are: `m.cell_site`), the bots' `taken` / `free_cells`, and the client's `buildOk`.
 - A player can be knocked out mid-resolution; loops over players use `self.alive()` again after
   each stage, and `remove_unit` also clears that unit's orders.
 

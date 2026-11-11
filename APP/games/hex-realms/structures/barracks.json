@@ -23,5 +23,7 @@
  ],
  "heals": true,
  "text": "Trains infantry. Units on or next to it heal fully.",
- "category": "military"
+ "category": "military",
+ "buildTurns": 2,
+ "builders": 2
 }

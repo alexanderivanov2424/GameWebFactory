@@ -21,5 +21,7 @@
  ],
  "text": "Carries goods: producers on a road network deliver to the stores on it. Units move twice as far on roads.",
  "category": "roads",
- "vision": 2
+ "vision": 2,
+ "buildTurns": 1,
+ "builders": 1
 }

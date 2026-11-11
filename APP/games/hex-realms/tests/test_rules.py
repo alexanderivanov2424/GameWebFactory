@@ -30,7 +30,7 @@ class StartTests(unittest.TestCase):
         m.act("p1", "found", s, m.private("p1")["found"][s][0])
         end_turn(m)
         self.assertTrue(m.players["p2"]["alive"])  # no city yet, but settlers: still in
-        self.assertEqual(stock(m, "p1")["wood"], h.match_mod.START_GOODS["wood"] + 1)  # + the hall's first turn
+        self.assertEqual(stock(m, "p1")["wood"], h.match_mod.START_GOODS["wood"])
 
     def test_turn_resolves_when_everyone_is_done(self):
         m = blank()
@@ -212,9 +212,9 @@ class LogisticsTests(unittest.TestCase):
         self.assertGreater(made, 0)
         self.assertEqual(mill["held"], {})
         self.assertEqual(economy.report(self.m, "p1")["unusable"]["wood"], made)
-        self.assertEqual(stock(self.m, "p1")["wood"], wood + 1)  # only the hall's own wood
+        self.assertEqual(stock(self.m, "p1")["wood"], wood)  # the hall makes no wood
         self.roads(*[f"{q},-1" for q in range(1, 10)])  # from the hall's 1,0 to the yard's 9,0
-        self.assertEqual(stock(self.m, "p1")["wood"], wood + 1 + made)
+        self.assertEqual(stock(self.m, "p1")["wood"], wood + made)
 
     def test_spending_uses_linked_stores_too(self):
         self.m.structures[self.hall]["stock"]["wood"] = 0

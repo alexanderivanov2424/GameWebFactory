@@ -30,5 +30,7 @@
  },
  "requires": "academics",
  "score": 2,
- "category": "culture"
+ "category": "culture",
+ "buildTurns": 4,
+ "builders": 3
 }

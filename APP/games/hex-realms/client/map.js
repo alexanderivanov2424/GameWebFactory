@@ -268,6 +268,19 @@
           borders(mine, (n) => owned[n] === pid, { class: "hr-sline", stroke: color(pid) }));
       }
       drawRoads(roads, cellStruct, game.structures, nameOf);
+      // Construction sites: dashed owner outline, faded icon, turns of work done.
+      const working = new Set((priv && priv.building?.works) || []);
+      for (const [cid, x] of Object.entries(game.sites || {})) {
+        const def = content.structures[x.type];
+        if (!def) continue;
+        const c = color(x.owner), [mx, my] = middle(x.cells);
+        let tip = `${def.name} under construction (${nameOf(x.owner)}): ${x.done}/${x.turns} turns, ${x.builders} builder${x.builders > 1 ? "s" : ""} a turn`;
+        if (x.owner === you) tip += working.has(cid) ? "\nBuilders at work this turn." : x.done < x.turns ? "\nWaiting: not enough idle people." : "";
+        put(structG, svg("g", { class: "hr-struct hr-site" }, svg("title", {}, tip),
+          x.cells.map((k) => hexAt(k, SIZE * 0.92, { class: "hr-site-cell", fill: c, stroke: c })),
+          svg("text", { x: mx, y: my + 1, class: "hr-icon" }, def.icon || def.name.slice(0, 2)),
+          svg("text", { x: mx, y: my + 17, class: "hr-site-text" }, `${x.done}/${x.turns}`)));
+      }
 
       // Units.
       for (const [uid, u] of Object.entries(game.units)) {

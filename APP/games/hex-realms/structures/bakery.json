@@ -24,5 +24,7 @@
  },
  "text": "+1 food, and +1 more per Hut or House next to it (up to 4).",
  "road": true,
- "category": "food"
+ "category": "food",
+ "buildTurns": 2,
+ "builders": 1
 }

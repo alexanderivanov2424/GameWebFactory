@@ -25,5 +25,7 @@
   "catapult"
  ],
  "road": true,
- "category": "industry"
+ "category": "industry",
+ "buildTurns": 3,
+ "builders": 2
 }
