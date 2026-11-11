@@ -32,10 +32,14 @@
     .hr-glyph { fill: none; stroke: rgba(0, 0, 0, 0.28); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; pointer-events: none; }
     .hr-territory, .hr-orders, .hr-units, .hr-structs, .hr-roads { pointer-events: none; }
     .hr-struct, .hr-unit, .hr-road { pointer-events: all; }
-    .hr-icon { fill: #fff; font: 700 15px sans-serif; text-anchor: middle; dominant-baseline: central; paint-order: stroke; stroke: #10131a; stroke-width: 3px; pointer-events: none; }
+    .hr-icon { fill: #fff; font: 700 20px sans-serif; text-anchor: middle; dominant-baseline: central; pointer-events: none; }
+    .hr-sfill { fill-opacity: 0.3; }
+    .hr-sfill.hr-nav { fill: none; }
+    .hr-sline { stroke-width: 3.5; stroke-linecap: round; pointer-events: none; }
+    .hr-sline-back { stroke: #10131a; stroke-opacity: 0.55; stroke-width: 6.5; stroke-linecap: round; pointer-events: none; }
+    .hr-cut { stroke: #ff5a4a; stroke-width: 2.5; stroke-dasharray: 5 3; stroke-linecap: round; }
     .hr-ghosttext { opacity: 0.8; }
-    .hr-idle polygon { opacity: 0.45; }
-    .hr-stranded polygon { stroke: #ff5a4a; stroke-width: 2.5; stroke-dasharray: 5 3; }
+    .hr-idle .hr-icon { opacity: 0.5; }
     .hr-strike { stroke: #ff6a5a; stroke-width: 3; stroke-linecap: round; }
     .hr-hpback { fill: #20242d; stroke: #000; stroke-width: 0.5; }
     .hr-hpbar { fill: #5ccf6a; }
@@ -115,7 +119,7 @@
     .hr-cats { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 8px; }
     .hr-buildgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
     #hud button.hr-build { display: flex; flex-direction: column; align-items: flex-start; gap: 1px; text-align: left; padding: 5px 8px; }
-    .hr-bicon { font-weight: 700; color: #ffe36b; } .hr-bname { font-weight: 600; } .hr-bcost { color: #98a2b6; }
+    .hr-bicon { font-weight: 700; color: #ffe36b; min-width: 1.4em; text-align: center; } .hr-bname { font-weight: 600; } .hr-bcost { color: #98a2b6; }
     .hr-adv { padding: 6px 0; border-bottom: 1px solid #2a3243; } .hr-adv.owned { opacity: 0.6; }
     .hr-ev { padding: 4px 0; border-bottom: 1px solid #2a3243; font-size: 0.85rem; }
     .hr-cell-link { color: #8ab4ff; cursor: pointer; text-decoration: underline; }

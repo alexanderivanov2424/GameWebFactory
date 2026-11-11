@@ -7,7 +7,8 @@
  *   HexHud.orders(el, ctx)      your pending builds / recruits / research, each with a cancel button
  *   HexHud.trade(el, ctx)       give/get selects (only when the market rate is > 0)
  *   HexHud.build(el, ctx)       one button per buildable structure (starts build mode)
- *   HexHud.fmt                  small text helpers shared with panels.js (cost, nameSpan)
+ *   HexHud.fmt                  small text helpers shared with panels.js (cost, nameSpan, resource icons);
+ *                               fmt.setResources(content.resourceInfo) first (game.js does, each render)
  *
  * ctx = { game, priv, you, me (public player entry), content, ui, act } where ui is the page's
  * persistent UI state ({sel, mode, trade}) and act = { send(msg), select(kind, id), setMode(mode), centre(key) }.
@@ -16,7 +17,11 @@
 (() => {
   const { el, fill } = AppDom;
   const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1);
-  const costText = (cost) => Object.entries(cost || {}).map(([r, n]) => `${n} ${r}`).join(", ") || "free";
+  let RES = {};  // {res: {name, icon}} from the content
+  const setResources = (info) => { RES = info || {}; };
+  const resIcon = (r) => RES[r]?.icon || r;
+  const resName = (r) => RES[r]?.name || cap(r);
+  const costText = (cost) => Object.entries(cost || {}).map(([r, n]) => `${n}${resIcon(r)}`).join(" ") || "free";
   const canPay = (ctx, cost) => Object.entries(cost || {}).every(([r, n]) => (ctx.priv.res[r] || 0) >= n);
   const nameSpan = (game, pid) => {
     const p = game.players[pid];
@@ -36,8 +41,8 @@
       const net = rep.net[r] || 0;
       const capped = rep.caps[r];
       const full = capped !== undefined && priv.res[r] >= capped;
-      return el("span", { className: `hr-chip hr-res-${r}${full ? " full" : ""}`, title: `${cap(r)}: income ${rep.income[r] || 0}, upkeep ${rep.upkeep[r] || 0}${capped !== undefined ? `, storage ${capped} in stores linked to a Town Hall` : ""}${(rep.held || {})[r] ? `, ${rep.held[r]} waiting in producers` : ""}${(rep.unusable || {})[r] ? `, ${rep.unusable[r]} in unlinked stores` : ""}` },
-        r, " ", el("b", {}, String(priv.res[r])), capped !== undefined ? el("small", {}, `/${capped}`) : null,
+      return el("span", { className: `hr-chip hr-res-${r}${full ? " full" : ""}`, title: `${resName(r)}: income ${rep.income[r] || 0}, upkeep ${rep.upkeep[r] || 0}${capped !== undefined ? `, storage ${capped} in stores linked to a Town Hall` : ""}${(rep.held || {})[r] ? `, ${rep.held[r]} waiting in producers` : ""}${(rep.unusable || {})[r] ? `, ${rep.unusable[r]} in unlinked stores` : ""}` },
+        el("span", { className: "hr-ricon" }, resIcon(r)), " ", el("b", {}, String(priv.res[r])), capped !== undefined ? el("small", {}, `/${capped}`) : null,
         (rep.unusable || {})[r] ? el("small", { className: "neg" }, ` +${rep.unusable[r]} cut off`) : null,
         el("span", { className: net < 0 ? "neg" : net > 0 ? "pos" : "" }, ` (${signed(net)})`));
     });
@@ -48,7 +53,7 @@
       game.turnSeconds > 0 ? el("span", { id: "hr-timer", className: "hr-timer" }) : null,
       el("span", { className: "hr-chips" }, chips),
       el("span", { className: "hr-people", title: `Population ${priv.pop}, housing ${rep.housing}, workers in jobs ${rep.workers}` },
-        "people ", el("b", {}, String(priv.pop)), ` (idle ${rep.idle}) / housing ${rep.housing}`,
+        el("span", { className: "hr-ricon" }, resIcon("people")), " ", el("b", {}, String(priv.pop)), ` (idle ${rep.idle}) / housing ${rep.housing}`,
         rep.growth ? ` growth +${rep.growth}` : ""),
       el("span", { className: "spacer" }), end);
   }
@@ -64,8 +69,8 @@
           el("span", { className: "spacer" }),
           !p.alive ? el("span", { className: "hr-outtag" }, "out") : p.done ? el("span", { className: "hr-tick", title: "Ended their turn" }, "✓") : null,
           el("b", { title: "Score" }, String(p.score))),
-        el("div", { className: "hr-psub", title: "Start of this turn" },
-          `g${r.gold ?? 0} f${r.food ?? 0} w${r.wood ?? 0} s${r.stone ?? 0} m${r.metal ?? 0} · pop ${p.pop ?? 0} · ${(p.advances || []).length} adv`));
+        el("div", { className: "hr-psub", title: `Start of this turn: ${["gold", "food", "wood", "stone", "metal"].map((k) => `${resName(k)} ${r[k] ?? 0}`).join(", ")}, ${resName("people")} ${p.pop ?? 0}` },
+          ["gold", "food", "wood", "stone", "metal"].map((k) => `${resIcon(k)}${r[k] ?? 0}`).join(" ") + ` · ${resIcon("people")}${p.pop ?? 0} · ${(p.advances || []).length} adv`));
     }));
   }
 
@@ -152,7 +157,7 @@
     box.hidden = !(rate > 0);
     if (box.hidden) return;
     const t = ctx.ui.trade;
-    const resOpts = (value) => ["gold", "food", "wood", "stone", "metal"].map((r) => el("option", { value: r, selected: r === value }, r));
+    const resOpts = (value) => ["gold", "food", "wood", "stone", "metal"].map((r) => el("option", { value: r, selected: r === value }, `${resIcon(r)} ${resName(r)}`));
     const give = el("select", { onchange: () => { t.give = give.value; } }, resOpts(t.give));
     const get = el("select", { onchange: () => { t.get = get.value; } }, resOpts(t.get));
     fill(box, el("h3", {}, "Trade"), el("div", { className: "row" }, "give", give, "get", get),
@@ -186,5 +191,5 @@
       el("p", { className: "muted small" }, "Click the map to place it. R or right-click turns it, Esc cancels. It must touch your structures and sit in your territory. Producers marked 'needs a road' deliver goods only along roads (or navigable structures) to a store; you spend only from Town Halls and stores linked to them."));
   }
 
-  window.HexHud = { topbar, players, selection, orders, trade, build, fmt: { costText, canPay, nameSpan, btn, cap } };
+  window.HexHud = { topbar, players, selection, orders, trade, build, fmt: { costText, canPay, nameSpan, btn, cap, setResources, resIcon, resName } };
 })();

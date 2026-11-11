@@ -105,6 +105,7 @@
   function refresh() {
     if (!state || state.phase === "lobby") return;
     const c = ctx();
+    HexHud.fmt.setResources(c.content.resourceInfo);
     const playing = !!c.priv && !!c.me;
     $("col-left").hidden = !playing;
     if (playing) {

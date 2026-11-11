@@ -5,8 +5,9 @@
 TERRAIN      {id: {"name", "move" (cost in half steps, None = impassable for land units),
              "cover" (hitting a unit here needs 5+), "build" (ordinary structures allowed)}}
 RESOURCES    stock resources in display order; "people" is separate (population)
+RESOURCE_INFO  {res: (name, icon)} for the client, people included
 structures/<id>.json:
-    name, icon (short text drawn on the map), cells [[q, r], ...] (axial offsets, first = anchor),
+    name, icon (an emoji or short text drawn on the map; placeholder for art), cells [[q, r], ...] (axial offsets, first = anchor),
     cost {res: n}, hp (0 = can't be attacked; roads), defense (dice it rolls back at attackers),
     jobs (people needed to work), produce {res: n}, perCell {terrain: {res: n}} (per own cell),
     onTerrain {terrain: {res: n}} (by the anchor's terrain, replaces produce), perAdjacent
@@ -41,6 +42,10 @@ log = logging.getLogger(__name__)
 HERE = Path(__file__).resolve().parent.parent
 
 RESOURCES = ["gold", "food", "wood", "stone", "metal", "faith", "science"]
+# Name and icon of each resource (plus people) for the client; icons are placeholders for art.
+RESOURCE_INFO = {"gold": ("Gold", "🪙"), "food": ("Food", "🍞"), "wood": ("Wood", "🪵"), "stone": ("Stone", "🪨"),
+                 "metal": ("Metal", "🔩"), "faith": ("Faith", "🙏"), "science": ("Science", "🔬"),
+                 "people": ("People", "👥")}
 CAPPED = ["food", "wood", "stone", "metal"]  # goods: kept in stores, moved by road (logistics.py)
 GLOBAL = ["gold", "faith", "science"]  # realm-wide, uncapped
 TERRAIN = {
@@ -78,7 +83,7 @@ def parse_structure(sid, d):
             not isinstance(c, list) or len(c) != 2 or any(type(x) is not int for x in c) for c in cells) or cells[0] != [0, 0]:
         raise ValueError("cells must be [[0, 0], [q, r], ...]")
     s = {
-        "id": sid, "name": text(d, "name", 30, required=True), "icon": text(d, "icon", 3), "cells": cells,
+        "id": sid, "name": text(d, "name", 30, required=True), "icon": text(d, "icon", 4), "cells": cells,
         "cost": res_map(d, "cost"), "hp": whole(d, "hp", 0, 99, default=3), "defense": whole(d, "defense", 0, 9, default=0),
         "jobs": whole(d, "jobs", 0, 9, default=0), "produce": res_map(d, "produce"),
         "housing": whole(d, "housing", 0, 99, default=0), "home": d.get("home") is True,

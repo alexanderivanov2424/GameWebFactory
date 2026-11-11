@@ -39,16 +39,18 @@
     return [x + s * Math.cos(a), y + s * Math.sin(a)];
   };
   const pts = (x, y, s = SIZE) => Array.from({ length: 6 }, (_, i) => corner(x, y, i, s).map((v) => v.toFixed(1)).join(",")).join(" ");
+  const middle = (ks) => { const ps = ks.map(center); return [0, 1].map((i) => ps.reduce((a, p) => a + p[i], 0) / ps.length); };
   const hexAt = (k, s, attrs) => { const [x, y] = center(k); return svg("polygon", { points: pts(x, y, s), ...attrs }); };
 
   // Edge i of a cell faces DIRS[i] and joins corners i and i+1: lines where the neighbour isn't in `same`.
-  function borders(cells, same, attrs) {
+  // `scale` < 1 draws the edges inset towards each cell's centre.
+  function borders(cells, same, attrs, scale = 1) {
     const lines = [];
     for (const k of cells) {
       const [x, y] = center(k);
       neighbors(k).forEach((n, i) => {
         if (same(n)) return;
-        const [x1, y1] = corner(x, y, i, SIZE), [x2, y2] = corner(x, y, i + 1, SIZE);
+        const [x1, y1] = corner(x, y, i, SIZE * scale), [x2, y2] = corner(x, y, i + 1, SIZE * scale);
         lines.push(svg("line", { x1: x1.toFixed(1), y1: y1.toFixed(1), x2: x2.toFixed(1), y2: y2.toFixed(1), ...attrs }));
       });
     }
@@ -245,10 +247,10 @@
         const cut = stranded.has(sid);
         if (cut) tip += "\nNo road network leads to a store: its goods wait here (one turn's worth).";
         const g = svg("g", { class: `hr-struct${idle ? " hr-idle" : ""}${cut ? " hr-stranded" : ""}` }, svg("title", {}, tip));
-        put(g, s.cells.map((k) => hexAt(k, SIZE * 0.97, { fill: c, "fill-opacity": 0.88 })));
-        const own = new Set(s.cells);
-        put(g, borders(s.cells, (n) => own.has(n), { stroke: "#10131a", "stroke-width": 3, "stroke-linecap": "round" }));
-        const [x, y] = center(s.at);
+        // Solid structures get a light owner tint, navigable ones none (outlines are drawn after all structures).
+        put(g, s.cells.map((k) => hexAt(k, SIZE, def.navigable ? { class: "hr-sfill hr-nav" } : { class: "hr-sfill", fill: c })));
+        if (cut) { const own = new Set(s.cells); put(g, borders(s.cells, (n) => own.has(n), { class: "hr-cut" }, 0.86)); }
+        const [x, y] = middle(s.cells);
         put(g, svg("text", { x, y: y + 1, class: "hr-icon" }, def.icon || def.name.slice(0, 2)));
         if (idle) put(g, svg("line", { x1: x - 14, y1: y + 12, x2: x + 14, y2: y - 12, class: "hr-strike" }));
         if (s.maxHp && s.hp < s.maxHp) {
@@ -256,6 +258,14 @@
             svg("rect", { x: x - 16, y: y + 14, width: 32 * s.hp / s.maxHp, height: 5, class: "hr-hpbar" }));
         }
         put(structG, g);
+      }
+      // Ownership: one outline around each group of touching structures of the same owner.
+      const owned = {};
+      for (const s of Object.values(game.structures)) if (s.type !== "road") for (const k of s.cells) owned[k] = s.owner;
+      for (const pid of new Set(Object.values(owned))) {
+        const mine = Object.keys(owned).filter((k) => owned[k] === pid);
+        put(structG, borders(mine, (n) => owned[n] === pid, { class: "hr-sline-back" }),
+          borders(mine, (n) => owned[n] === pid, { class: "hr-sline", stroke: color(pid) }));
       }
       drawRoads(roads, cellStruct, game.structures, nameOf);
 
@@ -283,7 +293,7 @@
       for (const b of o.builds) {
         const def = content.structures[b.type];
         put(orderG, b.cells.map((k) => hexAt(k, SIZE * 0.9, { fill: mine, "fill-opacity": 0.25, stroke: mine, "stroke-width": 2.5, "stroke-dasharray": "5 4" })));
-        const [x, y] = center(b.at);
+        const [x, y] = middle(b.cells);
         put(orderG, svg("text", { x, y: y + 1, class: "hr-icon hr-ghosttext" }, def?.icon || ""));
       }
       for (const [uid, path] of Object.entries(o.moves)) {
@@ -316,7 +326,7 @@
         if (!u || !th) continue;
         const foot = th.rotations[rot].map((d) => add(u.at, d));
         put(orderG, foot.map((k) => hexAt(k, SIZE * 0.9, { fill: "#f1c84b", "fill-opacity": 0.25, stroke: "#f1c84b", "stroke-width": 2.5, "stroke-dasharray": "5 4" })));
-        const [x, y] = center(foot[0]);
+        const [x, y] = middle(foot);
         put(orderG, svg("text", { x, y: y + 1, class: "hr-icon hr-ghosttext" }, th.icon || "TH"));
       }
     }
@@ -335,7 +345,7 @@
       if (!g) return;
       const cls = g.ok ? "hr-ghost-ok" : "hr-ghost-bad";
       put(ghostG, g.cells.filter((k) => all.has(k)).map((k) => hexAt(k, SIZE * 0.92, { class: cls })));
-      if (g.label && all.has(g.cells[0])) { const [x, y] = center(g.cells[0]); put(ghostG, svg("text", { x, y: y + 1, class: "hr-icon" }, g.label)); }
+      if (g.label && all.has(g.cells[0])) { const [x, y] = middle(g.cells); put(ghostG, svg("text", { x, y: y + 1, class: "hr-icon" }, g.label)); }
     }
 
     function flash(items) {
