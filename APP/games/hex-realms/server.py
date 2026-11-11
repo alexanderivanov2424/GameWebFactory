@@ -17,8 +17,9 @@ logic/movement.py, logic/orders.py, logic/logistics.py; content in structures/, 
 advances/ (fields in logic/content.py).
 
 Player options:  none (colors by seat)
-Settings:        mapSize (small/normal/large), turns (turn limit), turnSeconds (0 = no timer),
-                 fog (on/off), seed (0 = random map)
+Settings:        mapSize (small/normal/large/huge), turns (turn limit), turnSeconds (0 = no timer),
+                 fog (on/off), bots (computer players added to the seats; logic/bots.py),
+                 seed (0 = random map)
 State: the public part has no map; each member's private state has "view" (cells, dim, structures,
 units, territory, events as they see them; spectators see everything).
 Game messages (all only while planning; any order un-readies you; never use a "type" key,
@@ -58,10 +59,11 @@ class Game(LobbyGame):
     MAX_PLAYERS = 6
     SYNC = PatchState
     SETTINGS = {
-        "mapSize": Choice("Map size", default="normal", options={"small": "Small", "normal": "Normal", "large": "Large"}),
+        "mapSize": Choice("Map size", default="normal", options={"small": "Small", "normal": "Normal", "large": "Large", "huge": "Huge"}),
         "turns": Int("Turn limit", default=40, low=10, high=150),
         "turnSeconds": Int("Turn timer", default=0, low=0, high=600, suffix="s", hint="0 = no timer"),
         "fog": Choice("Fog of war", default="on", options={"on": "On", "off": "Off"}),
+        "bots": Int("Bots", default=0, low=0, high=5, hint="computer players"),
         "seed": Int("Map seed", default=0, low=0, high=999999, hint="0 = a new random map"),
     }
     ACTIONS = {name: name for name in
@@ -74,8 +76,16 @@ class Game(LobbyGame):
     def reset_game(self):
         self.match = None
 
+    def start_check(self):
+        if len(self.players) + self.settings["bots"] > self.MAX_PLAYERS:
+            return f"At most {self.MAX_PLAYERS} realms: fewer bots, please."
+        return None
+
     def start_game(self):
-        self.match = Match({p.id: p.name for p in self.players}, self.settings)
+        names = {p.id: p.name for p in self.players}
+        bots = [f"b{i}" for i in range(1, self.settings["bots"] + 1)]
+        names.update({b: f"Bot {b[1:]}" for b in bots})
+        self.match = Match(names, self.settings, bots=bots)
         self.start_timer()
 
     def game_state(self):

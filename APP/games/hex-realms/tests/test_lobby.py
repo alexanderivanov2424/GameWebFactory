@@ -63,6 +63,32 @@ class LobbyTests(unittest.TestCase):
         self.assertEqual(sim.state(1)["phase"], "finished")
         self.assertEqual(sim.state(1)["result"]["winner"], sim.pid(1))
 
+    def test_bots_take_seats_and_end_their_turn_at_once(self):
+        sim = Sim(GAME, players=1, settings={"seed": 3, "bots": 2})
+        game = sim.state(0)["game"]
+        self.assertEqual(game["seats"], [sim.pid(0), "b1", "b2"])
+        self.assertEqual(game["bots"], ["b1", "b2"])
+        self.assertTrue(game["players"]["b1"]["done"] and game["players"]["b2"]["done"])
+        self.assertFalse(game["players"][sim.pid(0)]["done"])
+        self.assertTrue(sim.game.match.orders["b1"]["found"])  # their Settlers found a city on turn 1
+        self.assertNotIn("b1", str(sim.state(0)["private"]["orders"]))  # bot orders stay secret
+        sim.ok(0, {"action": "done", "done": True})
+        self.assertEqual(sim.state(0)["game"]["turn"], 2)
+
+    def test_too_many_bots_for_the_seats(self):
+        sim = Sim(GAME, players=2, start=False, settings={"bots": 5})
+        sim.lobby(0, {"type": "ready", "ready": True})
+        sim.lobby(1, {"type": "ready", "ready": True})
+        self.assertIn("fewer bots", sim.lobby(0, {"type": "start"}))
+
+    def test_game_ends_when_only_bots_are_left(self):
+        sim = Sim(GAME, players=2, settings={"seed": 3, "bots": 2})
+        sim.leave(0)
+        self.assertEqual(sim.state(1)["phase"], "playing")
+        match = sim.game.match
+        sim.leave(1)  # the room then goes back to the lobby (nobody is left in it)
+        self.assertIn("Only bots are left", match.result["reason"])
+
 
 if __name__ == "__main__":
     unittest.main()

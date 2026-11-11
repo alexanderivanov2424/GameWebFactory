@@ -1,6 +1,7 @@
 """Hex Realms: Match, one game from start to finish (no lobby, network or members).
 
-    match = Match({"p1": "Ann", "p2": "Bob"}, settings, rng=random.Random(1))
+    match = Match({"p1": "Ann", "p2": "Bob"}, settings, rng=random.Random(1), bots=["b1"])
+                               bots: seats played by the computer (bots.py plans their turns)
     match.act(pid, "build", stype, at, rot)   any order from orders.py (raises LobbyError)
     match.set_done(pid, True)  end your turn; when every player still in is done, the turn resolves
     match.resolve()            resolve the turn now (also the turn timer's job, in server.py)
@@ -15,7 +16,8 @@ structure; production, deliveries along roads, eating, wages and growth (economy
 fight, full on or next to an own Barracks); players without a Town Hall are out. The game ends
 when one player is left (if it started with 2 or more) or after the last turn: highest score wins.
 Solo games (1 player) are a sandbox: they end at the turn limit with your score, or when you lose
-your last Town Hall.
+your last Town Hall. Bots plan as each turn starts (and are done at once); once no person is
+left in the game, it ends with the highest score winning.
 
 Score = population + units + 3 per advance + structure scores (Town Hall 4, University 2,
 Monument 10) + gold // 10.
@@ -33,7 +35,7 @@ import random
 from gamekit import LobbyError
 from gamekit.hexes import neighbors
 
-from . import combat, logistics, movement, orders, vision
+from . import bots, combat, logistics, movement, orders, vision
 from .content import ADVANCES, CATEGORIES, RESOURCE_INFO, RESOURCES, STRUCTURES, TERRAIN, TOWN_HALL, UNITS, footprint
 from .economy import end_of_turn, report, staffing, territory
 from .mapgen import generate
@@ -43,13 +45,13 @@ START_RES = {"gold": 10, "faith": 0, "science": 0}  # realm-wide
 START_GOODS = {"food": 10, "wood": 12, "stone": 6}  # put into the first Town Hall when it's founded
 START_UNIT = "settlers"
 START_POP = 3
-SIZES = {"small": -1, "normal": 0, "large": 2}
+SIZES = {"small": -3, "normal": 0, "large": 4, "huge": 8}
 ACTS = {name: getattr(orders, name) for name in
         ("build", "recruit", "move", "shoot", "hold", "found", "research", "cancel", "trade", "toggle", "disband")}
 
 
 def map_radius(players, size):
-    return 6 + 2 * min(players, 6) + SIZES.get(size, 0) - (1 if players == 1 else 0)
+    return 9 + 3 * min(players, 6) + SIZES.get(size, 0) - (2 if players == 1 else 0)
 
 
 def empty_orders():
@@ -57,8 +59,9 @@ def empty_orders():
 
 
 class Match:
-    def __init__(self, names, settings, rng=None):
+    def __init__(self, names, settings, rng=None, bots=()):
         self.rng = rng or random.Random()
+        self.bots = [pid for pid in bots if pid in names]
         self.names = dict(names)
         self.seats = list(self.names)
         self.settings = dict(settings)
@@ -90,6 +93,11 @@ class Match:
         self.multi = len(self.seats) > 1
         self.refresh()
         self.snapshot()
+        self.plan_bots()
+
+    def plan_bots(self):
+        for pid in self.bots:
+            bots.plan(self, pid)
 
     # --- State helpers (used by the other modules) -------------------------------------------
 
@@ -197,6 +205,7 @@ class Match:
             self.players[pid]["done"] = False
         self.snapshot()
         self._check_end()
+        self.plan_bots()
 
     def _found(self, ev):
         for pid in self.alive():
@@ -290,6 +299,11 @@ class Match:
         alive = self.alive()
         if not alive:
             self.end(None, "Every realm has fallen.")
+        elif self.bots and not [pid for pid in alive if pid not in self.bots]:
+            scores = {pid: self.score(pid) for pid in alive}
+            winner = max(alive, key=lambda pid: scores[pid]) if list(scores.values()).count(max(scores.values())) == 1 else None
+            self.end(winner, f"Only bots are left: {self.names[winner]} has the highest score." if winner
+                     else "Only bots are left.")
         elif self.multi and len(alive) == 1:
             self.end(alive[0], f"{self.names[alive[0]]} is the last realm standing.")
         elif self.turn > self.turn_limit and not self.multi:
@@ -320,7 +334,7 @@ class Match:
         self.knock_out(pid)
         self.log.append(f"Turn {self.turn}: {self.names[pid]} left the game.")
         self.refresh()
-        if not self.multi or len(self.alive()) <= 1:
+        if not self.multi or len(self.alive()) <= 1 or not set(self.alive()) - set(self.bots):
             self._check_end()
             if self.result is None:
                 self.end(None, "Everyone left.")
@@ -334,7 +348,7 @@ class Match:
         each viewer's private state, cut down by fog of war (vision.view)."""
         return {
             "turn": self.turn, "turnLimit": self.turn_limit, "step": self.step, "radius": self.radius,
-            "seats": self.seats, "fog": self.fog,
+            "seats": self.seats, "fog": self.fog, "bots": self.bots,
             "content": {"structures": STRUCTURES, "units": UNITS, "advances": ADVANCES, "terrain": TERRAIN,
                         "resources": RESOURCES, "categories": CATEGORIES,
                         "resourceInfo": {r: {"name": n, "icon": i} for r, (n, i) in RESOURCE_INFO.items()}},

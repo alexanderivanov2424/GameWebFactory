@@ -228,7 +228,8 @@ Summary:
    by population, goods kept in stores and carried along road networks (roads + navigable
    structures; you spend only from stores linked to a Town Hall), fog of war sent as each
    member's private map view, a Settlers start (found your own first city), territory, advances
-   bought with science or faith, an optional turn timer (`schedule`); `PatchState`.
+   bought with science or faith, an optional turn timer (`schedule`), bots in extra seats (a
+   setting; the user asked for them) planning through the same orders; `PatchState`.
 
 ## Lobby model (shared by all games)
 - Every connected tab is a **member**: a **spectator** until it joins, then a **player**. Players join and leave explicitly, and only in the lobby phase.

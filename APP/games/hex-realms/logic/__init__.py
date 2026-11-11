@@ -8,6 +8,7 @@ Modules:
     economy.py   territory, workers, production, upkeep, growth
     logistics.py goods in stores, road networks (roads + navigable structures), spending, deliveries
     vision.py    fog of war: what each player sees, has explored and remembers; their map view
+    bots.py      computer players: plan a turn through the same orders as people (fog applies)
     mapgen.py    the random hex map and fair starting spots
     content.py   loads structures/, units/, advances/ (JSON) and the terrain table
 """

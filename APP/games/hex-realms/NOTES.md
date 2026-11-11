@@ -35,6 +35,10 @@ fields in `logic/content.py`). Tests: `tests/` (`python3 -I tools/run_tests.py h
   `players[pid]["startGoods"]` until the first Town Hall. Players are out only with no Town
   Hall *and* no Settlers; a realm without a hall skips eating and growth.
 - **A turn timer**: `server.py` schedules a timeout per turn (checked against the turn number).
+- **Bots in the seats** (the user asked for them): the `bots` setting adds seats `b1`... to the
+  `Match` (not lobby members). `logic/bots.py` plans each bot's turn as the turn starts
+  (`Match.plan_bots`, after setup and after each resolve) through `Match.act`, so they obey the
+  same checks and fog, and marks them done. The game ends once no person is left.
 
 ## Map
 - `server.py`: `SETTINGS`, `ACTIONS` (one thin method per message → `Match.act`), turn timer
@@ -46,6 +50,7 @@ fields in `logic/content.py`). Tests: `tests/` (`python3 -I tools/run_tests.py h
   founding rotations).
 - `logic/orders.py`: one function per order; `site_problem` / `recruit_problem` /
   `found_problem` are shared with resolution (re-checked then) and the private state.
+- `logic/bots.py`: `plan(m, pid)`: the bot strategy (header lists it; constants at the top).
 - `logic/vision.py`: `update` (after every change via `Match.refresh`), `known_at`, `view`.
 - `logic/movement.py`, `logic/combat.py`, `logic/economy.py`, `logic/logistics.py`, `logic/mapgen.py`,
   `logic/content.py`: see their headers.
@@ -64,7 +69,10 @@ fields in `logic/content.py`). Tests: `tests/` (`python3 -I tools/run_tests.py h
 - `tests/`: `test_rules.py` (Match on a blank all-grass map: `helpers.blank`, `hall` (with the
   starting goods), `unit`, `rich`, `stock` = what a player can spend), `test_lobby.py` (Sim: secrecy, done, timer, leaving).
 
-## Balance notes (reasoning, not simulation)
+## Balance notes
+- Map radius = 9 + 3 per realm (bots count) + map size (small -3, large +4, huge +8), 2 less solo.
+- Bot-only test games (scratch, 80 turns): bots reach 2-3 cities, ~12 units, fight and siege from
+  turn ~20 but rarely take a city; a turn with 5 bots takes under 0.2 s.
 - Start: 3 people, housing 4, and the goods in the Town Hall (25 of each at most); the hall
   alone nets +1 food, so you grow once, then need a Hut (2 wood) or House. Every early producer
   also needs a road (1 wood per cell) to the hall, and the hall's 25-cap makes a Storage Yard or
@@ -98,4 +106,4 @@ fields in `logic/content.py`). Tests: `tests/` (`python3 -I tools/run_tests.py h
   each stage, and `remove_unit` also clears that unit's orders.
 
 ## Not done yet (ideas)
-- Fog of war, ships carrying land units, capturing (instead of destroying) cities, diplomacy.
+- Ships carrying land units, capturing (instead of destroying) cities, diplomacy.
