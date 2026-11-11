@@ -9,6 +9,7 @@ from gamekit import LobbyError
 h = importlib.import_module("games.hex-realms.tests.helpers")
 Match, blank, hall, rich, stock, unit = h.Match, h.blank, h.hall, h.rich, h.stock, h.unit
 economy = importlib.import_module("games.hex-realms.logic.economy")
+movement = importlib.import_module("games.hex-realms.logic.movement")
 
 
 def end_turn(m):
@@ -17,11 +18,19 @@ def end_turn(m):
 
 
 class StartTests(unittest.TestCase):
-    def test_everyone_starts_with_a_hall_and_a_militia(self):
+    def test_everyone_starts_with_settlers_only(self):
         m = Match({"p1": "A", "p2": "B", "p3": "C"}, {"turns": 40, "mapSize": "normal", "seed": 7}, rng=random.Random(3))
+        self.assertEqual(m.structures, {})
         for pid in m.seats:
-            self.assertEqual([s["type"] for s in m.structures.values() if s["owner"] == pid], ["town_hall"])
-            self.assertEqual([u["type"] for u in m.units.values() if u["owner"] == pid], ["militia"])
+            self.assertEqual([u["type"] for u in m.units.values() if u["owner"] == pid], ["settlers"])
+
+    def test_first_city_gets_the_starting_goods(self):
+        m = Match({"p1": "A", "p2": "B"}, {"turns": 40, "mapSize": "normal", "seed": 7}, rng=random.Random(3))
+        s = next(u for u, x in m.units.items() if x["owner"] == "p1")
+        m.act("p1", "found", s, m.private("p1")["found"][s][0])
+        end_turn(m)
+        self.assertTrue(m.players["p2"]["alive"])  # no city yet, but settlers: still in
+        self.assertEqual(stock(m, "p1")["wood"], h.match_mod.START_GOODS["wood"] + 1)  # + the hall's first turn
 
     def test_turn_resolves_when_everyone_is_done(self):
         m = blank()
@@ -370,6 +379,88 @@ class CityTests(unittest.TestCase):
             self.m.act("p1", "recruit", sid, "militia")
         end_turn(self.m)
         self.assertEqual(sum(1 for u in self.m.units.values() if u["owner"] == "p1"), 1)
+
+
+class FogTests(unittest.TestCase):
+    def setUp(self):
+        self.m = blank(fog="on", face=1)
+        hall(self.m, "p1", "-8,8"), hall(self.m, "p2", "8,-8")  # far away: they keep both players in
+
+    def view(self, pid="p1"):
+        return self.m.private(pid)["view"]
+
+    def test_units_see_two_cells(self):
+        unit(self.m, "p1", "militia", "0,0")
+        near = unit(self.m, "p2", "militia", "2,0")
+        far = unit(self.m, "p2", "militia", "3,0")
+        self.m.refresh()
+        units = self.view()["units"]
+        self.assertIn(near, units)
+        self.assertNotIn(far, units)
+        self.assertNotIn("4,0", self.view()["cells"])  # unexplored: no terrain either
+
+    def test_buildings_see_further(self):
+        self.m.add_structure("p1", "hut", "0,0", 0)
+        far = unit(self.m, "p2", "militia", "3,0")
+        self.m.refresh()
+        self.assertIn(far, self.view()["units"])
+
+    def test_explored_cells_stay_but_dim(self):
+        u = unit(self.m, "p1", "militia", "0,0")
+        self.m.refresh()
+        self.m.move_unit(u, "-6,0")
+        self.m.refresh()
+        view = self.view()
+        self.assertIn("2,0", view["cells"])
+        self.assertIn("2,0", view["dim"])
+
+    def test_enemy_structures_are_remembered_until_seen_gone(self):
+        u = unit(self.m, "p1", "militia", "0,0")
+        hut = self.m.add_structure("p2", "hut", "2,0", 0)["id"]
+        self.m.refresh()
+        self.m.move_unit(u, "-6,0")
+        self.m.refresh()
+        self.assertIn(hut, self.view()["structures"])  # out of sight: as last seen
+        self.m.remove_structure(hut)
+        self.m.refresh()
+        self.assertIn(hut, self.view()["structures"])  # still don't know it's gone
+        self.m.move_unit(u, "0,0")
+        self.m.refresh()
+        self.assertNotIn(hut, self.view()["structures"])
+
+    def test_spectators_see_everything(self):
+        far = unit(self.m, "p2", "militia", "8,0")
+        self.m.refresh()
+        self.assertIn(far, self.m.private(None)["view"]["units"])
+
+    def test_can_plan_into_unexplored_cells(self):
+        u = unit(self.m, "p1", "militia", "0,0")
+        self.m.refresh()
+        self.m.act("p1", "move", u, "-2,0")  # within reach either way
+        self.m.cells["3,0"] = "water"
+        for k in ("1,0", "2,0"):
+            self.m.explored["p1"].discard(k)
+        self.assertIn("2,0", movement.reach(self.m, u))
+
+    def test_unknown_rough_ground_stops_the_move(self):
+        u = unit(self.m, "p1", "militia", "0,0")
+        self.m.cells["2,0"] = "forest"
+        self.m.refresh()
+        self.m.explored["p1"] -= {"1,0", "2,0"}
+        self.m.visible["p1"] -= {"1,0", "2,0"}
+        self.m.act("p1", "move", u, "2,0")  # planned as open ground: 2 + 2
+        end_turn(self.m)
+        self.assertEqual(self.m.units[u]["at"], "1,0")  # the forest costs 4: not enough left
+
+    def test_hidden_enemies_dont_block_planning(self):
+        u = unit(self.m, "p1", "militia", "0,0")
+        hidden = unit(self.m, "p2", "militia", "1,0")
+        self.m.refresh()
+        self.m.visible["p1"].discard("1,0")
+        self.m.act("p1", "move", u, "2,0")  # through the unseen enemy
+        end_turn(self.m)
+        self.assertTrue(any(e["t"] == "battle" for e in self.m.events))
+        self.assertIn(hidden, self.m.units)
 
 
 class EndTests(unittest.TestCase):

@@ -1,6 +1,8 @@
 """Hex Realms: a simultaneous-turn civilization game on a random hex map.
 
-Each player starts with a Town Hall and a Militia. Every turn all players plan at once, in
+Each player starts with Settlers and founds their first Town Hall wherever they choose (the
+starting goods go into it). Fog of war (a setting): units and structures (further) reveal the
+map; cells once seen stay explored, enemy structures are remembered as last seen. Every turn all players plan at once, in
 secret: place structures (multi-cell footprints, turned in 60-degree steps) inside their
 territory, train units, order moves and attacks, research advances, trade at a market. When
 everyone has pressed End turn (or the turn timer runs out), all orders resolve together:
@@ -16,7 +18,9 @@ advances/ (fields in logic/content.py).
 
 Player options:  none (colors by seat)
 Settings:        mapSize (small/normal/large), turns (turn limit), turnSeconds (0 = no timer),
-                 seed (0 = random map)
+                 fog (on/off), seed (0 = random map)
+State: the public part has no map; each member's private state has "view" (cells, dim, structures,
+units, territory, events as they see them; spectators see everything).
 Game messages (all only while planning; any order un-readies you; never use a "type" key,
 the lobby envelope owns it):
     {"action": "build", "kind": stype, "at": "q,r", "rot": 0-5}
@@ -57,6 +61,7 @@ class Game(LobbyGame):
         "mapSize": Choice("Map size", default="normal", options={"small": "Small", "normal": "Normal", "large": "Large"}),
         "turns": Int("Turn limit", default=40, low=10, high=150),
         "turnSeconds": Int("Turn timer", default=0, low=0, high=600, suffix="s", hint="0 = no timer"),
+        "fog": Choice("Fog of war", default="on", options={"on": "On", "off": "Off"}),
         "seed": Int("Map seed", default=0, low=0, high=999999, hint="0 = a new random map"),
     }
     ACTIONS = {name: name for name in
@@ -79,7 +84,8 @@ class Game(LobbyGame):
         return state
 
     def private_state(self, member):
-        return self.match.private(member.id) if member.playing else None
+        """The map as this member sees it (fog of war), plus their own stock and orders."""
+        return self.match.private(member.id if member.playing else None)
 
     # --- Turn timer ----------------------------------------------------------------------------
 

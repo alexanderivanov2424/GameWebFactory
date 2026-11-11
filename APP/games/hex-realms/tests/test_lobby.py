@@ -19,15 +19,12 @@ class LobbyTests(unittest.TestCase):
 
     def test_orders_stay_secret_until_the_turn_resolves(self):
         sim = Sim(GAME, players=2, settings={"seed": 3})
-        hall = hall_of(sim, 0)
-        sim.ok(0, {"action": "recruit", "structure": hall["id"], "kind": "militia"})
+        settlers = next(u for u, x in sim.game.match.units.items() if x["owner"] == sim.pid(0))
+        sim.ok(0, {"action": "found", "unit": settlers, "rot": sim.state(0)["private"]["found"][settlers][0]})
         mine, theirs, watcher = sim.state(0), sim.state(1), sim.state(sim.spectator())
-        self.assertEqual(len(mine["private"]["orders"]["recruits"]), 1)
-        self.assertEqual(theirs["private"]["orders"]["recruits"], [])
-        self.assertIsNone(watcher.get("private"))
-        public = theirs["game"]["players"][sim.pid(0)]
-        self.assertEqual(public["res"]["gold"], 10)  # the start-of-turn stock, not after paying
-        self.assertLess(mine["private"]["res"]["gold"], 10)
+        self.assertEqual(list(mine["private"]["orders"]["found"]), [settlers])
+        self.assertEqual(theirs["private"]["orders"]["found"], {})
+        self.assertNotIn("orders", watcher["private"])
 
     def test_everyone_done_resolves(self):
         sim = Sim(GAME, players=2, settings={"seed": 3})

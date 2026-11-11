@@ -17,7 +17,13 @@
   let idx = { unitAt: {}, structAt: {} };
 
   const lobby = AppLobby.connect("hex-realms", {
-    onState(newState) { state = newState; render(); },
+    // The map lives in private.view (fog of war: each viewer gets their own); merge it into game, and
+    // keep private only when it has your orders (you're still playing), as the panels expect.
+    onState(newState) {
+      const p = newState.private;
+      state = { ...newState, game: newState.game && p?.view ? { ...newState.game, ...p.view } : newState.game, private: p?.orders ? p : null };
+      render();
+    },
     onError: (message) => showError(message),
     onConnection(status) { $("connection").textContent = AppLobbyUI.connectionText(status, lobby.roomId); },
   });
@@ -55,9 +61,8 @@
     const game = state.game, priv = state.private;
     if (ui.gameNumber !== state.gameNumber) {
       Object.assign(ui, { gameNumber: state.gameNumber, sel: null, mode: null, flashSeen: null });
-      const hall = Object.values(game.structures).find((s) => s.owner === state.you && s.type === "town_hall");
       map.draw(game, state.you, priv);
-      map.centre(hall ? hall.at : "0,0");
+      map.centre(home());
     }
     const key = `${state.gameNumber}:${game.turn}:${game.step}`;
     if (key !== ui.key) { ui.key = key; ui.mode = null; ui.turnStart = Date.now(); }
@@ -247,10 +252,16 @@
     else if (e.key === "r" || e.key === "R") rotate();
   });
 
-  $("centre").addEventListener("click", () => {
-    const hall = state?.game && Object.values(state.game.structures).find((s) => s.owner === state.you && s.type === "town_hall");
-    map.centre(hall ? hall.at : "0,0");
-  });
+  // Your first Town Hall, else your first unit (settlers before the first city), else the middle.
+  function home() {
+    const game = state?.game;
+    if (!game?.structures) return "0,0";
+    const hall = Object.values(game.structures).find((s) => s.owner === state.you && s.type === "town_hall");
+    const unit = Object.values(game.units).find((u) => u.owner === state.you);
+    return hall ? hall.at : unit ? unit.at : "0,0";
+  }
+
+  $("centre").addEventListener("click", () => map.centre(home()));
 
   function tick() {
     const span = $("hr-timer");

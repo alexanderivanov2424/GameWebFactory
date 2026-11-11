@@ -15,5 +15,6 @@
  "upkeep": {
   "food": 1,
   "gold": 2
- }
+ },
+ "vision": 3
 }

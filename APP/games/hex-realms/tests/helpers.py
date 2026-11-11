@@ -22,10 +22,11 @@ class FixedDice(random.Random):
         return self.face
 
 
-def blank(players=2, face=6, radius=10, **settings):
-    """A match whose map is all grass (a hexagon of `radius`) with nothing on it; place things with hall()/unit()."""
+def blank(players=2, face=6, radius=10, fog="off", **settings):
+    """A match whose map is all grass (a hexagon of `radius`) with nothing on it; place things with
+    hall()/unit(). Fog is off unless asked for (then call m.refresh() after placing things)."""
     names = {f"p{i + 1}": f"Player {i + 1}" for i in range(players)}
-    m = Match(names, {"turns": 40, "mapSize": "normal", "seed": 1, **settings}, rng=FixedDice(face))
+    m = Match(names, {"turns": 40, "mapSize": "normal", "seed": 1, "fog": fog, **settings}, rng=FixedDice(face))
     m.cells = {k: "grass" for k in disk(radius)}
     m.radius = radius
     for sid in list(m.structures):

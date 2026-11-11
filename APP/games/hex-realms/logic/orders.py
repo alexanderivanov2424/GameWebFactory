@@ -21,7 +21,7 @@ from gamekit import LobbyError
 from gamekit.hexes import dist, neighbors
 
 from .content import ADVANCES, STRUCTURES, TERRAIN, TOWN_HALL, UNITS, footprint
-from . import logistics
+from . import logistics, vision
 from .economy import report
 from .movement import path
 
@@ -61,8 +61,9 @@ def clear_unit(m, pid, uid):
         o["holds"].remove(uid)
 
 
-def site_problem(m, pid, stype, cells, pending=()):
-    """Why `cells` can't hold a `stype` for pid right now (None if they can)."""
+def site_problem(m, pid, stype, cells, pending=(), seen=None):
+    """Why `cells` can't hold a `stype` for pid right now (None if they can). `seen`: only enemy
+    units on these cells count (planning under fog); None = the truth (resolution)."""
     d = STRUCTURES[stype]
     for c in cells:
         if c not in m.cells:
@@ -72,7 +73,7 @@ def site_problem(m, pid, stype, cells, pending=()):
         if c in m.cell_structure or c in pending:
             return "Something is already built there."
         occ = m.unit_at.get(c)
-        if occ is not None and m.units[occ]["owner"] != pid:
+        if occ is not None and m.units[occ]["owner"] != pid and (seen is None or c in seen):
             return "An enemy unit stands there."
     if d["coast"] and not any(m.cells.get(n) == "water" for c in cells for n in neighbors(c)):
         return f"{d['name']} must touch water."
@@ -90,7 +91,7 @@ def build(m, pid, stype, at, rot):
     cells = footprint(stype, at, rot)
     o = m.orders[pid]
     pending = {c for b in o["builds"] for c in b["cells"]}
-    problem = site_problem(m, pid, stype, cells, pending)
+    problem = site_problem(m, pid, stype, cells, pending, m.visible[pid])
     if problem:
         raise LobbyError(problem)
     if any(m.territory.get(c) != pid for c in cells):
@@ -149,9 +150,10 @@ def shoot(m, pid, uid, at):
         raise LobbyError("Only ranged units shoot.")
     if at not in m.cells or dist(u["at"], at) > rng:
         raise LobbyError(f"Out of range ({rng}).")
-    occ, sid = m.unit_at.get(at), m.cell_structure.get(at)
-    enemy_unit = occ is not None and m.units[occ]["owner"] != pid
-    enemy_building = sid is not None and m.structures[sid]["owner"] != pid and STRUCTURES[m.structures[sid]["type"]]["hp"]
+    occ = m.unit_at.get(at)
+    owner, stype = vision.known_at(m, pid).get(at, (None, None))
+    enemy_unit = occ is not None and m.units[occ]["owner"] != pid and vision.sees(m, pid, at)
+    enemy_building = owner is not None and owner != pid and STRUCTURES[stype]["hp"]
     if not (enemy_unit or enemy_building):
         raise LobbyError("Shoot at an enemy unit or structure.")
     clear_unit(m, pid, uid)
@@ -166,14 +168,19 @@ def hold(m, pid, uid):
         m.orders[pid]["holds"].append(uid)
 
 
-def found_problem(m, pid, u, rot):
+def found_problem(m, pid, u, rot, planning=True):
+    """Why settlers u can't found a Town Hall turned `rot` (None if they can). Planning checks only
+    what pid knows (fog); resolution (planning=False) checks the truth."""
     cells = footprint(TOWN_HALL, u["at"], rot)
-    problem = site_problem(m, pid, TOWN_HALL, cells)
+    problem = site_problem(m, pid, TOWN_HALL, cells, seen=m.visible[pid] if planning else None)
     if problem:
         return problem
     if any(c in m.unit_at and m.unit_at[c] != u["id"] for c in cells):
         return "Move your other units off the site first."
-    halls = [c for c, sid in m.cell_structure.items() if m.structures[sid]["type"] == TOWN_HALL]
+    if planning:
+        halls = [c for c, (owner, stype) in vision.known_at(m, pid).items() if stype == TOWN_HALL]
+    else:
+        halls = [c for c, sid in m.cell_structure.items() if m.structures[sid]["type"] == TOWN_HALL]
     if any(dist(c, h) < CITY_SPACING for c in cells for h in halls):
         return f"Too close to a Town Hall (keep {CITY_SPACING} cells away)."
     return None

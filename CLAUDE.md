@@ -226,7 +226,8 @@ Summary:
    everyone plans in secret at once, then all orders resolve together (simultaneous step-by-step
    movement where units that meet fight with dice, sieges, towers), multi-cell structures staffed
    by population, goods kept in stores and carried along road networks (roads + navigable
-   structures; you spend only from stores linked to a Town Hall), territory, advances
+   structures; you spend only from stores linked to a Town Hall), fog of war sent as each
+   member's private map view, a Settlers start (found your own first city), territory, advances
    bought with science or faith, an optional turn timer (`schedule`); `PatchState`.
 
 ## Lobby model (shared by all games)

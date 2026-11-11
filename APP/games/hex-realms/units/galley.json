@@ -15,5 +15,6 @@
   "food": 1,
   "gold": 1
  },
- "text": "Moves on water. Attacks units and structures on the shore."
+ "text": "Moves on water. Attacks units and structures on the shore.",
+ "vision": 3
 }

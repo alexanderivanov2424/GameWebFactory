@@ -18,13 +18,13 @@ spent or eaten. "stranded" lists working road producers with no store on their n
 Everyone eats: pop // 2 food, plus each unit's upkeep. Not enough food starves 1 person (or
 disbands a unit); gold below 0 makes the newest paid unit desert. If more food reached usable
 stores this turn than was eaten and there is free housing, population grows by 1 (+1 per
-Granary).
+Granary). A realm without a Town Hall (settlers before their first city) skips all of this.
 """
 
 from gamekit.hexes import disk, dist, neighbors, parse
 
 from . import logistics
-from .content import ADVANCES, CAPPED, RESOURCES, STRUCTURES, UNITS
+from .content import ADVANCES, CAPPED, RESOURCES, STRUCTURES, TOWN_HALL, UNITS
 
 FOOD_FIRST = ("food",)
 
@@ -145,6 +145,8 @@ def report(m, pid):
 
 def end_of_turn(m, pid, events):
     p = m.players[pid]
+    if not any(s["owner"] == pid and s["type"] == TOWN_HALL for s in m.structures.values()):
+        return  # settlers still looking for a home: nothing to store, eat or grow yet
     rep = report(m, pid)
     nets = logistics.networks(m, pid)
     stores = logistics.usable(m, pid, nets)

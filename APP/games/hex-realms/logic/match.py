@@ -33,14 +33,15 @@ import random
 from gamekit import LobbyError
 from gamekit.hexes import neighbors
 
-from . import combat, logistics, movement, orders
+from . import combat, logistics, movement, orders, vision
 from .content import ADVANCES, CATEGORIES, RESOURCES, STRUCTURES, TERRAIN, TOWN_HALL, UNITS, footprint
-from .economy import end_of_turn, report, territory
+from .economy import end_of_turn, report, staffing, territory
 from .mapgen import generate
 
 COLORS = ["#d9483b", "#3b7dd9", "#e0b030", "#3ba55d", "#a05cc8", "#e07b22"]
 START_RES = {"gold": 10, "faith": 0, "science": 0}  # realm-wide
-START_GOODS = {"food": 10, "wood": 12, "stone": 6}  # in the first Town Hall
+START_GOODS = {"food": 10, "wood": 12, "stone": 6}  # put into the first Town Hall when it's founded
+START_UNIT = "settlers"
 START_POP = 3
 SIZES = {"small": -1, "normal": 0, "large": 2}
 ACTS = {name: getattr(orders, name) for name in
@@ -69,14 +70,17 @@ class Match:
         self.counter = 0
         self.structures, self.cell_structure, self.units, self.unit_at = {}, {}, {}, {}
         self.players = {pid: {"res": dict(START_RES), "pop": START_POP, "advances": [], "done": False, "alive": True,
-                              "color": COLORS[i % len(COLORS)]} for i, pid in enumerate(self.seats)}
+                              "color": COLORS[i % len(COLORS)], "startGoods": dict(START_GOODS)}
+                        for i, pid in enumerate(self.seats)}
         self.orders = {pid: empty_orders() for pid in self.seats}
+        self.fog = self.settings.get("fog", "on") == "on"
+        self.visible = {pid: set() for pid in self.seats}
+        self.explored = {pid: set() for pid in self.seats}
+        self.memory = {pid: {} for pid in self.seats}  # remembered enemy structures (vision.py)
+        self.vis_before = {}
+        self.result = None
         for pid, at in zip(self.seats, starts):
-            hall = self.add_structure(pid, TOWN_HALL, at, 0)
-            hall["stock"] = dict(START_GOODS)
-            spot = next(n for c in hall["cells"] for n in neighbors(c)
-                        if n in self.cells and n not in self.cell_structure and TERRAIN[self.cells[n]]["move"])
-            self.add_unit(pid, "militia", spot)
+            self.add_unit(pid, START_UNIT, at)  # they found the first Town Hall where they choose
         self.turn = 1
         self.step = 0
         self.events = []
@@ -132,6 +136,7 @@ class Match:
 
     def refresh(self):
         self.territory = territory(self)
+        vision.update(self)
 
     def snapshot(self):
         """What everyone sees of each player's stock during planning (their orders stay secret)."""
@@ -147,6 +152,8 @@ class Match:
             raise LobbyError("You're not playing.")
         ACTS[name](self, pid, *args)
         self.players[pid]["done"] = False
+        if name == "disband":
+            self.refresh()
 
     def set_done(self, pid, done):
         if self.result is not None or not self.players.get(pid, {}).get("alive"):
@@ -162,6 +169,7 @@ class Match:
             return
         ev = []
         self.fought = set()
+        self.vis_before = {pid: set(v) for pid, v in self.visible.items()}  # events seen as they happened
         for pid in self.alive():
             for r in self.orders[pid]["research"]:
                 self.players[pid]["advances"].append(r["advance"])
@@ -196,13 +204,14 @@ class Match:
                 u = self.units.get(uid)
                 if u is None:
                     continue
-                problem = orders.found_problem(self, pid, u, rot)
+                problem = orders.found_problem(self, pid, u, rot, planning=False)
                 if problem:
                     ev.append({"t": "failed", "owner": pid, "what": TOWN_HALL, "at": u["at"], "why": problem})
                     continue
                 at = u["at"]
                 self.remove_unit(uid)
-                self.add_structure(pid, TOWN_HALL, at, rot)
+                hall = self.add_structure(pid, TOWN_HALL, at, rot)
+                hall["stock"] = self.players[pid].pop("startGoods", {})
                 ev.append({"t": "founded", "owner": pid, "at": at})
                 self.log.append(f"Turn {self.turn}: {self.names[pid]} founded a city.")
 
@@ -262,7 +271,8 @@ class Match:
 
     def _eliminate(self, ev):
         for pid in self.alive():
-            if not any(s["owner"] == pid and s["type"] == TOWN_HALL for s in self.structures.values()):
+            if not any(s["owner"] == pid and s["type"] == TOWN_HALL for s in self.structures.values()) and \
+                    not any(u["owner"] == pid and UNITS[u["type"]]["settler"] for u in self.units.values()):
                 self.knock_out(pid)
                 ev.append({"t": "eliminated", "owner": pid})
                 self.log.append(f"Turn {self.turn}: {self.names[pid]} lost their last Town Hall.")
@@ -320,24 +330,16 @@ class Match:
     # --- What clients see -----------------------------------------------------------------------
 
     def public(self):
-        staffed = set()
-        for pid in self.alive():
-            staffed.update(report(self, pid)["staffed"])
+        """Everything but the map: the map part (cells, structures, units, territory, events) is in
+        each viewer's private state, cut down by fog of war (vision.view)."""
         return {
             "turn": self.turn, "turnLimit": self.turn_limit, "step": self.step, "radius": self.radius,
-            "cells": self.cells, "seats": self.seats,
+            "seats": self.seats, "fog": self.fog,
             "content": {"structures": STRUCTURES, "units": UNITS, "advances": ADVANCES, "terrain": TERRAIN,
                         "resources": RESOURCES, "categories": CATEGORIES},
             "players": {pid: {"name": self.names[pid], "color": p["color"], "res": self.shown[pid]["res"],
                               "pop": self.shown[pid]["pop"], "advances": p["advances"], "done": p["done"],
                               "alive": p["alive"], "score": self.score(pid)} for pid, p in self.players.items()},
-            "structures": {sid: {"type": s["type"], "owner": s["owner"], "at": s["at"], "cells": s["cells"], "hp": s["hp"],
-                                 "maxHp": STRUCTURES[s["type"]]["hp"], "working": sid in staffed, "active": s["active"]}
-                           for sid, s in self.structures.items()},
-            "units": {uid: {"type": u["type"], "owner": u["owner"], "at": u["at"], "hp": u["hp"],
-                            "maxHp": UNITS[u["type"]]["hp"]} for uid, u in self.units.items()},
-            "territory": self.territory,
-            "events": {str(i): e for i, e in enumerate(self.events)},
             "log": {str(i): line for i, line in enumerate(self.log)},
         }
 
@@ -349,14 +351,19 @@ class Match:
                 for s in self.structures.values() if s["owner"] == pid and logistics.capacity(s)}
 
     def private(self, pid):
+        """{"view": the map as pid sees it} for everyone (pid None = a spectator: the whole map),
+        plus pid's stock, orders, forecast and planning help while they're still playing."""
+        staffed = {s["id"] for x in self.alive() for s in staffing(self, x)[0]}
+        out = {"view": vision.view(self, pid, staffed)}
         if pid not in self.players or not self.players[pid]["alive"] or self.result is not None:
-            return None
+            return out
         p = self.players[pid]
         recruit = {}
         for s in self.structures.values():
             if s["owner"] == pid and STRUCTURES[s["type"]]["recruits"]:
                 recruit[s["id"]] = {u: orders.recruit_problem(self, pid, s, u) or "" for u in STRUCTURES[s["type"]]["recruits"]}
         return {
+            **out,
             "res": logistics.stock(self, pid), "pop": p["pop"], "done": p["done"],
             "stores": self.stores(pid), "held": {s["id"]: s["held"] for s in self.structures.values()
                                                  if s["owner"] == pid and s["held"]}, "orders": self.orders[pid], "report": report(self, pid),

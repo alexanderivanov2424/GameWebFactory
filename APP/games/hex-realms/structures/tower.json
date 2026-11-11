@@ -26,5 +26,6 @@
   "mountain"
  ],
  "text": "Shoots the nearest enemy unit within 2 after movement.",
- "category": "roads"
+ "category": "roads",
+ "vision": 5
 }

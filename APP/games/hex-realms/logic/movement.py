@@ -6,9 +6,14 @@ water only (2 per cell). Mountains and water stop land units. Own structures can
 enemy roads too. A cell with an enemy unit or enemy structure (not a road) can only be the last
 cell of a path: moving into it is an attack (it costs one step, 2).
 
-    reach(m, uid)          {key: previous key} for every cell the unit can end on this turn
+    reach(m, uid)          {key: previous key} for every cell the unit can end on this turn, as its
+                           owner sees the map (fog: unexplored cells cost 2, hidden enemies are
+                           ignored, remembered structures count)
     path(m, uid, to)       [keys] from the next cell to `to`, or None if out of reach
     resolve(m, events)     moves every unit with an order, one cell per step, all at once
+
+Resolution uses the real map: each unit has its real movement points, and stops before a cell
+that's impassable or costs more than it has left (fog hid the terrain).
 
 Each step: (1) moving into an enemy structure is a siege; (2) enemy units moving through each
 other fight (both attacking); (3) enemy units moving into the same cell fight there (nobody
@@ -22,6 +27,7 @@ import heapq
 
 from gamekit.hexes import neighbors
 
+from . import vision
 from .combat import battle, siege
 from .content import ROAD, ROAD_MOVE, TERRAIN, UNITS
 
@@ -46,32 +52,55 @@ def step_cost(m, u, k):
     return TERRAIN[terrain]["move"]
 
 
-def is_target(m, u, k):
-    """An enemy unit or attackable enemy structure on k (planned as the end of a path)."""
+def knowledge(m, u):
+    """What u's owner knows when planning: (explored cells, visible cells, {key: (owner, type)})."""
+    pid = u["owner"]
+    return m.explored[pid], m.visible[pid], vision.known_at(m, pid)
+
+
+def planned_cost(m, u, k, known):
+    """step_cost as the owner believes it: unexplored cells look like open ground (2)."""
+    explored, _, structures = known
+    if k not in m.cells:
+        return None
+    if k not in explored:
+        return 2
+    if UNITS[u["type"]]["naval"]:
+        return 2 if m.cells[k] == "water" else None
+    if structures.get(k, (None, None))[1] == ROAD:
+        return ROAD_MOVE
+    return TERRAIN[m.cells[k]]["move"]
+
+
+def is_target(m, u, k, known):
+    """A visible enemy unit or a known attackable enemy structure on k (the end of a path)."""
+    _, visible, structures = known
     occ = m.unit_at.get(k)
-    if occ is not None and m.units[occ]["owner"] != u["owner"]:
+    if occ is not None and m.units[occ]["owner"] != u["owner"] and k in visible:
         return True
-    return enemy_structure(m, u["owner"], k)
+    owner, stype = structures.get(k, (None, None))
+    return owner is not None and owner != u["owner"] and stype != ROAD
 
 
 def reach(m, uid):
     u = m.units[uid]
+    known = knowledge(m, u)
     budget = UNITS[u["type"]]["move"] * 2
     best, prev = {u["at"]: 0}, {}
     heap = [(0, u["at"])]
     while heap:
         cost, k = heapq.heappop(heap)
-        if cost > best.get(k, budget + 1) or (k != u["at"] and is_target(m, u, k)):
+        if cost > best.get(k, budget + 1) or (k != u["at"] and is_target(m, u, k, known)):
             continue
         for n in neighbors(k):
             if n not in m.cells:
                 continue
-            if is_target(m, u, n):
+            if is_target(m, u, n, known):
                 c = ATTACK_COST
-                if not UNITS[u["type"]]["naval"] and m.cells[n] == "water":
+                if not UNITS[u["type"]]["naval"] and n in known[0] and m.cells[n] == "water":
                     continue
             else:
-                c = step_cost(m, u, n)
+                c = planned_cost(m, u, n, known)
                 if c is None:
                     continue
             total = cost + c
@@ -93,6 +122,7 @@ def path(m, uid, to):
 
 def resolve(m, events):
     paths = {uid: list(p) for uid, p in m.orders_moves() if uid in m.units}
+    left = {uid: UNITS[m.units[uid]["type"]]["move"] * 2 for uid in paths}  # real movement points
     while True:
         intents = {uid: p[0] for uid, p in sorted(paths.items()) if p and uid in m.units}
         if not intents:
@@ -140,8 +170,13 @@ def resolve(m, events):
         while moved:
             moved = False
             for uid, k in sorted(intents.items()):
-                if k not in m.unit_at and not enemy_structure(m, m.units[uid]["owner"], k) \
-                        and step_cost(m, m.units[uid], k) is not None:
+                if k not in m.unit_at and not enemy_structure(m, m.units[uid]["owner"], k):
+                    cost = step_cost(m, m.units[uid], k)
+                    if cost is None or cost > left[uid]:  # the real terrain was worse than planned
+                        stop(uid)
+                        moved = True
+                        continue
+                    left[uid] -= cost
                     m.move_unit(uid, k)
                     paths[uid].pop(0)
                     intents.pop(uid)

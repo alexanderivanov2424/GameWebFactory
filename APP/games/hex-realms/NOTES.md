@@ -25,6 +25,15 @@ fields in `logic/content.py`). Tests: `tests/` (`python3 -I tools/run_tests.py h
   Halls and stores on a Town Hall's network only; an unlinked store still fills. Gold, faith and
   science are realm-wide. Every structure works if staffed (`logic/economy.py`: jobs filled food
   first, then oldest).
+- **Fog of war as per-viewer private state** (`logic/vision.py`): the public state has no map;
+  each member's private state carries `view` (explored cells, dimmed cells, structures as last
+  seen, units in sight, filtered events). Planning uses only what the player knows (unexplored
+  cells cost 2, hidden enemies don't block); resolution uses the truth, with real movement
+  points, so hidden things are discovered by running into them. The client merges `view` into
+  `game` in `onState`, so the rest of the page reads `game.cells` / `game.units` as before.
+- **A free first city**: everyone starts with Settlers; the starting goods wait in
+  `players[pid]["startGoods"]` until the first Town Hall. Players are out only with no Town
+  Hall *and* no Settlers; a realm without a hall skips eating and growth.
 - **A turn timer**: `server.py` schedules a timeout per turn (checked against the turn number).
 
 ## Map
@@ -37,6 +46,7 @@ fields in `logic/content.py`). Tests: `tests/` (`python3 -I tools/run_tests.py h
   founding rotations).
 - `logic/orders.py`: one function per order; `site_problem` / `recruit_problem` /
   `found_problem` are shared with resolution (re-checked then) and the private state.
+- `logic/vision.py`: `update` (after every change via `Match.refresh`), `known_at`, `view`.
 - `logic/movement.py`, `logic/combat.py`, `logic/economy.py`, `logic/logistics.py`, `logic/mapgen.py`,
   `logic/content.py`: see their headers.
 - `client/map.js`: `HexMap.create`: pan (drag) / zoom (wheel) SVG map; terrain layer rebuilt only
@@ -64,6 +74,11 @@ fields in `logic/content.py`). Tests: `tests/` (`python3 -I tools/run_tests.py h
   builder can win on the turn limit; conquest ends it early.
 
 ## Pitfalls seen here
+- Under fog, a validation error must not reveal hidden things: order checks pass the player's
+  view (`site_problem(..., seen=)`, `found_problem(planning=True)`, `shoot` only at what you see),
+  and resolution re-checks the truth (a failed order becomes a "failed" event for its owner).
+- Rules tests place pieces by hand: `helpers.blank` turns fog off unless asked (`fog="on"`, then
+  `m.refresh()` after placing).
 - SVG shapes without a fill are black: the highlight overlay (one polygon per cell, above the
   terrain) once painted the whole map black. Overlays get the `hr-hlcell` class (fill: none)
   until highlighted.

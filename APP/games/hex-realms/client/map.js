@@ -69,14 +69,14 @@
     const root = svg("svg", { class: "hr-svg" });
     const world = svg("g");
     const layer = (name) => { const g = svg("g", { class: `hr-${name}` }); put(world, g); return g; };
-    const terrainG = layer("terrain"), territoryG = layer("territory"), structG = layer("structs"), hlG = layer("hl");
+    const terrainG = layer("terrain"), territoryG = layer("territory"), structG = layer("structs"), dimG = layer("dim"), hlG = layer("hl");
     const orderG = layer("orders"), unitG = layer("units"), ghostG = layer("ghost"), flashG = layer("flashes");
     hlG.style.pointerEvents = "none";
     put(root, world);
     fill(element, root);
 
     let view = { x: 0, y: 0, k: 0.9 };
-    let cells = null, lastKey = null, hl = {}, hlClass = {};
+    let cells = null, all = new Set(), lastKey = null, hl = {}, hlClass = {};
     let hover = null, drag = null, moved = false;
     const applyView = () => world.setAttribute("transform", `translate(${view.x.toFixed(1)} ${view.y.toFixed(1)}) scale(${view.k.toFixed(3)})`);
 
@@ -88,7 +88,7 @@
       const dq = Math.abs(q - fq), dr = Math.abs(r - fr), ds = Math.abs(s - fs);
       if (dq > dr && dq > ds) q = -r - s; else if (dr > ds) r = -q - s;
       const k = key(q, r);
-      return cells && k in cells ? k : null;
+      return all.has(k) ? k : null;
     }
 
     element.addEventListener("mousedown", (e) => {
@@ -130,11 +130,24 @@
       applyView();
     }, { passive: false });
 
+    // Every cell of the hexagonal map; unexplored ones (not in game.cells under fog) are drawn as fog.
+    function disk(radius) {
+      const out = [];
+      for (let q = -radius; q <= radius; q++) {
+        for (let r = Math.max(-radius, -q - radius); r <= Math.min(radius, -q + radius); r++) out.push(key(q, r));
+      }
+      return out;
+    }
+
     function buildStatic(game) {
       fill(terrainG); fill(hlG); hl = {}; hlClass = {};
-      for (const [k, terrain] of Object.entries(game.cells)) {
+      const keys = disk(game.radius);
+      all = new Set(keys);
+      for (const k of keys) {
         const [x, y] = center(k);
-        put(terrainG, svg("polygon", { points: pts(x, y), fill: COLORS[terrain] || "#777", class: "hr-cell" }), glyph(terrain, x, y));
+        const terrain = game.cells[k];
+        if (terrain) put(terrainG, svg("polygon", { points: pts(x, y), fill: COLORS[terrain] || "#777", class: "hr-cell" }), glyph(terrain, x, y));
+        else put(terrainG, svg("polygon", { points: pts(x, y), class: "hr-fog" }));
         hl[k] = svg("polygon", { points: pts(x, y, SIZE - 1), class: "hr-hlcell" }); // transparent until highlighted (SVG fills black by default)
         put(hlG, hl[k]);
       }
@@ -152,6 +165,8 @@
       const color = (pid) => players[pid]?.color || "#888";
       const nameOf = (pid) => players[pid]?.name || pid;
       for (const g of [territoryG, structG, orderG, unitG]) fill(g);
+      // Explored but not seen right now: dimmed (enemy units there aren't shown).
+      fill(dimG, (game.dim || []).map((k) => hexAt(k, SIZE, { class: "hr-dim" })));
 
       // Territory: faint tint plus a coloured border where it meets another owner.
       for (const pid of game.seats) {
@@ -281,13 +296,13 @@
       fill(ghostG);
       if (!g) return;
       const cls = g.ok ? "hr-ghost-ok" : "hr-ghost-bad";
-      put(ghostG, g.cells.filter((k) => cells && k in cells).map((k) => hexAt(k, SIZE * 0.92, { class: cls })));
-      if (g.label && g.cells[0] in (cells || {})) { const [x, y] = center(g.cells[0]); put(ghostG, svg("text", { x, y: y + 1, class: "hr-icon" }, g.label)); }
+      put(ghostG, g.cells.filter((k) => all.has(k)).map((k) => hexAt(k, SIZE * 0.92, { class: cls })));
+      if (g.label && all.has(g.cells[0])) { const [x, y] = center(g.cells[0]); put(ghostG, svg("text", { x, y: y + 1, class: "hr-icon" }, g.label)); }
     }
 
     function flash(items) {
       for (const { at, kind } of items) {
-        if (!cells || !(at in cells)) continue;
+        if (!all.has(at)) continue;
         const [x, y] = center(at);
         const c = svg("circle", { cx: x, cy: y, r: SIZE * 0.7, class: `hr-flash hr-flash-${kind}` });
         put(flashG, c);

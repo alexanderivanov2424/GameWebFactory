@@ -18,12 +18,14 @@ structures/<id>.json:
     touches it is on its roads), growth (extra growth per turn), territory (claim radius,
     default 2), terrain [ids] (default every "build" terrain), coast (a cell must touch water),
     requires (advance id), recruits [unit ids], heals, shoots (dice) + range, trade (market
-    rate: give n for 1), score, text.
+    rate: give n for 1), score, category (a CATEGORIES id: the build menu's tabs), vision (fog of
+    war: cells seen around each of its cells, default 3), text.
 units/<id>.json:
     name, icon, cost {res: n}, people (default 1), attack, defense, hp, move (steps), range
     (shoots instead of moving), siege (damage per hit on structures, default 1), vsMounted (extra
     dice against mounted), mounted, naval (water only), settler (can found a Town Hall),
-    requires (advance), needs (a structure type the owner must have working), upkeep {res: n}, text.
+    requires (advance), needs (a structure type the owner must own), upkeep {res: n}, vision (cells
+    seen around it, default 2), text.
 advances/<id>.json:
     name, cost {"science"|"faith": n}, after [advance ids], effect {key: n}, text.
     Effect keys: towerDice, farmFood, homeHousing, defendDice, chapelGold, attackDice.
@@ -85,7 +87,8 @@ def parse_structure(sid, d):
         "terrain": terrain_list(d, "terrain", [t for t, v in TERRAIN.items() if v["build"]]),
         "coast": d.get("coast") is True, "requires": d.get("requires"), "recruits": list(d.get("recruits", [])),
         "heals": d.get("heals") is True, "shoots": whole(d, "shoots", 0, 9, default=0), "range": whole(d, "range", 0, 5, default=0),
-        "trade": whole(d, "trade", 0, 9, default=0), "score": whole(d, "score", 0, 99, default=0), "text": text(d, "text", 300),
+        "trade": whole(d, "trade", 0, 9, default=0), "vision": whole(d, "vision", 0, 9, default=3),
+        "score": whole(d, "score", 0, 99, default=0), "text": text(d, "text", 300),
     }
     s["category"] = d.get("category", "city")
     if s["category"] not in CATEGORIES:
@@ -116,7 +119,8 @@ def parse_unit(uid, d):
         "hp": whole(d, "hp", 1, 20), "move": whole(d, "move", 0, 9), "range": whole(d, "range", 0, 5, default=0),
         "siege": whole(d, "siege", 1, 9, default=1), "vsMounted": whole(d, "vsMounted", 0, 9, default=0),
         "mounted": d.get("mounted") is True, "naval": d.get("naval") is True, "settler": d.get("settler") is True,
-        "requires": d.get("requires"), "needs": d.get("needs"), "upkeep": res_map(d, "upkeep"), "text": text(d, "text", 300),
+        "requires": d.get("requires"), "needs": d.get("needs"), "upkeep": res_map(d, "upkeep"),
+        "vision": whole(d, "vision", 0, 9, default=2), "text": text(d, "text", 300),
     }
 
 
