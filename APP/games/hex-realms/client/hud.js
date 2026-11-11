@@ -44,9 +44,8 @@
       const net = rep.net[r] || 0;
       const capped = rep.caps[r];
       const full = capped !== undefined && priv.res[r] >= capped;
-      return el("span", { className: `hr-chip hr-res-${r}${full ? " full" : ""}`, title: `${resName(r)}: income ${rep.income[r] || 0}, upkeep ${rep.upkeep[r] || 0}${capped !== undefined ? `, storage ${capped} in stores linked to a Town Hall` : ""}${(rep.held || {})[r] ? `, ${rep.held[r]} waiting in producers` : ""}${(rep.unusable || {})[r] ? `, ${rep.unusable[r]} in unlinked stores` : ""}` },
+      return el("span", { className: `hr-chip hr-res-${r}${full ? " full" : ""}`, title: `${resName(r)}: income ${rep.income[r] || 0}, upkeep ${rep.upkeep[r] || 0}${capped !== undefined ? `, storage ${capped}` : ""}${(rep.wasted || {})[r] ? `, ${rep.wasted[r]} won't fit in your stores (lost)` : ""}` },
         el("span", { className: "hr-ricon" }, resIcon(r)), " ", el("b", {}, String(priv.res[r])), capped !== undefined ? el("small", {}, `/${capped}`) : null,
-        (rep.unusable || {})[r] ? el("small", { className: "neg" }, ` +${rep.unusable[r]} cut off`) : null,
         el("span", { className: net < 0 ? "neg" : net > 0 ? "pos" : "" }, ` (${signed(net)})`));
     });
     const done = priv.done;
@@ -55,10 +54,10 @@
       el("span", { className: "hr-turn" }, `Turn ${game.turn} / ${game.turnLimit}`),
       game.turnSeconds > 0 ? el("span", { id: "hr-timer", className: "hr-timer" }) : null,
       el("span", { className: "hr-chips" }, chips),
-      el("span", { className: "hr-people", title: `Population ${priv.pop}, housing ${rep.housing}, workers in jobs ${rep.workers}` },
-        el("span", { className: "hr-ricon" }, resIcon("people")), " ", el("b", {}, String(priv.pop)), ` (idle ${rep.idle}`,
-        priv.building?.builders ? `, ${priv.building.builders} building` : "", `) / housing ${rep.housing}`,
-        rep.growth ? ` growth +${rep.growth}` : ""),
+      el("span", { className: "hr-people", title: `Population ${priv.pop}, housing ${rep.housing}: ${rep.workers} in jobs, ${rep.builders} building, ${rep.idle} idle. Idle people lay roads on their own to link your buildings.${rep.growth ? "" : `\nNo growth this turn: ${rep.growthWhy}`}` },
+        el("span", { className: "hr-ricon" }, resIcon("people")), " ", el("b", {}, String(priv.pop)), ` / ${rep.housing} (jobs ${rep.workers}`,
+        rep.builders ? `, building ${rep.builders}` : "", `, idle ${rep.idle})`,
+        rep.growth ? el("span", { className: "pos" }, ` growth +${rep.growth}`) : null),
       btn("Jobs off", () => ctx.act.send({ action: "staff", on: false }), { cls: "small", title: "Switch off every structure with workers: they become idle and build your construction sites." }),
       btn("Jobs on", () => ctx.act.send({ action: "staff", on: true }), { cls: "small", title: "Switch every structure with workers back on." }),
       el("span", { className: "spacer" }), end);
@@ -95,12 +94,14 @@
       const own = u.owner === ctx.you, o = priv.orders;
       const kids = [el("h3", {}, `${def.name} `, nameSpan(game, u.owner)), unitStats(def), el("p", { className: "small" }, `HP ${u.hp}/${u.maxHp}. ${def.text || ""}`)];
       if (own) {
-        const pending = o.moves[sel.id] ? `Moving to ${o.moves[sel.id][o.moves[sel.id].length - 1]}` : o.shots[sel.id] ? `Shooting at ${o.shots[sel.id]}`
+        const exploring = (priv.exploring || []).includes(sel.id);
+        const pending = exploring ? "Exploring (walks on its own each turn; any other order stops it)" : o.moves[sel.id] ? `Moving to ${o.moves[sel.id][o.moves[sel.id].length - 1]}` : o.shots[sel.id] ? `Shooting at ${o.shots[sel.id]}`
           : sel.id in o.found ? "Founding a city" : o.holds.includes(sel.id) ? "Holding position" : "No orders";
         const hold = o.holds.includes(sel.id);
         const found = priv.found[sel.id] || [];
         const row = el("div", { className: "hr-btnrow" },
           btn(hold ? "Hold (on)" : "Hold", () => act.send({ action: "hold", unit: sel.id }), { cls: hold ? "on" : "", title: "Roll one extra defence die this turn instead of moving." }),
+          game.fog && !def.settler ? btn(exploring ? "Explore (on)" : "Explore", () => act.send({ action: "explore", unit: sel.id }), { cls: exploring ? "on" : "", title: "Walk around on its own every turn to clear the fog, until you give it another order." }) : null,
           def.range ? btn("Shoot", () => act.setMode({ type: "shoot", unit: sel.id }), { cls: ui.mode?.type === "shoot" ? "on" : "", title: `Shoot a unit or structure up to ${def.range} cells away.` }) : null,
           def.settler ? btn("Found city", () => act.setMode({ type: "found", unit: sel.id, rot: found[0] }), { disabled: !found.length, cls: ui.mode?.type === "found" ? "on" : "", title: found.length ? "Found a Town Hall here." : "Can't found a city here." }) : null,
           btn("Clear orders", () => act.send({ action: "move", unit: sel.id, to: u.at })),
@@ -120,16 +121,9 @@
       kids.push(el("p", { className: `small ${s.working ? "pos" : "neg"}` }, s.working ? "Working." : s.active === false ? "Switched off." : "Not working: no free workers."));
     }
     if (own) {
-      const goods = (o) => Object.entries(o).filter(([, n]) => n).map(([r, n]) => `${r} ${n}`).join(", ") || "nothing";
-      const store = priv.stores[sel.id], held = priv.held[sel.id];
-      if (store) {
-        kids.push(el("p", { className: "small" }, `Holds ${Object.entries(store.cap).map(([r, n]) => `${r} ${store.stock[r] || 0}/${n}`).join(", ")}.`));
-        if (!store.usable) kids.push(el("p", { className: "small neg" }, "Not on a Town Hall's road network: its goods can't be spent until a road links them."));
-      }
-      if ((priv.report.stranded || []).includes(sel.id)) kids.push(el("p", { className: "small neg" }, "No road network leads from here to a store: goods wait here, and it holds only one turn's output."));
-      if (held) kids.push(el("p", { className: "small" }, `Waiting to be carried: ${goods(held)}.`));
-      if (def.road) kids.push(el("p", { className: "muted small" }, "Needs a road: its goods travel along roads (and navigable structures) to a store."));
-      if (def.navigable) kids.push(el("p", { className: "muted small" }, "Navigable: structures touching it count as being on its roads."));
+      const store = priv.stores[sel.id];
+      if (store) kids.push(el("p", { className: "small" }, `Holds ${Object.entries(store.cap).map(([r, n]) => `${r} ${store.stock[r] || 0}/${n}`).join(", ")}.`));
+      if (def.navigable) kids.push(el("p", { className: "muted small" }, "Navigable: links the roads that touch it."));
     }
     if (own) {
       const recruits = priv.recruit[sel.id] || {};
@@ -208,18 +202,18 @@
     const items = buildable.filter(([, d]) => d.category === ui.buildCat).map(([id, d]) => {
       let why = "";
       if (d.requires && !mine.has(d.requires)) why = `Needs ${content.advances[d.requires]?.name || d.requires}`;
-      else if (!canPay(ctx, d.cost)) why = "Can't afford";
+      const poor = !why && !canPay(ctx, d.cost);
       const info = [d.text, `Build: ${d.buildTurns} turn${d.buildTurns > 1 ? "s" : ""}, ${d.builders} builder${d.builders > 1 ? "s" : ""} each turn`, d.jobs ? `Jobs: ${d.jobs}` : "", Object.keys(d.produce || {}).length ? `Produces: ${costText(d.produce)}` : "", d.housing ? `Housing: ${d.housing}` : "",
-        `Terrain: ${(d.terrain || []).map((t) => content.terrain[t]?.name || t).join(", ")}`, d.coast ? "Must touch water." : "", d.road ? "Needs a road to deliver its goods." : "", d.navigable ? "Navigable (extends roads)." : "", `${d.cells.length} cell${d.cells.length > 1 ? "s" : ""}`]
+        `Terrain: ${(d.terrain || []).map((t) => content.terrain[t]?.name || t).join(", ")}`, d.coast ? "Must touch water." : "", d.navigable ? "Navigable (links roads)." : "", `${d.cells.length} cell${d.cells.length > 1 ? "s" : ""}`]
         .filter(Boolean).join("\n");
       const active = ui.mode?.type === "build" && ui.mode.kind === id;
-      return el("button", { className: `hr-build${active ? " on" : ""}`, disabled: !!why, title: `${why ? `${why}\n` : ""}${info}`,
+      return el("button", { className: `hr-build${active ? " on" : ""}`, disabled: !!why || poor, title: `${why ? `${why}\n` : poor ? "Can't afford\n" : ""}${info}`,
         onclick: () => (active ? act.setMode(null) : act.setMode({ type: "build", kind: id, rot: ui.lastRot || 0 })) },
         el("span", { className: "hr-bicon" }, d.icon || "▪"), el("span", { className: "hr-bname" }, d.name), el("span", { className: "hr-bcost small" }, why || costText(d.cost)));
     });
     fill(box, tabs,
       ui.buildCat ? el("div", { className: "hr-buildgrid" }, items) : el("p", { className: "muted small" }, "Pick a category, then a structure."),
-      el("p", { className: "muted small" }, "Click the map to place it. R or right-click turns it, Esc cancels. It must touch your structures (or sites) and sit in your territory. It becomes a construction site that idle people build over a few turns. Producers marked 'needs a road' deliver goods only along roads (or navigable structures) to a store; you spend only from Town Halls and stores linked to them."));
+      el("p", { className: "muted small" }, "Click the map to place it. R or right-click turns it, Esc cancels. It must touch your structures (or sites) and sit in your territory. It becomes a construction site that idle people build over a few turns. Goods go straight to your stores; people left idle lay roads on their own to link your buildings."));
   }
 
   window.HexHud = { topbar, players, selection, orders, trade, build, fmt: { costText, canPay, nameSpan, btn, cap, setResources, resIcon, resName } };

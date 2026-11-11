@@ -232,7 +232,6 @@
         if (s.active === false) return "Switched off.";
         return "Not working: no free workers.";
       };
-      const stranded = new Set((priv && priv.report.stranded) || []);
       const roads = [];
       for (const [sid, s] of Object.entries(game.structures)) {
         const def = content.structures[s.type];
@@ -244,12 +243,9 @@
         let tip = `${def.name} (${nameOf(s.owner)})`;
         if (s.maxHp) tip += ` hp ${s.hp}/${s.maxHp}`;
         if (idle) tip += `\n${reasonFor(sid, s, def)}`;
-        const cut = stranded.has(sid);
-        if (cut) tip += "\nNo road network leads to a store: its goods wait here (one turn's worth).";
-        const g = svg("g", { class: `hr-struct${idle ? " hr-idle" : ""}${cut ? " hr-stranded" : ""}` }, svg("title", {}, tip));
+        const g = svg("g", { class: `hr-struct${idle ? " hr-idle" : ""}` }, svg("title", {}, tip));
         // Solid structures get a light owner tint, navigable ones none (outlines are drawn after all structures).
         put(g, s.cells.map((k) => hexAt(k, SIZE, def.navigable ? { class: "hr-sfill hr-nav" } : { class: "hr-sfill", fill: c })));
-        if (cut) { const own = new Set(s.cells); put(g, borders(s.cells, (n) => own.has(n), { class: "hr-cut" }, 0.86)); }
         const [x, y] = middle(s.cells);
         put(g, svg("text", { x, y: y + 1, class: "hr-icon" }, def.icon || def.name.slice(0, 2)));
         if (idle) put(g, svg("line", { x1: x - 14, y1: y + 12, x2: x + 14, y2: y - 12, class: "hr-strike" }));

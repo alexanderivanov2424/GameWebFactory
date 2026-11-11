@@ -10,7 +10,7 @@ work, house, store, carry goods, claim territory, see, count for score or take h
     forecast(m, pid)              {"builders": people building this turn, "works": [site ids]}
                                   for the planning screen (idle = economy.staffing's idle people)
     progress(m, pid, idle, ev)    sites that get their builders advance one turn; finished ones
-                                  become structures
+                                  become structures; people still idle lay roads (roads.lay)
     remove(m, cid)                take a site off the map (orders.demolish refunds its cost)
 
 Rules: a structure needs `buildTurns` turns of work (content, default 1), and every turn of work
@@ -24,7 +24,7 @@ finished site with an enemy unit on it waits (without builders) until the unit h
 """
 
 from .content import STRUCTURES
-from .economy import staffing
+from . import economy, roads
 
 
 def start(m, pid, b):
@@ -60,7 +60,7 @@ def plan(m, pid, idle):
 
 
 def forecast(m, pid):
-    idle = staffing(m, pid)[1]
+    idle = economy.staffing(m, pid)[1]
     works = [site["id"] for site, ok in plan(m, pid, idle) if ok]
     return {"builders": sum(STRUCTURES[m.sites[c]["type"]]["builders"] for c in works), "works": works}
 
@@ -73,7 +73,9 @@ def progress(m, pid, idle, events):
     for site, works in plan(m, pid, idle):
         if works:
             site["done"] += 1
+            idle -= STRUCTURES[site["type"]]["builders"]
         if finished(site) and not blocked(m, site):
             remove(m, site["id"])
             m.add_structure(pid, site["type"], site["at"], site["rot"])
             events.append({"t": "built", "owner": pid, "type": site["type"], "at": site["at"]})
+    roads.lay(m, pid, idle, events)

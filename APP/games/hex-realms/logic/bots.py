@@ -11,14 +11,14 @@ A simple strategy, in this order each turn:
   2. Research the cheapest advance it can afford.
   3. Builders: if a construction site gets no builders, switch off its newest working structure
      that doesn't make food (once nothing is waiting, switch everything back on). Then build by
-     need (at most MAX_BUILDS a turn, only with idle people left over for builders): homes when nearly full, farms when food is short,
-     a lumbermill and a mine per city, storage when goods are near the cap, then Barracks,
-     Market, Chapel, College, Smithy, Towers, more farms. Producers and stores go next to its
-     roads; if there's no such site, it lays a road (from the Town Hall or its roads) towards
-     the land the producer needs.
+     need (at most MAX_BUILDS a turn, only with idle people left over for builders): homes when
+     nearly full, farms when food is short, a lumbermill and a mine per city, storage when goods
+     are near the cap, then Barracks, Market, Chapel, College, Smithy, Towers, more farms. If a
+     farm / lumbermill / mine finds no land it needs, it lays a road (from the Town Hall or its
+     roads) towards such land, which grows its territory. (Roads between buildings come by themselves.)
   4. Recruit Settlers until it has 3 cities, then an army that grows with the turn number.
   5. Units: ranged ones shoot what's in range; everyone attacks enemies near its structures;
-     the oldest unit scouts (unexplored land) until a war needs it; from ATTACK_TURN an army of
+     the oldest unit scouts (explore.target, like the Explore order) until a war needs it; from ATTACK_TURN an army of
      ATTACK_ARMY marches on the nearest enemy city it knows (or any enemy structure); the rest
      stay near home and hold.
 """
@@ -29,7 +29,7 @@ from collections import Counter
 from gamekit import LobbyError
 from gamekit.hexes import disk, dist, neighbors, parse
 
-from . import construction, economy, logistics, movement, orders, vision
+from . import construction, economy, explore, logistics, movement, orders, vision
 from .content import ADVANCES, ROAD, STRUCTURES, TOWN_HALL, UNITS, footprint
 from .economy import report, staffing
 
@@ -194,7 +194,7 @@ class Bot:
                 continue
             site = self.site(stype)
             if site is None:
-                if d["road"] and roads < MAX_ROADS and self.lay_road(stype):
+                if stype in NEED_TERRAIN and roads < MAX_ROADS and self.lay_road(stype):
                     roads += 1
                     idle -= STRUCTURES[ROAD]["builders"]
                 continue
@@ -220,7 +220,6 @@ class Bot:
         """(at, rot) of the best place for stype, or None."""
         m, pid, d = self.m, self.pid, STRUCTURES[stype]
         cells_taken, roads, pending = self.taken()
-        on_road = d["road"] or d["navigable"]
         best = None
         for at in self.free_cells():
             for rot in range(6 if len(d["cells"]) > 1 else 1):
@@ -230,7 +229,7 @@ class Bot:
                 if orders.site_problem(m, pid, stype, cells, pending, m.visible[pid]):
                     continue
                 touching = {n for c in cells for n in neighbors(c)} - set(cells)
-                if not touching & cells_taken or (on_road and not touching & roads):
+                if not touching & cells_taken:
                     continue
                 value = self.value(stype, cells, touching) - 0.3 * self.near_hall(at) + self.rng.random() * 0.1
                 if best is None or value > best[0]:
@@ -354,13 +353,6 @@ class Bot:
             try_act(self.m, self.pid, "move", u["id"], min(options, key=lambda k: (dist(k, goal), k)))
 
     def explore(self, u):
-        m, explored = self.m, self.m.explored[self.pid]
-        options = [k for k in movement.reach(m, u["id"]) if not self.enemy_at(k)]
-        if not options:
-            return
-        unknown = lambda k: sum(1 for n in [k] + neighbors(k) + [x for y in neighbors(k) for x in neighbors(y)]
-                                if n in m.cells and n not in explored)
-        best = max(options, key=lambda k: (unknown(k), self.rng.random()))
-        if unknown(best) == 0:
-            best = self.rng.choice(sorted(options))
-        try_act(m, self.pid, "move", u["id"], best)
+        goal = explore.target(self.m, u["id"])
+        if goal:
+            try_act(self.m, self.pid, "move", u["id"], goal)

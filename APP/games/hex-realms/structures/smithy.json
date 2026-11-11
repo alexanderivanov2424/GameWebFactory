@@ -24,7 +24,6 @@
  "recruits": [
   "catapult"
  ],
- "road": true,
  "category": "industry",
  "buildTurns": 3,
  "builders": 2

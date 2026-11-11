@@ -10,12 +10,15 @@ units move one cell per step at the same time and fight with dice wherever they 
 structure works if it has its workers (people, who need food and housing). Ordered structures
 become construction sites that take a few turns of work, each turn needing builders: people
 without a job (switch structures off, all at once, or demolish them to free people). Gold, faith and
-science are realm-wide; goods (food, wood, stone, metal) sit in stores (Town Hall, Storage
-Yard, Granary) and producers flagged "road" deliver them along road networks (roads plus
-"navigable" structures); you spend only from Town Halls and the stores linked to them. Lose every Town Hall and you are out. Last
+science are realm-wide; goods (food, wood, stone, metal) go straight into the realm's stores (Town
+Hall, Storage Yard, Granary) up to their room. Roads are free (one builder, one turn), speed up
+units, and people still idle after the sites lay them on their own to link buildings to stores
+and Town Halls to each other. Units on an Explore order walk on their own to clear the fog.
+Lose every Town Hall and you are out. Last
 realm standing wins; otherwise the highest score after the last turn.
 Full rules: logic/match.py (turn order, score), logic/economy.py, logic/combat.py,
-logic/movement.py, logic/orders.py, logic/logistics.py, logic/construction.py; content in structures/, units/,
+logic/movement.py, logic/orders.py, logic/logistics.py, logic/construction.py, logic/roads.py,
+logic/explore.py; content in structures/, units/,
 advances/ (fields in logic/content.py).
 
 Player options:  none (colors by seat)
@@ -31,6 +34,7 @@ the lobby envelope owns it):
     {"action": "move", "unit": uid, "to": "q,r"}      (to = own cell clears the unit's orders)
     {"action": "shoot", "unit": uid, "at": "q,r"}
     {"action": "hold", "unit": uid}                    (toggle)
+    {"action": "explore", "unit": uid}                 (toggle; kept across turns, any other order stops it)
     {"action": "found", "unit": uid, "rot": 0-5}
     {"action": "research", "advance": aid}
     {"action": "cancel", "order": oid}                 (a build / recruit / research order)
@@ -72,7 +76,7 @@ class Game(LobbyGame):
         "seed": Int("Map seed", default=0, low=0, high=999999, hint="0 = a new random map"),
     }
     ACTIONS = {name: name for name in
-               ("build", "recruit", "move", "shoot", "hold", "found", "research", "cancel", "trade", "toggle", "staff", "demolish",
+               ("build", "recruit", "move", "shoot", "hold", "explore", "found", "research", "cancel", "trade", "toggle", "staff", "demolish",
                 "disband", "done")}
 
     def __init__(self, room):
@@ -140,6 +144,9 @@ class Game(LobbyGame):
 
     def hold(self, member, data):
         self.order(member, "hold", text_id(data, "unit"))
+
+    def explore(self, member, data):
+        self.order(member, "explore", text_id(data, "unit"))
 
     def found(self, member, data):
         self.order(member, "found", text_id(data, "unit"), whole_number(data.get("rot", 0), "Rotation", 0, 5))

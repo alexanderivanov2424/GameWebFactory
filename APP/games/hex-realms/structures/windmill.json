@@ -20,7 +20,6 @@
   "max": 3
  },
  "text": "+2 food per Farm next to it (up to 3).",
- "road": true,
  "category": "food",
  "buildTurns": 2,
  "builders": 1

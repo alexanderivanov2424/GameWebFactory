@@ -23,7 +23,7 @@
   "stone": 40,
   "metal": 40
  },
- "text": "Holds 40 wood, stone and metal. Navigable: structures touching it are on its roads.",
+ "text": "Holds 40 wood, stone and metal. Navigable: links the roads that touch it.",
  "navigable": true,
  "category": "industry",
  "buildTurns": 2,

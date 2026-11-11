@@ -32,7 +32,6 @@
   "plains"
  ],
  "text": "+1 food for each of its cells on grassland.",
- "road": true,
  "category": "food",
  "buildTurns": 2,
  "builders": 1

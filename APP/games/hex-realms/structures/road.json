@@ -7,9 +7,7 @@
    0
   ]
  ],
- "cost": {
-  "wood": 1
- },
+ "cost": {},
  "hp": 0,
  "territory": 1,
  "terrain": [
@@ -19,7 +17,7 @@
   "hills",
   "desert"
  ],
- "text": "Carries goods: producers on a road network deliver to the stores on it. Units move twice as far on roads.",
+ "text": "Free, but takes a builder for a turn. Units move twice as far on roads. Idle people also lay roads on their own to link your buildings to the nearest store and your Town Halls to each other.",
  "category": "roads",
  "vision": 2,
  "buildTurns": 1,

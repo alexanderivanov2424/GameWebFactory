@@ -55,11 +55,11 @@ class BuildTests(unittest.TestCase):
 
     def test_build_pays_and_appears_after_the_turn(self):
         wood = stock(self.m, "p1")["wood"]
-        self.m.act("p1", "build", "road", "-7,0", 0)
-        self.assertEqual(stock(self.m, "p1")["wood"], wood - 1)
+        self.m.act("p1", "build", "hut", "-7,0", 0)
+        self.assertEqual(stock(self.m, "p1")["wood"], wood - 2)
         self.assertNotIn("-7,0", self.m.cell_structure)
         end_turn(self.m)
-        self.assertEqual(self.m.structures[self.m.cell_structure["-7,0"]]["type"], "road")
+        self.assertEqual(self.m.structures[self.m.cell_structure["-7,0"]]["type"], "hut")
 
     def test_outside_territory_is_refused(self):
         with self.assertRaisesRegex(LobbyError, "territory"):
@@ -166,7 +166,7 @@ class EconomyTests(unittest.TestCase):
 
 
 class LogisticsTests(unittest.TestCase):
-    """Goods travel along road networks (roads + navigable structures) to stores."""
+    """Goods sit in the realm's stores (no roads needed)."""
 
     def setUp(self):
         self.m = blank(players=1)
@@ -175,51 +175,9 @@ class LogisticsTests(unittest.TestCase):
     def put(self, stype, at, rot=0):
         return self.m.add_structure("p1", stype, at, rot)
 
-    def roads(self, *cells):
-        for c in cells:
-            self.put("road", c)
-
-    def test_without_a_road_goods_wait_in_the_producer(self):
-        farm = self.put("farm", "2,0")  # touches the hall, but touching isn't a road
-        made = economy.output(self.m, farm)["food"]
-        end_turn(self.m)
-        end_turn(self.m)
-        self.assertEqual(farm["held"], {"food": made})  # one turn's output at most
-        self.assertIn(farm["id"], economy.report(self.m, "p1")["stranded"])
-        self.roads("2,-1")  # touches the hall's 1,0 and the farm's 2,0
-        before = stock(self.m, "p1")["food"]
-        end_turn(self.m)
-        self.assertEqual(farm["held"], {})
-        self.assertGreater(stock(self.m, "p1")["food"], before)
-
-    def test_navigable_structures_extend_roads(self):
-        self.put("storage_yard", "3,0")  # navigable: 3,0 4,0 3,1
-        self.put("market", "5,0")  # navigable: 5,0 6,0 7,0
-        farm = self.put("farm", "8,0")  # B - A - A
-        self.assertIn(farm["id"], economy.report(self.m, "p1")["stranded"])  # no road in the chain yet
-        self.roads("2,0")  # hall - road - A - A - B
-        self.assertNotIn(farm["id"], economy.report(self.m, "p1")["stranded"])
-        end_turn(self.m)
-        self.assertEqual(farm["held"], {})
-
-    def test_unlinked_store_fills_but_cannot_be_spent(self):
-        mill = self.put("lumbermill", "6,0")  # 6,0 7,0
-        self.roads("8,0")
-        yard = self.put("storage_yard", "9,0")  # 9,0 10,0 9,1: on the road, not linked to the hall
-        wood = stock(self.m, "p1")["wood"]
-        end_turn(self.m)
-        made = yard["stock"]["wood"]
-        self.assertGreater(made, 0)
-        self.assertEqual(mill["held"], {})
-        self.assertEqual(economy.report(self.m, "p1")["unusable"]["wood"], made)
-        self.assertEqual(stock(self.m, "p1")["wood"], wood)  # the hall makes no wood
-        self.roads(*[f"{q},-1" for q in range(1, 10)])  # from the hall's 1,0 to the yard's 9,0
-        self.assertEqual(stock(self.m, "p1")["wood"], wood + made)
-
-    def test_spending_uses_linked_stores_too(self):
+    def test_spending_uses_every_store(self):
         self.m.structures[self.hall]["stock"]["wood"] = 0
-        self.roads("2,0")
-        yard = self.put("storage_yard", "3,0")
+        yard = self.put("storage_yard", "6,0")  # far from the hall, no road
         yard["stock"]["wood"] = 5
         self.m.act("p1", "build", "hut", "-1,0", 0)
         self.assertEqual(yard["stock"]["wood"], 3)

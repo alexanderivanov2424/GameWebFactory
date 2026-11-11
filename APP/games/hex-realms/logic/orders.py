@@ -9,6 +9,7 @@ so a player can never order more than they have. Orders are private until the tu
                                     `to` = the unit's own cell clears its orders
     shoot(m, pid, uid, at)          ranged unit: shoot a cell instead of moving
     hold(m, pid, uid)               toggle: stay put and defend with 1 more die
+    explore(m, pid, uid)            toggle: the unit walks on its own each turn to clear fog (explore.py)
     found(m, pid, uid, rot)         settlers found a Town Hall where they stand (instead of moving)
     research(m, pid, aid)           buy an advance (takes effect at the start of resolution)
     cancel(m, pid, oid)             undo a build / recruit / research order (refund)
@@ -24,7 +25,7 @@ from gamekit import LobbyError
 from gamekit.hexes import dist, neighbors
 
 from .content import ADVANCES, STRUCTURES, TERRAIN, TOWN_HALL, UNITS, footprint
-from . import construction, logistics, vision
+from . import construction, explore as exploring, logistics, vision
 from .economy import report
 from .movement import path
 
@@ -33,7 +34,7 @@ TRADE_GOODS = ["gold", "food", "wood", "stone", "metal"]
 
 
 def pay(m, pid, cost):
-    """From the Town Halls and the stores linked to them (logistics.py), plus realm gold/faith/science."""
+    """From the realm's stores (logistics.py), plus realm gold/faith/science."""
     logistics.take(m, pid, cost)
 
 
@@ -55,7 +56,10 @@ def own_structure(m, pid, sid):
     return s
 
 
-def clear_unit(m, pid, uid):
+def clear_unit(m, pid, uid, exploring=False):
+    """Drop the unit's orders for this turn (and its Explore order, unless `exploring`)."""
+    if not exploring and uid in m.units:
+        m.units[uid].pop("explore", None)
     o = m.orders[pid]
     o["moves"].pop(uid, None)
     o["shots"].pop(uid, None)
@@ -170,6 +174,20 @@ def hold(m, pid, uid):
     clear_unit(m, pid, uid)
     if not holding:
         m.orders[pid]["holds"].append(uid)
+
+
+def explore(m, pid, uid):
+    u = own_unit(m, pid, uid)
+    if u.get("explore"):
+        clear_unit(m, pid, uid)
+        return
+    if not m.fog:
+        raise LobbyError("There's no fog of war to clear.")
+    if UNITS[u["type"]]["settler"]:
+        raise LobbyError("Settlers don't explore.")
+    if not exploring.step(m, uid):
+        raise LobbyError("Nothing left to explore from here.")
+    u["explore"] = True
 
 
 def found_problem(m, pid, u, rot, planning=True):

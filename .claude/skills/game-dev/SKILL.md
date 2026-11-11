@@ -59,11 +59,11 @@ Games at a glance (details in each `NOTES.md`):
   always-for-sale market plus a shop row). Unbounded grid; full-screen page with a HUD
   (`client/map.js` pans/zooms). Enemies hidden. Content: `content/README.md`.
 - **hex-realms**: `logic/` modules; civilization game on a random hex map. Secret simultaneous
-  orders (build / recruit / move / shoot / hold / found / research / trade), resolved together in
+  orders (build / recruit / move / shoot / hold / explore / found / research / trade), resolved together in
   `Match.resolve` (order in `logic/match.py`'s header); movement collisions in `logic/movement.py`,
   dice in `logic/combat.py`, territory/workers in `logic/economy.py`, construction sites (build turns, idle builders) in
-  `logic/construction.py`, goods in stores and road
-  networks in `logic/logistics.py`, fog of war in `logic/vision.py` (the map is in each member's
+  `logic/construction.py`, goods in stores in `logic/logistics.py`, road networks and automatic
+  roads in `logic/roads.py`, the Explore order in `logic/explore.py`, fog of war in `logic/vision.py` (the map is in each member's
   private `view`; the client merges it into `game`), bots (a setting; seats `b1`...) in `logic/bots.py`. Content JSON in
   `structures/`, `units/`, `advances/` (fields in `logic/content.py`).
 - **block-blast**: `logic/` modules; 9x9 boards filled with rotatable shape cards (JSON in

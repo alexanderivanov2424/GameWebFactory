@@ -31,7 +31,7 @@
   "max": 4
  },
  "trade": 3,
- "text": "+1 gold per Hut/House next to it (up to 4). Lets you trade 3:1. Navigable: structures touching it are on its roads.",
+ "text": "+1 gold per Hut/House next to it (up to 4). Lets you trade 3:1. Navigable: links the roads that touch it.",
  "navigable": true,
  "category": "trade",
  "buildTurns": 3,
