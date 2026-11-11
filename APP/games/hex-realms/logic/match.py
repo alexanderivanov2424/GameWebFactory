@@ -34,7 +34,7 @@ from gamekit import LobbyError
 from gamekit.hexes import neighbors
 
 from . import combat, logistics, movement, orders
-from .content import ADVANCES, RESOURCES, STRUCTURES, TERRAIN, TOWN_HALL, UNITS, footprint
+from .content import ADVANCES, CATEGORIES, RESOURCES, STRUCTURES, TERRAIN, TOWN_HALL, UNITS, footprint
 from .economy import end_of_turn, report, territory
 from .mapgen import generate
 
@@ -327,7 +327,7 @@ class Match:
             "turn": self.turn, "turnLimit": self.turn_limit, "step": self.step, "radius": self.radius,
             "cells": self.cells, "seats": self.seats,
             "content": {"structures": STRUCTURES, "units": UNITS, "advances": ADVANCES, "terrain": TERRAIN,
-                        "resources": RESOURCES},
+                        "resources": RESOURCES, "categories": CATEGORIES},
             "players": {pid: {"name": self.names[pid], "color": p["color"], "res": self.shown[pid]["res"],
                               "pop": self.shown[pid]["pop"], "advances": p["advances"], "done": p["done"],
                               "alive": p["alive"], "score": self.score(pid)} for pid, p in self.players.items()},

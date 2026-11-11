@@ -19,5 +19,6 @@
  "jobs": 1,
  "produce": {
   "science": 2
- }
+ },
+ "category": "culture"
 }

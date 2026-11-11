@@ -21,5 +21,6 @@
   "desert",
   "mountain"
  ],
- "text": "Blocks enemy units until knocked down."
+ "text": "Blocks enemy units until knocked down.",
+ "category": "roads"
 }

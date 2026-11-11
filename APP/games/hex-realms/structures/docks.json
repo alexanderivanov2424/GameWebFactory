@@ -20,5 +20,6 @@
   "water"
  ],
  "text": "Built on water.",
- "road": true
+ "road": true,
+ "category": "food"
 }

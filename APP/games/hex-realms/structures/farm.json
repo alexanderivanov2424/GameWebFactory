@@ -32,5 +32,6 @@
   "plains"
  ],
  "text": "+1 food for each of its cells on grassland.",
- "road": true
+ "road": true,
+ "category": "food"
 }

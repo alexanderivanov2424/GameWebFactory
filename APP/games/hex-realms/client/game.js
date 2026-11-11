@@ -10,7 +10,7 @@
 (() => {
   const { $, el, fill } = AppDom;
   const U = HexMap.util;
-  const ui = { sel: null, mode: null, tab: "build", trade: { give: "gold", get: "food" }, lastRot: 0,
+  const ui = { sel: null, mode: null, tab: "build", buildCat: null, trade: { give: "gold", get: "food" }, lastRot: 0,
     key: null, flashSeen: null, turnStart: Date.now(), gameNumber: null };
   let state = null;
   let hover = null;

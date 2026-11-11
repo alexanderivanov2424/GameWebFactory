@@ -19,5 +19,6 @@
  ],
  "requires": "sailing",
  "coast": true,
- "text": "Must touch water. Builds galleys."
+ "text": "Must touch water. Builds galleys.",
+ "category": "military"
 }

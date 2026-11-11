@@ -23,5 +23,6 @@
   "max": 4
  },
  "text": "+1 food, and +1 more per Hut or House next to it (up to 4).",
- "road": true
+ "road": true,
+ "category": "food"
 }

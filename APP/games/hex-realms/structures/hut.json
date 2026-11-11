@@ -12,5 +12,6 @@
  },
  "housing": 2,
  "home": true,
- "text": "Housing for 2 people."
+ "text": "Housing for 2 people.",
+ "category": "homes"
 }

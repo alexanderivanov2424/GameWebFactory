@@ -163,7 +163,13 @@
   function build(box, ctx) {
     const { content, me, ui, act } = ctx;
     const mine = new Set(me.advances || []);
-    const items = Object.entries(content.structures).filter(([id]) => id !== "town_hall").map(([id, d]) => {
+    const buildable = Object.entries(content.structures).filter(([id]) => id !== "town_hall");
+    const cats = Object.entries(content.categories || {}).filter(([c]) => buildable.some(([, d]) => d.category === c));
+    // One category open at a time; clicking the open one closes it. Switching cancels a placement.
+    const pick = (c) => { ui.buildCat = ui.buildCat === c ? null : c; act.setMode(ui.mode?.type === "build" ? null : ui.mode); };
+    const tabs = el("div", { className: "hr-cats" }, cats.map(([c, label]) =>
+      el("button", { className: `hr-cat${ui.buildCat === c ? " on" : ""}`, onclick: () => pick(c) }, label)));
+    const items = buildable.filter(([, d]) => d.category === ui.buildCat).map(([id, d]) => {
       let why = "";
       if (d.requires && !mine.has(d.requires)) why = `Needs ${content.advances[d.requires]?.name || d.requires}`;
       else if (!canPay(ctx, d.cost)) why = "Can't afford";
@@ -175,8 +181,9 @@
         onclick: () => (active ? act.setMode(null) : act.setMode({ type: "build", kind: id, rot: ui.lastRot || 0 })) },
         el("span", { className: "hr-bicon" }, d.icon || "▪"), el("span", { className: "hr-bname" }, d.name), el("span", { className: "hr-bcost small" }, why || costText(d.cost)));
     });
-    fill(box, el("div", { className: "hr-buildgrid" }, items),
-      el("p", { className: "muted small" }, "Pick a structure, then click the map. R or right-click turns it, Esc cancels. It must touch your structures and sit in your territory. Producers marked 'needs a road' deliver goods only along roads (or navigable structures) to a store; you spend only from Town Halls and stores linked to them."));
+    fill(box, tabs,
+      ui.buildCat ? el("div", { className: "hr-buildgrid" }, items) : el("p", { className: "muted small" }, "Pick a category, then a structure."),
+      el("p", { className: "muted small" }, "Click the map to place it. R or right-click turns it, Esc cancels. It must touch your structures and sit in your territory. Producers marked 'needs a road' deliver goods only along roads (or navigable structures) to a store; you spend only from Town Halls and stores linked to them."));
   }
 
   window.HexHud = { topbar, players, selection, orders, trade, build, fmt: { costText, canPay, nameSpan, btn, cap } };

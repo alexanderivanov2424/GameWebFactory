@@ -24,5 +24,6 @@
  "recruits": [
   "catapult"
  ],
- "road": true
+ "road": true,
+ "category": "industry"
 }

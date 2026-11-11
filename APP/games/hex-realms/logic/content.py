@@ -51,6 +51,8 @@ TERRAIN = {
     "water": {"name": "Water", "move": None, "cover": False, "build": False},
 }
 ROAD_MOVE = 1  # half steps per road cell
+CATEGORIES = {"roads": "Roads & Defense", "homes": "Homes", "food": "Food", "industry": "Industry", "trade": "Trade",
+              "military": "Military", "culture": "Learning & Faith", "city": "City"}  # build menu tabs, in order
 EFFECTS = {"towerDice", "farmFood", "homeHousing", "defendDice", "chapelGold", "attackDice"}
 
 
@@ -85,6 +87,9 @@ def parse_structure(sid, d):
         "heals": d.get("heals") is True, "shoots": whole(d, "shoots", 0, 9, default=0), "range": whole(d, "range", 0, 5, default=0),
         "trade": whole(d, "trade", 0, 9, default=0), "score": whole(d, "score", 0, 99, default=0), "text": text(d, "text", 300),
     }
+    s["category"] = d.get("category", "city")
+    if s["category"] not in CATEGORIES:
+        raise ValueError(f"category must be one of {sorted(CATEGORIES)}")
     s["road"] = d.get("road") is True
     s["navigable"] = d.get("navigable") is True
     s["perCell"] = {t: res_map(d["perCell"], t) for t in d.get("perCell", {}) if t in TERRAIN}

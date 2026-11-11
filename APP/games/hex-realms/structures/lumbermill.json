@@ -27,5 +27,6 @@
   "max": 4
  },
  "text": "+1 wood per forest cell next to it (up to 4).",
- "road": true
+ "road": true,
+ "category": "industry"
 }

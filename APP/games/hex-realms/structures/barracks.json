@@ -22,5 +22,6 @@
   "swordsman"
  ],
  "heals": true,
- "text": "Trains infantry. Units on or next to it heal fully."
+ "text": "Trains infantry. Units on or next to it heal fully.",
+ "category": "military"
 }

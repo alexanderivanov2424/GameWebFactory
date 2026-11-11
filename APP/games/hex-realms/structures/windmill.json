@@ -20,5 +20,6 @@
   "max": 3
  },
  "text": "+2 food per Farm next to it (up to 3).",
- "road": true
+ "road": true,
+ "category": "food"
 }

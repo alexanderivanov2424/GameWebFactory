@@ -19,5 +19,6 @@
   "hills",
   "desert"
  ],
- "text": "Carries goods: producers on a road network deliver to the stores on it. Units move twice as far on roads."
+ "text": "Carries goods: producers on a road network deliver to the stores on it. Units move twice as far on roads.",
+ "category": "roads"
 }

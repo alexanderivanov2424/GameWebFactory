@@ -26,5 +26,6 @@
   }
  },
  "text": "Hills: +2 stone +1 metal. Mountain: +1 stone +2 metal.",
- "road": true
+ "road": true,
+ "category": "industry"
 }

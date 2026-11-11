@@ -19,5 +19,6 @@
  },
  "growth": 1,
  "text": "Holds 40 food. Population grows 1 faster. Navigable: structures touching it are on its roads.",
- "navigable": true
+ "navigable": true,
+ "category": "food"
 }

@@ -25,5 +25,6 @@
   "desert",
   "mountain"
  ],
- "text": "Shoots the nearest enemy unit within 2 after movement."
+ "text": "Shoots the nearest enemy unit within 2 after movement.",
+ "category": "roads"
 }
