@@ -7,7 +7,8 @@ TERRAIN      {id: {"name", "move" (cost in half steps, None = impassable for lan
 RESOURCES    stock resources in display order; "people" is separate (population)
 RESOURCE_INFO  {res: (name, icon)} for the client, people included
 structures/<id>.json:
-    name, icon (an emoji or short text drawn on the map; placeholder for art), cells [[q, r], ...] (axial offsets, first = anchor),
+    name, icon (an emoji or short text drawn on the map; placeholder for art), color ("#rrggbb", its
+    solid colour on the map; owners show on territory borders and hover), cells [[q, r], ...] (axial offsets, first = anchor),
     cost {res: n}, hp (0 = can't be attacked), defense (dice it rolls back at attackers),
     jobs (people needed to work), produce {res: n}, perCell {terrain: {res: n}} (per own cell),
     onTerrain {terrain: {res: n}} (by the anchor's terrain, replaces produce), perAdjacent
@@ -32,6 +33,7 @@ advances/<id>.json:
 """
 
 import logging
+import re
 from pathlib import Path
 
 from gamekit.data import load_json_dir, text, whole
@@ -94,6 +96,9 @@ def parse_structure(sid, d):
         "score": whole(d, "score", 0, 99, default=0), "text": text(d, "text", 300),
         "buildTurns": whole(d, "buildTurns", 1, 9, default=1), "builders": whole(d, "builders", 1, 9, default=1),
     }
+    s["color"] = d.get("color", "#a0a0a0")
+    if not isinstance(s["color"], str) or not re.fullmatch(r"#[0-9a-fA-F]{6}", s["color"]):
+        raise ValueError("color must be like #a0b0c0")
     s["category"] = d.get("category", "city")
     if s["category"] not in CATEGORIES:
         raise ValueError(f"category must be one of {sorted(CATEGORIES)}")

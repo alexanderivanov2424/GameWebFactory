@@ -34,5 +34,6 @@
  "text": "+1 food for each of its cells on grassland.",
  "category": "food",
  "buildTurns": 2,
- "builders": 1
+ "builders": 1,
+ "color": "#e3c75a"
 }

@@ -1,8 +1,12 @@
 """Hex Realms: territory, workers, production, upkeep and growth.
 
-    territory(m)             {key: pid}: each cell within a structure's claim radius (or within
-                             CLAIM_RADIUS of a claimed cell, m.claims) belongs to the owner of the
-                             nearest such cell (a tie between players = no one)
+    territory(m)             the new {key: pid}: a player reaches the cells within a structure's
+                             claim radius (or CLAIM_RADIUS of a claimed cell, m.claims). Land is
+                             first come, first served: a cell stays its owner's while they still
+                             reach it; a free cell goes to the one player reaching it, and to no
+                             one while two or more do (they got there at the same time). Called
+                             by Match.refresh, so land changes hands only as structures and claims
+                             appear or vanish (at resolution).
     effect(m, pid, name)     sum of an advance effect key over pid's advances
     output(m, s)             what structure s makes in a turn when it works
     staffing(m, pid)         (working structures in job order, people without a job)
@@ -33,20 +37,22 @@ CLAIM_RADIUS = 1  # a claimed cell (orders.claim) holds itself and its neighbour
 
 
 def territory(m):
-    best = {}
+    """The new {key: pid} map from m.territory (see the module header): first come, first served."""
+    reach = {}
     sources = [(c, STRUCTURES[s["type"]]["territory"], s["owner"]) for s in m.structures.values() for c in s["cells"]]
     sources += [(c, CLAIM_RADIUS, owner) for c, owner in m.claims.items()]
     for c, radius, owner in sources:
         for k in disk(radius, parse(c)):
-            if k not in m.cells:
-                continue
-            d = dist(k, c)
-            cur = best.get(k)
-            if cur is None or d < cur[0]:
-                best[k] = (d, owner)
-            elif d == cur[0] and cur[1] != owner:
-                best[k] = (d, None)
-    return {k: p for k, (d, p) in best.items() if p}
+            if k in m.cells:
+                reach.setdefault(k, set()).add(owner)
+    out = {}
+    for k, owners in reach.items():
+        cur = m.territory.get(k)
+        if cur in owners:
+            out[k] = cur
+        elif len(owners) == 1:
+            out[k] = next(iter(owners))
+    return out
 
 
 def effect(m, pid, name):

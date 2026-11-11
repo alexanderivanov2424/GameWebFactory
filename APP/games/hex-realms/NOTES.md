@@ -29,9 +29,12 @@ fields in `logic/content.py`). Tests: `tests/` (`python3 -I tools/run_tests.py h
   not food that fits in the stores.
 - **No roads; land is bought** (2026-11-11, the user's call): roads (first carrying goods, then laid
   automatically) were removed. Structures go anywhere in your territory, with no "must touch"
-  rule; `orders.claim` spends 1 wood (`CLAIM_COST`) to add a claim point (`m.claims`) that
-  `economy.territory` treats like a 1-radius structure (nearest owner wins, ties = no one). Claims
-  happen at once, so you can build on the land the same turn.
+  rule. `orders.claim` is an order paid in gold (`CLAIM_COST`); at resolution (`Match._claims`,
+  before builds) it adds a claim point (`m.claims`) that reaches like a 1-radius structure.
+- **First come, first served land** (`economy.territory`): `m.territory` is kept between refreshes;
+  a cell stays its owner's while they still reach it, a free cell goes to the only player reaching
+  it, and to nobody while two or more do (same-turn expansion). Land only changes as structures
+  and claims appear or vanish, which is at resolution (demolish frees land at once).
 - **Explore** (`logic/explore.py`): a flag on the unit (`u["explore"]`) survives the per-turn order
   reset; `Match.plan_explorers` gives each flagged unit a move as planning starts, and any other
   order for the unit (`orders.clear_unit`) clears it. Bots scout with the same `target`.
@@ -75,8 +78,9 @@ fields in `logic/content.py`). Tests: `tests/` (`python3 -I tools/run_tests.py h
   `logic/content.py`: see their headers.
 - `client/map.js`: `HexMap.create`: pan (drag) / zoom (wheel) SVG map; terrain layer rebuilt only
   when `game.cells` changes, the rest per state;
-  structures are a light owner tint with one owner-coloured outline per group of
-  touching structures, and the icon (emoji from the content, placeholder for art) at their middle; `setHighlights` / `setGhost` / `flash` only
+  structures are solid in their content `color`, drawn by `blob` (cells at 90% with the gaps
+  between a structure's own cells filled, so only its outside is inset); owner colours show on the
+  territory border and as an outline on hover (`hoverG`, `shapeAt`), and the icon (emoji from the content, placeholder for art) at their middle; `setHighlights` / `setGhost` / `flash` only
   touch overlays. `HexMap.util` has the client's hex maths (dist, neighbors, add).
 - `client/hud.js`: `HexHud`: top bar (stock + net, people: jobs / building / idle, growth only when
   it will happen, Jobs off / on, End turn), players, selection panel (unit / structure / site actions, Explore, recruit buttons with the server's reasons), orders list, trade,
@@ -97,7 +101,7 @@ fields in `logic/content.py`). Tests: `tests/` (`python3 -I tools/run_tests.py h
   turns x 1 builder, House 2 x 2, University 4 x 3, Monument 5 x 3), and every worker in a job is
   one builder fewer, so the opening is a choice between producing and building. The hall's 25-cap
   makes a Storage Yard or Granary the next limit. Territory grows with structures (radius 2, the hall
-  3) or 1 wood per claimed cell, so wood also buys room to expand.
+  3) or gold per claimed cell (2), so gold also buys room to expand.
 - Sieges are slow on purpose: a Swordsman does ~2 damage a turn to a 15 hp Town Hall and takes
   ~1 back, so taking a city needs 3+ units or Catapults (3 damage per hit, from range, no reply,
   but towers shoot them).

@@ -29,5 +29,6 @@
  "text": "+1 wood per forest cell next to it (up to 4).",
  "category": "industry",
  "buildTurns": 2,
- "builders": 1
+ "builders": 1,
+ "color": "#7a4a22"
 }

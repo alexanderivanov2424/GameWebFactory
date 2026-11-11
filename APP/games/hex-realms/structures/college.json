@@ -22,5 +22,6 @@
  },
  "category": "culture",
  "buildTurns": 3,
- "builders": 2
+ "builders": 2,
+ "color": "#5a70b8"
 }

@@ -34,5 +34,6 @@
  "text": "+1 gold per Hut/House next to it (up to 4). Lets you trade 3:1.",
  "category": "trade",
  "buildTurns": 3,
- "builders": 2
+ "builders": 2,
+ "color": "#cf6a35"
 }

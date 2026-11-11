@@ -9,12 +9,13 @@ so a player can never order more than they have. Orders are private until the tu
                                     `to` = the unit's own cell clears its orders
     shoot(m, pid, uid, at)          ranged unit: shoot a cell instead of moving
     hold(m, pid, uid)               toggle: stay put and defend with 1 more die
-    claim(m, pid, at)               at once, for CLAIM_COST: an unowned explored cell next to your
-                                    territory becomes yours with its neighbours (economy.territory)
+    claim(m, pid, at)               for CLAIM_COST (gold): at resolution, an unowned explored cell next
+                                    to your territory becomes yours with its free neighbours
+                                    (economy.territory); cancel refunds it
     explore(m, pid, uid)            toggle: the unit walks on its own each turn to clear fog (explore.py)
     found(m, pid, uid, rot)         settlers found a Town Hall where they stand (instead of moving)
     research(m, pid, aid)           buy an advance (takes effect at the start of resolution)
-    cancel(m, pid, oid)             undo a build / recruit / research order (refund)
+    cancel(m, pid, oid)             undo a build / claim / recruit / research order (refund)
     trade(m, pid, give, get)        market: give `rate` of one resource for 1 of another, at once
     toggle(m, pid, sid)             switch a structure with jobs off/on (frees its workers)
     staff(m, pid, on)               switch every structure with jobs off (on=False) or on at once
@@ -32,7 +33,7 @@ from .economy import report
 from .movement import path
 
 CITY_SPACING = 5
-CLAIM_COST = {"wood": 1}
+CLAIM_COST = {"gold": 2}
 TRADE_GOODS = ["gold", "food", "wood", "stone", "metal"]
 
 
@@ -105,7 +106,7 @@ def build(m, pid, stype, at, rot):
     if problem:
         raise LobbyError(problem)
     if any(m.territory.get(c) != pid for c in cells):
-        raise LobbyError("Build inside your territory (extend it with wood).")
+        raise LobbyError("Build inside your territory (claim more land with gold).")
     pay(m, pid, d["cost"])
     o["builds"].append({"id": m.new_id("o"), "type": stype, "at": at, "rot": rot % 6, "cells": cells, "cost": dict(d["cost"])})
 
@@ -183,6 +184,8 @@ def claim_problem(m, pid, at):
         return "That cell already belongs to a realm." if m.territory[at] != pid else "That's your land already."
     if not any(m.territory.get(n) == pid for n in neighbors(at)):
         return "Claim a cell next to your territory."
+    if any(c["at"] == at for c in m.orders[pid]["claims"]):
+        return "You're claiming that cell already."
     return None
 
 
@@ -191,7 +194,7 @@ def claim(m, pid, at):
     if problem:
         raise LobbyError(problem)
     pay(m, pid, CLAIM_COST)
-    m.claims[at] = pid
+    m.orders[pid]["claims"].append({"id": m.new_id("o"), "at": at, "cost": dict(CLAIM_COST)})
 
 
 def explore(m, pid, uid):
@@ -254,7 +257,7 @@ def research(m, pid, aid):
 
 def cancel(m, pid, oid):
     o = m.orders[pid]
-    for kind in ("builds", "recruits", "research"):
+    for kind in ("builds", "claims", "recruits", "research"):
         for x in o[kind]:
             if x["id"] == oid:
                 o[kind].remove(x)

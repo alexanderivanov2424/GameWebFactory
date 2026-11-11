@@ -22,5 +22,6 @@
  "text": "+2 food per Farm next to it (up to 3).",
  "category": "food",
  "buildTurns": 2,
- "builders": 1
+ "builders": 1,
+ "color": "#eadfae"
 }

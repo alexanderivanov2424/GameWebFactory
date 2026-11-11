@@ -26,5 +26,6 @@
  "text": "Trains knights.",
  "category": "military",
  "buildTurns": 3,
- "builders": 2
+ "builders": 2,
+ "color": "#86613f"
 }

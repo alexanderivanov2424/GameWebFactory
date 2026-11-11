@@ -29,5 +29,6 @@
  "text": "+1 faith per Hut/House next to it (up to 3).",
  "category": "culture",
  "buildTurns": 2,
- "builders": 2
+ "builders": 2,
+ "color": "#ece6d2"
 }

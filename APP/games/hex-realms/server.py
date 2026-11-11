@@ -12,7 +12,8 @@ become construction sites that take a few turns of work, each turn needing build
 without a job (switch structures off, all at once, or demolish them to free people). Gold, faith and
 science are realm-wide; goods (food, wood, stone, metal) go straight into the realm's stores (Town
 Hall, Storage Yard, Granary) up to their room. Structures go anywhere inside your territory;
-1 wood extends it (an explored cell next to it, with its neighbours). There are no roads. Units on
+gold buys more (claim an explored cell next to it, with its neighbours). Land is first come, first
+served: it stays yours, and cells two realms reach in the same turn go to no one. No roads. Units on
 an Explore order walk on their own to clear the fog.
 Lose every Town Hall and you are out. Last
 realm standing wins; otherwise the highest score after the last turn.
@@ -30,7 +31,7 @@ units, construction sites, territory, events as they see them; spectators see ev
 Game messages (all only while planning; any order un-readies you; never use a "type" key,
 the lobby envelope owns it):
     {"action": "build", "kind": stype, "at": "q,r", "rot": 0-5}
-    {"action": "claim", "at": "q,r"}                   (at once: 1 wood, the cell and its neighbours join your territory)
+    {"action": "claim", "at": "q,r"}                   (2 gold; at resolution the cell and its free neighbours become yours)
     {"action": "recruit", "structure": sid, "kind": utype}
     {"action": "move", "unit": uid, "to": "q,r"}      (to = own cell clears the unit's orders)
     {"action": "shoot", "unit": uid, "at": "q,r"}
@@ -38,7 +39,7 @@ the lobby envelope owns it):
     {"action": "explore", "unit": uid}                 (toggle; kept across turns, any other order stops it)
     {"action": "found", "unit": uid, "rot": 0-5}
     {"action": "research", "advance": aid}
-    {"action": "cancel", "order": oid}                 (a build / recruit / research order)
+    {"action": "cancel", "order": oid}                 (a build / claim / recruit / research order)
     {"action": "trade", "give": res, "get": res}
     {"action": "toggle", "structure": sid}
     {"action": "staff", "on": true|false}              (switch every structure with jobs on / off)

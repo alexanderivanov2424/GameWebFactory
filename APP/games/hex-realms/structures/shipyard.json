@@ -22,5 +22,6 @@
  "text": "Must touch water. Builds galleys.",
  "category": "military",
  "buildTurns": 3,
- "builders": 2
+ "builders": 2,
+ "color": "#356489"
 }

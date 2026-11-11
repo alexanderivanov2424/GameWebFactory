@@ -29,5 +29,6 @@
  "text": "Lets you trade 2:1.",
  "category": "trade",
  "buildTurns": 4,
- "builders": 2
+ "builders": 2,
+ "color": "#b04a35"
 }

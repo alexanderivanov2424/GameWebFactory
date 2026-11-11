@@ -57,6 +57,46 @@
     return lines;
   }
 
+  // One solid shape for a group of cells: each cell inset to `scale` of its size, with the gaps
+  // between its own cells filled (a strip along each shared edge, a triangle where three meet),
+  // so only the outside edge is inset. A thin stroke of the same colour hides seams.
+  const BLOB = 0.9;
+  function blob(cells, attrs, scale = BLOB) {
+    const own = new Set(cells), out = [], seen = new Set();
+    const inset = (k, [vx, vy]) => { const [x, y] = center(k); return [x + scale * (vx - x), y + scale * (vy - y)]; };
+    const poly = (ps) => svg("polygon", { points: ps.map((p) => p.map((v) => v.toFixed(1)).join(",")).join(" "), ...attrs });
+    for (const k of cells) {
+      const [x, y] = center(k);
+      out.push(poly(Array.from({ length: 6 }, (_, i) => inset(k, corner(x, y, i, SIZE)))));
+      neighbors(k).forEach((n, i) => {
+        if (!own.has(n)) return;
+        const v1 = corner(x, y, i, SIZE), v2 = corner(x, y, i + 1, SIZE);
+        if (n > k) out.push(poly([inset(k, v1), inset(k, v2), inset(n, v2), inset(n, v1)]));
+        const prev = neighbors(k)[(i + 5) % 6];  // corner i is shared by k, neighbour i-1 and neighbour i
+        const id = v1.map((v) => v.toFixed(0)).join(",");
+        if (own.has(prev) && !seen.has(id)) { seen.add(id); out.push(poly([inset(k, v1), inset(prev, v1), inset(n, v1)])); }
+      });
+    }
+    return out;
+  }
+
+  // The outline of blob(cells): inset outside edges plus the short joins where two of its cells
+  // meet on the outside (a shared corner whose third cell isn't in the group).
+  function blobLine(cells, attrs, scale = BLOB) {
+    const own = new Set(cells), out = borders(cells, (n) => own.has(n), attrs, scale);
+    const inset = (k, [vx, vy]) => { const [x, y] = center(k); return [x + scale * (vx - x), y + scale * (vy - y)]; };
+    const line = ([x1, y1], [x2, y2]) => svg("line", { x1: x1.toFixed(1), y1: y1.toFixed(1), x2: x2.toFixed(1), y2: y2.toFixed(1), ...attrs });
+    for (const k of cells) {
+      const [x, y] = center(k), ns = neighbors(k);
+      ns.forEach((n, i) => {
+        if (!own.has(n) || n < k) return;
+        if (!own.has(ns[(i + 5) % 6])) { const v = corner(x, y, i, SIZE); out.push(line(inset(k, v), inset(n, v))); }
+        if (!own.has(ns[(i + 1) % 6])) { const v = corner(x, y, i + 1, SIZE); out.push(line(inset(k, v), inset(n, v))); }
+      });
+    }
+    return out;
+  }
+
   function glyph(terrain, x, y) {
     const a = { class: "hr-glyph" };
     if (terrain === "forest") return svg("path", { ...a, d: `M${x - 9},${y + 6} l5,-11 l5,11 z M${x + 1},${y + 8} l6,-13 l6,13 z` });
@@ -72,14 +112,19 @@
     const world = svg("g");
     const layer = (name) => { const g = svg("g", { class: `hr-${name}` }); put(world, g); return g; };
     const terrainG = layer("terrain"), territoryG = layer("territory"), structG = layer("structs"), dimG = layer("dim"), hlG = layer("hl");
-    const orderG = layer("orders"), unitG = layer("units"), ghostG = layer("ghost"), flashG = layer("flashes");
+    const hoverG = layer("hover"), orderG = layer("orders"), unitG = layer("units"), ghostG = layer("ghost"), flashG = layer("flashes");
     hlG.style.pointerEvents = "none";
     put(root, world);
     fill(element, root);
 
     let view = { x: 0, y: 0, k: 0.9 };
     let cells = null, all = new Set(), lastKey = null, hl = {}, hlClass = {};
-    let hover = null, drag = null, moved = false;
+    let hover = null, drag = null, moved = false, shapeAt = {};  // shapeAt: {cell: {cells, color}} for the hover outline
+    // Hovering a structure or site outlines it in its owner's colour.
+    function drawHover() {
+      const s = hover && shapeAt[hover];
+      fill(hoverG, s ? blobLine(s.cells, { class: "hr-hover-line", stroke: s.color }) : []);
+    }
     const applyView = () => world.setAttribute("transform", `translate(${view.x.toFixed(1)} ${view.y.toFixed(1)}) scale(${view.k.toFixed(3)})`);
 
     function cellAt(event) {
@@ -117,9 +162,9 @@
     element.addEventListener("mousemove", (e) => {
       if (drag && moved) return;
       const k = cellAt(e);
-      if (k !== hover) { hover = k; handlers.onHover?.(k); }
+      if (k !== hover) { hover = k; drawHover(); handlers.onHover?.(k); }
     });
-    element.addEventListener("mouseleave", () => { if (hover !== null) { hover = null; handlers.onHover?.(null); } });
+    element.addEventListener("mouseleave", () => { if (hover !== null) { hover = null; drawHover(); handlers.onHover?.(null); } });
     element.addEventListener("contextmenu", (e) => { e.preventDefault(); handlers.onRightClick?.(cellAt(e)); });
     element.addEventListener("wheel", (e) => {
       e.preventDefault();
@@ -170,14 +215,15 @@
       // Explored but not seen right now: dimmed (enemy units there aren't shown).
       fill(dimG, (game.dim || []).map((k) => hexAt(k, SIZE, { class: "hr-dim" })));
 
-      // Territory: faint tint plus a coloured border where it meets another owner.
+      // Territory: faint tint plus a border in the owner's colour all round it (ownership shows here).
       for (const pid of game.seats) {
         const mine = Object.keys(game.territory).filter((k) => game.territory[k] === pid);
         put(territoryG, mine.map((k) => hexAt(k, SIZE, { fill: color(pid), "fill-opacity": 0.16 })),
           borders(mine, (n) => game.territory[n] === pid, { stroke: color(pid), "stroke-width": 3, "stroke-opacity": 0.8, "stroke-linecap": "round" }));
       }
 
-      // Structures.
+      // Structures: solid, in the structure's own colour (content "color"), fused into one shape each.
+      shapeAt = {};
       const reasonFor = (sid, s, def) => {
         if (s.active === false) return "Switched off.";
         return "Not working: no free workers.";
@@ -185,15 +231,14 @@
       for (const [sid, s] of Object.entries(game.structures)) {
         const def = content.structures[s.type];
         if (!def) continue;
-        const c = color(s.owner);
         const needsWork = (def.jobs > 0) || Object.keys(def.produce || {}).length > 0;
         const idle = !s.working && needsWork;
         let tip = `${def.name} (${nameOf(s.owner)})`;
         if (s.maxHp) tip += ` hp ${s.hp}/${s.maxHp}`;
         if (idle) tip += `\n${reasonFor(sid, s, def)}`;
         const g = svg("g", { class: `hr-struct${idle ? " hr-idle" : ""}` }, svg("title", {}, tip));
-        // A light owner tint (outlines are drawn after all structures).
-        put(g, s.cells.map((k) => hexAt(k, SIZE, { class: "hr-sfill", fill: c })));
+        put(g, blob(s.cells, { class: "hr-sfill", fill: def.color, stroke: def.color }));
+        for (const k of s.cells) shapeAt[k] = { cells: s.cells, color: color(s.owner) };
         const [x, y] = middle(s.cells);
         put(g, svg("text", { x, y: y + 1, class: "hr-icon" }, def.icon || def.name.slice(0, 2)));
         if (idle) put(g, svg("line", { x1: x - 14, y1: y + 12, x2: x + 14, y2: y - 12, class: "hr-strike" }));
@@ -203,24 +248,17 @@
         }
         put(structG, g);
       }
-      // Ownership: one outline around each group of touching structures of the same owner.
-      const owned = {};
-      for (const s of Object.values(game.structures)) for (const k of s.cells) owned[k] = s.owner;
-      for (const pid of new Set(Object.values(owned))) {
-        const mine = Object.keys(owned).filter((k) => owned[k] === pid);
-        put(structG, borders(mine, (n) => owned[n] === pid, { class: "hr-sline-back" }),
-          borders(mine, (n) => owned[n] === pid, { class: "hr-sline", stroke: color(pid) }));
-      }
-      // Construction sites: dashed owner outline, faded icon, turns of work done.
+      // Construction sites: the structure's colour, faded, with turns of work done.
       const working = new Set((priv && priv.building?.works) || []);
       for (const [cid, x] of Object.entries(game.sites || {})) {
         const def = content.structures[x.type];
         if (!def) continue;
-        const c = color(x.owner), [mx, my] = middle(x.cells);
+        const [mx, my] = middle(x.cells);
+        for (const k of x.cells) shapeAt[k] = { cells: x.cells, color: color(x.owner) };
         let tip = `${def.name} under construction (${nameOf(x.owner)}): ${x.done}/${x.turns} turns, ${x.builders} builder${x.builders > 1 ? "s" : ""} a turn`;
         if (x.owner === you) tip += working.has(cid) ? "\nBuilders at work this turn." : x.done < x.turns ? "\nWaiting: not enough idle people." : "";
         put(structG, svg("g", { class: "hr-struct hr-site" }, svg("title", {}, tip),
-          x.cells.map((k) => hexAt(k, SIZE * 0.92, { class: "hr-site-cell", fill: c, stroke: c })),
+          blob(x.cells, { class: "hr-site-cell", fill: def.color, stroke: def.color }),
           svg("text", { x: mx, y: my + 1, class: "hr-icon" }, def.icon || def.name.slice(0, 2)),
           svg("text", { x: mx, y: my + 17, class: "hr-site-text" }, `${x.done}/${x.turns}`)));
       }
@@ -243,14 +281,20 @@
         put(unitG, g);
       }
 
+      drawHover();
+
       // Your pending orders.
       if (!priv) return;
       const o = priv.orders, mine = color(you);
       for (const b of o.builds) {
         const def = content.structures[b.type];
-        put(orderG, b.cells.map((k) => hexAt(k, SIZE * 0.9, { fill: mine, "fill-opacity": 0.25, stroke: mine, "stroke-width": 2.5, "stroke-dasharray": "5 4" })));
+        put(orderG, b.cells.map((k) => hexAt(k, SIZE * 0.9, { fill: def?.color || mine, "fill-opacity": 0.35, stroke: mine, "stroke-width": 2.5, "stroke-dasharray": "5 4" })));
         const [x, y] = middle(b.cells);
         put(orderG, svg("text", { x, y: y + 1, class: "hr-icon hr-ghosttext" }, def?.icon || ""));
+      }
+      for (const c of o.claims || []) {
+        put(orderG, hexAt(c.at, SIZE * 0.8, { fill: mine, "fill-opacity": 0.25, stroke: mine, "stroke-width": 2.5, "stroke-dasharray": "4 4" }),
+          svg("text", { x: center(c.at)[0], y: center(c.at)[1] + 1, class: "hr-icon hr-ghosttext" }, "⚑"));
       }
       for (const [uid, path] of Object.entries(o.moves)) {
         const u = game.units[uid];

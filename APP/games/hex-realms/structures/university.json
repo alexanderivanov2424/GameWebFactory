@@ -32,5 +32,6 @@
  "score": 2,
  "category": "culture",
  "buildTurns": 4,
- "builders": 3
+ "builders": 3,
+ "color": "#43509c"
 }
