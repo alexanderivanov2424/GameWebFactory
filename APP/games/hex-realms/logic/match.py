@@ -14,6 +14,8 @@ players ordering the same cell both fail and get refunds); recruits appear on or
 structure; production, deliveries along roads, eating, wages and growth (economy.py, logistics.py); healing (+1 hp for units that didn't
 fight, full on or next to an own Barracks); players without a Town Hall are out. The game ends
 when one player is left (if it started with 2 or more) or after the last turn: highest score wins.
+Solo games (1 player) are a sandbox: they end at the turn limit with your score, or when you lose
+your last Town Hall.
 
 Score = population + units + 3 per advance + structure scores (Town Hall 4, University 2,
 Monument 10) + gold // 10.
@@ -280,6 +282,9 @@ class Match:
             self.end(None, "Every realm has fallen.")
         elif self.multi and len(alive) == 1:
             self.end(alive[0], f"{self.names[alive[0]]} is the last realm standing.")
+        elif self.turn > self.turn_limit and not self.multi:
+            pid = alive[0]
+            self.end(pid, f"Turn limit reached: {self.names[pid]} finished with {self.score(pid)} points.")
         elif self.turn > self.turn_limit:
             scores = {pid: self.score(pid) for pid in alive}
             top = max(scores.values())

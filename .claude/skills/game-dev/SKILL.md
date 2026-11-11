@@ -123,7 +123,9 @@ Games at a glance (details in each `NOTES.md`):
      go in `tests/helpers.py` (not collected), imported with
      `importlib.import_module("games.<id>.tests.helpers")`.
    - Shared code gets tests in `APP/gamekit/tests/` (a tiny Game class passed to `Sim(MyGame)`).
-3. Client: the JS check only catches broken brackets/strings/templates. Re-read the code
+3. Client: the JS check only catches broken brackets/strings/templates (including a quote
+   that closes a string early: `"marked "this" here"`). One syntax error stops the whole file
+   loading, so the page renders half-empty. Re-read the code
    paths you changed: element ids used in JS must exist in `index.html`, and every helper you
    call must still be defined (or come from `AppDom` / `AppLobbyUI`). Nothing else will catch
    a client bug before the user does.

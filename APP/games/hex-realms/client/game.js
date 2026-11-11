@@ -8,7 +8,7 @@
  * render() runs on each new state (redraws the map); refresh() on UI-only changes (no map redraw).
  */
 (() => {
-  const { $, el } = AppDom;
+  const { $, el, fill } = AppDom;
   const U = HexMap.util;
   const ui = { sel: null, mode: null, tab: "build", trade: { give: "gold", get: "food" }, lastRot: 0,
     key: null, flashSeen: null, turnStart: Date.now(), gameNumber: null };
@@ -83,7 +83,7 @@
     if (!finished) return;
     const r = state.result, game = state.game;
     const winner = r.winner ? game.players[r.winner] : null;
-    $("result-text").replaceChildren(
+    fill($("result-text"), 
       el("h2", {}, winner ? [el("span", { style: `color:${winner.color}` }, winner.name), " wins!"] : "Game over"),
       el("p", {}, r.reason || ""),
       Object.entries(r.scores || {}).sort((a, b) => b[1] - a[1]).map(([pid, score]) =>
@@ -112,7 +112,7 @@
         HexHud.trade($("p-trade"), c);
       });
     } else {
-      $("topbar").replaceChildren(el("span", { className: "hr-turn" }, `Turn ${c.game.turn} / ${c.game.turnLimit}`), el("span", { className: "muted" }, "Spectating"));
+      fill($("topbar"), el("span", { className: "hr-turn" }, `Turn ${c.game.turn} / ${c.game.turnLimit}`), el("span", { className: "muted" }, "Spectating"));
     }
     renderTabs(c, playing);
     renderHint(c);
@@ -123,7 +123,7 @@
   function renderTabs(c, playing) {
     const tabs = playing ? [["build", "Build"], ["advances", "Advances"], ["report", "Report"]] : [["report", "Report"]];
     if (!tabs.some(([id]) => id === ui.tab) && ui.tab !== "none") ui.tab = tabs[0][0];
-    $("tabs").replaceChildren(tabs.map(([id, label]) => el("button", {
+    fill($("tabs"), tabs.map(([id, label]) => el("button", {
       className: `hr-tab${ui.tab === id ? " on" : ""}`, onclick: () => { ui.tab = ui.tab === id ? "none" : id; refresh(); },
     }, label)));
     const body = $("tab-body");
@@ -142,9 +142,9 @@
     if (!m) return;
     const cancel = HexHud.fmt.btn("Cancel (Esc)", () => act.setMode(null));
     const names = c.content;
-    if (m.type === "build") box.replaceChildren(`Placing ${names.structures[m.kind].name}: click to build, R or right-click to turn, Esc to stop. `, cancel);
-    else if (m.type === "shoot") box.replaceChildren("Click an enemy unit or structure in range. ", cancel);
-    else box.replaceChildren("Found a city here: R turns the footprint, click it (or Confirm) to place. ",
+    if (m.type === "build") fill(box, `Placing ${names.structures[m.kind].name}: click to build, R or right-click to turn, Esc to stop. `, cancel);
+    else if (m.type === "shoot") fill(box, "Click an enemy unit or structure in range. ", cancel);
+    else fill(box, "Found a city here: R turns the footprint, click it (or Confirm) to place. ",
       HexHud.fmt.btn("Confirm", confirmFound, { cls: "endturn" }), cancel);
   }
 

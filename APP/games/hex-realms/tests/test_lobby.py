@@ -51,6 +51,15 @@ class LobbyTests(unittest.TestCase):
         self.assertEqual(sim.state(0)["game"]["turn"], 2)
         self.assertEqual(len(sim.pending_timers()), 1)  # the next turn's timer
 
+    def test_solo_game_plays_to_the_turn_limit(self):
+        sim = Sim(GAME, players=1, settings={"seed": 3, "turns": 10})
+        for turn in range(1, 11):
+            self.assertEqual(sim.state(0)["game"]["turn"], turn)
+            sim.ok(0, {"action": "done", "done": True})
+        result = sim.state(0)["result"]
+        self.assertEqual(result["winner"], sim.pid(0))
+        self.assertIn("points", result["reason"])
+
     def test_player_leaves_mid_game(self):
         sim = Sim(GAME, players=2, settings={"seed": 3})
         sim.leave(0)

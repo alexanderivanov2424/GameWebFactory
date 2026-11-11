@@ -14,7 +14,7 @@
  * Every function replaces the children of its element, so call them on each render.
  */
 (() => {
-  const { el } = AppDom;
+  const { el, fill } = AppDom;
   const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1);
   const costText = (cost) => Object.entries(cost || {}).map(([r, n]) => `${n} ${r}`).join(", ") || "free";
   const canPay = (ctx, cost) => Object.entries(cost || {}).every(([r, n]) => (ctx.priv.res[r] || 0) >= n);
@@ -43,7 +43,7 @@
     });
     const done = priv.done;
     const end = btn(done ? "Waiting for others… (undo)" : "End turn", () => ctx.act.send({ action: "done", done: !done }), { cls: done ? "waiting" : "endturn" });
-    box.replaceChildren(
+    fill(box, 
       el("span", { className: "hr-turn" }, `Turn ${game.turn} / ${game.turnLimit}`),
       game.turnSeconds > 0 ? el("span", { id: "hr-timer", className: "hr-timer" }) : null,
       el("span", { className: "hr-chips" }, chips),
@@ -55,7 +55,7 @@
 
   function players(box, ctx) {
     const { game } = ctx;
-    box.replaceChildren(el("h3", {}, "Realms"), game.seats.map((pid) => {
+    fill(box, el("h3", {}, "Realms"), game.seats.map((pid) => {
       const p = game.players[pid];
       const r = p.res || {};
       return el("div", { className: `hr-player${p.alive ? "" : " out"}${pid === ctx.you ? " me" : ""}` },
@@ -77,10 +77,10 @@
   function selection(box, ctx) {
     const { game, priv, content, ui, act } = ctx;
     const sel = ui.sel;
-    if (!sel) return box.replaceChildren(el("h3", {}, "Selection"), el("p", { className: "muted small" }, "Click one of your units or structures to command it, or any enemy to inspect it."));
+    if (!sel) return fill(box, el("h3", {}, "Selection"), el("p", { className: "muted small" }, "Click one of your units or structures to command it, or any enemy to inspect it."));
     if (sel.kind === "unit") {
       const u = game.units[sel.id], def = u && content.units[u.type];
-      if (!def) return box.replaceChildren();
+      if (!def) return fill(box);
       const own = u.owner === ctx.you, o = priv.orders;
       const kids = [el("h3", {}, `${def.name} `, nameSpan(game, u.owner)), unitStats(def), el("p", { className: "small" }, `HP ${u.hp}/${u.maxHp}. ${def.text || ""}`)];
       if (own) {
@@ -97,10 +97,10 @@
         kids.push(el("p", { className: "hr-pending" }, pending), row,
           el("p", { className: "muted small" }, "Click a highlighted cell to move there (red = attack). Click the unit again to clear."));
       }
-      return box.replaceChildren(...kids);
+      return fill(box, ...kids);
     }
     const s = game.structures[sel.id], def = s && content.structures[s.type];
-    if (!def) return box.replaceChildren();
+    if (!def) return fill(box);
     const own = s.owner === ctx.you;
     const kids = [el("h3", {}, `${def.name} `, nameSpan(game, s.owner)),
       el("p", { className: "small" }, s.maxHp ? `HP ${s.hp}/${s.maxHp}. ` : "", def.text || "")];
@@ -131,7 +131,7 @@
       }
       if (def.jobs > 0) kids.push(btn(s.active === false ? "Switch on" : "Switch off", () => act.send({ action: "toggle", structure: sel.id }), { title: "Switched-off structures don't use workers." }));
     }
-    box.replaceChildren(...kids);
+    fill(box, ...kids);
   }
 
   function orders(box, ctx) {
@@ -142,7 +142,7 @@
       ...o.recruits.map((r) => [r.id, `Recruit ${content.units[r.type]?.name || r.type} at ${content.structures[game.structures[r.at]?.type]?.name || "?"}`, r.cost]),
       ...o.research.map((r) => [r.id, `Research ${content.advances[r.advance]?.name || r.advance}`, r.cost]),
     ];
-    box.replaceChildren(el("h3", {}, "Orders"), rows.length ? rows.map(([id, text, cost]) =>
+    fill(box, el("h3", {}, "Orders"), rows.length ? rows.map(([id, text, cost]) =>
       el("div", { className: "row hr-order" }, el("span", { className: "small" }, text, el("span", { className: "muted" }, ` (${costText(cost)})`)),
         el("span", { className: "spacer" }), btn("✕", () => act.send({ action: "cancel", order: id }), { cls: "small", title: "Cancel and refund" }))) : el("p", { className: "muted small" }, "Nothing queued."));
   }
@@ -155,7 +155,7 @@
     const resOpts = (value) => ["gold", "food", "wood", "stone", "metal"].map((r) => el("option", { value: r, selected: r === value }, r));
     const give = el("select", { onchange: () => { t.give = give.value; } }, resOpts(t.give));
     const get = el("select", { onchange: () => { t.get = get.value; } }, resOpts(t.get));
-    box.replaceChildren(el("h3", {}, "Trade"), el("div", { className: "row" }, "give", give, "get", get),
+    fill(box, el("h3", {}, "Trade"), el("div", { className: "row" }, "give", give, "get", get),
       el("div", { className: "row" }, el("span", { className: "small muted" }, `Give ${rate} for 1`), el("span", { className: "spacer" }),
         btn("Trade", () => ctx.act.send({ action: "trade", give: t.give, get: t.get }), { disabled: t.give === t.get })));
   }
@@ -175,8 +175,8 @@
         onclick: () => (active ? act.setMode(null) : act.setMode({ type: "build", kind: id, rot: ui.lastRot || 0 })) },
         el("span", { className: "hr-bicon" }, d.icon || "▪"), el("span", { className: "hr-bname" }, d.name), el("span", { className: "hr-bcost small" }, why || costText(d.cost)));
     });
-    box.replaceChildren(el("div", { className: "hr-buildgrid" }, items),
-      el("p", { className: "muted small" }, "Pick a structure, then click the map. R or right-click turns it, Esc cancels. It must touch your structures and sit in your territory. Producers marked "needs a road" deliver goods only along roads (or navigable structures) to a store; you spend only from Town Halls and stores linked to them."));
+    fill(box, el("div", { className: "hr-buildgrid" }, items),
+      el("p", { className: "muted small" }, "Pick a structure, then click the map. R or right-click turns it, Esc cancels. It must touch your structures and sit in your territory. Producers marked 'needs a road' deliver goods only along roads (or navigable structures) to a store; you spend only from Town Halls and stores linked to them."));
   }
 
   window.HexHud = { topbar, players, selection, orders, trade, build, fmt: { costText, canPay, nameSpan, btn, cap } };

@@ -112,7 +112,7 @@ APP/
       admin.js          Admin view button + dialog (view only); not in pages: settings.js loads it while
                         Settings -> Settings -> Enable Admin Mode holds a password
     gamekit/            Shared game library, client side (served at /gamekit/)
-      dom.js            AppDom: $, el, svg, debounce, setInput, listNames
+      dom.js            AppDom: $, el, svg, fill, debounce, setInput, listNames
       room.js           AppRoom.connect(gameId, handlers): low-level game room connection
       lobby.js          AppLobby.connect(gameId, handlers): lobby client (use this for games)
       lobby-ui.js       AppLobbyUI: player list, start button/status, spectators, connection text, error banner,

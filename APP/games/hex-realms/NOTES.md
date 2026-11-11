@@ -64,6 +64,9 @@ fields in `logic/content.py`). Tests: `tests/` (`python3 -I tools/run_tests.py h
   builder can win on the turn limit; conquest ends it early.
 
 ## Pitfalls seen here
+- A stray double quote inside a double-quoted string in `client/hud.js` stopped the file
+  loading: the map drew but every panel stayed empty. `tools/jscheck.py` now flags a string
+  followed by a word on the same line.
 - Goods aren't in `players[pid]["res"]` (that's gold/faith/science only): read them with
   `logistics.stock`, spend with `logistics.take` / `orders.pay`, refund with `give`.
 - Never use a `type` key in game messages: the lobby envelope is `{"type": "game", ...}` and

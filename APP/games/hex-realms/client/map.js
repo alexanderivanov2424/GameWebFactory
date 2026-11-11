@@ -14,7 +14,9 @@
  * around the pointer, a click without dragging reports the cell. Styles (.hr-*) live in index.html.
  */
 (() => {
-  const { svg } = AppDom;
+  const { svg, fill } = AppDom;
+  // Native append() would print arrays as "[object SVGElement]" and null as "null".
+  const put = (node, ...children) => node.append(...children.flat(Infinity).filter((c) => c !== null && c !== undefined && c !== false));
   const SIZE = 30;
   const SQ3 = Math.sqrt(3);
   const DIRS = [[1, 0], [0, 1], [-1, 1], [-1, 0], [0, -1], [1, -1]]; // DIRS[i] faces angle 60*i
@@ -66,12 +68,12 @@
   function create(element, handlers = {}) {
     const root = svg("svg", { class: "hr-svg" });
     const world = svg("g");
-    const layer = (name) => { const g = svg("g", { class: `hr-${name}` }); world.append(g); return g; };
+    const layer = (name) => { const g = svg("g", { class: `hr-${name}` }); put(world, g); return g; };
     const terrainG = layer("terrain"), territoryG = layer("territory"), structG = layer("structs"), hlG = layer("hl");
     const orderG = layer("orders"), unitG = layer("units"), ghostG = layer("ghost"), flashG = layer("flashes");
     hlG.style.pointerEvents = "none";
-    root.append(world);
-    element.replaceChildren(root);
+    put(root, world);
+    fill(element, root);
 
     let view = { x: 0, y: 0, k: 0.9 };
     let cells = null, lastKey = null, hl = {}, hlClass = {};
@@ -129,12 +131,12 @@
     }, { passive: false });
 
     function buildStatic(game) {
-      terrainG.replaceChildren(); hlG.replaceChildren(); hl = {}; hlClass = {};
+      fill(terrainG); fill(hlG); hl = {}; hlClass = {};
       for (const [k, terrain] of Object.entries(game.cells)) {
         const [x, y] = center(k);
-        terrainG.append(svg("polygon", { points: pts(x, y), fill: COLORS[terrain] || "#777", class: "hr-cell" }), glyph(terrain, x, y));
+        put(terrainG, svg("polygon", { points: pts(x, y), fill: COLORS[terrain] || "#777", class: "hr-cell" }), glyph(terrain, x, y));
         hl[k] = svg("polygon", { points: pts(x, y, SIZE - 1) });
-        hlG.append(hl[k]);
+        put(hlG, hl[k]);
       }
     }
 
@@ -149,12 +151,12 @@
       const players = game.players, content = game.content;
       const color = (pid) => players[pid]?.color || "#888";
       const nameOf = (pid) => players[pid]?.name || pid;
-      for (const g of [territoryG, structG, orderG, unitG]) g.replaceChildren();
+      for (const g of [territoryG, structG, orderG, unitG]) fill(g);
 
       // Territory: faint tint plus a coloured border where it meets another owner.
       for (const pid of game.seats) {
         const mine = Object.keys(game.territory).filter((k) => game.territory[k] === pid);
-        territoryG.append(mine.map((k) => hexAt(k, SIZE, { fill: color(pid), "fill-opacity": 0.16 })),
+        put(territoryG, mine.map((k) => hexAt(k, SIZE, { fill: color(pid), "fill-opacity": 0.16 })),
           borders(mine, (n) => game.territory[n] === pid, { stroke: color(pid), "stroke-width": 3, "stroke-opacity": 0.8, "stroke-linecap": "round" }));
       }
 
@@ -180,17 +182,17 @@
         const cut = stranded.has(sid);
         if (cut) tip += "\nNo road network leads to a store: its goods wait here (one turn's worth).";
         const g = svg("g", { class: `hr-struct${idle ? " hr-idle" : ""}${cut ? " hr-stranded" : ""}` }, svg("title", {}, tip));
-        g.append(s.cells.map((k) => hexAt(k, SIZE * 0.97, { fill: c, "fill-opacity": 0.88 })));
+        put(g, s.cells.map((k) => hexAt(k, SIZE * 0.97, { fill: c, "fill-opacity": 0.88 })));
         const own = new Set(s.cells);
-        g.append(borders(s.cells, (n) => own.has(n), { stroke: "#10131a", "stroke-width": 3, "stroke-linecap": "round" }));
+        put(g, borders(s.cells, (n) => own.has(n), { stroke: "#10131a", "stroke-width": 3, "stroke-linecap": "round" }));
         const [x, y] = center(s.at);
-        g.append(svg("text", { x, y: y + 1, class: "hr-icon" }, def.icon || def.name.slice(0, 2)));
-        if (idle) g.append(svg("line", { x1: x - 14, y1: y + 12, x2: x + 14, y2: y - 12, class: "hr-strike" }));
+        put(g, svg("text", { x, y: y + 1, class: "hr-icon" }, def.icon || def.name.slice(0, 2)));
+        if (idle) put(g, svg("line", { x1: x - 14, y1: y + 12, x2: x + 14, y2: y - 12, class: "hr-strike" }));
         if (s.maxHp && s.hp < s.maxHp) {
-          g.append(svg("rect", { x: x - 16, y: y + 14, width: 32, height: 5, class: "hr-hpback" }),
+          put(g, svg("rect", { x: x - 16, y: y + 14, width: 32, height: 5, class: "hr-hpback" }),
             svg("rect", { x: x - 16, y: y + 14, width: 32 * s.hp / s.maxHp, height: 5, class: "hr-hpbar" }));
         }
-        structG.append(g);
+        put(structG, g);
       }
       for (const s of roads) {
         const k = s.at;
@@ -198,10 +200,10 @@
           && (game.structures[cellStruct[n]].type !== "road" || n > k));
         const [x, y] = center(k);
         const g = svg("g", { class: "hr-road" }, svg("title", {}, `Road (${nameOf(s.owner)})`));
-        for (const n of links) { const [nx, ny] = center(n); g.append(svg("line", { x1: x, y1: y, x2: nx, y2: ny, stroke: color(s.owner), class: "hr-road-edge" })); }
-        for (const n of links) { const [nx, ny] = center(n); g.append(svg("line", { x1: x, y1: y, x2: nx, y2: ny, class: "hr-road-line" })); }
-        g.append(svg("circle", { cx: x, cy: y, r: 8, stroke: color(s.owner), class: "hr-road-dot" }));
-        structG.append(g);
+        for (const n of links) { const [nx, ny] = center(n); put(g, svg("line", { x1: x, y1: y, x2: nx, y2: ny, stroke: color(s.owner), class: "hr-road-edge" })); }
+        for (const n of links) { const [nx, ny] = center(n); put(g, svg("line", { x1: x, y1: y, x2: nx, y2: ny, class: "hr-road-line" })); }
+        put(g, svg("circle", { cx: x, cy: y, r: 8, stroke: color(s.owner), class: "hr-road-dot" }));
+        put(structG, g);
       }
 
       // Units.
@@ -214,12 +216,12 @@
           svg("text", { x, y: y + 1, class: "hr-uicon" }, def?.icon || u.type.slice(0, 2)));
         if (u.maxHp <= 6) {
           const x0 = x - (u.maxHp - 1) * 3.5;
-          for (let i = 0; i < u.maxHp; i++) g.append(svg("circle", { cx: x0 + i * 7, cy: y + SIZE * 0.62, r: 2.6, class: i < u.hp ? "hr-pip on" : "hr-pip" }));
+          for (let i = 0; i < u.maxHp; i++) put(g, svg("circle", { cx: x0 + i * 7, cy: y + SIZE * 0.62, r: 2.6, class: i < u.hp ? "hr-pip on" : "hr-pip" }));
         } else {
-          g.append(svg("rect", { x: x - 14, y: y + SIZE * 0.55, width: 28, height: 4, class: "hr-hpback" }),
+          put(g, svg("rect", { x: x - 14, y: y + SIZE * 0.55, width: 28, height: 4, class: "hr-hpback" }),
             svg("rect", { x: x - 14, y: y + SIZE * 0.55, width: 28 * u.hp / u.maxHp, height: 4, class: "hr-hpbar" }));
         }
-        unitG.append(g);
+        put(unitG, g);
       }
 
       // Your pending orders.
@@ -227,42 +229,42 @@
       const o = priv.orders, mine = color(you);
       for (const b of o.builds) {
         const def = content.structures[b.type];
-        orderG.append(b.cells.map((k) => hexAt(k, SIZE * 0.9, { fill: mine, "fill-opacity": 0.25, stroke: mine, "stroke-width": 2.5, "stroke-dasharray": "5 4" })));
+        put(orderG, b.cells.map((k) => hexAt(k, SIZE * 0.9, { fill: mine, "fill-opacity": 0.25, stroke: mine, "stroke-width": 2.5, "stroke-dasharray": "5 4" })));
         const [x, y] = center(b.at);
-        orderG.append(svg("text", { x, y: y + 1, class: "hr-icon hr-ghosttext" }, def?.icon || ""));
+        put(orderG, svg("text", { x, y: y + 1, class: "hr-icon hr-ghosttext" }, def?.icon || ""));
       }
       for (const [uid, path] of Object.entries(o.moves)) {
         const u = game.units[uid];
         if (!u) continue;
         const ks = [u.at, ...path.filter((k, i) => !(i === 0 && k === u.at))];
         const ps = ks.map(center);
-        orderG.append(svg("polyline", { points: ps.map((p) => p.join(",")).join(" "), class: "hr-path" }));
+        put(orderG, svg("polyline", { points: ps.map((p) => p.join(",")).join(" "), class: "hr-path" }));
         if (ps.length > 1) {
           const [x1, y1] = ps[ps.length - 2], [x2, y2] = ps[ps.length - 1];
           const a = Math.atan2(y2 - y1, x2 - x1);
           const back = (off) => `${(x2 - 11 * Math.cos(a + off)).toFixed(1)},${(y2 - 11 * Math.sin(a + off)).toFixed(1)}`;
-          orderG.append(svg("polygon", { points: `${x2.toFixed(1)},${y2.toFixed(1)} ${back(0.5)} ${back(-0.5)}`, class: "hr-arrow" }));
+          put(orderG, svg("polygon", { points: `${x2.toFixed(1)},${y2.toFixed(1)} ${back(0.5)} ${back(-0.5)}`, class: "hr-arrow" }));
         }
       }
       for (const [uid, at] of Object.entries(o.shots)) {
         const u = game.units[uid];
         if (!u) continue;
         const [x1, y1] = center(u.at), [x2, y2] = center(at);
-        orderG.append(svg("line", { x1, y1, x2, y2, class: "hr-shot" }), svg("circle", { cx: x2, cy: y2, r: 7, class: "hr-shotmark" }));
+        put(orderG, svg("line", { x1, y1, x2, y2, class: "hr-shot" }), svg("circle", { cx: x2, cy: y2, r: 7, class: "hr-shotmark" }));
       }
       for (const uid of o.holds) {
         const u = game.units[uid];
         if (!u) continue;
         const [x, y] = center(u.at);
-        orderG.append(svg("path", { d: "M0,-8 L7,-5 L6,3 L0,9 L-6,3 L-7,-5 Z", transform: `translate(${x + 14} ${y - 14})`, class: "hr-hold" }));
+        put(orderG, svg("path", { d: "M0,-8 L7,-5 L6,3 L0,9 L-6,3 L-7,-5 Z", transform: `translate(${x + 14} ${y - 14})`, class: "hr-hold" }));
       }
       for (const [uid, rot] of Object.entries(o.found)) {
         const u = game.units[uid], th = content.structures.town_hall;
         if (!u || !th) continue;
         const foot = th.rotations[rot].map((d) => add(u.at, d));
-        orderG.append(foot.map((k) => hexAt(k, SIZE * 0.9, { fill: "#f1c84b", "fill-opacity": 0.25, stroke: "#f1c84b", "stroke-width": 2.5, "stroke-dasharray": "5 4" })));
+        put(orderG, foot.map((k) => hexAt(k, SIZE * 0.9, { fill: "#f1c84b", "fill-opacity": 0.25, stroke: "#f1c84b", "stroke-width": 2.5, "stroke-dasharray": "5 4" })));
         const [x, y] = center(foot[0]);
-        orderG.append(svg("text", { x, y: y + 1, class: "hr-icon hr-ghosttext" }, th.icon || "TH"));
+        put(orderG, svg("text", { x, y: y + 1, class: "hr-icon hr-ghosttext" }, th.icon || "TH"));
       }
     }
 
@@ -276,11 +278,11 @@
     }
 
     function setGhost(g) {
-      ghostG.replaceChildren();
+      fill(ghostG);
       if (!g) return;
       const cls = g.ok ? "hr-ghost-ok" : "hr-ghost-bad";
-      ghostG.append(g.cells.filter((k) => cells && k in cells).map((k) => hexAt(k, SIZE * 0.92, { class: cls })));
-      if (g.label && g.cells[0] in (cells || {})) { const [x, y] = center(g.cells[0]); ghostG.append(svg("text", { x, y: y + 1, class: "hr-icon" }, g.label)); }
+      put(ghostG, g.cells.filter((k) => cells && k in cells).map((k) => hexAt(k, SIZE * 0.92, { class: cls })));
+      if (g.label && g.cells[0] in (cells || {})) { const [x, y] = center(g.cells[0]); put(ghostG, svg("text", { x, y: y + 1, class: "hr-icon" }, g.label)); }
     }
 
     function flash(items) {
@@ -288,7 +290,7 @@
         if (!cells || !(at in cells)) continue;
         const [x, y] = center(at);
         const c = svg("circle", { cx: x, cy: y, r: SIZE * 0.7, class: `hr-flash hr-flash-${kind}` });
-        flashG.append(c);
+        put(flashG, c);
         setTimeout(() => c.remove(), 3200);
       }
     }

@@ -203,9 +203,11 @@ Rules and pitfalls:
   `--gwf-main-width`, ...; see its header).
 - Render everything from the `state` passed to `onState`: `state.game` is public, and
   `state.private` is yours only. Don't keep game logic on the client.
-- Helpers: `const { $, el, svg, debounce, setInput, listNames } = AppDom;`. Build the DOM with
+- Helpers: `const { $, el, svg, fill, debounce, setInput, listNames } = AppDom;`. Build the DOM with
   `el`/`textContent` (`svg` for SVG elements, e.g. a graph board); never put player-supplied
-  text into `innerHTML`.
+  text into `innerHTML`. Replace a box's contents with `fill(box, ...children)`, not the native
+  `replaceChildren` / `append`: those print an array as "[object HTMLElement]" and null as
+  "null" (`el`, `svg` and `fill` flatten arrays and skip null / false children).
 - Use `AppLobbyUI` instead of hand-rolling: `lobbyButtons(lobby, {join, leave, ready, back})`
   and `settingsForm(element, lobby)` (both return a render function to call on every
   render), `renderPlayers` (with `afterName` for game-specific extras), `renderStart` (the

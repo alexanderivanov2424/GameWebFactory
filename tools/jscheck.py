@@ -1,13 +1,17 @@
 """Rough syntax check for browser JS, since Node isn't allowed: matches brackets, strings,
 template literals (with nested ${...}) and comments, and reports the first mismatch by line.
 It doesn't understand regex literals or catch undefined names; it catches the typical
-broken-edit mistakes (a lost brace, an unterminated string or template).
+broken-edit mistakes (a lost brace, an unterminated string or template, and a string
+followed on the same line by a word or another string, as when quotes inside a string close
+it early: "say "hi" now").
 
     python3 -I tools/jscheck.py path/to/file.js [more.js ...]
 
 tools/run_tests.py runs it on every .js file in the app.
 """
 import sys
+
+AFTER_STRING = {"in", "instanceof", "of"}  # the only words that may follow a string literal
 
 
 def check(path):
@@ -31,7 +35,16 @@ def check(path):
                 if s[j] == '\\': j += 1
                 if s[j] == '\n': return (f"unterminated string line {line(i)}")
                 j += 1
-            i = j + 1; continue
+            i = j + 1
+            k = i
+            while k < n and s[k] in ' \t':
+                k += 1
+            word = k
+            while k < n and (s[k].isalnum() or s[k] in '_$'):
+                k += 1
+            if (k > word and s[word:k] not in AFTER_STRING) or (k == word and k < n and s[k] in '"\''):
+                return f"string followed by {s[word:k] or s[k]!r} at line {line(i)} (a quote inside a string?)"
+            continue
         if ch == '`': stack.append(('`', i)); i += 1; continue
         if ch in '([{': stack.append((ch, i))
         elif ch in ')]}':

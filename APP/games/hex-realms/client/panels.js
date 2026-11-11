@@ -8,14 +8,14 @@
  * ctx is the one built in game.js (see hud.js). Event shapes come from logic/combat.py, match.py, economy.py.
  */
 (() => {
-  const { el } = AppDom;
+  const { el, fill } = AppDom;
   const { costText, canPay, nameSpan, btn } = HexHud.fmt;
 
   function advances(box, ctx) {
     const { content, me, priv, act } = ctx;
     const owned = new Set(me.advances || []);
     const queued = new Set(priv.orders.research.map((r) => r.advance));
-    box.replaceChildren(Object.entries(content.advances).map(([id, a]) => {
+    fill(box, Object.entries(content.advances).map(([id, a]) => {
       const missing = a.after.filter((x) => !owned.has(x));
       const why = owned.has(id) ? "" : queued.has(id) ? "" : missing.length ? `Research ${missing.map((x) => content.advances[x]?.name || x).join(", ")} first`
         : !canPay(ctx, a.cost) ? "Can't afford" : "";
@@ -76,7 +76,7 @@
       }
     }
     const log = Object.keys(game.log || {}).sort((a, b) => a - b).map((i) => game.log[i]).slice(-20).reverse();
-    box.replaceChildren(el("h3", {}, "Last turn"), lines.length ? lines : el("p", { className: "muted small" }, "Nothing happened."),
+    fill(box, el("h3", {}, "Last turn"), lines.length ? lines : el("p", { className: "muted small" }, "Nothing happened."),
       el("h3", {}, "History"), log.length ? log.map((t) => el("div", { className: "small hr-log" }, t)) : el("p", { className: "muted small" }, "Empty."));
   }
 
