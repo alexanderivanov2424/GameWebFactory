@@ -11,9 +11,12 @@ structure works if it has its workers (people, who need food and housing). Order
 become construction sites that take a few turns of work, each turn needing builders: people
 without a job (switch structures off, all at once, or demolish them to free people). Gold, faith and
 science are realm-wide; goods (food, wood, stone, metal) go straight into the realm's stores (Town
-Hall, Storage Yard, Granary) up to their room. Structures go anywhere inside your territory;
-gold buys more (claim an explored cell next to it, with its neighbours). Land is first come, first
-served: it stays yours, and cells two realms reach in the same turn go to no one. No roads. Units can be
+Hall, Storage Yard, Granary) up to their room. Structures go anywhere inside your territory.
+Land your structures reach is strong: first come, first served, it stays yours while they reach it,
+and cells two realms reach in the same turn go to no one. Gold buys weak land (claim an explored
+cell next to yours, with its free neighbours): it goes back to no one when an enemy unit stands on or
+next to it (nor can you claim there), when it's cut off from your strong land, or when another
+realm's structures reach it; your own structures reaching it make it strong. No roads. Units can be
 given standing orders kept across turns: Explore (clear the fog), Fight (attack the nearest enemy
 unit in sight), Pillage (attack the nearest enemy structure in sight, fighting enemy units that
 come close first) or a far-away destination (walk there over several turns). Your own units pass
@@ -35,7 +38,7 @@ units, construction sites, territory, events as they see them; spectators see ev
 Game messages (all only while planning; any order un-readies you; never use a "type" key,
 the lobby envelope owns it):
     {"action": "build", "kind": stype, "at": "q,r", "rot": 0-5}
-    {"action": "claim", "at": "q,r"}                   (2 gold; at resolution the cell and its free neighbours become yours)
+    {"action": "claim", "at": "q,r"}                   (2 gold; at resolution the cell and its free neighbours become your weak land)
     {"action": "recruit", "structure": sid, "kind": utype}
     {"action": "move", "unit": uid, "to": "q,r"}      (to = own cell clears the unit's orders)
     {"action": "shoot", "unit": uid, "at": "q,r"}

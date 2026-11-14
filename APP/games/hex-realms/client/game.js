@@ -152,7 +152,7 @@
     const cancel = HexHud.fmt.btn("Cancel (Esc)", () => act.setMode(null));
     const names = c.content;
     if (m.type === "build") fill(box, `Placing ${names.structures[m.kind].name}: click to build, R or right-click to turn, Esc to stop. `, cancel);
-    else if (m.type === "claim") fill(box, `Extending territory: click a green cell to claim it and its free neighbours at the end of the turn (${HexHud.fmt.costText(names.claim.cost)} each; if another realm claims it too, nobody gets it). Esc to stop. `, cancel);
+    else if (m.type === "claim") fill(box, `Extending territory: click a green cell to claim it and its free neighbours at the end of the turn (${HexHud.fmt.costText(names.claim.cost)} each; if another realm claims it too, nobody gets it). Bought land is weak (dashed): it's lost to an enemy unit on or next to it, if it's cut off from land your structures hold, or to another realm's structures. Esc to stop. `, cancel);
     else if (m.type === "shoot") fill(box, "Click an enemy unit or structure in range. ", cancel);
     else fill(box, "Found a city here: R turns the footprint, click it (or Confirm) to place. ",
       HexHud.fmt.btn("Confirm", confirmFound, { cls: "endturn" }), cancel);
@@ -163,11 +163,13 @@
     return (u && c.game.units[u].owner !== c.you) || (s && c.game.structures[s].owner !== c.you && c.content.structures[c.game.structures[s].type].hp > 0);
   };
 
-  // Cells you could claim (the server decides): explored, nobody's, next to your territory.
+  // Cells you could claim (the server decides): explored, nobody's, next to your territory, no enemy unit on or next to it.
   function claimable(c) {
     const g = c.game;
     const pending = new Set((c.priv.orders.claims || []).map((x) => x.at));
-    return Object.keys(g.cells).filter((k) => !(k in g.territory) && !pending.has(k) && U.neighbors(k).some((n) => g.territory[n] === c.you));
+    const enemyUnit = (k) => idx.unitAt[k] && g.units[idx.unitAt[k]].owner !== c.you;
+    return Object.keys(g.cells).filter((k) => !(k in g.territory) && !pending.has(k) && U.neighbors(k).some((n) => g.territory[n] === c.you)
+      && !enemyUnit(k) && !U.neighbors(k).some(enemyUnit));
   }
 
   function highlights(c) {

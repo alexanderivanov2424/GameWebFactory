@@ -30,11 +30,17 @@ fields in `logic/content.py`). Tests: `tests/` (`python3 -I tools/run_tests.py h
 - **No roads; land is bought** (2026-11-11, the user's call): roads (first carrying goods, then laid
   automatically) were removed. Structures go anywhere in your territory, with no "must touch"
   rule. `orders.claim` is an order paid in gold (`CLAIM_COST`); at resolution (`Match._claims`,
-  before builds) it adds a claim point (`m.claims`) that reaches like a 1-radius structure.
-- **First come, first served land** (`economy.territory`): `m.territory` is kept between refreshes;
-  a cell stays its owner's while they still reach it, a free cell goes to the only player reaching
-  it, and to nobody while two or more do (same-turn expansion). Land only changes as structures
-  and claims appear or vanish, which is at resolution (demolish frees land at once).
+  before builds) the cell and its free neighbours become weak land (`m.claims`).
+- **Strong and weak land** (`logic/territory.py`, 2026-11-14, the user's rules): structures' reach is
+  strong land, first come, first served (`m.territory` is kept between refreshes; a cell stays its
+  owner's while they still reach it, a free cell goes to the only player reaching it, nobody while
+  two or more do). Bought land is weak, per cell in `m.claims`, and lost for good when an enemy
+  unit stands on or next to it (`territory.unit_entered`, called by `Match.add_unit` / `move_unit`, so
+  passing through counts mid-move), when any structure of another player reaches it, or when it's
+  no longer connected to its owner's strong land (both in `territory.territory`, run by `refresh`);
+  your own structure reaching it makes it strong (it leaves `m.claims`). Claims need no enemy unit
+  on or next to the target (`claim_problem` checks what you see, `_claims` the truth). The client
+  gets `claims` in the view and draws weak land fainter with a dashed border.
 - **Standing orders** (`logic/standing.py`, 2026-11-11 feedback): `u["auto"]` (explore / fight /
   pillage / travel, plus `u["goal"]` for travel) survives the per-turn order reset; `standing.plan_all`
   gives each such unit this turn's ordinary order (move / shoot / hold) as planning starts, and any
@@ -74,7 +80,7 @@ fields in `logic/content.py`). Tests: `tests/` (`python3 -I tools/run_tests.py h
 - `server.py`: `SETTINGS`, `ACTIONS` (one thin method per message → `Match.act`), turn timer
   (`start_timer` / `timeout` / `after_resolve`).
 - `logic/match.py`: `Match`: setup (map, halls, militia), state helpers used by the other modules
-  (`add_structure`, `remove_unit`, `move_unit`, `refresh` = territory cache), `act` / `set_done`,
+  (`add_structure`, `add_unit` / `move_unit` (both unclaim weak land an enemy unit touches), `remove_unit`, `refresh` = territory cache), `act` / `set_done`,
   `resolve` (+ `_found`, `_builds`, `_recruits`, `_heal`, `_eliminate`, `_check_end`), `score`,
   `remove`, `public`, `private` (orders, economy forecast, unit reach, recruit reasons, valid
   founding rotations).
@@ -86,6 +92,7 @@ fields in `logic/content.py`). Tests: `tests/` (`python3 -I tools/run_tests.py h
 - `logic/explore.py`: `target` (where an exploring unit goes).
 - `logic/bots.py`: `plan(m, pid)`: the bot strategy (header lists it; constants at the top).
 - `logic/vision.py`: `update` (after every change via `Match.refresh`), `known_at`, `view`.
+- `logic/territory.py`: `territory` (strong + weak land, returns both maps), `unit_entered`, `claim_cells`, `threatened`.
 - `logic/movement.py`, `logic/combat.py`, `logic/economy.py`, `logic/logistics.py`, `logic/mapgen.py`,
   `logic/content.py`: see their headers.
 - `client/map.js`: `HexMap.create`: pan (drag) / zoom (wheel) SVG map; terrain layer rebuilt only

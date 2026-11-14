@@ -101,7 +101,7 @@ def view(m, pid, staffed):
     if sees_all(m, pid):
         return {"cells": m.cells, "dim": [], "structures": structures, "units": _units(m, lambda u: True),
                 "sites": _sites(m, lambda x: True),
-                "territory": m.territory, "events": {str(i): e for i, e in enumerate(m.events)}}
+                "territory": m.territory, "claims": m.claims, "events": {str(i): e for i, e in enumerate(m.events)}}
     explored, vis = m.explored[pid], m.visible[pid]
     before = m.vis_before.get(pid, set())
     shown = {sid: s for sid, s in structures.items() if s["owner"] == pid}
@@ -116,6 +116,7 @@ def view(m, pid, staffed):
         "units": _units(m, lambda u: u["owner"] == pid or u["at"] in vis),
         "sites": _sites(m, lambda x: x["owner"] == pid or any(c in vis for c in x["cells"])),
         "territory": {k: p for k, p in m.territory.items() if k in explored},
+        "claims": {k: p for k, p in m.claims.items() if k in explored},
         "events": {str(i): e for i, e in enumerate(events)},
     }
 

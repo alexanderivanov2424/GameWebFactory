@@ -11,8 +11,9 @@ so a player can never order more than they have. Orders are private until the tu
     shoot(m, pid, uid, at)          ranged unit: shoot a cell instead of moving
     hold(m, pid, uid)               toggle: stay put and defend with 1 more die
     claim(m, pid, at)               for CLAIM_COST (gold): at resolution, an unowned explored cell next
-                                    to your territory becomes yours with its free neighbours
-                                    (economy.territory); cancel refunds it
+                                    to your territory becomes your weak land with its free neighbours
+                                    (territory.py); not with an enemy unit (that you see) on or next
+                                    to it; cancel refunds it
     auto(m, pid, uid, mode)         toggle a standing order kept across turns (standing.py): explore
                                     (clear fog), fight (nearest enemy unit) or pillage (nearest enemy
                                     structure, fighting enemy units that come close)
@@ -31,7 +32,7 @@ from gamekit import LobbyError
 from gamekit.hexes import dist, neighbors
 
 from .content import ADVANCES, STRUCTURES, TERRAIN, TOWN_HALL, UNITS, footprint
-from . import construction, logistics, standing, vision
+from . import construction, logistics, standing, territory, vision
 from .economy import report
 from .movement import path
 
@@ -192,6 +193,8 @@ def claim_problem(m, pid, at):
         return "That cell already belongs to a realm." if m.territory[at] != pid else "That's your land already."
     if not any(m.territory.get(n) == pid for n in neighbors(at)):
         return "Claim a cell next to your territory."
+    if territory.threatened(m, pid, at, m.visible[pid]):
+        return "An enemy unit is on or next to that cell."
     if any(c["at"] == at for c in m.orders[pid]["claims"]):
         return "You're claiming that cell already."
     return None

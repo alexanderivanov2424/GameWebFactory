@@ -1,5 +1,5 @@
 /*
- * Hex Realms: the pannable, zoomable SVG hex map (terrain, territory, structures, units,
+ * Hex Realms: the pannable, zoomable SVG hex map (terrain, territory (weak land dashed), structures, units,
  * your pending orders (Travel goals dashed; units with orders greyed out), highlights, build ghost, event flashes). No game rules here.
  *
  *   const map = HexMap.create(element, { onCell(key), onHover(key|null), onRightClick(key) });
@@ -217,10 +217,16 @@
       fill(dimG, (game.dim || []).map((k) => hexAt(k, SIZE, { class: "hr-dim" })));
 
       // Territory: faint tint plus a border in the owner's colour all round it (ownership shows here).
+      // Weak land (bought with gold, game.claims) is fainter with a dashed border.
+      const weak = game.claims || {};
       for (const pid of game.seats) {
         const mine = Object.keys(game.territory).filter((k) => game.territory[k] === pid);
-        put(territoryG, mine.map((k) => hexAt(k, SIZE, { fill: color(pid), "fill-opacity": 0.16 })),
-          borders(mine, (n) => game.territory[n] === pid, { stroke: color(pid), "stroke-width": 3, "stroke-opacity": 0.8, "stroke-linecap": "round" }));
+        const line = { stroke: color(pid), "stroke-width": 3, "stroke-opacity": 0.8, "stroke-linecap": "round" };
+        const same = (n) => game.territory[n] === pid;
+        const strong = mine.filter((k) => weak[k] !== pid), bought = mine.filter((k) => weak[k] === pid);
+        put(territoryG, strong.map((k) => hexAt(k, SIZE, { fill: color(pid), "fill-opacity": 0.16 })),
+          bought.map((k) => hexAt(k, SIZE, { fill: color(pid), "fill-opacity": 0.07 })),
+          borders(strong, same, line), borders(bought, same, { ...line, "stroke-dasharray": "6 5", "stroke-linecap": "butt" }));
       }
 
       // Structures: solid, in the structure's own colour (content "color"), fused into one shape each.

@@ -5,7 +5,8 @@ Modules:
     orders.py    the orders a player gives while planning (validation, paying, refunds)
     movement.py  paths (reach, path) and simultaneous step-by-step movement with collisions
     combat.py    dice battles, ranged shots, sieges of structures, tower fire
-    economy.py   territory, workers, production, upkeep, growth
+    territory.py strong land (structures' reach) and weak land (bought with gold, easily lost)
+    economy.py   workers, production, upkeep, growth
     logistics.py goods in the realm's stores: stock, spending, refunds, filling
     construction.py  construction sites: build turns and builders (idle people), finishing structures
     standing.py  standing orders kept across turns: Explore, Fight, Pillage, Travel (multi-turn moves)
