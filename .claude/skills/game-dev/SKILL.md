@@ -61,7 +61,7 @@ Games at a glance (details in each `NOTES.md`):
 - **hex-realms**: `logic/` modules; civilization game on a random hex map. Secret simultaneous
   orders (build / claim / recruit / move / shoot / hold / explore / found / research / trade), resolved together in
   `Match.resolve` (order in `logic/match.py`'s header); movement collisions in `logic/movement.py`,
-  dice in `logic/combat.py`, strong and weak territory in `logic/territory.py`, workers in `logic/economy.py`, construction sites (build turns, idle builders) in
+  dice in `logic/combat.py`, strong and weak territory in `logic/territory.py`, recruits (spawning, structures that recruit on their own) in `logic/recruiting.py`, workers in `logic/economy.py`, construction sites (build turns, idle builders) in
   `logic/construction.py`, goods in stores in `logic/logistics.py`, standing orders (Explore / Fight / Pillage / Travel) in `logic/standing.py`, fog of war in `logic/vision.py` (the map is in each member's
   private `view`; the client merges it into `game`), bots (a setting; seats `b1`...) in `logic/bots.py`. Content JSON in
   `structures/`, `units/`, `advances/` (fields in `logic/content.py`).

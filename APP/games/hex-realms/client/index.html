@@ -66,6 +66,8 @@
     .hr-hl-sel { fill: rgba(255, 255, 255, 0.1); stroke: none; }
     .hr-sel { pointer-events: none; }
     .hr-sel-line { stroke: #ffe36b; stroke-width: 3.5; stroke-linecap: round; }
+    .hr-autorecruit { margin-top: 6px; padding-top: 6px; border-top: 1px solid #364055; }
+    .hr-autorecruit .row { margin: 3px 0; }
     .hr-hl-goal { fill: rgba(255, 227, 107, 0.25); stroke: #ffe36b; stroke-width: 2.5; stroke-dasharray: 5 4; }
     .hr-ghost { pointer-events: none; }
     .hr-ghost-ok { fill: rgba(80, 230, 110, 0.45); stroke: #6dff8a; stroke-width: 2.5; }
@@ -83,7 +85,24 @@
     #topbar { grid-column: 1 / 4; display: flex; align-items: center; gap: 14px; flex-wrap: wrap; pointer-events: auto; }
     #col-left, #col-right { overflow-y: auto; display: flex; flex-direction: column; gap: 8px; pointer-events: none; padding-bottom: 8px; }
     #col-left > *, #col-right > * { pointer-events: auto; flex: none; }
-    #col-right { grid-column: 3; padding-bottom: 96px; }
+    #col-left { grid-column: 1; grid-row: 2; }
+    #col-right { grid-column: 3; grid-row: 2; padding-bottom: 96px; }
+    /* Tech tree popup: covers the map and side columns below the top bar. */
+    #tech { grid-column: 1 / 4; grid-row: 2; z-index: 4; display: flex; flex-direction: column; padding: 0; overflow: hidden; margin-bottom: 40px; }
+    .hr-tech-head { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-bottom: 1px solid #364055; }
+    #hud .hr-tech-head h3 { margin: 0 8px 0 0; }
+    .hr-tech-body { flex: 1; overflow: auto; padding: 18px; }
+    .hr-tree { position: relative; }
+    .hr-tree > svg { position: absolute; left: 0; top: 0; pointer-events: none; overflow: visible; }
+    .hr-tlink { fill: none; stroke: #4a566e; stroke-width: 2.5; } .hr-tlink.done { stroke: #6fe08a; }
+    .hr-tnode { position: absolute; display: flex; flex-direction: column; gap: 3px; padding: 7px 9px; border: 2px solid #4a566e;
+      border-radius: 8px; background: #222a39; overflow: hidden; }
+    .hr-ttext { flex: 1; overflow: hidden; }
+    .hr-tfoot { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+    .hr-tnode.owned { border-color: #6fe08a; background: #1d3226; }
+    .hr-tnode.queued { border-color: #ffd36b; }
+    .hr-tnode.ready { border-color: #8e9bff; }
+    .hr-tnode.locked { opacity: 0.55; }
     #hud h3 { margin: 0 0 6px; font-size: 0.95rem; color: #fff; }
     #hud p { margin: 4px 0; }
     #hud .muted { color: #98a2b6; }
@@ -125,7 +144,6 @@
     .hr-buildgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
     #hud button.hr-build { display: flex; flex-direction: column; align-items: flex-start; gap: 1px; text-align: left; padding: 5px 8px; }
     .hr-bicon { font-weight: 700; color: #ffe36b; min-width: 1.4em; text-align: center; } .hr-bname { font-weight: 600; } .hr-bcost { color: #98a2b6; }
-    .hr-adv { padding: 6px 0; border-bottom: 1px solid #2a3243; } .hr-adv.owned { opacity: 0.6; }
     .hr-ev { padding: 4px 0; border-bottom: 1px solid #2a3243; font-size: 0.85rem; }
     .hr-cell-link { color: #8ab4ff; cursor: pointer; text-decoration: underline; }
     .hr-round { margin-left: 8px; }
@@ -188,7 +206,11 @@
           sight, fighting enemy units that come close first); click a cell beyond a unit's reach to walk there over
           several turns. Your own units pass through each other. Units with orders are greyed out.
           Units fight with dice wherever they meet: each die that rolls 4 or more hits (5 or more against a unit standing
-          in forest, hills or mountains, or on its own structure). Lose every Town Hall and you are out.</p>
+          in forest, hills or mountains, or on its own structure). Lose every Town Hall and you are out.
+          Units appear on the structure that trains them. A military structure can <b>recruit every turn</b> on its own
+          (when you can pay and have people without a job), and give each unit it trains a standing order.
+          Click a cell again to cycle through what's on it (a unit, then the structure under it).
+          <b>Tech tree</b> (next to the Build tab) shows the science and faith advances.</p>
         <p>The last realm standing wins; if several survive to the turn limit, the highest score wins. The host can add
           bots (computer players) in the settings; once no person is left in the game, it ends and the highest score wins.</p>
       </div>
@@ -208,6 +230,10 @@
       <div id="col-right">
         <div id="tabs"></div>
         <div id="tab-body" class="hr-panel"></div>
+      </div>
+      <div id="tech" class="hr-panel" hidden>
+        <div id="tech-head" class="hr-tech-head"></div>
+        <div id="tech-body" class="hr-tech-body"></div>
       </div>
     </div>
     <button id="centre" class="hr-btn" style="position:absolute" title="Centre the map on your Town Hall">Centre</button>

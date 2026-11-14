@@ -5,7 +5,7 @@
  *                               builders, Jobs off / Jobs on (every structure with workers), End turn
  *   HexHud.players(el, ctx)     colour, name, score, done tick, out, public resource snapshot
  *   HexHud.selection(el, ctx)   the selected unit / structure / construction site: stats, orders,
- *                               Recruit/Hold/Shoot/Found/Disband/Switch off/Demolish
+ *                               Recruit/Hold/Shoot/Found/Disband/Switch off/Demolish, automatic recruiting
  *   HexHud.orders(el, ctx)      your pending builds / recruits / research, each with a cancel button, and your
  *                               construction sites (progress, whether builders work there this turn, demolish)
  *   HexHud.trade(el, ctx)       give/get selects (only when the market rate is > 0)
@@ -115,7 +115,7 @@
           btn("Clear orders", () => act.send({ action: "move", unit: sel.id, to: u.at })),
           btn("Disband", () => { if (confirm(`Disband this ${def.name}?`)) act.send({ action: "disband", unit: sel.id }); }, { cls: "danger" }));
         kids.push(el("p", { className: "hr-pending" }, pending), row,
-          el("p", { className: "muted small" }, "Click a highlighted cell to move there (red = attack), or any cell further away to walk there over several turns. Click the unit again to clear."));
+          el("p", { className: "muted small" }, "Click a highlighted cell to move there (red = attack), or any cell further away to walk there over several turns. Click the unit again to clear its orders (when it stands on a structure, that selects the structure; use Clear orders)."));
       }
       return fill(box, ...kids);
     }
@@ -142,12 +142,30 @@
           el("span", { className: "small" }, costText(ud.cost)),
           el("div", { className: "muted small" }, `atk ${ud.attack} def ${ud.defense} hp ${ud.hp} move ${ud.move}${ud.range ? ` range ${ud.range}` : ""}${why ? ` — ${why}` : ""}`)));
       }
+      const auto = priv.autoRecruit?.[sel.id];
+      if (auto) kids.push(autoRecruit(ctx, sel.id, auto, Object.keys(recruits)));
       const row = el("div", { className: "hr-btnrow" },
         def.jobs > 0 ? btn(s.active === false ? "Switch on" : "Switch off", () => act.send({ action: "toggle", structure: sel.id }), { title: "Switched-off structures don't use workers." }) : null,
         s.type !== "town_hall" ? btn("Demolish", () => { if (confirm(`Demolish this ${def.name}? No refund, and goods stored in it are lost.`)) act.send({ action: "demolish", structure: sel.id }); }, { cls: "danger", title: "Remove it now (no refund)." }) : null);
       kids.push(row);
     }
     fill(box, ...kids);
+  }
+
+  // A military structure's automatic recruiting: which unit every turn (or Off), and the standing order its units get.
+  function autoRecruit(ctx, sid, auto, kinds) {
+    const { game, content, act } = ctx;
+    const send = () => act.send({ action: "autorecruit", structure: sid, kind: kind.value || null, order: order.value || null });
+    const kind = el("select", { onchange: send, title: "Recruit this unit every turn on its own, when you can pay and have people without a job." },
+      el("option", { value: "", selected: !auto.kind }, "Off"),
+      kinds.map((ut) => el("option", { value: ut, selected: auto.kind === ut }, content.units[ut]?.name || ut)));
+    const modes = [["", "No order"], ...(game.fog ? [["explore", "Explore"]] : []), ["fight", "Fight"], ["pillage", "Pillage"]];
+    const order = el("select", { onchange: send, title: "The standing order every unit trained here starts with (also ones you recruit by hand)." },
+      modes.map(([m, label]) => el("option", { value: m, selected: (auto.order || "") === m }, label)));
+    return el("div", { className: "hr-autorecruit" },
+      el("div", { className: "row small" }, "Recruit every turn", el("span", { className: "spacer" }), kind),
+      el("div", { className: "row small" }, "New units", el("span", { className: "spacer" }), order),
+      el("p", { className: "muted small" }, "Skips a turn when it can't pay or no one is free (it never takes people from jobs)."));
   }
 
   function siteText(ctx, cid, x) {
@@ -172,7 +190,7 @@
     const rows = [
       ...o.builds.map((b) => [b.id, `Build ${content.structures[b.type]?.name || b.type}`, b.cost]),
       ...(o.claims || []).map((c) => [c.id, `Claim land @${c.at}`, c.cost]),
-      ...o.recruits.map((r) => [r.id, `Recruit ${content.units[r.type]?.name || r.type} at ${content.structures[game.structures[r.at]?.type]?.name || "?"}`, r.cost]),
+      ...o.recruits.map((r) => [r.id, `${r.auto ? "Auto-recruit" : "Recruit"} ${content.units[r.type]?.name || r.type} at ${content.structures[game.structures[r.at]?.type]?.name || "?"}`, r.cost]),
       ...o.research.map((r) => [r.id, `Research ${content.advances[r.advance]?.name || r.advance}`, r.cost]),
     ];
     const sites = Object.entries(game.sites || {}).filter(([, x]) => x.owner === ctx.you);

@@ -81,7 +81,7 @@ fields in `logic/content.py`). Tests: `tests/` (`python3 -I tools/run_tests.py h
   (`start_timer` / `timeout` / `after_resolve`).
 - `logic/match.py`: `Match`: setup (map, halls, militia), state helpers used by the other modules
   (`add_structure`, `add_unit` / `move_unit` (both unclaim weak land an enemy unit touches), `remove_unit`, `refresh` = territory cache), `act` / `set_done`,
-  `resolve` (+ `_found`, `_builds`, `_recruits`, `_heal`, `_eliminate`, `_check_end`), `score`,
+  `resolve` (+ `_found`, `_builds`, `_heal`, `_eliminate`, `_check_end`), `score`,
   `remove`, `public`, `private` (orders, economy forecast, unit reach, recruit reasons, valid
   founding rotations).
 - `logic/orders.py`: one function per order; `site_problem` / `recruit_problem` /
@@ -92,6 +92,9 @@ fields in `logic/content.py`). Tests: `tests/` (`python3 -I tools/run_tests.py h
 - `logic/explore.py`: `target` (where an exploring unit goes).
 - `logic/bots.py`: `plan(m, pid)`: the bot strategy (header lists it; constants at the top).
 - `logic/vision.py`: `update` (after every change via `Match.refresh`), `known_at`, `view`.
+- `logic/recruiting.py`: `spawn_cell` (on the structure first), `resolve` (recruit orders appear, take the
+  structure's `autoOrder` as `u["auto"]`), `set_auto` (the `autorecruit` message) and `plan` (each turn's
+  automatic recruit orders, marked `"auto": True`, only with people who have no job).
 - `logic/territory.py`: `territory` (strong + weak land, returns both maps), `unit_entered`, `claim_cells`, `threatened`.
 - `logic/movement.py`, `logic/combat.py`, `logic/economy.py`, `logic/logistics.py`, `logic/mapgen.py`,
   `logic/content.py`: see their headers.
@@ -102,10 +105,13 @@ fields in `logic/content.py`). Tests: `tests/` (`python3 -I tools/run_tests.py h
   territory border and as an outline on hover (`hoverG`, `shapeAt`), and the icon (emoji from the content, placeholder for art) at their middle; `setHighlights` / `setGhost` / `flash` only
   touch overlays (a selection, "sel" cells, is outlined round its outside only, in `selG`). `HexMap.util` has the client's hex maths (dist, neighbors, add).
 - `client/hud.js`: `HexHud`: top bar (stock + net, people: jobs / building / idle, growth only when
-  it will happen, Jobs off / on, End turn), players, selection panel (unit / structure / site actions, Explore, recruit buttons with the server's reasons), orders list, trade,
-  build menu. `client/panels.js`: `HexPanels`: advances, last-turn report (dice faces), log.
-- `client/game.js`: UI state (`ui.sel`, `ui.mode` build / shoot / found + rotation, tab), click
-  and key handling, highlights and the build ghost (its green/red is only a hint; the server
+  it will happen, Jobs off / on, End turn), players, selection panel (unit / structure / site actions, Explore, recruit buttons with the server's reasons, automatic
+  recruiting selects), orders list, trade, build menu. `client/panels.js`: `HexPanels`: `techTree` (advances of one
+  currency laid out by prerequisite depth, absolutely placed nodes over an SVG of links), last-turn report (dice faces), log.
+  The tech tree opens in the `#tech` popup (`ui.tech` = the open currency tab), which covers row 2 of the `#hud` grid,
+  so `#col-left` / `#col-right` are placed explicitly (an auto-placed column would be pushed below it).
+- `client/game.js`: UI state (`ui.sel`, `ui.mode` build / shoot / found + rotation, tab, `ui.tech`), click
+  and key handling (`selectAt` cycles unit -> structure -> site on repeated clicks), highlights and the build ghost (its green/red is only a hint; the server
   decides), the turn countdown (approximate: restarts on reload).
 - `tests/`: `test_rules.py` (Match on a blank all-grass map: `helpers.blank`, `hall` (with the
   starting goods), `unit`, `rich`, `stock` = what a player can spend), `test_lobby.py` (Sim: secrecy, done, timer, leaving).

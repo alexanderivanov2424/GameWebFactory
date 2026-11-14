@@ -1,30 +1,83 @@
 /*
- * Hex Realms: the research panel and the last-turn report (events as readable lines, plus the history log).
+ * Hex Realms: the tech tree (game.js shows it in a popup over the map) and the last-turn report (events as readable lines, plus the history log).
  *
- *   HexPanels.advances(el, ctx)   every advance: cost, prerequisites, text, owned tick, queued, Research button
+ *   HexPanels.techTree(el, ctx, currency)   the advances bought with `currency` drawn as a tree (columns by
+ *                                 prerequisite depth, lines prerequisite -> advance), each with its cost, text,
+ *                                 status (researched / queued / ready / can't afford / locked) and Research button
+ *   HexPanels.currencies(content)  the currencies advances are bought with (science, faith), one tab each
  *   HexPanels.report(el, ctx)     game.events (last resolution) with dice faces, then game.log
  *   HexPanels.flashCells(game)    [{at, kind}] for the map's event markers
  *
  * ctx is the one built in game.js (see hud.js). Event shapes come from logic/combat.py, match.py, economy.py.
  */
 (() => {
-  const { el, fill } = AppDom;
+  const { el, fill, svg } = AppDom;
   const { costText, canPay, nameSpan, btn } = HexHud.fmt;
 
-  function advances(box, ctx) {
+  // Advances are bought with one currency (science or faith): the first key of their cost.
+  const currencyOf = (a) => Object.keys(a.cost || {})[0] || "science";
+  const currencies = (content) => {
+    const found = new Set(Object.values(content.advances).map(currencyOf));
+    return ["science", "faith", ...found].filter((c, i, all) => found.has(c) && all.indexOf(c) === i);
+  };
+
+  const NODE_W = 230, NODE_H = 132, GAP_X = 70, GAP_Y = 18;
+
+  // The advances bought with `currency`, as a tree: columns by depth (one more than the deepest
+  // prerequisite in the same tree), each advance placed level with (the middle of) its prerequisites
+  // where there's room, and a line from each prerequisite to the advances it opens.
+  function techTree(box, ctx, currency) {
     const { content, me, priv, act } = ctx;
+    const A = content.advances;
     const owned = new Set(me.advances || []);
     const queued = new Set(priv.orders.research.map((r) => r.advance));
-    fill(box, Object.entries(content.advances).map(([id, a]) => {
-      const missing = a.after.filter((x) => !owned.has(x));
-      const why = owned.has(id) ? "" : queued.has(id) ? "" : missing.length ? `Research ${missing.map((x) => content.advances[x]?.name || x).join(", ")} first`
-        : !canPay(ctx, a.cost) ? "Can't afford" : "";
-      return el("div", { className: `hr-adv${owned.has(id) ? " owned" : ""}` },
-        el("div", { className: "row" }, el("b", {}, owned.has(id) ? "✓ " : "", a.name), el("span", { className: "spacer" }), el("span", { className: "small" }, costText(a.cost))),
-        el("div", { className: "small muted" }, a.text),
-        a.after.length ? el("div", { className: "small muted" }, `After: ${a.after.map((x) => content.advances[x]?.name || x).join(", ")}`) : null,
-        owned.has(id) ? null : queued.has(id) ? el("div", { className: "small pos" }, "Queued") : btn("Research", () => act.send({ action: "research", advance: id }), { disabled: !!why, title: why }));
+    const ids = Object.keys(A).filter((id) => currencyOf(A[id]) === currency);
+    const inTree = new Set(ids);
+    const parents = (id) => A[id].after.filter((x) => inTree.has(x));
+    const depth = {};
+    const depthOf = (id, seen = new Set()) => {
+      if (id in depth) return depth[id];
+      if (seen.has(id)) return 0;  // a loop in the content: don't recurse forever
+      seen.add(id);
+      const ps = parents(id);
+      return (depth[id] = ps.length ? 1 + Math.max(...ps.map((p) => depthOf(p, seen))) : 0);
+    };
+    ids.forEach((id) => depthOf(id));
+    const cols = [];
+    for (const id of ids) (cols[depth[id]] ||= []).push(id);
+    const row = {};
+    for (const col of cols.filter(Boolean)) {
+      const want = (id) => { const ps = parents(id); return ps.length ? ps.reduce((t, p) => t + row[p], 0) / ps.length : -1; };
+      col.sort((a, b) => want(a) - want(b) || A[a].name.localeCompare(A[b].name));
+      let next = 0;
+      for (const id of col) { row[id] = Math.max(next, Math.round(want(id))); next = row[id] + 1; }
+    }
+    const pos = (id) => [depth[id] * (NODE_W + GAP_X), row[id] * (NODE_H + GAP_Y)];
+    const width = Math.max(1, cols.length) * (NODE_W + GAP_X) - GAP_X;
+    const height = (Math.max(0, ...Object.values(row)) + 1) * (NODE_H + GAP_Y) - GAP_Y;
+
+    const links = ids.flatMap((id) => parents(id).map((p) => {
+      const [px, py] = pos(p), [cx, cy] = pos(id);
+      const x1 = px + NODE_W, y1 = py + NODE_H / 2, x2 = cx, y2 = cy + NODE_H / 2;
+      return svg("path", { class: `hr-tlink${owned.has(p) ? " done" : ""}`, d: `M${x1},${y1} C${x1 + GAP_X / 2},${y1} ${x2 - GAP_X / 2},${y2} ${x2},${y2}` });
     }));
+    const nodes = ids.map((id) => {
+      const a = A[id], [x, y] = pos(id);
+      const missing = a.after.filter((x) => !owned.has(x));
+      const why = missing.length ? `Research ${missing.map((x) => A[x]?.name || x).join(", ")} first` : !canPay(ctx, a.cost) ? "Can't afford" : "";
+      const status = owned.has(id) ? "owned" : queued.has(id) ? "queued" : missing.length ? "locked" : why ? "poor" : "ready";
+      const other = a.after.filter((x) => !inTree.has(x));  // prerequisites from the other tree
+      return el("div", { className: `hr-tnode ${status}`, style: `left:${x}px;top:${y}px;width:${NODE_W}px;height:${NODE_H}px` },
+        el("div", { className: "row" }, el("b", {}, owned.has(id) ? "✓ " : "", a.name), el("span", { className: "spacer" }), el("span", { className: "small" }, costText(a.cost))),
+        el("div", { className: "small muted hr-ttext" }, a.text),
+        other.length ? el("div", { className: "small muted" }, `After: ${other.map((x) => A[x]?.name || x).join(", ")}`) : null,
+        el("div", { className: "hr-tfoot" }, owned.has(id) ? el("span", { className: "small pos" }, "Researched")
+          : queued.has(id) ? el("span", { className: "small pos" }, "Queued: learnt as the turn resolves")
+          : btn("Research", () => act.send({ action: "research", advance: id }), { disabled: !!why, title: why }),
+          !owned.has(id) && !queued.has(id) && why ? el("span", { className: "small muted" }, ` ${why}`) : null));
+    });
+    fill(box, el("div", { className: "hr-tree", style: `width:${width}px;height:${height}px` },
+      svg("svg", { width, height }, links), nodes));
   }
 
   const die = (x, need) => el("span", { className: `hr-die${x >= need ? " hit" : ""}` }, String(x));
@@ -93,5 +146,5 @@
     return out;
   }
 
-  window.HexPanels = { advances, report, flashCells };
+  window.HexPanels = { techTree, currencies, report, flashCells };
 })();

@@ -3,6 +3,8 @@
  * turns clicks on the map into game messages, and re-renders the map (map.js) and panels (hud.js,
  * panels.js) from the state. The server validates everything; the ghost colours here are only a hint.
  *
+ * Clicking a cell selects what's on it; clicking it again cycles unit -> structure -> construction site.
+ * ui.tech: null | the open tech tree tab (a currency: "science" / "faith"), shown in the #tech popup.
  * ui.mode: null | {type: "build", kind, rot} | {type: "shoot", unit} | {type: "found", unit, rot}
  * (Escape cancels; R or right-click turns). ui.sel: null | {kind: "unit"|"structure", id}; giving a unit a
  * command deselects it (clearing its orders keeps it selected).
@@ -11,7 +13,7 @@
 (() => {
   const { $, el, fill } = AppDom;
   const U = HexMap.util;
-  const ui = { sel: null, mode: null, tab: "build", buildCat: null, trade: { give: "gold", get: "food" }, lastRot: 0,
+  const ui = { sel: null, mode: null, tab: "build", tech: null, buildCat: null, trade: { give: "gold", get: "food" }, lastRot: 0,
     key: null, flashSeen: null, turnStart: Date.now(), gameNumber: null };
   let state = null;
   let hover = null;
@@ -130,19 +132,38 @@
   }
 
   function renderTabs(c, playing) {
-    const tabs = playing ? [["build", "Build"], ["advances", "Advances"], ["report", "Report"]] : [["report", "Report"]];
+    const tabs = playing ? [["build", "Build"], ["report", "Report"]] : [["report", "Report"]];
     if (!tabs.some(([id]) => id === ui.tab) && ui.tab !== "none") ui.tab = tabs[0][0];
     fill($("tabs"), tabs.map(([id, label]) => el("button", {
       className: `hr-tab${ui.tab === id ? " on" : ""}`, onclick: () => { ui.tab = ui.tab === id ? "none" : id; refresh(); },
-    }, label)));
+    }, label)), playing ? el("button", {
+      className: `hr-tab${ui.tech ? " on" : ""}`, title: "Open the tech tree (science and faith advances)",
+      onclick: () => { ui.tech = ui.tech ? null : HexPanels.currencies(c.content)[0]; refresh(); },
+    }, "Tech tree") : null);
+    renderTech(c, playing);
     const body = $("tab-body");
     body.hidden = ui.tab === "none";
     if (body.hidden) return;
     keep(body, () => {
       if (ui.tab === "build") HexHud.build(body, c);
-      else if (ui.tab === "advances") HexPanels.advances(body, c);
       else HexPanels.report(body, c);
     });
+  }
+
+  // The tech tree: a popup over the map with a tab per currency (science, faith); Esc or ✕ closes it.
+  function renderTech(c, playing) {
+    const box = $("tech");
+    box.hidden = !playing || !ui.tech;
+    if (box.hidden) return;
+    const { resIcon, resName, btn } = HexHud.fmt;
+    fill($("tech-head"), el("h3", {}, "Tech tree"),
+      HexPanels.currencies(c.content).map((cur) => el("button", {
+        className: `hr-tab${ui.tech === cur ? " on" : ""}`, onclick: () => { ui.tech = cur; refresh(); },
+      }, `${resIcon(cur)} ${resName(cur)}`)),
+      el("span", { className: "muted small" }, `You have ${c.priv.res[ui.tech] ?? 0} ${resIcon(ui.tech)}`),
+      el("span", { className: "spacer" }),
+      btn("✕ Close (Esc)", () => { ui.tech = null; refresh(); }));
+    keep($("tech-body"), () => HexPanels.techTree($("tech-body"), c, ui.tech));
   }
 
   function renderHint(c) {
@@ -252,6 +273,7 @@
     const sel = ui.sel;
     if (sel?.kind === "unit" && c.game.units[sel.id]?.owner === c.you) {
       const u = c.game.units[sel.id];
+      if (k === u.at && thingsAt(k).length > 1) { selectAt(k); return; }  // a structure under it: cycle to it
       if (k === u.at) { act.send({ action: "move", unit: sel.id, to: k }); return; }  // clear (stays selected)
       // In reach: move (or attack) this turn. Further away (except onto another of your units, which
       // selects it): walk there over several turns. Either way the unit is deselected.
@@ -261,16 +283,20 @@
     selectAt(k);
   }
 
+  // Everything on a cell, top first: unit, structure, construction site.
+  const thingsAt = (k) => [["unit", idx.unitAt[k]], ["structure", idx.structAt[k]], ["site", idx.siteAt[k]]].filter(([, id]) => id);
+
+  // Selects the first thing on the cell; clicking again moves on to the next one (and wraps round).
   function selectAt(k) {
-    if (idx.unitAt[k]) act.select("unit", idx.unitAt[k]);
-    else if (idx.structAt[k]) act.select("structure", idx.structAt[k]);
-    else if (idx.siteAt[k]) act.select("site", idx.siteAt[k]);
-    else act.select(null);
+    const things = thingsAt(k);
+    if (!things.length) { act.select(null); return; }
+    const i = things.findIndex(([kind, id]) => ui.sel?.kind === kind && ui.sel.id === id);
+    act.select(...things[(i + 1) % things.length]);
   }
 
   document.addEventListener("keydown", (e) => {
     if (!state || state.phase === "lobby" || /^(INPUT|SELECT|TEXTAREA)$/.test(e.target.tagName)) return;
-    if (e.key === "Escape") { if (ui.mode) act.setMode(null); else if (ui.sel) act.select(null); }
+    if (e.key === "Escape") { if (ui.tech) { ui.tech = null; refresh(); } else if (ui.mode) act.setMode(null); else if (ui.sel) act.select(null); }
     else if (e.key === "r" || e.key === "R") rotate();
   });
 

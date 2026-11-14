@@ -227,7 +227,7 @@ Summary:
    movement where units that meet fight with dice, sieges, towers), multi-cell structures staffed
    by population and built over several turns by idle people (construction sites), goods kept in
    stores, no roads (first-come territory from structures, plus weak land bought with gold that enemy units next to it or being cut off take away), standing orders kept across turns (Explore,
-   Fight, Pillage, multi-turn Travel), own units passing through each other, fog of war sent as each
+   Fight, Pillage, multi-turn Travel), military structures that recruit every turn and hand out a standing order, a tech tree popup, own units passing through each other, fog of war sent as each
    member's private map view, a Settlers start (found your own first city), territory, advances
    bought with science or faith, an optional turn timer (`schedule`), bots in extra seats (a
    setting; the user asked for them) planning through the same orders; `PatchState`.
