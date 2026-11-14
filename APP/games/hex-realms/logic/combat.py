@@ -12,7 +12,8 @@ knights, +attackDice when attacking.
     siege(m, uid, sid, events)        a unit attacks an enemy structure: one round, the structure
                                       rolls its defense dice back; hits x the unit's siege damage
     towers(m, events)                 every tower shoots the nearest enemy unit within range
-Each adds an event to `events` (see match.py's public() for the event shapes).
+Each adds an event to `events` (shapes in the functions below; a unit in one is side(m, u), with "need",
+the roll that hits it). The client's report (panels.js) and combat replay (replay.js) read them.
 """
 
 from gamekit.hexes import dist
@@ -49,13 +50,14 @@ def dice(m, u, attacking, foe=None):
     return n
 
 
-def side(u):
-    return {"unit": u["id"], "type": u["type"], "owner": u["owner"], "at": u["at"], "hp": u["hp"]}
+def side(m, u):
+    """A unit in a combat event: hp before the fight, need = the roll that hits it (for the client's dice)."""
+    return {"unit": u["id"], "type": u["type"], "owner": u["owner"], "at": u["at"], "hp": u["hp"], "need": need(m, u)}
 
 
 def battle(m, a, b, a_attacks, b_attacks, events):
     ua, ub = m.units[a], m.units[b]
-    ev = {"t": "battle", "a": side(ua), "b": side(ub), "rounds": [], "dead": []}
+    ev = {"t": "battle", "a": side(m, ua), "b": side(m, ub), "rounds": [], "dead": []}
     da, db = dice(m, ua, a_attacks, ub), dice(m, ub, b_attacks, ua)
     for _ in range(ROUNDS):
         if da <= 0 and db <= 0:
@@ -94,7 +96,7 @@ def shoot(m, uid, cell, events):
         r = roll(m, dice(m, u, True))
         hits = sum(1 for x in r if x >= need(m, t))
         t["hp"] -= hits
-        ev = {"t": "shot", "a": side(u), "b": side(t), "roll": r, "hits": hits, "dead": []}
+        ev = {"t": "shot", "a": side(m, u), "b": side(m, t), "roll": r, "hits": hits, "dead": []}
         m.fought.add(target)
         if t["hp"] <= 0:
             ev["dead"].append(target)
@@ -103,7 +105,7 @@ def shoot(m, uid, cell, events):
     elif sid is not None and m.structures[sid]["owner"] != u["owner"] and STRUCTURES[m.structures[sid]["type"]]["hp"]:
         r = roll(m, dice(m, u, True))
         hits = sum(1 for x in r if x >= HIT)
-        events.append({"t": "shot", "a": side(u), "structure": sid, "stype": m.structures[sid]["type"], "at": cell,
+        events.append({"t": "shot", "a": side(m, u), "structure": sid, "stype": m.structures[sid]["type"], "owner": m.structures[sid]["owner"], "at": cell,
                        "roll": r, "hits": hits, "damage": hits * d["siege"]})
         damage_structure(m, sid, hits * d["siege"], u["owner"], events)
 
@@ -116,7 +118,7 @@ def siege(m, uid, sid, events):
     back = roll(m, sd["defense"])
     hits = sum(1 for x in r if x >= HIT)
     taken = sum(1 for x in back if x >= HIT)
-    ev = {"t": "siege", "a": side(u), "structure": sid, "stype": s["type"], "owner": s["owner"], "at": s["at"],
+    ev = {"t": "siege", "a": side(m, u), "structure": sid, "stype": s["type"], "owner": s["owner"], "at": s["at"],
           "roll": r, "back": back, "damage": hits * UNITS[u["type"]]["siege"], "dead": []}
     m.fought.add(uid)
     u["hp"] -= taken
@@ -142,7 +144,7 @@ def towers(m, events):
         r = roll(m, sd["shoots"] + effect(m, s["owner"], "towerDice"))
         hits = sum(1 for x in r if x >= need(m, t))
         t["hp"] -= hits
-        ev = {"t": "tower", "structure": sid, "owner": s["owner"], "at": s["at"], "b": side(t), "roll": r, "hits": hits, "dead": []}
+        ev = {"t": "tower", "structure": sid, "owner": s["owner"], "at": s["at"], "b": side(m, t), "roll": r, "hits": hits, "dead": []}
         m.fought.add(t["id"])
         if t["hp"] <= 0:
             ev["dead"].append(t["id"])

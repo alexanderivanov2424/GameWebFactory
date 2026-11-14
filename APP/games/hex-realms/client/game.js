@@ -8,6 +8,7 @@
  * ui.mode: null | {type: "build", kind, rot} | {type: "shoot", unit} | {type: "found", unit, rot}
  * (Escape cancels; R or right-click turns). ui.sel: null | {kind: "unit"|"structure", id}; giving a unit a
  * command deselects it (clearing its orders keeps it selected).
+ * When a turn resolves, replay.js plays its combats (Esc skips).
  * render() runs on each new state (redraws the map); refresh() on UI-only changes (no map redraw).
  */
 (() => {
@@ -36,6 +37,8 @@
   const updateTurnAlert = AppLobbyUI.turnAlert($("map"));
   const map = HexMap.create($("map"), { onCell, onHover(k) { hover = k; ghost(); }, onRightClick() { rotate(); } });
 
+  const replay = HexReplay.create(map);
+
   const act = {
     send: (msg) => lobby.sendGame(msg),
     select(kind, id) { ui.sel = kind ? { kind, id } : null; refresh(); },
@@ -54,6 +57,7 @@
     $("game").hidden = inLobby;
     renderButtons();
     if (inLobby) {
+      if (replay.playing) replay.skip();
       updateTurnAlert(null);
       AppLobbyUI.renderPlayers($("players"), lobby, {});
       AppLobbyUI.renderStart($("start"), lobby);
@@ -63,6 +67,7 @@
     }
     const game = state.game, priv = state.private;
     if (ui.gameNumber !== state.gameNumber) {
+      replay.skip();
       Object.assign(ui, { gameNumber: state.gameNumber, sel: null, mode: null, flashSeen: null });
       map.draw(game, state.you, priv);
       map.centre(home());
@@ -78,7 +83,8 @@
     map.draw(game, state.you, priv);
 
     const flashKey = `${state.gameNumber}:${game.step}`;
-    if (ui.flashSeen !== null && ui.flashSeen !== flashKey) map.flash(HexPanels.flashCells(game));
+    // A new resolution: replay its combats (replay.js), or just flash the cells when there's nothing to replay.
+    if (ui.flashSeen !== null && ui.flashSeen !== flashKey && !replay.play(game, state.you)) map.flash(HexPanels.flashCells(game));
     ui.flashSeen = flashKey;
 
     const alive = !!priv && game.players[state.you]?.alive;
@@ -296,7 +302,7 @@
 
   document.addEventListener("keydown", (e) => {
     if (!state || state.phase === "lobby" || /^(INPUT|SELECT|TEXTAREA)$/.test(e.target.tagName)) return;
-    if (e.key === "Escape") { if (ui.tech) { ui.tech = null; refresh(); } else if (ui.mode) act.setMode(null); else if (ui.sel) act.select(null); }
+    if (e.key === "Escape") { if (replay.playing) replay.skip(); else if (ui.tech) { ui.tech = null; refresh(); } else if (ui.mode) act.setMode(null); else if (ui.sel) act.select(null); }
     else if (e.key === "r" || e.key === "R") rotate();
   });
 

@@ -22,6 +22,10 @@
  *   AppSettings.onChange((key, value) => { ... })   // returns an unsubscribe function
  *   AppSettings.account()   // logged-in account name, or null for a guest
  *                           // (changes fire onChange("account", name))
+ *   AppSettings.addPageSettings(label, fields)   // a page (a game) adds a tab of its own player
+ *       settings, kept in this tab's store like the others. fields: [{key, label, hint, default, type:
+ *       "select", options: [[value, text], ...]} | {key, label, hint, default, type: "checkbox"}].
+ *       Read them with AppSettings.get(key) ?? default. Start keys with the page's id ("hex-realms.").
  *
  * While logged in, the user name (display name) is saved to the account whenever it changes
  * (debounced), and logging in switches to the name saved there (a new account takes the
@@ -139,6 +143,9 @@
     events.dispatchEvent(new CustomEvent("change", { detail: { key, value } }));
   }
 
+  const pageTabs = []; // tabs added by the page (AppSettings.addPageSettings)
+  let settingsElement = null; // the dialog, once built
+
   window.AppSettings = {
     clientId,
     get: (key) => values[key],
@@ -149,6 +156,11 @@
       emit(key, value);
     },
     account: () => account.user,
+    addPageSettings(label, fields) {
+      const tab = { id: `page-${pageTabs.length}`, label, render: (panel) => renderPageSettings(panel, fields) };
+      pageTabs.push(tab);
+      settingsElement?.addTab(tab);
+    },
     onChange(callback) {
       const listener = (e) => callback(e.detail.key, e.detail.value);
       events.addEventListener("change", listener);
@@ -515,6 +527,35 @@
     panel.append(field);
   }
 
+  // A page's own settings (selects and checkboxes), saved on change.
+  function renderPageSettings(panel, fields) {
+    for (const f of fields) {
+      const field = make("div", { className: "field" });
+      const id = `page-${f.key}`;
+      const current = () => AppSettings.get(f.key) ?? f.default;
+      let input;
+      if (f.type === "checkbox") {
+        input = make("input", { id, type: "checkbox", checked: !!current() });
+        input.addEventListener("change", () => AppSettings.set(f.key, input.checked));
+        const check = make("label", { className: "check", htmlFor: id });
+        check.append(input, document.createTextNode(f.label));
+        field.append(check);
+      } else {
+        input = make("select", { id, className: "page-select" });
+        for (const [value, text] of f.options || []) input.append(make("option", { value, selected: String(current()) === String(value) }, text));
+        input.addEventListener("change", () => AppSettings.set(f.key, input.value));
+        field.append(make("label", { htmlFor: id }, f.label), input);
+      }
+      if (f.hint) field.append(make("p", { className: "hint" }, f.hint));
+      AppSettings.onChange((key, value) => {
+        if (key !== f.key) return;
+        if (f.type === "checkbox") input.checked = !!value;
+        else input.value = String(value);
+      });
+      panel.append(field);
+    }
+  }
+
   // --- UI ------------------------------------------------------------------
 
   const STYLE = `
@@ -593,6 +634,9 @@
     .hint.warning { color: #c62828; font-weight: 600; }
     .hint.ok { color: #2e7d32; font-weight: 600; }
     .field .error { margin: 6px 0 0; }
+    .check { display: flex; align-items: center; gap: 8px; cursor: pointer; }
+    .check input { width: auto; margin: 0; }
+    .page-select { font: inherit; min-width: 220px; padding: 6px 8px; border: 1px solid #c8c8d4; border-radius: 6px; }
 
     @media (max-width: 600px) {
       .body { flex-direction: column; }
@@ -636,6 +680,7 @@
       this.openBtn = root.querySelector(".open-btn");
       this.backdrop = root.querySelector(".backdrop");
       this.buildTabs(root.querySelector(".tabs"), root.querySelector(".panels"));
+      settingsElement = this;
       // Keep open inputs current when a value changes elsewhere (e.g. logging in restores the name).
       AppSettings.onChange((key, value) => {
         this.inputs.forEach(({ input, field }) => {
@@ -663,27 +708,32 @@
 
     buildTabs(tabList, panelContainer) {
       this.inputs = [];
-      let first = null;
-      TABS.forEach((tab) => {
-        const button = document.createElement("button");
-        button.className = "tab";
-        button.setAttribute("role", "tab");
-        button.textContent = tab.label;
-
-        const panel = document.createElement("section");
-        panel.className = "panel";
-        panel.setAttribute("role", "tabpanel");
-
-        if (tab.render) tab.render(panel);
-        else tab.fields.forEach((field) => panel.append(this.buildField(field)));
-
-        button.addEventListener("click", () => this.selectTab(button, panel));
-        tabList.append(button);
-        panelContainer.append(panel);
-        first ||= [button, panel];
-      });
+      this.tabList = tabList;
+      this.panelContainer = panelContainer;
+      const made = [...TABS, ...pageTabs].map((tab) => this.addTab(tab));
       // Select once every panel exists, so the others are all hidden.
-      if (first) this.selectTab(...first);
+      if (made.length) this.selectTab(...made[0]);
+    }
+
+    // Adds one tab (hidden until clicked); page tabs added after the dialog is built come here too.
+    addTab(tab) {
+      const button = document.createElement("button");
+      button.className = "tab";
+      button.setAttribute("role", "tab");
+      button.textContent = tab.label;
+
+      const panel = document.createElement("section");
+      panel.className = "panel";
+      panel.setAttribute("role", "tabpanel");
+      panel.hidden = true;
+
+      if (tab.render) tab.render(panel);
+      else tab.fields.forEach((field) => panel.append(this.buildField(field)));
+
+      button.addEventListener("click", () => this.selectTab(button, panel));
+      this.tabList.append(button);
+      this.panelContainer.append(panel);
+      return [button, panel];
     }
 
     buildField(field) {

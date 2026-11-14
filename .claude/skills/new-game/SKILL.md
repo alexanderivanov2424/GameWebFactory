@@ -201,6 +201,9 @@ Rules and pitfalls:
   (`.green`, `.red`, `.plain`, `.small`) and inputs, at zero specificity. Write only
   game-specific CSS; restyle with its variables (`--gwf-bg`, `--gwf-accent`,
   `--gwf-main-width`, ...; see its header).
+- Per-player options (animation speed, "skip X"): `AppSettings.addPageSettings("<Game name>", fields)`
+  adds a tab to the Settings dialog (header of `web/shared/settings.js`); read with `AppSettings.get(key)`.
+  Host options are `SETTINGS` instead.
 - Render everything from the `state` passed to `onState`: `state.game` is public, and
   `state.private` is yours only. Don't keep game logic on the client.
 - Helpers: `const { $, el, svg, fill, debounce, setInput, listNames } = AppDom;`. Build the DOM with

@@ -9,6 +9,9 @@
  *   map.setGhost({cells, ok, label} | null)   footprint preview under the mouse (small, rebuilt per hover)
  *   map.flash([{at, kind}])     brief pulsing markers (battle/siege cells)
  *   map.centre(key)             pan to a cell;  map.fit() resets the zoom
+ *   map.focus(keys, zoom, ms)   glide (pan + zoom, eased) to centre `keys`; a Promise
+ *   map.getView() / map.setView(view, ms)   save and glide back to a view ({x, y, k})
+ *   map.mark(keys)              rings round cells (the combat replay.js is showing); [] clears
  *   HexMap.util                 pointy-top axial helpers: parse, key, add, neighbors, dist, center, DIRS
  *
  * Pointy-top axial "q,r" keys: x = SIZE*sqrt(3)*(q + r/2), y = SIZE*1.5*r. Drag pans, the wheel zooms
@@ -125,7 +128,7 @@
     const world = svg("g");
     const layer = (name) => { const g = svg("g", { class: `hr-${name}` }); put(world, g); return g; };
     const terrainG = layer("terrain"), territoryG = layer("territory"), structG = layer("structs"), dimG = layer("dim"), hlG = layer("hl"), selG = layer("sel");
-    const hoverG = layer("hover"), orderG = layer("orders"), unitG = layer("units"), ghostG = layer("ghost"), flashG = layer("flashes");
+    const hoverG = layer("hover"), orderG = layer("orders"), unitG = layer("units"), ghostG = layer("ghost"), flashG = layer("flashes"), markG = layer("marks");
     hlG.style.pointerEvents = "none";
     put(root, world);
     fill(element, root);
@@ -398,8 +401,38 @@
     }
     function fit() { view.k = 0.9; view.x = element.clientWidth / 2; view.y = element.clientHeight / 2; applyView(); }
 
+    // Smooth pan/zoom to `target` ({x, y, k}) over `ms` (0 = jump). Resolves when it gets there, or
+    // as soon as another glide starts.
+    let anim = null, settle = null;
+    function glide(target, ms) {
+      cancelAnimationFrame(anim);
+      settle?.();
+      const from = { ...view };
+      return new Promise((resolve) => {
+        settle = () => { settle = null; resolve(); };
+        if (!ms) { Object.assign(view, target); applyView(); settle(); return; }
+        const t0 = performance.now();
+        const frame = (now) => {
+          const p = Math.min(1, (now - t0) / ms), e = p < 0.5 ? 2 * p * p : 1 - (2 - 2 * p) ** 2 / 2;
+          for (const c of ["x", "y", "k"]) view[c] = from[c] + (target[c] - from[c]) * e;
+          applyView();
+          if (p < 1) anim = requestAnimationFrame(frame); else settle?.();
+        };
+        anim = requestAnimationFrame(frame);
+      });
+    }
+    // Glide so the middle of `keys` is in the middle of the screen at zoom k.
+    function focus(keys, k, ms) {
+      const [x, y] = middle(keys);
+      return glide({ k, x: element.clientWidth / 2 - x * k, y: element.clientHeight / 2 - y * k }, ms);
+    }
+    // Rings round the cells of the combat being shown (replay.js); [] clears them.
+    function mark(keys) {
+      fill(markG, keys.filter((k) => all.has(k)).map((k) => hexAt(k, SIZE - 3, { class: "hr-mark" })));
+    }
+
     applyView();
-    return { draw, setHighlights, setGhost, flash, centre, fit };
+    return { draw, setHighlights, setGhost, flash, centre, fit, focus, mark, getView: () => ({ ...view }), setView: glide };
   }
 
   window.HexMap = { create, util: { parse, key, add, neighbors, dist, center, DIRS } };

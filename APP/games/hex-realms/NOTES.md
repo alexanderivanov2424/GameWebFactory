@@ -110,6 +110,11 @@ fields in `logic/content.py`). Tests: `tests/` (`python3 -I tools/run_tests.py h
   currency laid out by prerequisite depth, absolutely placed nodes over an SVG of links), last-turn report (dice faces), log.
   The tech tree opens in the `#tech` popup (`ui.tech` = the open currency tab), which covers row 2 of the `#hud` grid,
   so `#col-left` / `#col-right` are placed explicitly (an auto-placed column would be pushed below it).
+- `client/replay.js`: `HexReplay`: the end-of-turn combat replay (glides with `map.focus`, dice per round
+  left = you / right = them, `map.mark` rings, back to the saved view). `steps(game, you)` turns battle /
+  shot / siege / tower events into steps; each unit side carries `need` (the roll that hits it, from
+  `combat.side`). Player settings (speed, skip) via `AppSettings.addPageSettings`. game.js starts it where
+  it used to only flash the cells (a new `game.step`); Esc or the Skip button stops it.
 - `client/game.js`: UI state (`ui.sel`, `ui.mode` build / shoot / found + rotation, tab, `ui.tech`), click
   and key handling (`selectAt` cycles unit -> structure -> site on repeated clicks), highlights and the build ghost (its green/red is only a hint; the server
   decides), the turn countdown (approximate: restarts on reload).

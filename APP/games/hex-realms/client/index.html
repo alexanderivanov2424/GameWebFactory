@@ -17,6 +17,7 @@
   <script src="map.js" defer></script>
   <script src="hud.js" defer></script>
   <script src="panels.js" defer></script>
+  <script src="replay.js" defer></script>
   <script src="game.js" defer></script>
 
   <style>
@@ -152,6 +153,25 @@
     .hr-die.hit { background: #d7463a; color: #fff; }
     .hr-log { padding: 2px 0; color: #b8c1d4; }
     #hint { position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%); max-width: 62vw; z-index: 5; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    /* Combat replay (replay.js): a bar at the top, you on the left, the other side on the right. */
+    #replay { position: absolute; inset: 0; z-index: 7; pointer-events: none; color: #e7eaf0; }
+    #replay > * { pointer-events: auto; position: absolute; }
+    #replay .muted { color: #98a2b6; } #replay .small { font-size: 0.85rem; } #replay .neg { color: #ff7d6d; }
+    #replay-bar { top: 112px; left: 50%; transform: translateX(-50%); display: flex; align-items: center; gap: 12px; min-width: 380px; }
+    #replay-bar .spacer { flex: 1; }
+    .hr-rp { top: 50%; transform: translateY(-50%); width: 270px; display: flex; flex-direction: column; gap: 6px; }
+    #replay-left { left: 24px; } #replay-right { right: 24px; }
+    .hr-rp-who { display: flex; align-items: center; font-weight: 700; font-size: 1.05rem; }
+    .hr-rp-unit { font-size: 1.15rem; } .hr-rp-icon { font-size: 1.5rem; }
+    .hr-rp-rolls { display: flex; flex-direction: column; gap: 6px; min-height: 40px; }
+    .hr-rp-row { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; animation: hr-rp-in 0.25s ease-out; }
+    .hr-rp-row .small { min-width: 22px; }
+    .hr-rp .hr-die { min-width: 30px; padding: 3px 0; font-size: 1.15rem; border-radius: 6px; }
+    .hr-rp-out { font-weight: 700; font-size: 1.05rem; animation: hr-rp-in 0.25s ease-out; }
+    @keyframes hr-rp-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+    #game.replaying #col-left, #game.replaying #col-right, #game.replaying #hint, #game.replaying #tech { visibility: hidden; }
+    .hr-mark { fill: none; stroke: #ffe36b; stroke-width: 3.5; stroke-dasharray: 6 4; pointer-events: none; }
+    .hr-marks { pointer-events: none; }
     #centre { position: absolute; left: 12px; bottom: 12px; z-index: 5; }
     #result { position: absolute; top: 130px; left: 50%; transform: translateX(-50%); z-index: 6; min-width: 300px; text-align: center; }
     #result .row { display: flex; gap: 12px; }
@@ -210,7 +230,9 @@
           Units appear on the structure that trains them. A military structure can <b>recruit every turn</b> on its own
           (when you can pay and have people without a job), and give each unit it trains a standing order.
           Click a cell again to cycle through what's on it (a unit, then the structure under it).
-          <b>Tech tree</b> (next to the Build tab) shows the science and faith advances.</p>
+          <b>Tech tree</b> (next to the Build tab) shows the science and faith advances. When a turn resolves, a replay
+          visits each fight you saw with the dice (you on the left); Skip or Esc stops it, and Settings → Hex Realms sets its
+          speed or turns it off.</p>
         <p>The last realm standing wins; if several survive to the turn limit, the highest score wins. The host can add
           bots (computer players) in the settings; once no person is left in the game, it ends and the highest score wins.</p>
       </div>
@@ -238,6 +260,11 @@
     </div>
     <button id="centre" class="hr-btn" style="position:absolute" title="Centre the map on your Town Hall">Centre</button>
     <div id="hint" hidden></div>
+    <div id="replay" hidden>
+      <div id="replay-bar" class="hr-panel"></div>
+      <div id="replay-left" class="hr-panel hr-rp"></div>
+      <div id="replay-right" class="hr-panel hr-rp"></div>
+    </div>
     <div id="result" hidden>
       <div id="result-text"></div>
       <button id="back" hidden>Back to lobby</button>

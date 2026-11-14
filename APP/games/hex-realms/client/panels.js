@@ -87,7 +87,7 @@
     const { game, content, you } = ctx;
     const unitName = (t) => content.units[t]?.name || t;
     const structName = (t) => content.structures[t]?.name || t;
-    const needAt = (at) => (content.terrain[game.cells[at]]?.cover ? 5 : 4);
+    const needOf = (s) => s.need || (content.terrain[game.cells[s.at]]?.cover ? 5 : 4);  // the roll that hits unit side s
     const who = (s) => el("span", {}, nameSpan(game, s.owner), ` ${unitName(s.type)}`);
     const where = (at) => (at ? el("a", { className: "hr-cell-link", onclick: () => ctx.act.centre(at), title: "Show on the map" }, ` @${at}`) : null);
     const line = (...kids) => el("div", { className: "hr-ev" }, ...kids);
@@ -96,13 +96,13 @@
     for (const e of evs) {
       switch (e.t) {
         case "battle": {
-          const rounds = e.rounds.map(([ra, rb], i) => el("div", { className: "hr-round" }, `R${i + 1} `, dice(ra, needAt(e.b.at)), " vs ", dice(rb, needAt(e.a.at))));
+          const rounds = e.rounds.map(([ra, rb], i) => el("div", { className: "hr-round" }, `R${i + 1} `, dice(ra, needOf(e.b)), " vs ", dice(rb, needOf(e.a))));
           lines.push(line(el("b", {}, "Battle "), who(e.a), " attacks ", who(e.b), where(e.b.at), rounds,
             e.dead.length ? el("div", { className: "neg small" }, `Dead: ${e.dead.map((u) => (u === e.a.unit ? unitName(e.a.type) : unitName(e.b.type))).join(", ")}`) : el("div", { className: "muted small" }, "Both survive.")));
           break;
         }
         case "shot":
-          lines.push(line(el("b", {}, "Shot "), who(e.a), " fires at ", e.b ? who(e.b) : `${structName(e.stype)}`, where(e.at || e.b?.at), " ", dice(e.roll, e.b ? needAt(e.b.at) : 4),
+          lines.push(line(el("b", {}, "Shot "), who(e.a), " fires at ", e.b ? who(e.b) : `${structName(e.stype)}`, where(e.at || e.b?.at), " ", dice(e.roll, e.b ? needOf(e.b) : 4),
             e.b ? (e.dead.length ? el("span", { className: "neg" }, " dead") : ` ${e.hits} hit${e.hits === 1 ? "" : "s"}`) : ` ${e.damage} damage`));
           break;
         case "siege":
@@ -110,7 +110,7 @@
             ` ${e.damage} damage; defenders `, dice(e.back, 4), e.dead.length ? el("span", { className: "neg" }, " attacker dead") : null));
           break;
         case "tower":
-          lines.push(line(el("b", {}, "Tower "), nameSpan(game, e.owner), " tower fires at ", who(e.b), where(e.b.at), " ", dice(e.roll, needAt(e.b.at)), e.dead.length ? el("span", { className: "neg" }, " dead") : ` ${e.hits} hit${e.hits === 1 ? "" : "s"}`));
+          lines.push(line(el("b", {}, "Tower "), nameSpan(game, e.owner), " tower fires at ", who(e.b), where(e.b.at), " ", dice(e.roll, needOf(e.b)), e.dead.length ? el("span", { className: "neg" }, " dead") : ` ${e.hits} hit${e.hits === 1 ? "" : "s"}`));
           break;
         case "destroyed":
           lines.push(line(el("b", { className: "neg" }, "Destroyed "), nameSpan(game, e.owner), ` ${structName(e.type)}`, e.by ? [" by ", nameSpan(game, e.by)] : null, where(e.at)));

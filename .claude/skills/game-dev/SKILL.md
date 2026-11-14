@@ -31,6 +31,7 @@ bodies only for what you change.
 | Client lobby API and the state shape | Header of `APP/web/gamekit/lobby.js` |
 | Client real-time helpers (interpolation, keyboard input, ping) | Header of `APP/web/gamekit/realtime.js` |
 | Shared UI (player list, start, lobby buttons, settings form, error banner, turn alert) | Header of `APP/web/gamekit/lobby-ui.js` |
+| Per-player game settings in the Settings dialog (`AppSettings.addPageSettings`) | Header of `APP/web/shared/settings.js` |
 | Base page styles and the CSS variables a game can set | Header of `APP/web/shared/theme.js` |
 | Admin view (read-only accounts / feedback / sessions / rooms) | Headers of `APP/server/admin.py` and `APP/web/shared/admin.js`; a game's Rooms-tab summary is `admin_info()` (`LobbyGame` provides it) |
 | Connections, reconnects, the WebSocket server | Headers of `APP/server/rooms.py`, `main.py`, `websocket.py` (platform; games don't use it directly) |

@@ -107,7 +107,8 @@ APP/
       theme.js          Base page styles (CSS variables, zero specificity); load first, not deferred
       home.js           "GWF" home button (top left)
       settings.js       Settings component + AppSettings API; owns the per-tab player UUID and the
-                        Account tab (log in / create account / log out over /ws/account)
+                        Account tab (log in / create account / log out over /ws/account); a game adds
+                        its own player settings tab with AppSettings.addPageSettings
       chat.js           Site-wide chat component
       admin.js          Admin view button + dialog (view only); not in pages: settings.js loads it while
                         Settings -> Settings -> Enable Admin Mode holds a password
@@ -279,6 +280,9 @@ Summary:
 
 ## Settings and privacy
 - Settings stay in the browser (sessionStorage) and are never sent to the server. Exceptions: the display name (sent with chat messages and when joining a game, and saved to the account while logged in), the player UUID (sent when connecting to a game room or the account socket), the account name and password (sent only when pressing Log in / Create account), the login token the server gave the tab (sent when the account socket connects) and feedback text with the display name and chosen game (sent only when pressing Submit in the Feedback tab), and the admin password (Settings -> Settings -> Enable Admin Mode; sent to /ws/admin, which checks it and then answers read-only admin requests). The site has no HTTPS yet, so passwords travel unencrypted; the Account tab says so.
+- **Player settings for a game** (not the host's `SETTINGS`): `AppSettings.addPageSettings(label, fields)`
+  adds a tab to the Settings dialog (selects and checkboxes, keys starting with the game id); they stay in the
+  browser like any setting. Example: Hex Realms' combat replay speed / skip (`client/replay.js`).
 - **Admin view** (`server/admin.py`, `web/shared/admin.js`): view only, and not meant to be secure (one shared
   password, `ADMIN_PASSWORD`). Never add actions that change anything there without the user's OK, never send
   password hashes, and only shortened client UUIDs (a full one is a seat key). Games show up in the Rooms tab
