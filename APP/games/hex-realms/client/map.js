@@ -81,22 +81,34 @@
     return out;
   }
 
-  // The outline of blob(cells): inset outside edges plus the short joins where two of its cells
-  // meet on the outside (a shared corner whose third cell isn't in the group).
-  function blobLine(cells, attrs, scale = BLOB) {
-    const own = new Set(cells), out = borders(cells, (n) => own.has(n), attrs, scale);
+  // An inset outline round a region (`same(n)` says whether cell n is in it), drawn for `cells` (all of the
+  // region or part of it, e.g. only its weak land): their outside edges inset to `scale`, plus, where two
+  // region cells meet on the outside (a shared corner whose third cell isn't in the region), each cell's
+  // half of the short join between their inset corners (so parts drawn in different styles still meet).
+  function outline(cells, same, attrs, scale) {
+    const out = borders(cells, same, attrs, scale);
     const inset = (k, [vx, vy]) => { const [x, y] = center(k); return [x + scale * (vx - x), y + scale * (vy - y)]; };
     const line = ([x1, y1], [x2, y2]) => svg("line", { x1: x1.toFixed(1), y1: y1.toFixed(1), x2: x2.toFixed(1), y2: y2.toFixed(1), ...attrs });
+    const half = (k, n, v) => { const a = inset(k, v), b = inset(n, v); return line(a, [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2]); };
     for (const k of cells) {
       const [x, y] = center(k), ns = neighbors(k);
       ns.forEach((n, i) => {
-        if (!own.has(n) || n < k) return;
-        if (!own.has(ns[(i + 5) % 6])) { const v = corner(x, y, i, SIZE); out.push(line(inset(k, v), inset(n, v))); }
-        if (!own.has(ns[(i + 1) % 6])) { const v = corner(x, y, i + 1, SIZE); out.push(line(inset(k, v), inset(n, v))); }
+        if (!same(n)) return;
+        if (!same(ns[(i + 5) % 6])) out.push(half(k, n, corner(x, y, i, SIZE)));
+        if (!same(ns[(i + 1) % 6])) out.push(half(k, n, corner(x, y, i + 1, SIZE)));
       });
     }
     return out;
   }
+
+  // The outline of blob(cells), for the hover highlight.
+  function blobLine(cells, attrs, scale = BLOB) {
+    const own = new Set(cells);
+    return outline(cells, (n) => own.has(n), attrs, scale);
+  }
+
+  // Territory borders sit this far inside each cell, so two realms' borders show side by side.
+  const BORDER = (SIZE - 3) / SIZE;
 
   function glyph(terrain, x, y) {
     const a = { class: "hr-glyph" };
@@ -226,7 +238,7 @@
         const strong = mine.filter((k) => weak[k] !== pid), bought = mine.filter((k) => weak[k] === pid);
         put(territoryG, strong.map((k) => hexAt(k, SIZE, { fill: color(pid), "fill-opacity": 0.16 })),
           bought.map((k) => hexAt(k, SIZE, { fill: color(pid), "fill-opacity": 0.07 })),
-          borders(strong, same, line), borders(bought, same, { ...line, "stroke-dasharray": "6 5", "stroke-linecap": "butt" }));
+          outline(strong, same, line, BORDER), outline(bought, same, { ...line, "stroke-dasharray": "6 5", "stroke-linecap": "butt" }, BORDER));
       }
 
       // Structures: solid, in the structure's own colour (content "color"), fused into one shape each.
