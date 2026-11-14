@@ -90,10 +90,10 @@ fields in `logic/content.py`). Tests: `tests/` (`python3 -I tools/run_tests.py h
   `logic/content.py`: see their headers.
 - `client/map.js`: `HexMap.create`: pan (drag) / zoom (wheel) SVG map; terrain layer rebuilt only
   when `game.cells` changes, the rest per state;
-  structures are solid in their content `color`, drawn by `blob` (cells at 90% with the gaps
+  structures are solid in their content `color`, drawn by `blob` (cells at 80% with the gaps
   between a structure's own cells filled, so only its outside is inset); owner colours show on the
   territory border and as an outline on hover (`hoverG`, `shapeAt`), and the icon (emoji from the content, placeholder for art) at their middle; `setHighlights` / `setGhost` / `flash` only
-  touch overlays. `HexMap.util` has the client's hex maths (dist, neighbors, add).
+  touch overlays (a selection, "sel" cells, is outlined round its outside only, in `selG`). `HexMap.util` has the client's hex maths (dist, neighbors, add).
 - `client/hud.js`: `HexHud`: top bar (stock + net, people: jobs / building / idle, growth only when
   it will happen, Jobs off / on, End turn), players, selection panel (unit / structure / site actions, Explore, recruit buttons with the server's reasons), orders list, trade,
   build menu. `client/panels.js`: `HexPanels`: advances, last-turn report (dice faces), log.

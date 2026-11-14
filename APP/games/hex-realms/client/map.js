@@ -5,6 +5,7 @@
  *   const map = HexMap.create(element, { onCell(key), onHover(key|null), onRightClick(key) });
  *   map.draw(game, you, priv)   rebuild the dynamic layers from state (terrain only if the map changed)
  *   map.setHighlights({key: "reach"|"attack"|"range"|"sel"|"claim"|"goal"})   toggle classes on pre-made cell overlays
+ *                               ("sel" cells also get one outline round their outside edge, none inside)
  *   map.setGhost({cells, ok, label} | null)   footprint preview under the mouse (small, rebuilt per hover)
  *   map.flash([{at, kind}])     brief pulsing markers (battle/siege cells)
  *   map.centre(key)             pan to a cell;  map.fit() resets the zoom
@@ -60,7 +61,7 @@
   // One solid shape for a group of cells: each cell inset to `scale` of its size, with the gaps
   // between its own cells filled (a strip along each shared edge, a triangle where three meet),
   // so only the outside edge is inset. A thin stroke of the same colour hides seams.
-  const BLOB = 0.9;
+  const BLOB = 0.8;
   function blob(cells, attrs, scale = BLOB) {
     const own = new Set(cells), out = [], seen = new Set();
     const inset = (k, [vx, vy]) => { const [x, y] = center(k); return [x + scale * (vx - x), y + scale * (vy - y)]; };
@@ -111,7 +112,7 @@
     const root = svg("svg", { class: "hr-svg" });
     const world = svg("g");
     const layer = (name) => { const g = svg("g", { class: `hr-${name}` }); put(world, g); return g; };
-    const terrainG = layer("terrain"), territoryG = layer("territory"), structG = layer("structs"), dimG = layer("dim"), hlG = layer("hl");
+    const terrainG = layer("terrain"), territoryG = layer("territory"), structG = layer("structs"), dimG = layer("dim"), hlG = layer("hl"), selG = layer("sel");
     const hoverG = layer("hover"), orderG = layer("orders"), unitG = layer("units"), ghostG = layer("ghost"), flashG = layer("flashes");
     hlG.style.pointerEvents = "none";
     put(root, world);
@@ -346,6 +347,10 @@
         hl[k].setAttribute("class", `hr-hlcell hr-hl-${c}`);
         hlClass[k] = c;
       }
+      // "sel" cells are only filled; the selection (a unit's cell, or a whole structure) gets one
+      // outline round its outside edge, with no lines between its own cells.
+      const sel = Object.keys(next).filter((k) => next[k] === "sel" && hl[k]);
+      fill(selG, borders(sel, (n) => next[n] === "sel", { class: "hr-sel-line" }, (SIZE - 1) / SIZE));
     }
 
     function setGhost(g) {
