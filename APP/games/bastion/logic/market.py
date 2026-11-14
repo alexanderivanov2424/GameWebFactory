@@ -1,35 +1,40 @@
-"""Bastion: the market, a shared row of cards anyone may buy at any time during a round with the
-team's gold. Copies are unlimited: a bought slot is dealt a new card at once. Every round the
-whole row is dealt anew (Match.start_round), and the team may reroll it for gold during a round
-(REROLL_COST, +1 for each reroll earlier in the same round: Match.reroll).
+"""Bastion: the market, two shared rows of cards anyone may buy during the planning phase with
+their own gold: blueprints (kind "build") and actions. Copies are unlimited: a bought slot is
+dealt a new card at once. The rows persist between rounds; each player may reshuffle each half
+once per round for RESHUFFLE_COST gold (Match.reshuffle).
 
-    market = Market(pool, rng)    pool = card ids that have a price (cards.py)
-    market.slots                  [card id] (SIZE of them, fewer if the pool is smaller)
+    HALVES                        {"blueprints": row size, "actions": row size}
+    market = Market(pool, size, rng)   pool = card ids of that half that have a price (cards.py)
+    market.slots                  [card id] (size of them, fewer if the pool is smaller)
     market.take(slot) -> card id  and deals that slot a new card (LobbyError for a bad slot)
     market.redeal()               deals every slot anew
-Dealing avoids a card already on offer while the pool has others.
+Dealing avoids a card already on offer while the pool has others (with every card on offer, a
+bought card is dealt back into its slot, so the row never shows duplicates).
 """
 
 from gamekit import LobbyError
 
-SIZE = 6
-REROLL_COST = 2  # gold for the first reroll in a round; each further one costs 1 more
+HALVES = {"blueprints": 4, "actions": 3}
+RESHUFFLE_COST = 1
 
 
 class Market:
-    def __init__(self, pool, rng):
+    def __init__(self, pool, size, rng):
         self.pool = sorted(pool)
+        self.size = size
         self.rng = rng
         self.slots = []
         self.redeal()
 
     def redeal(self):
         self.slots = []
-        while len(self.slots) < min(SIZE, len(self.pool)):
+        while len(self.slots) < min(self.size, len(self.pool)):
             self.slots.append(self.deal())
 
     def deal(self, skip=None):
         fresh = [c for c in self.pool if c not in self.slots and c != skip]
+        if not fresh and skip is not None and skip not in self.slots:
+            return skip  # a small pool (every card on offer): the bought card comes back
         return self.rng.choice(fresh or self.pool)
 
     def take(self, slot):

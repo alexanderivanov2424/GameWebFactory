@@ -1,0 +1,31 @@
+{
+ "name": "Smithy",
+ "icon": "⚒️",
+ "cells": [
+  [
+   0,
+   0
+  ],
+  [
+   1,
+   0
+  ]
+ ],
+ "cost": {
+  "stone": 4,
+  "wood": 2
+ },
+ "jobs": 1,
+ "produce": {
+  "metal": 1
+ },
+ "requires": "bronze_working",
+ "text": "+1 metal. Builds catapults; swordsmen and knights need one too.",
+ "recruits": [
+  "catapult"
+ ],
+ "category": "industry",
+ "buildTurns": 3,
+ "builders": 2,
+ "color": "#474d57"
+}

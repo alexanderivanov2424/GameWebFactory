@@ -2,7 +2,7 @@
   "name": "Dragon",
   "icon": "🐉",
   "tier": 3,
-  "hp": 36,
+  "hp": 18,
   "defeat": {
     "soldiers": 2
   },

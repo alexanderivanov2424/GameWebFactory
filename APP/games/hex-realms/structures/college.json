@@ -1,0 +1,27 @@
+{
+ "name": "College",
+ "icon": "🎓",
+ "cells": [
+  [
+   0,
+   0
+  ],
+  [
+   1,
+   0
+  ]
+ ],
+ "cost": {
+  "wood": 4,
+  "stone": 3,
+  "gold": 5
+ },
+ "jobs": 1,
+ "produce": {
+  "science": 2
+ },
+ "category": "culture",
+ "buildTurns": 3,
+ "builders": 2,
+ "color": "#5a70b8"
+}

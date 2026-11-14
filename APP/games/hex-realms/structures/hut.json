@@ -1,0 +1,20 @@
+{
+ "name": "Hut",
+ "icon": "🛖",
+ "cells": [
+  [
+   0,
+   0
+  ]
+ ],
+ "cost": {
+  "wood": 2
+ },
+ "housing": 2,
+ "home": true,
+ "text": "Housing for 2 people.",
+ "category": "homes",
+ "buildTurns": 1,
+ "builders": 1,
+ "color": "#9c6b43"
+}

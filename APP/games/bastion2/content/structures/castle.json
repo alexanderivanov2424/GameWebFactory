@@ -1,0 +1,5 @@
+{
+  "name": "Castle", "icon": "🏰",
+  "provides": {"food_cap": 5, "actions": 1},
+  "text": "Your seat. Food storage 5, 1 action every turn."
+}

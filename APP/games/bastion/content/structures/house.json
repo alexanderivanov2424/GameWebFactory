@@ -1,15 +1,12 @@
 {
   "name": "House",
   "icon": "🏠",
-  "shape": [
-    "#"
-  ],
   "price": 2,
-  "bundle": 3,
   "cost": {
-    "wood": 1,
+    "decrees": 1,
     "stone": 1
   },
-  "population": 2,
-  "text": "Home for 2 people: each round the city's fed people become units to place. Markets and chapels like houses nearby; workshops and smithies are too noisy for them."
+  "build": 1,
+  "units": 2,
+  "text": "Adds 2 units to your pool once built. A unit placed here does nothing (for now)."
 }

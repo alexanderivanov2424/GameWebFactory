@@ -1,18 +1,18 @@
 """Bastion: fighting enemies: soldier strikes, razing enemy tiles, units fighting, damage, cures.
 
 Enemies with defeat.soldiers take 1 damage per that many soldiers. A fighting unit counts as 1
-soldier: each one resolved adds a strike to the enemy (foe.strikes), and every defeat.soldiers
-strikes deal 1 damage; leftover strikes carry over on that enemy, and the soldier counter's
-Strike uses them up first. Enemy tiles work the same way: a blight takes 1 (a lair tile
-foe.raze) soldiers or unit strikes to raze (blight["strikes"] carries over). Razing a lair tile
-deals 1 damage. A beaten enemy's blights and plague go; beating every enemy wins. Units placed on
-an enemy or tile that is gone are dropped (Match.clear_gone).
+soldier: each one adds a strike to the enemy (foe.strikes) when the units act (resolution.py),
+and every defeat.soldiers strikes deal 1 damage; leftover strikes carry over on that enemy, and
+the soldier counter's Strike uses them up first. Enemy tiles work the same way: a blight takes
+1 (a lair tile foe.raze) soldiers or unit strikes to raze (blight["strikes"] carries over).
+Razing a lair tile deals 1 damage. A beaten enemy's blights and plague go; beating every enemy
+wins. Units still placed on an enemy or tile that is gone become haulers (Match.clear_gone).
 
     active_foe(match, index) -> Foe (LobbyError unless it's active)
     strike(match, pid, index, way, times=1)   soldier counter ("soldiers") or resources ("resources")
     raze(match, pid, x, y)          spend soldiers to raze an enemy tile
-    unit_fight(match, seat, foe) -> log text      one fighting unit resolves
-    unit_raze(match, seat, cell) -> log text      one unit on an enemy tile resolves
+    units_fight(match, foe, count) -> text   `count` fighting units strike at once
+    unit_raze(match, cell) -> text           the unit on an enemy tile strikes it
     raze_cost(match, blight) -> strikes it takes in all
     hurt(match, foe, amount)        damage; a beaten enemy's tiles and plague go; all beaten wins
     cure(match, structure) -> text  lift its plague (hurts a foe with defeat.cure)
@@ -69,25 +69,31 @@ def raze(match, pid, x, y):
     razed(match, (x, y), blight)
 
 
-def unit_fight(match, seat, foe):
-    foe.strikes += 1
+def units_fight(match, foe, count):
+    """`count` fighting units strike foe at once -> summary text."""
     per = foe.defeat["soldiers"]
-    if foe.strikes < per:
-        return f"struck the {foe.name} ({foe.strikes} of {per} toward the next damage)"
-    foe.strikes -= per
-    hurt(match, foe, 1)
-    return f"hit the {foe.name} for 1"
+    foe.strikes += count
+    damage = min(foe.hp, foe.strikes // per)
+    foe.strikes -= damage * per
+    text = f"{count} strike{'s' if count != 1 else ''}: "
+    text += f"{damage} damage" if damage else "no damage yet"
+    if damage:
+        hurt(match, foe, damage)
+    if foe.active and per > 1:
+        text += f" ({foe.strikes} of {per} toward the next)"
+    return text
 
 
-def unit_raze(match, seat, cell):
+def unit_raze(match, cell):
+    """A unit on an enemy tile strikes it -> summary text."""
     blight = match.board.blights[cell]
     blight["strikes"] += 1
     match.board.version += 1
     cost = raze_cost(match, blight)
     if blight["strikes"] < cost:
-        return f"struck the {blight['name']} ({blight['strikes']} of {cost} toward razing it)"
+        return f"{blight['strikes']} of {cost} strikes toward razing it"
     razed(match, cell, blight)
-    return f"razed a {blight['name']}"
+    return "razed"
 
 
 def hurt(match, foe, amount):

@@ -1,7 +1,11 @@
 {
   "name": "Tax",
+  "price": 2,
+  "cost": {
+    "decrees": 1
+  },
   "gain": {
-    "gold": 2
+    "gold": 1
   },
   "adds": "unrest"
 }

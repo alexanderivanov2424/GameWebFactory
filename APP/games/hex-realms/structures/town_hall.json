@@ -1,0 +1,36 @@
+{
+ "name": "Town Hall",
+ "icon": "🏛️",
+ "cells": [
+  [
+   0,
+   0
+  ],
+  [
+   1,
+   0
+  ],
+  [
+   0,
+   1
+  ]
+ ],
+ "hp": 15,
+ "defense": 2,
+ "housing": 4,
+ "storage": 25,
+ "territory": 3,
+ "produce": {
+  "gold": 1,
+  "food": 2
+ },
+ "recruits": [
+  "militia",
+  "settlers"
+ ],
+ "score": 4,
+ "text": "Heart of a city: stores 25 of each good and is where you spend from. Founded by Settlers. Lose every Town Hall and you are out.",
+ "category": "city",
+ "vision": 4,
+ "color": "#c9a227"
+}

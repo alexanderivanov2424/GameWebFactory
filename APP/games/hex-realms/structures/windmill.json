@@ -1,0 +1,27 @@
+{
+ "name": "Windmill",
+ "icon": "🌬️",
+ "cells": [
+  [
+   0,
+   0
+  ]
+ ],
+ "cost": {
+  "wood": 3,
+  "stone": 1
+ },
+ "jobs": 1,
+ "perAdjacent": {
+  "type": "farm",
+  "gain": {
+   "food": 2
+  },
+  "max": 3
+ },
+ "text": "+2 food per Farm next to it (up to 3).",
+ "category": "food",
+ "buildTurns": 2,
+ "builders": 1,
+ "color": "#eadfae"
+}

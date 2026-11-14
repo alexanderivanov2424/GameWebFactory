@@ -1,0 +1,37 @@
+{
+ "name": "University",
+ "icon": "📚",
+ "cells": [
+  [
+   0,
+   0
+  ],
+  [
+   1,
+   0
+  ],
+  [
+   0,
+   1
+  ],
+  [
+   1,
+   1
+  ]
+ ],
+ "cost": {
+  "stone": 10,
+  "gold": 15,
+  "metal": 2
+ },
+ "jobs": 2,
+ "produce": {
+  "science": 5
+ },
+ "requires": "academics",
+ "score": 2,
+ "category": "culture",
+ "buildTurns": 4,
+ "builders": 3,
+ "color": "#43509c"
+}

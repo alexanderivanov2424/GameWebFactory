@@ -1,0 +1,37 @@
+{
+ "name": "Monument",
+ "icon": "🗿",
+ "cells": [
+  [
+   0,
+   0
+  ],
+  [
+   1,
+   0
+  ],
+  [
+   0,
+   1
+  ],
+  [
+   1,
+   1
+  ]
+ ],
+ "cost": {
+  "stone": 20,
+  "gold": 20,
+  "metal": 5
+ },
+ "produce": {
+  "faith": 2
+ },
+ "score": 10,
+ "hp": 10,
+ "text": "+10 score.",
+ "category": "culture",
+ "buildTurns": 5,
+ "builders": 3,
+ "color": "#e2d6b4"
+}

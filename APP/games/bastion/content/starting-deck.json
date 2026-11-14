@@ -1,7 +1,5 @@
 {
-  "plan-house": 2,
-  "plan-farm": 1,
   "tax": 1,
-  "sell": 1,
-  "levy": 1
+  "orders": 2,
+  "trade": 1
 }

@@ -1,0 +1,18 @@
+{
+ "name": "Spearman",
+ "icon": "Sp",
+ "cost": {
+  "wood": 2,
+  "gold": 4
+ },
+ "attack": 2,
+ "defense": 3,
+ "hp": 3,
+ "move": 2,
+ "upkeep": {
+  "food": 1,
+  "gold": 1
+ },
+ "vsMounted": 2,
+ "text": "+2 dice against knights."
+}

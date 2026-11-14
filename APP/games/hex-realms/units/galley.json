@@ -1,0 +1,20 @@
+{
+ "name": "Galley",
+ "icon": "Ga",
+ "cost": {
+  "wood": 8,
+  "gold": 4
+ },
+ "attack": 3,
+ "defense": 2,
+ "hp": 3,
+ "move": 4,
+ "naval": true,
+ "requires": "sailing",
+ "upkeep": {
+  "food": 1,
+  "gold": 1
+ },
+ "text": "Moves on water. Attacks units and structures on the shore.",
+ "vision": 3
+}

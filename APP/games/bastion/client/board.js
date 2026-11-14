@@ -1,29 +1,27 @@
 /*
- * Bastion: BastionBoard draws the shared board (terrain, roads, walls, enemy blights, buildings
- * with merged borders and their badges, and the units placed this round as small tokens in their
- * player's colour) and reports the mouse. No rules here: outputs, links, flags and placements all
- * come from the state.
+ * Bastion: BastionBoard draws the shared map: terrain, roads (tinted in their owner's colour),
+ * structures (one tile each, framed in their owner's colour; planned ones greyed out with a
+ * 🔨n build-token badge) and units (a 🧍 worker or ⚔️ soldier badge in their owner's colour, one
+ * per tile; ringed when it's yours). It reports the mouse. No rules here: everything comes from
+ * the state.
  *
  *   const board = BastionBoard.create(element, { onHover(x, y), onLeave(), onClick(x, y, event),
- *                                                onRightClick(), onWheel(direction) })
- *   board.build(game, you)     rebuild every cell from game (catalog terrain + structures +
- *                              placements); `you`'s tokens get a ring
- *   board.structureAt(x, y)    uid (string) of the building there, or null
- *   board.clearMarks()         remove hover marks (ghost, bad, target, hl, spot)
- *   board.mark(cells, cls)     add `cls` to each [x, y] that is on the board
- *   board.cellRect(x, y)       the cell's viewport rectangle (getBoundingClientRect, for tips)
+ *                                                onRightClick(x, y, event) })
+ *   board.build(game, you)     rebuild every cell from the state
+ *   board.clearMarks()         remove hover marks (spot, hl, ghost, bad, prompt)
+ *   board.mark(cells, cls)     add `cls` to each [x, y] on the board
+ *   board.cellRect(x, y)       the cell's viewport rectangle (for tips)
  * The board is rebuilt only on a new state; hover marks are toggled on the existing cells.
  */
 const BastionBoard = (() => {
   const { el } = AppDom;
   const TERRAIN_CLASS = { ".": "grass", F: "forest", M: "mountain", "~": "water" };
-  const MARKS = ["ghost", "bad", "target", "hl", "spot"];
+  const MARKS = ["spot", "hl", "ghost", "bad", "prompt"];
 
   function create(element, handlers) {
     let cells = [];
     let width = 0;
     let height = 0;
-    let owner = {}; // "x,y" -> structure uid
 
     const pos = (target) => {
       const cell = target.closest(".cell");
@@ -40,102 +38,54 @@ const BastionBoard = (() => {
     });
     element.addEventListener("contextmenu", (e) => {
       e.preventDefault();
-      handlers.onRightClick();
+      const p = pos(e.target);
+      handlers.onRightClick(p ? p[0] : null, p ? p[1] : null, e);
     });
-    element.addEventListener("wheel", (e) => {
-      if (handlers.onWheel(e.deltaY > 0 ? 1 : -1)) e.preventDefault();
-    }, { passive: false });
 
     function build(game, you) {
       width = game.width;
       height = game.height;
       element.style.setProperty("--w", width);
       element.style.setProperty("--h", height);
-      owner = {};
       cells = [];
-      const roads = new Set(game.roads);
-      const walls = new Set(game.walls);
       for (let y = 0; y < height; y++) {
         const row = [];
         for (let x = 0; x < width; x++) {
           const key = `${x},${y}`;
-          const blight = game.blights[key];
-          // Occupied cells get no terrain class: .cell.grass.alt would outrank .cell.road etc.
           let base = TERRAIN_CLASS[game.terrain[y][x]] || "grass";
-          if (roads.has(key)) base = "road";
-          else if (walls.has(key)) base = "wall";
-          else if (blight) base = "blight";
+          const road = game.roads[key];
+          if (road !== undefined) base = "road";
           const cell = el("div", { className: `cell ${base}` });
           if (base === "grass" && (x + y) % 2) cell.classList.add("alt");
+          if (road !== undefined) cell.style.boxShadow = `inset 0 0 0 2px ${game.colors[road] || "#888"}`;
           cell.dataset.x = x;
           cell.dataset.y = y;
-          if (blight) {
-            cell.classList.add("razeable");
-            if (blight.lair) cell.classList.add("lair");
-            cell.textContent = blight.icon || "☠";
-            if (blight.strikes) cell.append(el("span", { className: "badge strikes", textContent: `${blight.strikes}✕` }));
-          }
           row.push(cell);
         }
         cells.push(row);
       }
-      for (const [uid, s] of Object.entries(game.structures)) drawStructure(game, uid, s);
-      drawUnits(game, you);
-      element.replaceChildren(...cells.flat());
-    }
-
-    function firstCell(list) {
-      return [...list].sort((a, b) => a[1] - b[1] || a[0] - b[0])[0];
-    }
-
-    function drawStructure(game, uid, s) {
-      const info = game.kinds[s.kind];
-      const own = new Set(s.cells.map(([x, y]) => `${x},${y}`));
-      const ruined = new Set(s.ruined.map(([x, y]) => `${x},${y}`));
-      const first = firstCell(s.cells);
-      for (const [x, y] of s.cells) {
+      for (const s of Object.values(game.structures)) {
+        const cell = cells[s.y] && cells[s.y][s.x];
+        if (!cell) continue;
+        const info = game.kinds[s.kind] || {};
+        cell.className = `cell bld k-${s.kind}${s.tokens ? " plan" : ""}`;
+        cell.style.borderColor = game.colors[s.owner] || "#888";
+        cell.append(el("span", { className: "ico", textContent: info.icon || "🏠" }));
+        if (s.tokens) cell.append(el("span", { className: "badge tokens", textContent: `🔨${s.tokens}` }));
+      }
+      for (const [key, unit] of Object.entries(game.units || {})) {
+        const [x, y] = key.split(",").map(Number);
         const cell = cells[y] && cells[y][x];
         if (!cell) continue;
-        owner[`${x},${y}`] = uid;
-        cell.classList.remove("grass", "alt");
-        cell.classList.add("bld", `k-${s.kind}`);
-        if (own.has(`${x},${y - 1}`)) cell.classList.add("nt");
-        if (own.has(`${x},${y + 1}`)) cell.classList.add("nb");
-        if (own.has(`${x - 1},${y}`)) cell.classList.add("nl");
-        if (own.has(`${x + 1},${y}`)) cell.classList.add("nr");
-        if (s.worked) cell.classList.add("worked");
-        if (info.depot) cell.classList.add("depot");
-        if (s.plague) cell.classList.add("sick");
-        if (s.frozen) cell.classList.add("frozen");
-        if (ruined.has(`${x},${y}`)) cell.classList.add("ruined");
+        const badge = el("span", {
+          className: `badge unit${unit.pid === you ? " mine" : ""}${unit.new ? " new" : ""}`,
+          textContent: unit.soldier ? "⚔️" : "🧍",
+          title: `${game.names[unit.pid] || unit.pid}'s ${unit.soldier ? "soldier" : "unit"}`,
+        });
+        badge.style.background = game.colors[unit.pid] || "#888";
+        cell.append(badge);
       }
-      const cell = cells[first[1]] && cells[first[1]][first[0]];
-      if (!cell) return;
-      cell.append(info.icon || "🏠");
-      if ("output" in s && info.work) {
-        const key = Object.keys(info.work.makes)[0];
-        cell.append(el("span", { className: `badge out${s.output ? "" : " none"}`, textContent: `+${s.output}${game.icons[key] || ""}` }));
-      }
-      const stored = Object.entries(s.store).map(([k, n]) => `${game.icons[k] || k}${n}`).join(" ");
-      if (stored) cell.append(el("span", { className: "badge store", textContent: stored }));
-      const flags = (s.plague ? "🦠" : "") + (s.frozen ? "❄️" : "") + (s.link === "none" && info.work ? "⛓️‍💥" : "");
-      if (flags) cell.append(el("span", { className: "badge flags", textContent: flags }));
-      if (s.worked) cell.append(el("span", { className: "badge done", textContent: "✓" }));
-    }
-
-    // One-unit targets: "s<uid>" (on the building's first cell) and "raze<x>,<y>" (on that tile).
-    function drawUnits(game, you) {
-      for (const [target, who] of Object.entries(game.placements || {})) {
-        if (typeof who !== "string") continue; // pools (haul, fight) are drawn off the board
-        let at = null;
-        if (target.startsWith("raze")) at = target.slice(4).split(",").map(Number);
-        else if (target.startsWith("s") && game.structures[target.slice(1)]) at = firstCell(game.structures[target.slice(1)].cells);
-        const cell = at && cells[at[1]] && cells[at[1]][at[0]];
-        if (!cell) continue;
-        const token = el("span", { className: `badge unit${who === you ? " mine" : ""}`, title: game.names[who] || who });
-        token.style.background = game.colors[who] || "#888";
-        cell.append(token);
-      }
+      element.replaceChildren(...cells.flat());
     }
 
     function clearMarks() {
@@ -153,13 +103,7 @@ const BastionBoard = (() => {
       return cell ? cell.getBoundingClientRect() : null;
     }
 
-    return {
-      build,
-      clearMarks,
-      mark,
-      cellRect,
-      structureAt: (x, y) => owner[`${x},${y}`] || null,
-    };
+    return { build, clearMarks, mark, cellRect };
   }
 
   return { create };

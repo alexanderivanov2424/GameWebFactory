@@ -1,0 +1,14 @@
+{
+ "name": "Engineering",
+ "cost": {
+  "science": 35
+ },
+ "after": [
+  "masonry",
+  "bronze_working"
+ ],
+ "effect": {
+  "towerDice": 1
+ },
+ "text": "Catapults; towers roll 1 more die."
+}

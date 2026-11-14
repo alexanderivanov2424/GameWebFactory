@@ -1,0 +1,13 @@
+{
+  "name": "Tower",
+  "icon": "🗼",
+  "price": 4,
+  "cost": {
+    "decrees": 1,
+    "wood": 3,
+    "stone": 1
+  },
+  "build": 2,
+  "staff": "soldier",
+  "text": "Soldiers placed here attack at range (does nothing yet)."
+}

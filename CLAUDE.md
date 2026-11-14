@@ -85,6 +85,7 @@ APP/
   gamekit/              Shared game library, server side (Python package `gamekit`). Games import only this.
     __init__.py         Re-exports: LobbyGame, LobbyError, PLAYING/FINISHED/LOBBY, Int, Choice, MultiChoice, TurnQueue, SecretChoices,
                         Deck, RealtimeGame, FullState, PatchState, Snapshots, turtle
+                        (gamekit.hexes and gamekit.shapes are imported directly)
     lobby.py            LobbyGame: spectators/players, host, ready, phases, end-game vote, public + private state sync,
                         SETTINGS, ACTIONS dispatch, game_number, schedule() timers, SYNC,
                         saved player data (load_data / save_data / account_name)
@@ -96,6 +97,7 @@ APP/
     choices.py          SecretChoices: hidden simultaneous picks (required + optional choosers), revealed all at once
     deck.py             Deck: shuffled draw pile + discard pile of card instances (uids), reshuffles when empty
     shapes.py           Polyomino shapes: parse rows of '#', turn them, list the 4 rotations (never mirrored)
+    hexes.py            Hex grid geometry (axial "q,r" keys): distance, neighbours, disk/ring maps, 6 rotations of hex shapes
     data.py             Loading JSON content files (cards, units...): bad files are logged and skipped
     sim.py              Sim: drives a game through the real lobby for tests (no network); also ticks and inputs
     tests/
@@ -105,12 +107,13 @@ APP/
       theme.js          Base page styles (CSS variables, zero specificity); load first, not deferred
       home.js           "GWF" home button (top left)
       settings.js       Settings component + AppSettings API; owns the per-tab player UUID and the
-                        Account tab (log in / create account / log out over /ws/account)
+                        Account tab (log in / create account / log out over /ws/account); a game adds
+                        its own player settings tab with AppSettings.addPageSettings
       chat.js           Site-wide chat component
       admin.js          Admin view button + dialog (view only); not in pages: settings.js loads it while
                         Settings -> Settings -> Enable Admin Mode holds a password
     gamekit/            Shared game library, client side (served at /gamekit/)
-      dom.js            AppDom: $, el, svg, debounce, setInput, listNames
+      dom.js            AppDom: $, el, svg, fill, debounce, setInput, listNames
       room.js           AppRoom.connect(gameId, handlers): low-level game room connection
       lobby.js          AppLobby.connect(gameId, handlers): lobby client (use this for games)
       lobby-ui.js       AppLobbyUI: player list, start button/status, spectators, connection text, error banner,
@@ -200,12 +203,13 @@ Summary:
    secret objectives (JSON with a `check` key -> scoring function), hidden picks that only work
    like a physical game (secret die rolls you may under-report, a Secret Hitler style card
    hand-off between two players), a nightly secret vote with only the tally shown, `PatchState`.
-   `games/bastion/` (`logic/` modules): a co-op worker-placement city-builder (population from
-   houses becomes units each round, placed together then resolved in turn order, food upkeep),
-   polyomino buildings (`gamekit.shapes`) whose output comes from adjacency conditions in JSON,
-   goods hauled to depots by units, server-computed placement targets with output previews,
-   enemy cards with cycling attacks and their own ways to be beaten, and test-only playtest
-   bots (`tests/bots.py`, `tests/playtest.py`) the user asked for; `PatchState`.
+   `games/bastion/` (`logic/` modules): a city-builder where each player runs their own city and
+   trades with the others (endless for now; enemy modules kept but dormant): a setup phase in
+   turn order, then simultaneous phases each round (place units on owned one-tile buildings,
+   build tokens, gathering tiles; resolution with automatic jobs plus per-player prompts answered
+   one by one; planning with royal decrees, blueprints, Orders and Trade), a two-half persistent
+   market, per-player resources and upkeep, reach-limited placement; `PatchState`. Its playtest
+   bots (`tests/bots.py`, `tests/playtest.py`) are disabled until rewritten for the redesign.
    `games/gilded-trail/` (`logic/` modules): a hex map generated from a seed (preset JSON maps
    or a random one) drawn as SVG, deck-building with a shared market and reserve (`Deck` per
    player), action cards that leave a pending choice inside the turn, and the server sending
@@ -214,6 +218,20 @@ Summary:
    never control a unit: shared orders tagged by player, shared pause/speed, live cursors as
    realtime input, a cell simulation (gas, liquid, heat, germs, decor) sent as row strings over
    `Snapshots`, power/pipe networks, and colonists choosing chores on their own.
+   `games/bastion2/` (`logic/` modules): Bastion as a deck-building city-builder (no units, no
+   terrain, enemies hidden): a play area with per-turn resource counters, upkeep cards that punish
+   being discarded, builds that complete at the end of the turn, structure actions, an unbounded
+   grid shown as a pannable/zoomable floating map with the HUD around the screen edges, and turns
+   either everyone at once or one at a time (a setting); `PatchState`.
+   `games/hex-realms/` (`logic/` modules): a civilization game on a random hex map (`gamekit.hexes`):
+   everyone plans in secret at once, then all orders resolve together (simultaneous step-by-step
+   movement where units that meet fight with dice, sieges, towers), multi-cell structures staffed
+   by population and built over several turns by idle people (construction sites), goods kept in
+   stores, no roads (first-come territory from structures, plus weak land bought with gold that enemy units next to it or being cut off take away), standing orders kept across turns (Explore,
+   Fight, Pillage, multi-turn Travel), military structures that recruit every turn and hand out a standing order, a tech tree popup, own units passing through each other, fog of war sent as each
+   member's private map view, a Settlers start (found your own first city), territory, advances
+   bought with science or faith, an optional turn timer (`schedule`), bots in extra seats (a
+   setting; the user asked for them) planning through the same orders; `PatchState`.
 
 ## Lobby model (shared by all games)
 - Every connected tab is a **member**: a **spectator** until it joins, then a **player**. Players join and leave explicitly, and only in the lobby phase.
@@ -262,6 +280,9 @@ Summary:
 
 ## Settings and privacy
 - Settings stay in the browser (sessionStorage) and are never sent to the server. Exceptions: the display name (sent with chat messages and when joining a game, and saved to the account while logged in), the player UUID (sent when connecting to a game room or the account socket), the account name and password (sent only when pressing Log in / Create account), the login token the server gave the tab (sent when the account socket connects) and feedback text with the display name and chosen game (sent only when pressing Submit in the Feedback tab), and the admin password (Settings -> Settings -> Enable Admin Mode; sent to /ws/admin, which checks it and then answers read-only admin requests). The site has no HTTPS yet, so passwords travel unencrypted; the Account tab says so.
+- **Player settings for a game** (not the host's `SETTINGS`): `AppSettings.addPageSettings(label, fields)`
+  adds a tab to the Settings dialog (selects and checkboxes, keys starting with the game id); they stay in the
+  browser like any setting. Example: Hex Realms' combat replay speed / skip (`client/replay.js`).
 - **Admin view** (`server/admin.py`, `web/shared/admin.js`): view only, and not meant to be secure (one shared
   password, `ADMIN_PASSWORD`). Never add actions that change anything there without the user's OK, never send
   password hashes, and only shortened client UUIDs (a full one is a seat key). Games show up in the Rooms tab

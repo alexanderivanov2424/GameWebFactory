@@ -1,0 +1,26 @@
+{
+ "name": "Granary",
+ "icon": "🧺",
+ "cells": [
+  [
+   0,
+   0
+  ],
+  [
+   1,
+   0
+  ]
+ ],
+ "cost": {
+  "wood": 4
+ },
+ "store": {
+  "food": 40
+ },
+ "growth": 1,
+ "text": "Holds 40 food. Population grows 1 faster.",
+ "category": "food",
+ "buildTurns": 2,
+ "builders": 1,
+ "color": "#c7963f"
+}

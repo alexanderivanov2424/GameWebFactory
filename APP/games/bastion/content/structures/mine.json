@@ -1,39 +1,31 @@
 {
   "name": "Mine",
   "icon": "⚒️",
-  "shape": [
-    "##",
-    "#."
-  ],
-  "price": 3,
+  "price": 4,
   "cost": {
-    "wood": 2,
+    "decrees": 1,
+    "wood": 3,
     "stone": 1
   },
+  "build": 2,
   "requires": [
     {
       "near": "mountain"
     }
   ],
   "work": {
-    "makes": {
-      "ore": 1
-    }
+    "choices": [
+      {
+        "makes": {
+          "metal": 1
+        }
+      },
+      {
+        "makes": {
+          "stone": 3
+        }
+      }
+    ]
   },
-  "bonuses": [
-    {
-      "near": "mountain",
-      "min": 3,
-      "bonus": 1
-    },
-    {
-      "near": "smithy",
-      "bonus": 1
-    },
-    {
-      "near": "storage-yard",
-      "bonus": 1
-    }
-  ],
-  "text": "Digs ore out of the mountain. Smiths next door keep the picks sharp."
+  "text": "Planned next to a mountain. Each round a unit works it, pick 1 metal or 3 stone."
 }

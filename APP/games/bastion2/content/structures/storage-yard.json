@@ -1,0 +1,5 @@
+{
+  "name": "Storage Yard", "icon": "📦", "market": "shop", "copies": 3,
+  "cost": {"wood": 1, "population": 3},
+  "action": {"name": "Bundle", "actions": 1, "bundle": [3, 5]}
+}

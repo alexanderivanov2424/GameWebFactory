@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Bastion 2</title>
+  <!--
+    Bastion 2's page. Lobby: players, settings, how to play (inside <main>). Game: a full-screen
+    layer (#game) with the map (map.js: a pannable, zoomable grid) filling it and the HUD floating
+    around the edges: status bar (top centre), structure actions (left), market + players + log
+    (right), and the bottom bar: the prompt line, the play area (played cards and pending builds as
+    card faces; counters top right: permanent resources, a separator, then this turn's temporary
+    ones), the actions circle, your hand and the
+    End turn button; the Centre button sits in the map's corner between the left and bottom panels.
+    Windows (<dialog>): a player's deck (Deck in the players list), help. game.js renders from the state, hud.js
+    draws the panels.
+  -->
+
+  <!-- Shared components: keep these, in this order. theme.js isn't deferred (no unstyled flash). -->
+  <script src="/shared/theme.js"></script>
+  <script src="/shared/home.js" defer></script>
+  <script src="/shared/settings.js" defer></script>
+  <script src="/shared/chat.js" defer></script>
+  <script src="/gamekit/dom.js" defer></script>
+  <script src="/gamekit/room.js" defer></script>
+  <script src="/gamekit/lobby.js" defer></script>
+  <script src="/gamekit/lobby-ui.js" defer></script>
+  <script src="map.js" defer></script>
+  <script src="hud.js" defer></script>
+  <script src="game.js" defer></script>
+
+  <style>
+    :root {
+      --gwf-main-width: 760px;
+      --gwf-bg: #efe7d6;
+      --gwf-surface: #fbf7ee;
+      --gwf-line: #dccfb4;
+      --gwf-accent: #8a5a2b;
+      --gwf-accent-hover: #6f4620;
+      --gwf-soft: #f1e5cd;
+      --gwf-soft-hover: #e7d6b4;
+      --void: #2b2e33;
+      --grass: #9cc373;
+      --grid-line: rgba(40, 60, 20, 0.18);
+      --hud: rgba(251, 247, 238, 0.95);
+      --hud-line: #cdbd9c;
+      --left-w: 250px;
+      --right-w: 280px;
+      --bottom-h: 372px;
+    }
+    h1 { font-family: Georgia, "Times New Roman", serif; letter-spacing: 0.02em; }
+    .lead { font-size: 0.95rem; line-height: 1.45; }
+
+    /* In game the page is the full-screen #game layer; <main> keeps only the error banner. */
+    body.in-game { overflow: hidden; }
+    body.in-game main > :not(#error) { display: none; }
+    body.in-game #error { position: fixed; top: 64px; left: 50%; transform: translateX(-50%); z-index: 60; min-width: 300px; }
+    #game { position: fixed; inset: 0; background: var(--void); user-select: none; }
+
+    /* Map (map.js) */
+    #map { position: absolute; inset: 0; overflow: hidden; cursor: grab; }
+    #map.dragging { cursor: grabbing; }
+    #world { position: absolute; left: 0; top: 0; transform-origin: 0 0; }
+    #world .ground { position: absolute; background-color: var(--grass); border-radius: 4px;
+      background-image: linear-gradient(var(--grid-line) 1px, transparent 1px), linear-gradient(90deg, var(--grid-line) 1px, transparent 1px);
+      background-size: var(--tile) var(--tile); box-shadow: 0 0 0 3px rgba(0, 0, 0, 0.25), 0 10px 40px rgba(0, 0, 0, 0.5); }
+    #world .tile { position: absolute; width: var(--tile); height: var(--tile); box-sizing: border-box; display: grid; place-items: center; }
+    #world .bld { background: #f3e6c8; border: 3px solid #6b4f2e; border-radius: 6px; font-size: 26px; box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3); }
+    #world .bld.pending { background: rgba(243, 230, 200, 0.55); border-style: dashed; }
+    #world .bld.pending .ico { opacity: 0.55; filter: grayscale(0.6); }
+    #world .bld.mine-pending { cursor: context-menu; }
+    #world .bld .tag { position: absolute; right: -3px; bottom: -3px; font-size: 10px; background: #6b4f2e; color: #fff; border-radius: 4px; padding: 0 3px; }
+    #world .spot { border-radius: 4px; background: rgba(255, 236, 140, 0.35); outline: 2px solid rgba(255, 210, 60, 0.9); outline-offset: -3px;
+      animation: spot-pulse 2.4s ease-in-out infinite; cursor: pointer; }
+    @keyframes spot-pulse { 0%, 100% { background-color: rgba(255, 236, 140, 0.12); outline-color: rgba(255, 210, 60, 0.35); }
+                            50% { background-color: rgba(255, 236, 140, 0.55); outline-color: rgba(255, 210, 60, 1); } }
+    #world .ghost { border-radius: 6px; border: 3px dashed #1a6a3a; background: rgba(120, 220, 140, 0.55); font-size: 26px; pointer-events: none; z-index: 3; }
+    #world .hover { outline: 2px solid rgba(255, 255, 255, 0.7); outline-offset: -2px; pointer-events: none; z-index: 2; }
+    #tip { position: fixed; z-index: 70; pointer-events: none; background: rgba(30, 20, 10, 0.92); color: #fff; font-size: 0.8rem;
+      padding: 6px 9px; border-radius: 6px; max-width: 300px; line-height: 1.35; }
+
+    /* HUD panels float over the map */
+    .hud { position: absolute; background: var(--hud); border: 1px solid var(--hud-line); border-radius: 12px; box-shadow: 0 6px 24px rgba(0, 0, 0, 0.35); }
+    .hud h3 { margin: 0 0 6px; font-family: Georgia, serif; font-size: 1rem; }
+    .hud .section { padding: 10px 12px; border-bottom: 1px solid var(--gwf-line); }
+    .hud .section:last-child { border-bottom: none; }
+    #status { top: 12px; left: 50%; transform: translateX(-50%); padding: 7px 16px; display: flex; gap: 12px; align-items: center;
+      font-size: 0.92rem; white-space: nowrap; max-width: calc(100vw - 420px); overflow: hidden; }
+    #status .round { font-family: Georgia, serif; font-weight: 700; font-size: 1.1rem; }
+    #status .todo { overflow: hidden; text-overflow: ellipsis; }
+    #left { left: 12px; top: 64px; width: var(--left-w); bottom: calc(var(--bottom-h) + 12px); overflow-y: auto; }
+    #right { right: 12px; top: 64px; width: var(--right-w); bottom: calc(var(--bottom-h) + 12px); overflow-y: auto; }
+    #bottom { left: 12px; right: 110px; bottom: 10px; height: var(--bottom-h); display: flex; flex-direction: column; overflow: hidden; }
+
+    #center-button { left: calc(var(--left-w) + 22px); bottom: calc(var(--bottom-h) + 20px); width: 44px; height: 44px; padding: 0;
+      border-radius: 50%; font-size: 1.4rem; color: #6b4f2e; background: var(--hud); }
+    #center-button:hover { background: #fff; }
+
+    /* Left: structure actions */
+    .uses { display: flex; flex-direction: column; gap: 6px; }
+    .use { display: flex; flex-direction: column; gap: 2px; text-align: left; white-space: normal; padding: 7px 9px; font-size: 0.82rem; }
+    .use .head { display: flex; justify-content: space-between; gap: 6px; font-weight: 700; }
+    .use .sub { font-size: 0.74rem; opacity: 0.85; }
+    .use.used { opacity: 0.5; }
+    .use.on { box-shadow: 0 0 0 3px #ffd54a; }
+
+    /* Right: market, players, log */
+    .offers { display: flex; flex-direction: column; gap: 6px; }
+    .offer { display: flex; gap: 8px; align-items: center; background: #fff; border: 1px solid var(--gwf-line); border-radius: 8px; padding: 5px 7px; font-size: 0.8rem; }
+    .offer .ico { font-size: 1.4rem; }
+    .offer .body { flex: 1; min-width: 0; }
+    .offer .body b { display: block; }
+    .offer .body span { color: var(--gwf-muted); font-size: 0.72rem; }
+    .offer button { padding: 4px 10px; font-size: 0.8rem; }
+    .offer.empty { color: var(--gwf-muted); justify-content: center; }
+    .offer.on { box-shadow: 0 0 0 3px #ffd54a; }
+    .seat { display: flex; flex-direction: column; gap: 2px; padding: 5px 0; border-top: 1px solid var(--gwf-line); font-size: 0.8rem; }
+    .seat:first-of-type { border-top: none; }
+    .seat .who { display: flex; align-items: center; gap: 6px; font-weight: 600; }
+    .seat .dot { width: 12px; height: 12px; border-radius: 50%; flex: none; }
+    .seat .flag { margin-left: auto; font-size: 0.72rem; font-weight: 600; color: #1a6a3a; }
+    .seat .deck { padding: 1px 8px; font-size: 0.72rem; }
+    .seat.now { background: #fff3cf; margin: 0 -12px; padding: 5px 12px; }
+    #log { font-size: 0.76rem; line-height: 1.35; max-height: 220px; overflow-y: auto; }
+    #log p { margin: 0 0 3px; }
+
+    /* Bottom: prompt line, play area, hand */
+    #prompt { display: flex; align-items: center; gap: 8px; padding: 6px 12px; min-height: 40px; background: #fff3cf; border-bottom: 1px solid var(--gwf-line);
+      font-size: 0.86rem; border-radius: 12px 12px 0 0; }
+    #prompt.idle { background: transparent; color: var(--gwf-muted); }
+    #prompt button { padding: 4px 12px; font-size: 0.82rem; }
+    #playarea { flex: none; height: 142px; display: flex; align-items: stretch; gap: 10px; padding: 6px 10px 6px 12px; border-bottom: 1px dashed var(--hud-line);
+      background: rgba(140, 110, 60, 0.08); }
+    #played { flex: 1; min-width: 0; display: flex; align-items: center; gap: 6px; overflow-x: auto; overflow-y: hidden; }
+    #played .pcard { zoom: 0.8; cursor: default; }
+    #played .pcard:hover { transform: none; }
+    .pcard.building { border-style: dashed; border-color: #1a6a3a; }
+    .pcard .badge { position: absolute; top: -1px; right: -1px; background: #1a6a3a; color: #fff; font-size: 0.6rem; padding: 1px 5px; border-radius: 0 8px 0 6px; }
+    .pcard .opts { margin-top: auto; display: flex; flex-direction: column; gap: 3px; }
+    .pcard .opts label { display: flex; gap: 3px; align-items: center; color: #1a6a3a; cursor: pointer; font-weight: 600; }
+    .pcard .opts button { padding: 2px 6px; font-size: 0.68rem; }
+    #counters { flex: none; align-self: flex-start; display: flex; flex-direction: column; gap: 5px; }
+    #counters .row { gap: 6px; flex-wrap: nowrap; justify-content: flex-end; }
+    #counters .sep { height: 0; border-top: 2px solid #b39a6c; margin: 1px 2px; }
+    #counters .counter { min-width: 56px; text-align: center; background: #fff; border: 2px solid #8a5a2b; border-radius: 8px; padding: 2px 6px; white-space: nowrap; }
+    #counters .perm .counter { border-color: #2f6f3e; }
+    #counters .counter b { font-size: 1.05rem; }
+    #counters .counter.zero { opacity: 0.45; border-color: var(--gwf-line); }
+    #handrow { flex: 1; display: flex; align-items: center; gap: 12px; padding: 8px 12px; min-height: 0; }
+    #actions-circle { flex: none; width: 82px; height: 82px; border-radius: 50%; display: grid; place-items: center; background: #8a5a2b; color: #fff;
+      box-shadow: inset 0 -4px 0 rgba(0, 0, 0, 0.25), 0 3px 8px rgba(0, 0, 0, 0.3); text-align: center; line-height: 1; }
+    #actions-circle b { font-size: 2.3rem; display: block; }
+    #actions-circle span { font-size: 0.66rem; text-transform: uppercase; letter-spacing: 0.06em; }
+    #actions-circle.zero { background: #9c9286; }
+    #hand { flex: 1; display: flex; gap: 8px; overflow-x: auto; overflow-y: hidden; padding: 14px 2px 4px; align-items: flex-end; height: 100%; }
+    #handside { flex: none; display: flex; flex-direction: column; gap: 6px; align-items: stretch; width: 130px; }
+    #handside button { padding: 8px 10px; }
+    #end-turn { font-size: 1rem; font-weight: 700; padding: 12px 10px !important; }
+    #end-note { font-size: 0.72rem; color: #a33; line-height: 1.25; }
+
+    .pcard { position: relative; flex: none; width: 112px; height: 150px; border: 2px solid #b39a6c; border-radius: 10px; background: #fffaf0; padding: 6px 7px;
+      font-size: 0.7rem; display: flex; flex-direction: column; gap: 3px; cursor: pointer; transition: transform 0.12s; }
+    .pcard:hover { transform: translateY(-6px); }
+    .pcard .name { font-weight: 700; font-size: 0.82rem; padding-right: 16px; }
+    .pcard .kind { font-size: 0.62rem; color: var(--gwf-muted); text-transform: uppercase; letter-spacing: 0.05em; }
+    .pcard .icon { font-size: 1.7rem; text-align: center; line-height: 1.2; }
+    .pcard .cost { font-weight: 600; }
+    .pcard .text { color: #4a3d28; line-height: 1.25; overflow: hidden; }
+    .pcard .icons { flex: 1; display: flex; flex-wrap: wrap; align-content: center; justify-content: center; gap: 2px 6px; font-size: 3.4rem; line-height: 1.1; }
+    .pcard .icons.some { font-size: 2.1rem; }
+    .pcard .icons.many { font-size: 1.7rem; }
+    .pcard.resource { background: #f4fbe9; border-color: #7fa75a; }
+    .pcard.upkeep { background: #fbeeee; border-color: #b46a6a; }
+    .pcard.action { background: #eef3fb; border-color: #6a86b4; }
+    .pcard.structure { background: #fbf3e2; border-color: #a4783e; }
+    .pcard.temp { border-style: dashed; }
+    .pcard.off { opacity: 0.55; }
+    .pcard.sel { transform: translateY(-10px); box-shadow: 0 0 0 3px #ffd54a, 0 6px 14px rgba(0, 0, 0, 0.3); }
+    .pcard.picked { box-shadow: 0 0 0 3px #e67e22; transform: translateY(-8px); }
+    .pcard.kept { box-shadow: 0 0 0 2px #2471a3; }
+    .pcard .keep { position: absolute; top: 3px; right: 3px; padding: 0 3px; font-size: 0.85rem; line-height: 1.2; background: transparent; color: inherit;
+      opacity: 0.35; border-radius: 4px; }
+    .pcard .keep:hover:not(:disabled) { background: rgba(36, 113, 163, 0.15); opacity: 1; }
+    .pcard.kept .keep { opacity: 1; background: #2471a3; }
+
+    /* Windows */
+    dialog.window { border: none; border-radius: 12px; padding: 0; width: min(860px, 92vw); max-height: 85vh; background: var(--gwf-surface); }
+    dialog.window::backdrop { background: rgba(30, 20, 10, 0.5); }
+    dialog .head { display: flex; align-items: center; gap: 10px; padding: 12px 16px; border-bottom: 1px solid var(--gwf-line); }
+    dialog .head h2 { margin: 0; }
+    dialog .body { padding: 14px 16px; overflow-y: auto; max-height: calc(85vh - 60px); font-size: 0.9rem; line-height: 1.45; }
+    .cardgrid { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 12px; }
+    .cardgrid .pcard { cursor: default; }
+    .cardgrid .pcard:hover { transform: none; }
+    .deckcard { position: relative; }
+    .deckcard .count { position: absolute; left: -6px; top: -8px; background: #6b4f2e; color: #fff; font-weight: 700; font-size: 0.8rem; border-radius: 999px; padding: 1px 7px; }
+    #result { margin-top: 8px; font-weight: 600; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>🏰 Bastion 2</h1>
+    <p id="connection" class="muted">Connecting…</p>
+    <div id="error" hidden></div>
+
+    <section id="lobby" hidden>
+      <div class="card">
+        <div class="row" style="margin-bottom: 8px">
+          <h2 style="margin: 0">Builders</h2>
+          <span class="spacer"></span>
+          <button id="join" class="green" hidden>Join game</button>
+          <button id="ready" class="green" hidden>Ready</button>
+          <button id="leave" class="red" hidden>Leave game</button>
+        </div>
+        <ul id="players"></ul>
+        <div id="start"></div>
+        <p id="spectators" class="muted"></p>
+      </div>
+      <div class="card">
+        <h2>Game settings</h2>
+        <div id="settings"></div>
+      </div>
+      <div class="card lead">
+        <h2>How to play</h2>
+        <p>Grow your own city with a <b>deck of cards</b>. Up to 4 players, or solo. No enemies yet: the game goes on
+          until you all vote to end it.</p>
+        <p><b>Setup:</b> place your Castle, then a House and a Farm next to it.</p>
+        <p><b>Each turn</b> you hold 5 new cards (plus any you kept). Play <b>resource cards</b>
+          into your play area to fill this turn's counters (🪵 wood, 🪨 stone, 🌾 wheat). Each Hut turns 1 wheat a
+          turn into 🍞 food, which you keep (up to 5).
+          <b>Buy</b> a structure from the market with your action (1 per turn): pay its resources and 🧑 population
+          and place it on a tile next to your buildings. It's built at the end of your turn.</p>
+        <p><b>Villagers</b> must be fed: pay 1 food or discard 2 cards. Discard one unfed and you get <b>Hunger</b>,
+          then <b>Starvation</b>, which costs you population.</p>
+      </div>
+    </section>
+  </main>
+
+  <section id="game" hidden>
+    <div id="map"><div id="world"></div></div>
+
+    <div id="status" class="hud"></div>
+
+    <div id="left" class="hud">
+      <div class="section">
+        <h3>Actions</h3>
+        <div class="uses" id="uses"></div>
+      </div>
+      <div class="section">
+        <button id="help-button" class="plain small">How to play</button>
+      </div>
+    </div>
+    <button id="center-button" class="hud" title="Centre the map on your castle (C)">⌖</button>
+
+    <div id="right" class="hud">
+      <div class="section"><h3>Market</h3><div id="market"></div></div>
+      <div class="section"><h3>Players</h3><div id="seats"></div></div>
+      <div class="section"><h3>Chronicle</h3><div id="log"></div>
+        <div id="result" hidden></div>
+        <button id="back" hidden>Back to lobby</button>
+      </div>
+    </div>
+
+    <div id="bottom" class="hud">
+      <div id="prompt" class="idle"></div>
+      <div id="playarea"><div id="played"></div><div id="counters"></div></div>
+      <div id="handrow">
+        <div id="actions-circle" title="Actions left this turn"></div>
+        <div id="hand"></div>
+        <div id="handside">
+          <button id="end-turn" class="green">End turn</button>
+          <div id="end-note"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+  <div id="tip" hidden></div>
+
+  <dialog id="deck-window" class="window" aria-labelledby="deck-title">
+    <div class="head"><h2 id="deck-title">Your deck</h2><span class="spacer"></span><span id="deck-note" class="muted small"></span>
+      <button class="plain small" data-close>Close</button></div>
+    <div class="body">
+      <h3>Every card they own</h3><div id="deck-cards" class="cardgrid"></div>
+      <div id="discard-section"><h3>Your discard pile</h3><div id="discard-cards" class="cardgrid"></div></div>
+    </div>
+  </dialog>
+
+  <dialog id="help-window" class="window" aria-labelledby="help-title">
+    <div class="head"><h2 id="help-title">How to play</h2><span class="spacer"></span><button class="plain small" data-close>Close</button></div>
+    <div class="body">
+      <p><b>Map:</b> drag to pan, mouse wheel to zoom, C to centre on your castle. Hover a building to see what it does.</p>
+      <p><b>Hand:</b> click a card to play it. Resource cards go to your play area and fill the counters at its top
+        right, under your permanent food and population (temporary: cleared at the end of your turn). Each Hut's
+        free action turns 1 🌾 wheat into 1 🍞 food, which you keep (up to your food storage). <b>Upkeep cards</b> (Villager,
+        Hunger, Starvation) ask how to pay. The 📌 on a card keeps it in your hand when your turn ends.</p>
+      <p><b>Building:</b> click Buy on a structure in the market (right) and the tiles next to your buildings light
+        up: click one to place it there. You pay its resources, population and 1 action at once; it's built at the
+        end of your turn. Until then, right-click it (or Take back in the play area) to undo and get everything back.</p>
+      <p><b>Population</b> (🧑 available / total) is what your builds take this turn; it comes back every turn.
+        <b>Actions</b> (the big circle): buying a card costs 1, the King costs 1, some structure actions cost 1 and
+        some are free. Each structure's action works once per turn (the list on the left).</p>
+      <p><b>End turn:</b> your planned builds are built, your play area and every unkept card are discarded, and you
+        draw 5. Discarding an unpaid Villager adds Hunger to your deck; an unpaid Hunger adds Starvation; an unpaid
+        Starvation costs 1 population and a Villager.</p>
+    </div>
+  </dialog>
+</body>
+</html>

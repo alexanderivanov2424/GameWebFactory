@@ -1,23 +1,26 @@
-"""Bastion: Seat, one player's own things: deck, hand, units and ready flag (stockpile, soldiers
-and the board are shared by the team, in Match; where units stand is Match.placed, units.py).
+"""Bastion: Seat, one player's own things: their resources, units, soldiers, royal decrees, deck,
+hand, ready flag and resolution prompts. Where units stand is Match.assigned (units.py); the
+board's structures and roads carry their owner's pid.
 
-    seat = Seat("p1", "Ann", color, Deck(ids, rng))
-    seat.hand_card(uid)     the hand instance with that uid (LobbyError if not in hand)
-    seat.take(card)         remove an instance from the hand (played: the caller discards or exiles it)
-    seat.draw(n) / seat.refill(size)   draw more / discard the hand and draw a new one
-    seat.to_top(card_id)    move one copy of card_id from the draw pile to its top (round-1 hand)
+    seat = Seat("p1", "Ann", color, Deck(ids, rng), stock)
+    seat.stock              {resource: n} (structures.RESOURCE_IDS)
+    seat.units / soldiers   workers / soldiers the player has in all (placed or not)
+    seat.decrees            royal decrees left this planning phase
+    seat.ready              done placing (place phase) or done planning (plan phase)
+    seat.prompts            resolution: [prompt] still to answer, first = the one shown (resolution.py)
+    seat.reshuffled         market halves reshuffled this round ({"blueprints", "actions"})
+    seat.can_pay(cost) / seat.pay(cost, what)   cost = {resource or "decrees": n}
+    seat.hand_card(uid) / take(card) / draw(n) / refill(size)
     seat.card_ids()         every card the player owns (hand + draw + discard), sorted for display
-    seat.units / seat.spent units handed out this round / resolved or lost so far
-    seat.ready              done placing (place phase)
     seat.public() / seat.private()
-Hand instances are {"uid", "card"} plus "from" (enemy index) on cards an enemy sent.
+Hand instances are {"uid", "card"} (plus "from": enemy index on cards a dormant enemy sent).
 """
 
 from dataclasses import dataclass, field
 
 from gamekit import Deck, LobbyError
 
-from .cards import CARDS
+from .cards import CARDS, amount_text
 
 KIND_ORDER = {"build": 0, "action": 1, "curse": 2}
 
@@ -28,10 +31,41 @@ class Seat:
     name: str
     color: str
     deck: Deck
+    stock: dict
     hand: list = field(default_factory=list)
     units: int = 0
-    spent: int = 0
+    soldiers: int = 0
+    decrees: int = 0
     ready: bool = False
+    prompts: list = field(default_factory=list)
+    reshuffled: set = field(default_factory=set)
+
+    # --- paying --------------------------------------------------------------------------------
+
+    def have(self, key):
+        return self.decrees if key == "decrees" else self.stock.get(key, 0)
+
+    def missing(self, cost):
+        return [k for k, n in cost.items() if self.have(k) < n]
+
+    def can_pay(self, cost):
+        return not self.missing(cost)
+
+    def pay(self, cost, what):
+        short = self.missing(cost)
+        if short:
+            raise LobbyError(f"{what} needs {amount_text(cost)}; you're short of {', '.join(short)}.")
+        for k, n in cost.items():
+            if k == "decrees":
+                self.decrees -= n
+            else:
+                self.stock[k] -= n
+
+    def gain(self, amounts):
+        for k, n in amounts.items():
+            self.stock[k] = self.stock.get(k, 0) + n
+
+    # --- cards ---------------------------------------------------------------------------------
 
     def hand_card(self, uid):
         for card in self.hand:
@@ -50,13 +84,6 @@ class Seat:
         self.hand = []
         self.draw(size)
 
-    def to_top(self, card_id):
-        pile = self.deck.draw_pile
-        for i, card in enumerate(pile):
-            if card["card"] == card_id:
-                pile.append(pile.pop(i))
-                return
-
     def all_cards(self):
         return self.hand + self.deck.draw_pile + self.deck.discard_pile
 
@@ -65,8 +92,6 @@ class Seat:
                       key=lambda c: (KIND_ORDER[CARDS[c]["kind"]], CARDS[c]["name"]))
 
     def public(self):
-        return {"name": self.name, "color": self.color, "hand": len(self.hand),
-                **self.deck.counts(), "deck": self.card_ids()}
-
-    def private(self):
-        return {"hand": [dict(c) for c in self.hand]}
+        return {"name": self.name, "color": self.color, "stock": dict(self.stock), "units": self.units,
+                "soldiers": self.soldiers, "decrees": self.decrees, "ready": self.ready,
+                "prompts": len(self.prompts), "hand": len(self.hand), **self.deck.counts(), "deck": self.card_ids()}

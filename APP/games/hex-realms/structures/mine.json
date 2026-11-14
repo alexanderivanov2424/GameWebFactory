@@ -1,0 +1,33 @@
+{
+ "name": "Mine",
+ "icon": "⛏️",
+ "cells": [
+  [
+   0,
+   0
+  ]
+ ],
+ "cost": {
+  "wood": 4
+ },
+ "jobs": 1,
+ "terrain": [
+  "hills",
+  "mountain"
+ ],
+ "onTerrain": {
+  "hills": {
+   "stone": 2,
+   "metal": 1
+  },
+  "mountain": {
+   "stone": 1,
+   "metal": 2
+  }
+ },
+ "text": "Hills: +2 stone +1 metal. Mountain: +1 stone +2 metal.",
+ "category": "industry",
+ "buildTurns": 2,
+ "builders": 1,
+ "color": "#6e6e78"
+}

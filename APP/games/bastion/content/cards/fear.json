@@ -2,6 +2,7 @@
   "name": "Fear",
   "kind": "curse",
   "pay": {
-    "wheat": 1
+    "decrees": 1,
+    "food": 1
   }
 }

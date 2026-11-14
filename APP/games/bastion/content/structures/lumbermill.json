@@ -1,14 +1,13 @@
 {
-  "name": "Lumbermill",
+  "name": "Lumber Mill",
   "icon": "🪓",
-  "shape": [
-    "#.",
-    "##"
-  ],
-  "price": 2,
+  "price": 3,
   "cost": {
-    "wood": 2
+    "decrees": 1,
+    "wood": 2,
+    "stone": 1
   },
+  "build": 1,
   "requires": [
     {
       "near": "forest"
@@ -16,24 +15,8 @@
   ],
   "work": {
     "makes": {
-      "wood": 2
+      "wood": 3
     }
   },
-  "bonuses": [
-    {
-      "near": "forest",
-      "min": 3,
-      "bonus": 1
-    },
-    {
-      "near": "storage-yard",
-      "bonus": 1
-    },
-    {
-      "near": "lumbermill",
-      "bonus": -1
-    }
-  ],
-  "text": "Cuts wood from the forest next to it. Two mills side by side fight over the trees.",
-  "bundle": 2
+  "text": "Planned next to a forest. Makes 3 wood every round a unit works it."
 }

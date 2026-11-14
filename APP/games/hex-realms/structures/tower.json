@@ -1,0 +1,34 @@
+{
+ "name": "Tower",
+ "icon": "🗼",
+ "cells": [
+  [
+   0,
+   0
+  ]
+ ],
+ "cost": {
+  "stone": 5,
+  "wood": 2
+ },
+ "hp": 8,
+ "defense": 2,
+ "shoots": 2,
+ "range": 2,
+ "territory": 2,
+ "requires": "masonry",
+ "terrain": [
+  "grass",
+  "plains",
+  "forest",
+  "hills",
+  "desert",
+  "mountain"
+ ],
+ "text": "Shoots the nearest enemy unit within 2 after movement.",
+ "category": "defense",
+ "vision": 5,
+ "buildTurns": 2,
+ "builders": 2,
+ "color": "#7c8794"
+}

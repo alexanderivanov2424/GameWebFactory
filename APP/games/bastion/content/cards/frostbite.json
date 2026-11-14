@@ -2,6 +2,7 @@
   "name": "Frostbite",
   "kind": "curse",
   "pay": {
+    "decrees": 1,
     "wood": 2
   }
 }

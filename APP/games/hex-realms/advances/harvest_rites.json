@@ -1,0 +1,10 @@
+{
+ "name": "Harvest Rites",
+ "cost": {
+  "faith": 12
+ },
+ "effect": {
+  "farmFood": 1
+ },
+ "text": "+1 food from every farm."
+}

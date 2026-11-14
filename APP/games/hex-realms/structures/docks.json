@@ -1,0 +1,27 @@
+{
+ "name": "Docks",
+ "icon": "🐟",
+ "cells": [
+  [
+   0,
+   0
+  ]
+ ],
+ "cost": {
+  "wood": 4
+ },
+ "jobs": 1,
+ "produce": {
+  "food": 2,
+  "gold": 2
+ },
+ "requires": "sailing",
+ "terrain": [
+  "water"
+ ],
+ "text": "Built on water.",
+ "category": "food",
+ "buildTurns": 2,
+ "builders": 1,
+ "color": "#4f8bb8"
+}

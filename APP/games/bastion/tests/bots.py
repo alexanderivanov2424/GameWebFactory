@@ -1,24 +1,37 @@
-"""Bastion: playtest bots (test-only: tests/ is never deployed, and this isn't a test_*.py file, so
+"""DISABLED (2026-11-09): written for the worker-placement v4 rules (shared stockpile, hauling,
+enemies); not updated for the per-player trading redesign, so it no longer runs against the current
+Match. Kept for reference; tests/playtest.py exits before importing it.
+
+Bastion: playtest bots (test-only: tests/ is never deployed, and this isn't a test_*.py file, so
 the test runner doesn't collect it). The user asked for bots to playtest and balance the game;
 tests/playtest.py drives them. They play through the Match API only (legal moves from units,
 hauling and tiles, build spots from board.check + economy.output like views.build_targets but
 only near the city; Match methods to act) and never change Match internals.
 
     bot = Bot(match, pid, rng, stats, style="good" | "passive")
-    bot.place()      place phase: put every free unit somewhere, then ready
-    bot.act()        act phase, on this bot's turn: cards, resolving, building, roads, market,
-                     soldier strikes (the driver calls match.end_turn after it)
+    bot.place(ready=True)  place phase: put units on buildings / enemies (the rest stay haulers),
+                     then ready (the last ready runs the resolution)
+    bot.act()        act phase, on this bot's turn: hauls, cards, upgrades, building, roads,
+                     market, soldier strikes (the driver calls match.end_turn after it: unused
+                     haulers haul on their own)
     Stats()          counters every bot of one game writes to (playtest.py reads them)
 
-"good": a heuristic player. Placement is greedy over a value per output (food is worth more
-when the stockpile won't cover the next rounds, scarce materials more than plentiful ones,
-strikes on an active enemy a lot); work goes first, hauls after, input users last; a tool
-boosts work when the stockpile has spares; blueprints go to the spot with the best output plus
-link, neighbour and keep-distance terms (never one that cuts roads off); houses wait until food
-and work keep up; roads link what's cut off; the market buys from a want list driven by the
-food margin, materials, idle units and enemies (at most 2 rerolls a round). It never builds
-walls: walling the city cost more space than raids cost it.
-"passive": works the farm and the lumbermill, fights with everything else, never builds or buys.
+"good": a heuristic player. Placement is greedy over a whole-round plan: each step tries one
+more unit on every legal target and keeps the one that adds the most value to a model of the
+round (buildings without inputs work first, then input users with the stockpile they'd find,
+then the team's haulers carry the most valuable piles; goods in the stockpile count fully,
+goods left in stores STORED (0.3)). Values per output: food is worth more when the stockpile won't
+cover the next rounds, scarce materials more than plentiful ones, a strike on an active enemy
+a lot. On its turn it hauls by value (and leaves the rest to End turn's auto-haul once its pick
+is the auto pick and nothing in hand waits for materials), upgrades the building whose level
+pays most over the rounds left with spare tools, builds blueprints at the best-scoring spot
+(output, link, neighbours, keep distance; never one that cuts roads off), holds houses until
+food keeps up, lays roads to link what's cut off (producers whose terrain near the city is used up
+look over the whole map), pays curses unless the city would go hungry, plays Tax only with
+fewer than 2 Unrests in its deck, and buys from a want list driven by the food margin,
+materials, idle haulers and enemies (at most 2 rerolls a round). It never builds walls.
+"passive": fills the farms and lumbermills, fights with everything else, hauls on End turn,
+never builds, upgrades or buys.
 Both are deterministic (the match rng is seeded; ties break by board order): a seed gives the same game.
 """
 
@@ -31,26 +44,33 @@ from games.bastion.logic import economy, food, hauling, tiles, units
 from games.bastion.logic.cards import CARDS
 from games.bastion.logic.structures import GOODS, STRUCTURES
 
-BASE_VALUE = {"wood": 1.0, "stone": 1.3, "ore": 0.6, "wheat": 1.2, "bread": 2.4, "tools": 1.5, "gold": 1.2}
-TARGET = {"wood": 8, "stone": 6, "gold": 6, "tools": 3}  # stockpile the good bot likes to keep
+BASE_VALUE = {"wood": 1.0, "stone": 1.3, "ore": 0.6, "wheat": 1.2, "bread": 2.4, "tools": 1.8, "gold": 1.2}
+TARGET = {"wood": 8, "stone": 6, "gold": 6, "tools": 4}  # stockpile the good bot likes to keep
+STORED = 0.3  # worth of a good left waiting in a building, against one in the stockpile
 
 
 class Stats:
     def __init__(self):
         self.produced = Counter()  # round -> goods made (stockpile or store)
-        self.hauled = Counter()  # round -> goods hauled
-        self.haul_units = Counter()  # round -> haul resolutions
+        self.stored = Counter()  # round -> goods the resolution put into building stores
+        self.hauled = Counter()  # round -> goods hauled (manual + auto)
+        self.haul_units = Counter()  # round -> hauls made (manual + auto)
+        self.auto_hauls = Counter()  # round -> hauls made by End turn's auto-haul
+        self.haulers = Counter()  # round -> haulers the team had after the resolution
         self.gold_in = 0
         self.gold_out = defaultdict(int)  # what gold went to
-        self.tools_used = 0  # tools spent on work
+        self.upgrades = Counter()  # level reached -> times
+        self.tools_upgrades = 0  # tools spent on upgrades
         self.tools_sold = 0
         self.built = Counter()
         self.bought = Counter()
+        self.work_kinds = Counter()  # building kind -> units placed on it (all rounds)
         self.fight_units = 0
         self.work_units = 0
-        self.lost_units = 0
+        self.worked = 0  # buildings worked (sum over rounds)
+        self.short_units = 0  # placed units that couldn't work (inputs short) and hauled instead
         self.rerolls = 0
-        self.idle = Counter()  # round -> units the good bots left unplaced
+        self.idle = Counter()  # round -> haulers with nothing to carry
 
 
 def goods_total(match):
@@ -77,19 +97,24 @@ def kinds_on_board(match):
     return Counter(s.kind for s in match.board.structures.values())
 
 
+def full_output(board, s):
+    """What s makes with every cell worked (its level included)."""
+    return economy.amount(board, s, max(1, economy.capacity(s)))[0]
+
+
 def food_capacity(match):
-    """Wheat-equivalent the city's food buildings make in a round if all are worked (bakeries
-    count their bread less the wheat they use)."""
+    """Wheat-equivalent a round the city's food buildings make with every cell worked (bakeries
+    count their bread less the wheat they use), plus the keep's income."""
     total = 0
     for s in match.board.structures.values():
         if not s.spec["work"] or s.ruined or s.plague is not None:
             continue
         key = makes(s.spec)
-        out = economy.output(match.board, s.kind, s.cells)[0]
         if key == "wheat":
-            total += out
+            total += full_output(match.board, s)
         elif key == "bread":
-            total += out * food.FEEDS["bread"] / food.FEEDS["wheat"] - 1
+            cells = economy.capacity(s)
+            total += full_output(match.board, s) * food.FEEDS["bread"] / food.FEEDS["wheat"] - cells
     for s in match.board.structures.values():
         total += s.spec["income"].get("wheat", 0) + s.spec["income"].get("bread", 0) * 2
     return total
@@ -104,6 +129,28 @@ def need_per_round(match):
     return match.population() / food.FEEDS["wheat"]
 
 
+def auto_haul_preview(match, pid):
+    """(hauls, goods) End turn's auto-haul would make for pid now (nothing changed)."""
+    board = match.board
+    stores = {uid: dict(s.store) for uid, s in hauling.sources(board).items()}
+    hauls = goods = 0
+    for i in range(match.seats[pid].haulers):
+        live = {uid: st for uid, st in stores.items() if sum(st.values())}
+        if not live:
+            break
+        uid = max(live, key=lambda u: (sum(live[u].values()), -u))
+        cap = hauling.capacity(board, match.hauled + i)
+        for good, n in sorted(live[uid].items(), key=lambda kv: (-kv[1], GOODS.index(kv[0]))):
+            moved = min(n, cap)
+            cap -= moved
+            live[uid][good] -= moved
+            goods += moved
+            if cap <= 0:
+                break
+        hauls += 1
+    return hauls, goods
+
+
 # --- roads -----------------------------------------------------------------------------------
 
 def connected_cells(board, reach):
@@ -111,7 +158,7 @@ def connected_cells(board, reach):
     return lambda c: bool(board.neighbors([c]) & depots) or bool(board.neighbors([c]) & reach)
 
 
-def road_path(board, cells, limit=14):
+def road_path(board, cells, limit=24):
     """The empty cells to pave so `cells` gets a road link (None if no path within limit)."""
     reach = board.road_reach()
     ok = connected_cells(board, reach)
@@ -204,13 +251,21 @@ class Bot:
     def board(self):
         return self.match.board
 
-    def link_of(self, s):
-        """board.link(s) with the road reach cached per board version."""
+    def reach(self):
         board = self.match.board
         cached = self._spot_cache.get("reach")
         if not cached or cached[0] != board.version:
             cached = self._spot_cache["reach"] = (board.version, board.road_reach())
-        return board.link(s, cached[1])
+        return cached[1]
+
+    def link_of(self, s):
+        """board.link(s) with the road reach cached per board version."""
+        return self.match.board.link(s, self.reach())
+
+    def rounds_left(self):
+        """Rough rounds the game still has (the last enemy arrives, then a few rounds to beat it)."""
+        m = self.match
+        return max(2, m.last_arrival() + 4 - m.round)
 
     # --- values -----------------------------------------------------------------------------
 
@@ -271,124 +326,172 @@ class Bot:
 
     # --- place phase ------------------------------------------------------------------------
 
-    def place(self):
+    def place(self, ready=True):
         m = self.match
         if self.style == "passive":
             self.place_passive()
         else:
             self.place_good()
-        m.ready(self.pid)
+        if ready:
+            m.ready(self.pid)
 
     def place_passive(self):
         m = self.match
-        while units.free(m, self.pid) > 0:
+        while units.haulers(m, self.pid) > 0:
             options = units.targets(m)
             pick = None
             for t in options:
                 if t.startswith("s"):
                     s = m.board.structures[int(t[1:])]
-                    if s.kind in ("farm", "lumbermill") and not units.resolve_reason(m, t):
+                    if s.kind in ("farm", "lumbermill"):
                         pick = t
                         break
             if pick is None:
                 fights = [t for t in options if t.startswith("fight") or t.startswith("raze")]
-                pick = fights[0] if fights else "haul"
+                if not fights:
+                    return  # the rest haul
+                pick = fights[0]
             m.place(self.pid, pick)
 
-    def plan_context(self):
-        """Expected stockpile changes and stored goods from everything already placed this round."""
+    def model(self, plan, vals):
+        """Value of a whole round's placements `plan` ({target: units}, the team's): the
+        resolution (no-input buildings, then input users, then fights), then every hauler
+        carrying the most valuable pile it can reach."""
         m = self.match
-        ctx = {"stock": Counter(), "stored": 0, "haul_cap": 0, "strikes": Counter(), "hauls": 0}
-        for target, by in sorted(m.placed.items(), key=lambda kv: kv[0] == "haul"):  # work before hauls
-            for _ in range(sum(by.values())):
-                self.apply(ctx, target)
-        return ctx
-
-    def apply(self, ctx, target):
-        m = self.match
-        if target == "haul":
-            cap = hauling.capacity(m.board, m.hauled + ctx["hauls"])
-            ctx["hauls"] += 1
-            moved = min(cap, max(0, self.haulable(ctx)))
-            ctx["haul_cap"] += moved
-            return
-        if target.startswith("fight"):
-            ctx["strikes"][target] += 1
-            return
-        if target.startswith("raze"):
-            ctx["strikes"][target] += 1
-            return
-        s = m.board.structures[int(target[1:])]
-        key = makes(s.spec)
-        out = economy.amount(m.board, s)
-        for r, n in s.spec["work"]["uses"].items():
-            ctx["stock"][r] -= n
-        if key in GOODS and self.link_of(s) != "depot":
-            room = economy.STORE_CAP - s.stored()
-            if self.link_of(s):
-                ctx["stored"] += min(out, room)
-        else:
-            ctx["stock"][key] += out
-
-    def haulable(self, ctx):
-        stored = sum(s.stored() for s in hauling.sources(self.match.board).values())
-        return stored + ctx["stored"] - ctx["haul_cap"]
-
-    def score(self, ctx, target, vals):
-        m = self.match
-        if target == "haul":
-            cap = hauling.capacity(m.board, m.hauled + ctx["hauls"])
-            gain = min(cap, max(0, self.haulable(ctx)))
-            return gain * 1.15
-        if target.startswith("fight"):
-            foe = m.foes[int(target[5:])]
-            left = foe.hp * foe.defeat["soldiers"] - foe.strikes - ctx["strikes"][target]
-            return self.strike_value(foe) if left > 0 else -1
-        if target.startswith("raze"):
-            x, y = (int(v) for v in target[4:].split(","))
-            blight = m.board.blights.get((x, y))
-            if not blight or ctx["strikes"][target]:
-                return -1
-            if blight["lair"]:
-                return self.strike_value(m.foes[blight["foe"]]) + 0.3
-            hurt = sum(1 for uid in {m.board.at[c] for c in m.board.neighbors([(x, y)]) if c in m.board.at}
-                       if m.board.structures[uid].spec["work"])
-            return 1.0 + 1.2 * hurt
-        s = m.board.structures[int(target[1:])]
-        spec = s.spec
-        key = makes(spec)
-        uses = spec["work"]["uses"]
-        if uses and not self.link_of(s):
-            return -1
-        for r, n in uses.items():
-            if m.stock[r] + min(0, ctx["stock"][r]) < n:
-                return -1
-        out = economy.amount(m.board, s)
-        value = out * vals.get(key, 1.0)
-        if key in GOODS and self.link_of(s) != "depot":
-            if not self.link_of(s):
-                return value * 0.15
-            room = economy.STORE_CAP - s.stored()
-            value = min(out, room) * vals.get(key, 1.0) * 0.85
-        if key == "cure":
-            value = min(out, len(m.plagued())) * vals["cure"]
-        if key == "keep":
-            value = min(out, m.keep_max - m.keep) * vals["keep"]
-        value -= sum(n * vals.get(r, 1.0) for r, n in uses.items()) * 0.8
+        board = m.board
+        stock = dict(m.stock)
+        stores = {}
+        value = 0.0
+        team = sum(seat.units for seat in m.seats.values())
+        placed = sum(plan.values())
+        idle = 0
+        buildings = []
+        for target, n in plan.items():
+            if target.startswith("s") and n:
+                s = board.structures[int(target[1:])]
+                buildings.append((bool(s.spec["work"]["uses"]), s.uid, s, n))
+        buildings.sort(key=lambda b: b[:2])
+        for _, uid, s, n in buildings:
+            spec = s.spec["work"]
+            link = self.link_of(s)
+            able = n
+            if spec["uses"]:
+                able = 0 if not link else min(n, *(stock.get(k, 0) // c for k, c in spec["uses"].items()))
+            idle += n - able
+            if not able:
+                continue
+            for k, c in spec["uses"].items():
+                stock[k] -= c * able
+            made = self._amount(s, able)
+            key = makes(s.spec)
+            if key in GOODS:
+                if link == "depot":
+                    stock[key] += made
+                else:
+                    st = stores.setdefault(uid, dict(s.store))
+                    kept = min(made, economy.STORE_CAP - sum(st.values()))
+                    if kept > 0:
+                        st[key] = st.get(key, 0) + kept
+                    if not link:
+                        value -= kept * vals.get(key, 1.0) * (STORED - 0.1)  # nobody can haul it
+            elif key == "gold":
+                stock["gold"] += made
+            elif key == "soldiers":
+                value += made * vals["soldiers"]
+            elif key == "keep":
+                value += min(made, m.keep_max - m.keep) * vals["keep"]
+            elif key == "cure":
+                value += min(made, len(m.plagued())) * vals["cure"]
+        for target, n in plan.items():
+            if target.startswith("fight") and n:
+                foe = m.foes[int(target[5:])]
+                left = foe.hp * foe.defeat["soldiers"] - foe.strikes
+                value += min(n, max(0, left)) * self.strike_value(foe)
+            elif target.startswith("raze") and n:
+                x, y = (int(v) for v in target[4:].split(","))
+                blight = board.blights[(x, y)]
+                if blight["lair"]:
+                    value += self.strike_value(m.foes[blight["foe"]]) + 0.3
+                else:
+                    hurt = sum(1 for uid in {board.at[c] for c in board.neighbors([(x, y)]) if c in board.at}
+                               if board.structures[uid].spec["work"])
+                    value += 1.0 + 1.2 * hurt
+        # hauling: the team's haulers take the most valuable piles they can reach
+        haulers = team - placed + idle
+        reach = self.reach()
+        final = stores  # {uid: store after this round} for every building touched
+        pool = []
+        for uid, s in sorted(board.structures.items()):
+            st = final.get(uid, s.store)
+            if st and sum(st.values()) and board.link(s, reach):
+                final[uid] = dict(st)
+                pool.append(uid)
+        for i in range(haulers):
+            cap = hauling.capacity(board, m.hauled + i)
+            best, best_v, best_take = None, 0, None
+            for uid in pool:
+                take, room = {}, cap
+                for good, k in sorted(final[uid].items(), key=lambda kv: (-kv[1], GOODS.index(kv[0]))):
+                    moved = min(k, room)
+                    if moved <= 0:
+                        break
+                    take[good] = moved
+                    room -= moved
+                worth = sum(k * vals.get(g, 1.0) for g, k in take.items())
+                if worth > best_v:
+                    best, best_v, best_take = uid, worth, take
+            if best is None:
+                break
+            for g, k in best_take.items():
+                final[best][g] -= k
+                stock[g] += k
+                if not final[best][g]:
+                    del final[best][g]
+        for g in list(GOODS) + ["gold"]:
+            value += (stock.get(g, 0) - m.stock[g]) * vals.get(g, 1.0)
+        for uid, st in final.items():
+            before = board.structures[uid].store
+            for g in GOODS:
+                value += (st.get(g, 0) - before.get(g, 0)) * vals.get(g, 1.0) * STORED
         return value
+
+    def _amount(self, s, n):
+        key = (self.match.board.version, s.uid, s.level, n)
+        cache = self._spot_cache.setdefault("amount", {})
+        if key not in cache:
+            if len(cache) > 2000:
+                cache.clear()
+            cache[key] = economy.amount(self.match.board, s, n)[0]
+        return cache[key]
+
+    def planned_stock(self, plan):
+        """Stockpile change from the work in plan (for the values of the next pick)."""
+        m = self.match
+        delta = Counter()
+        for target, n in plan.items():
+            if not target.startswith("s"):
+                continue
+            s = m.board.structures[int(target[1:])]
+            for k, c in s.spec["work"]["uses"].items():
+                delta[k] -= c * n
+            key = makes(s.spec)
+            delta[key] += self._amount(s, n)
+        return delta
 
     def place_good(self):
         m = self.match
-        while units.free(m, self.pid) > 0:
-            ctx = self.plan_context()
-            vals = self.values(ctx["stock"])
-            best, best_score = None, 0.05
+        while units.haulers(m, self.pid) > 0:
+            plan = {t: sum(by.values()) for t, by in m.placed.items()}
+            vals = self.values(self.planned_stock(plan))
+            base = self.model(plan, vals)
+            best, best_gain = None, 0.05
             for t in units.targets(m):
-                sc = self.score(ctx, t, vals)
-                if sc > best_score:
-                    best, best_score = t, sc
-            if best is None:  # nothing useful: leave the rest unplaced
-                self.stats.idle[m.round] += units.free(m, self.pid)
+                trial = dict(plan)
+                trial[t] = trial.get(t, 0) + 1
+                gain = self.model(trial, vals) - base
+                if gain > best_gain:
+                    best, best_gain = t, gain
+            if best is None:  # nothing beats hauling: the rest haul
                 return
             m.place(self.pid, best)
 
@@ -397,16 +500,13 @@ class Bot:
     def act(self):
         m = self.match
         if self.style == "passive":
-            self.resolve_all()
             self.pay_curses(passive=True)
             self.spend_soldiers()
             return
+        self.haul_pass()
         self.play_actions()
-        self.build_pass()
-        self.resolve_all()
-        if m.result is not None:
-            return
         self.pay_curses()
+        self.upgrade_pass()
         self.build_pass()
         self.link_pass()
         self.special_damage()
@@ -414,6 +514,30 @@ class Bot:
         self.buy_pass()
         self.play_actions(late=True)
         self.build_pass()
+        self.upgrade_pass()
+
+    def haul_pass(self):
+        """Haul by value while it matters (the pick differs from the auto pick, or a blueprint
+        in hand waits for materials); End turn hauls the rest."""
+        m = self.match
+        seat = m.seats[self.pid]
+        while seat.haulers > 0 and m.result is None:
+            found = hauling.sources(m.board)
+            if not found:
+                return
+            vals = self.values()
+            cap = hauling.capacity(m.board, m.hauled)
+            pick = max(found.values(), key=lambda s: (sum(n * vals.get(g, 1.0) for g, n in hauling.carry(s, cap).items()),
+                                                      s.stored(), -s.uid))
+            auto = hauling.best_source(m.board)
+            need = self.blueprint_demand()
+            waiting = any(m.stock[g] < n for g, n in need.items() if g in GOODS)
+            if pick is auto and not waiting:
+                return
+            goods = sum(m.stock[g] for g in GOODS)
+            m.haul(self.pid, pick.uid)
+            self.stats.hauled[m.round] += sum(m.stock[g] for g in GOODS) - goods
+            self.stats.haul_units[m.round] += 1
 
     def tool_reserve(self):
         need = self.blueprint_demand().get("tools", 0)
@@ -421,62 +545,35 @@ class Bot:
             need += 1
         return need
 
-    def resolve_order(self, target):
+    def upgrade_pass(self):
         m = self.match
-        if target.startswith("s"):
-            s = m.board.structures.get(int(target[1:]))
-            if s and s.spec["work"]["uses"]:
-                return 2
-            return 0
-        if target == "haul":
-            return 1
-        return 3
-
-    def resolve_all(self):
-        m = self.match
-        for _ in range(3):  # retry: hauls and earlier work may supply later inputs
-            mine = units.mine(m, self.pid)
-            if not mine:
-                return
-            progress = False
-            for target in sorted(mine, key=self.resolve_order):
-                for _ in range(mine[target]):
-                    if m.result is not None or self.match.turn() != self.pid:
-                        return
-                    if self.resolve_one(target):
-                        progress = True
-            if not progress:
-                break
-
-    def resolve_one(self, target):
-        m = self.match
-        tool = False
-        if target.startswith("s") and self.style != "passive":
-            s = m.board.structures.get(int(target[1:]))
-            if s and m.stock["tools"] > self.tool_reserve() and makes(s.spec) not in ("cure",) \
-                    and not units.resolve_reason(m, target, True):
+        if m.result is not None or m.turn() != self.pid:
+            return
+        while True:
+            spare = m.stock["tools"] - self.tool_reserve()
+            vals = self.values()
+            left = self.rounds_left()
+            best, best_score = None, 0
+            for s in m.board.structures.values():
+                cost = economy.upgrade_cost(s)
+                if not cost or cost > spare or economy.upgrade_reason(s, m.stock):
+                    continue
                 key = makes(s.spec)
-                if key != "keep" or m.keep_max - m.keep > economy.amount(m.board, s):
-                    tool = True
-        if units.resolve_reason(m, target, tool):
-            if tool and not units.resolve_reason(m, target):
-                tool = False
-            else:
-                return False
-        gold, goods, stock = m.stock["gold"], goods_total(m), sum(m.stock[g] for g in GOODS)
-        m.resolve(self.pid, target, tool)
-        self.stats.gold_in += max(0, m.stock["gold"] - gold)
-        if target == "haul":
-            self.stats.hauled[m.round] += sum(m.stock[g] for g in GOODS) - stock
-            self.stats.haul_units[m.round] += 1
-        elif target.startswith("s"):
-            self.stats.work_units += 1
-            self.stats.produced[m.round] += max(0, goods_total(m) - goods + (1 if tool else 0))
-            if tool:
-                self.stats.tools_used += 1
-        else:
-            self.stats.fight_units += 1
-        return True
+                if key in ("cure", "keep"):
+                    continue
+                use = 1.0 if s.worked else 0.4  # worked this round: likely worked every round
+                if s.spec["work"]["uses"]:
+                    use *= 0.8
+                gain = use * left * min(vals.get(key, 1.0), 2.5)
+                score = gain / (cost * vals["tools"])
+                if score > best_score:
+                    best, best_score = s, score
+            if best is None or best_score < 1.5:
+                return
+            cost = economy.upgrade_cost(best)
+            m.upgrade(self.pid, uid=best.uid)
+            self.stats.upgrades[best.level] += 1
+            self.stats.tools_upgrades += cost
 
     # --- cards ------------------------------------------------------------------------------
 
@@ -509,10 +606,11 @@ class Bot:
                 elif cid == "levy":
                     self.play(c["uid"])
                 elif cid == "tax":
-                    if m.stock["gold"] < 10:
+                    unrest = sum(1 for h in self.match.seats[self.pid].all_cards() if h["card"] == "unrest")
+                    if m.stock["gold"] < 10 and unrest < 2:
                         self.play(c["uid"])
                 elif cid == "sell":
-                    if m.stock["tools"] > self.tool_reserve() + (2 if not late else 0) or m.stock["gold"] < 2:
+                    if (late and m.stock["tools"] > self.tool_reserve() + 6) or m.stock["gold"] < 2 <= m.stock["tools"]:
                         self.play(c["uid"])
                         self.stats.tools_sold += 1
                 elif cid == "trade-fair":
@@ -550,8 +648,8 @@ class Bot:
             pay = card["pay"]
             if any(m.stock[r] < n for r, n in pay.items()):
                 continue
-            if not passive and "wheat" in pay and vals["wheat"] >= 2.2:
-                continue  # food first
+            if not passive and "wheat" in pay and vals["wheat"] >= 3.2:
+                continue  # food first: the city would go hungry
             self.play(c["uid"])
 
     # --- building ---------------------------------------------------------------------------
@@ -626,15 +724,15 @@ class Bot:
                     total += cond["bonus"]
         return total
 
-    def candidates(self, kind, ex):
-        """Legal spots near the city (same rules as views.build_targets, a smaller area):
+    def candidates(self, kind, ex, wide=False):
+        """Legal spots near the city, or anywhere when wide (same rules as views.build_targets):
         (rotation, x, y, cells, output)."""
         board, spec = self.board, STRUCTURES[kind]
         if "near" not in ex:
             used = [c for s in board.structures.values() for c in s.cells] + list(board.roads)
             ex["near"] = (min(x for x, _ in used) - 5, max(x for x, _ in used) + 2,
                           min(y for _, y in used) - 5, max(y for _, y in used) + 2)
-        x0, x1, y0, y1 = ex["near"]
+        x0, x1, y0, y1 = (0, board.width - 1, 0, board.height - 1) if wide else ex["near"]
         rots = 1 if len(spec["pieces"][0]) == 1 else 4
         for rot in range(rots):
             for y in range(max(0, y0), min(board.height, y1 + 1)):
@@ -653,10 +751,13 @@ class Bot:
         ex = self.spot_extras()
         if kind in ex.setdefault("best", {}):
             return ex["best"][kind]
-        ex["best"][kind] = found = self.find_spot(kind, ex)
+        found = self.find_spot(kind, ex)
+        if found is None and spec["requires"]:  # a producer whose terrain near the city is used up
+            found = self.find_spot(kind, ex, wide=True)
+        ex["best"][kind] = found
         return found
 
-    def find_spot(self, kind, ex):
+    def find_spot(self, kind, ex, wide=False):
         board, spec = self.board, STRUCTURES[kind]
         key = makes(spec)
         kx, ky = ex["keep"]
@@ -664,7 +765,7 @@ class Bot:
             open_cells = [c for s in board.structures.values() if s.kind != "keep" for c in s.cells
                           if not board.protected(c)]
         scored = []
-        for rot, x, y, cells, out in self.candidates(kind, ex):
+        for rot, x, y, cells, out in self.candidates(kind, ex, wide):
             around = board.neighbors(cells)
             score = 0.0
             near_depot = bool(around & ex["depots"])
@@ -715,7 +816,7 @@ class Bot:
                     score -= 8.0  # cuts buildings off the road network
             if score > best_score:
                 best, best_score = (rot, x, y), score
-        if best is None or (spec["work"] and best_score < 0):
+        if best is None or (spec["work"] and best_score < (-6 if wide else 0)):
             return None
         return best
 
@@ -780,15 +881,15 @@ class Bot:
     # --- market -----------------------------------------------------------------------------
 
     def slots(self):
-        """Useful places for units in a round: workable buildings, one haul per building that
-        stores its goods, and a few fighters while a fightable enemy is here."""
+        """Useful places for units in a round: every cell of a workable building, a hauler per
+        building that stores its goods, and a few fighters while a fightable enemy is here."""
         m = self.match
         count = 0
         for s in m.board.structures.values():
             if s.spec["work"] and not s.ruined and s.plague is None:
-                if makes(s.spec) == "cure" and not m.plagued():
+                if makes(s.spec) in ("cure", "keep"):
                     continue
-                count += 1
+                count += economy.capacity(s)
                 if makes(s.spec) in GOODS and self.link_of(s) == "road":
                     count += 1
         if any(f.active and f.fightable for f in m.foes):
@@ -797,13 +898,14 @@ class Bot:
         return count
 
     def house_ok(self, extra=0):
-        """Another house (2 people) would have food and work."""
+        """Another `extra` houses would have food and work."""
         m = self.match
-        units_next = m.population() + 2 * extra
+        per = STRUCTURES["house"]["population"]
+        units_next = m.population() + per * extra
         idle = self.stats.idle.get(m.round - 1, 0) if m.round > 1 else 0
         stocked = (m.stock["wheat"] + 2 * m.stock["bread"]) / max(1.0, need_per_round(m))
-        food_ok = food_margin(m) >= extra - (1.5 if stocked >= 2 else 0.5)
-        planned = sum(n for cid, n in team_cards(m).items()
+        food_ok = food_margin(m) >= per * extra / food.FEEDS["wheat"] - (1.5 if stocked >= 2 else 0.5)
+        planned = sum(len(STRUCTURES[CARDS[cid]["structure"]]["pieces"][0]) * n for cid, n in team_cards(m).items()
                       if CARDS[cid]["kind"] == "build" and STRUCTURES[CARDS[cid]["structure"]]["work"])
         soon = m.foes and m.round >= m.foes[0].arrives - 2 and any(f.state != "defeated" for f in m.foes)
         work_ok = soon or self.slots() + planned >= units_next - 1
@@ -831,16 +933,16 @@ class Bot:
         if cards.get("plan-house", 0) == 0 and self.house_ok(1):
             wants.append(("plan-house", 8))
         targets = {
-            "quarry": (1 + pop // 12, 9 if not have("quarry") else 6),
-            "lumbermill": (1 + pop // 10, 7),
-            "workshop": (1 if pop >= 6 else 0, 6),
-            "bakery": ((pop >= 10) + (pop >= 20), 7),
-            "storage-yard": ((pop >= 8) + (pop >= 18), 5),
-            "carriage": ((pop >= 10) + (pop >= 18), 4),
+            "quarry": (1 + pop // 8, 9 if not have("quarry") else 6),
+            "lumbermill": (1 + pop // 7, 7),
+            "workshop": (1 if pop >= 4 else 0, 7),
+            "bakery": ((pop >= 6) + (pop >= 11), 7),
+            "storage-yard": ((pop >= 6) + (pop >= 11), 5),
+            "carriage": ((pop >= 6) + (pop >= 10), 4),
             "market": ((houses >= 3) + (houses >= 7), 8),
-            "chapel": (1 if m.keep < m.keep_max - 4 or pop >= 16 else 0, 5),
-            "barracks": (1 if pop >= 12 and any(f.state != "defeated" for f in m.foes) else 0, 4),
-            "mine": (1 if pop >= 16 else 0, 3),
+            "chapel": (1 if m.keep < m.keep_max - 4 or pop >= 9 else 0, 5),
+            "barracks": (1 if pop >= 7 and any(f.state != "defeated" for f in m.foes) else 0, 4),
+            "mine": (1 if pop >= 9 else 0, 3),
             "smithy": (1 if kinds.get("mine") else 0, 3),
             "watchtower": (1 if houses >= 6 else 0, 2),
         }
@@ -856,16 +958,16 @@ class Bot:
         short = [r for r in ("stone", "wood") if m.stock[r] < 3 + self.blueprint_demand().get(r, 0)]
         for r in short:
             kind = "quarry" if r == "stone" else "lumbermill"
-            if not cards.get(f"plan-{kind}") and kinds.get(kind, 0) < 2 + pop // 10:
+            if not cards.get(f"plan-{kind}") and kinds.get(kind, 0) < 2 + pop // 6:
                 wants.append((f"plan-{kind}", 7))
-        if self.stats.idle.get(m.round - 1, 0) >= 2:  # idle hands: more workplaces
+        if self.stats.idle.get(m.round - 1, 0) >= 3:  # idle haulers: more workplaces
             for kind in ("farm", "workshop", "market", "bakery", "quarry", "lumbermill", "mine"):
                 want = targets.get(kind, (99,))[0] + 1
                 if have(kind) < want and not cards.get(f"plan-{kind}"):
                     wants.append((f"plan-{kind}", 5))
                     break
-        if kinds.get("workshop") and cards.get("sell", 0) < 1 + kinds.get("workshop", 0) + (pop >= 16):
-            wants.append(("sell", 6))
+        if kinds.get("workshop") and cards.get("sell", 0) < 1 + (pop >= 10):
+            wants.append(("sell", 4))
         if any(s.ruined for s in m.board.structures.values()) and not cards.get("masons"):
             wants.append(("masons", 4))
         seen, ranked = set(), []
