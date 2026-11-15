@@ -11,12 +11,14 @@
    0
   ]
  ],
+ "tags": [
+  "home"
+ ],
  "cost": {
   "wood": 3,
   "stone": 3
  },
  "housing": 5,
- "home": true,
  "text": "Housing for 5 people.",
  "category": "homes",
  "buildTurns": 2,

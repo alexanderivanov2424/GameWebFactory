@@ -168,6 +168,11 @@ fields in `logic/content.py`). Tests: `tests/` (`python3 -I tools/run_tests.py h
   makes a Storage Yard or Granary the next limit. Free land is the first city's radius 2 (~27 cells);
   beyond it, land costs 2 gold per claim (up to 7 cells) and 1 gold a turn per cell, while the hall
   makes 1 gold, so expanding needs a gold economy (Market, Chapel with its advance, trade).
+- Structure tags (2026-11-15, the user's call): `tags` in each structures/*.json (ids from `content.TAGS`, sent
+  as `content.tags` with name + pip colour), shown as pips on the structure card (`HexHud.structCard`: the
+  placing hint's right side and the top of a selected structure's panel). `perAdjacent` can count own
+  neighbours with a `tag` and gains may be negative (Farm: -1 food per Industrial next to it, shown as
+  "−1 🍞 for [Industrial]"); output never goes below 0. The `home` flag = the "home" tag.
 - Hunger (2026-11-15, the user's rule): food short at the end of the turn kills everyone who can't eat,
   units first (newest first, until the rest can be fed), then people (`economy.starvation`; the
   forecast's `starve` warns on the people chip).

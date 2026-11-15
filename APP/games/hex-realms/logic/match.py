@@ -45,7 +45,7 @@ from gamekit import LobbyError
 from gamekit.hexes import neighbors
 
 from . import bots, combat, construction, economy, logistics, movement, orders, recruiting, standing, territory, vision
-from .content import ADVANCES, CATEGORIES, RESOURCE_INFO, RESOURCES, STRUCTURES, TERRAIN, TOWN_HALL, UNITS, footprint
+from .content import ADVANCES, CATEGORIES, RESOURCE_INFO, TAGS, RESOURCES, STRUCTURES, TERRAIN, TOWN_HALL, UNITS, footprint
 from .economy import end_of_turn, report, staffing
 from .mapgen import generate
 
@@ -382,6 +382,7 @@ class Match:
             "seats": self.seats, "fog": self.fog, "bots": self.bots,
             "content": {"structures": STRUCTURES, "units": UNITS, "advances": ADVANCES, "terrain": TERRAIN,
                         "resources": RESOURCES, "categories": CATEGORIES,
+                        "tags": {t: {"name": n, "color": c} for t, (n, c) in TAGS.items()},
                         "claim": {"cost": orders.CLAIM_COST, "radius": territory.CLAIM_RADIUS, "upkeep": territory.LAND_UPKEEP},
                         "resourceInfo": {r: {"name": n, "icon": i} for r, (n, i) in RESOURCE_INFO.items()}},
             "players": {pid: {"name": self.names[pid], "color": p["color"], "res": self.shown[pid]["res"],

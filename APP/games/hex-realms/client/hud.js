@@ -14,10 +14,13 @@
  *   HexHud.build(el, ctx)       one button per buildable structure (starts build mode)
  *   HexHud.fmt                  small text helpers shared with panels.js (cost, nameSpan, resource icons);
  *                               fmt.setResources(content.resourceInfo) first (game.js does, each render)
- *   HexHud.fmt.structInfo(content, def)  {text, stats: [text], hp: text, terrains: text, build: text}: a
+ *   HexHud.fmt.structInfo(content, def)  {text, stats: [text], hp: text, terrains: text, build: text,
+ *                               tags: [id], byTag: [{n, res, tag}] (perAdjacent per neighbour with a tag)}: a
  *                               structure described from its content fields (build menu tooltip, placing panel)
- *   HexHud.structCard(content, def)  the placing hint's right-hand section: a small picture of the
- *                               footprint, HP below it, then every effect
+ *   HexHud.structCard(content, def, hp?)  the structure card: a small picture of the footprint, HP below it
+ *                               (hp: live "HP 5/15" text for a placed one), its tags as pips, then every
+ *                               effect ("−1 🍞 for [Industrial]" lines for tag bonuses). The placing hint's
+ *                               right-hand section and the top of a selected structure's panel
  *   Top bar deltas: each resource / people / housing chip has an empty .hr-delta.hr-delta-<key> below it
  *                   (plus one for "turns" at the end), filled by game.js while placing a structure
  *
@@ -52,7 +55,8 @@
     const hp = d.hp ? `HP ${d.hp}${d.defense ? ` · defense ${d.defense}` : ""}` : "Can't be attacked";
     const terrains = names(content, "terrain", d.terrain || []) + (d.coast ? " · touching water" : "");
     const build = `${costText(d.cost)}, ${plural(d.buildTurns, "turn")} of work by ${plural(d.builders, "idle person")} each`;
-    return { text: d.text || "", stats, hp, terrains, build };
+    const byTag = (d.perAdjacent || []).filter((a) => a.tag).flatMap((a) => Object.entries(a.gain || {}).map(([res, n]) => ({ n, res, tag: a.tag })));
+    return { text: d.text || "", stats, hp, terrains, build, tags: d.tags || [], byTag };
   }
 
   // A small picture of a structure's footprint (unturned) in its colour, its icon in the middle.
@@ -72,11 +76,19 @@
       svg("text", { x: mid[0].toFixed(1), y: mid[1].toFixed(1), "font-size": 34, "text-anchor": "middle", "dominant-baseline": "central" }, d.icon || ""));
   }
 
-  function structCard(content, d) {
+  const pip = (content, tag) => {
+    const t = content.tags?.[tag] || { name: tag, color: "#666" };
+    return el("span", { className: "hr-pip", style: `background:${t.color}` }, t.name);
+  };
+  const tagLine = (content, b) => el("li", { title: `${b.n > 0 ? "+" : "−"}${Math.abs(b.n)} ${resName(b.res).toLowerCase()} for each of your ${content.tags?.[b.tag]?.name || b.tag} structures next to it` },
+    el("span", { className: b.n > 0 ? "pos" : "neg" }, `${b.n > 0 ? "+" : "−"}${Math.abs(b.n)} ${resIcon(b.res)}`), " for ", pip(content, b.tag));
+
+  function structCard(content, d, hp) {
     const si = structInfo(content, d);
-    return el("div", { className: "hr-scard" }, structPicture(d), el("div", { className: "hr-shp" }, si.hp),
+    return el("div", { className: "hr-scard" }, structPicture(d), el("div", { className: "hr-shp" }, hp || si.hp),
+      si.tags.length ? el("div", { className: "hr-pips" }, si.tags.map((t) => pip(content, t))) : null,
       si.text ? el("div", { className: "hr-stext" }, si.text) : null,
-      el("ul", { className: "hr-sstats" }, si.stats.map((t) => el("li", {}, t))));
+      el("ul", { className: "hr-sstats" }, si.byTag.map((b) => tagLine(content, b)), si.stats.map((t) => el("li", {}, t))));
   }
   const canPay = (ctx, cost) => Object.entries(cost || {}).every(([r, n]) => (ctx.priv.res[r] || 0) >= n);
   const nameSpan = (game, pid) => {
@@ -187,7 +199,7 @@
     if (!def) return fill(box);
     const own = s.owner === ctx.you;
     const kids = [el("h3", {}, `${def.name} `, nameSpan(game, s.owner)),
-      el("p", { className: "small" }, s.maxHp ? `HP ${s.hp}/${s.maxHp}. ` : "", def.text || "")];
+      structCard(content, def, s.maxHp ? `HP ${s.hp}/${s.maxHp}${def.defense ? ` · defense ${def.defense}` : ""}` : null)];
     if (def.jobs || Object.keys(def.produce || {}).length) {
       kids.push(el("p", { className: `small ${s.working ? "pos" : "neg"}` }, s.working ? "Working." : s.active === false ? "Switched off." : "Not working: no free workers."));
     }
@@ -294,7 +306,9 @@
       if (d.requires && !mine.has(d.requires)) why = `Needs ${content.advances[d.requires]?.name || d.requires}`;
       const poor = !why && !canPay(ctx, d.cost);
       const si = structInfo(content, d);
-      const info = [si.text, si.stats.join(". "), si.hp, `Build: ${si.build}`, `On: ${si.terrains}`].filter(Boolean).join("\n");
+      const tagText = si.byTag.map((b) => `${b.n > 0 ? "+" : "−"}${Math.abs(b.n)} ${resIcon(b.res)} for ${content.tags?.[b.tag]?.name || b.tag}`);
+      const tags = si.tags.map((t) => content.tags?.[t]?.name || t).join(", ");
+      const info = [tags ? `[${tags}]` : "", si.text, ...tagText, si.stats.join(". "), si.hp, `Build: ${si.build}`, `On: ${si.terrains}`].filter(Boolean).join("\n");
       const active = ui.mode?.type === "build" && ui.mode.kind === id;
       return el("button", { className: `hr-build${active ? " on" : ""}`, disabled: !!why || poor, title: `${why ? `${why}\n` : poor ? "Can't afford\n" : ""}${info}`,
         onclick: () => (active ? act.setMode(null) : act.setMode({ type: "build", kind: id, rot: ui.lastRot || 0 })) },

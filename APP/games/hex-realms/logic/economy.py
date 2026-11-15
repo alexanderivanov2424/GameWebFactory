@@ -65,13 +65,14 @@ def output(m, s):
             count = sum(1 for n in around if m.cells[n] == adj["terrain"])
         else:
             sids = {m.cell_structure[n] for n in around if n in m.cell_structure}
-            others = [m.structures[x] for x in sids if m.structures[x]["owner"] == s["owner"]]
-            count = sum(1 for o in others if (o["type"] == adj["type"] if adj["type"] else STRUCTURES[o["type"]]["home"]))
+            others = [STRUCTURES[m.structures[x]["type"]] for x in sids if m.structures[x]["owner"] == s["owner"]]
+            count = sum(1 for o in others if (o["id"] == adj["type"] if adj["type"] else
+                                              adj["tag"] in o["tags"] if adj["tag"] else o["home"]))
         for r, n in adj["gain"].items():
             out[r] = out.get(r, 0) + n * min(count, adj["max"])
     for r, n in type_bonus(m, s["owner"]).get(s["type"], {}).items():
         out[r] = out.get(r, 0) + n
-    return {r: n for r, n in out.items() if n}
+    return {r: n for r, n in out.items() if n > 0}  # penalties never make it negative
 
 
 def type_bonus(m, pid):

@@ -12,8 +12,10 @@ structures/<id>.json:
     cost {res: n}, hp (0 = can't be attacked), defense (dice it rolls back at attackers),
     jobs (people needed to work), produce {res: n}, perCell {terrain: {res: n}} (per own cell),
     onTerrain {terrain: {res: n}} (by the anchor's terrain, replaces produce), perAdjacent
-    {"terrain"|"type"|"home": ..., "gain": {res: n}, "max": n} (per neighbouring cell of that terrain /
-    own structure of that type / own home structure, up to max; a list of these for several bonuses), housing, home (counts as a home), storage (all
+    {"terrain"|"type"|"tag"|"home": ..., "gain": {res: n (may be negative)}, "max": n} (per neighbouring
+    cell of that terrain / own structure of that type / with that tag / own home structure, up to max; a
+    list of these for several bonuses; a structure's output never goes below 0), tags [TAGS ids] (shown
+    as pips; "home" = counts as a home), housing, home (counts as a home; same as the "home" tag), storage (all
     capped resources), store {res: n} (a structure with either is a store of goods: see
     logistics.py), growth (extra growth per turn), terrain [ids] (default every "build" terrain), coast (a cell must touch water),
     requires (advance id), recruits [unit ids], heals, shoots (dice) + range, trade (market
@@ -58,12 +60,16 @@ TERRAIN = {
 }
 CATEGORIES = {"defense": "Defense", "homes": "Homes", "food": "Food", "industry": "Industry", "trade": "Trade",
               "military": "Military", "culture": "Learning & Faith", "city": "City"}  # build menu tabs, in order
+# Structure tags {id: (name, pip colour)}: shown on the structure card; perAdjacent can count them.
+TAGS = {"industrial": ("Industrial", "#a0643c"), "food": ("Food", "#c9a93a"), "home": ("Home", "#c97b5b"),
+        "storage": ("Storage", "#4f86c6"), "military": ("Military", "#b8433a"), "defense": ("Defense", "#7d8794"),
+        "trade": ("Trade", "#d9b13b"), "culture": ("Culture", "#8e5bb5"), "civic": ("Civic", "#5f9e8f")}
 EFFECTS = {"towerDice", "farmFood", "homeHousing", "defendDice", "chapelGold", "attackDice"}
 
 
-def res_map(data, k, keys=RESOURCES):
+def res_map(data, k, keys=RESOURCES, low=0):
     v = data.get(k, {})
-    if not isinstance(v, dict) or any(r not in keys or type(n) is not int or not 0 <= n <= 999 for r, n in v.items()):
+    if not isinstance(v, dict) or any(r not in keys or type(n) is not int or not low <= n <= 999 for r, n in v.items()):
         raise ValueError(f"{k} must map resources to whole numbers")
     return dict(v)
 
@@ -72,6 +78,13 @@ def terrain_list(data, k, default):
     v = data.get(k, default)
     if not isinstance(v, list) or any(t not in TERRAIN for t in v):
         raise ValueError(f"{k} must list terrain ids")
+    return list(v)
+
+
+def tag_list(d):
+    v = d.get("tags", [])
+    if not isinstance(v, list) or any(t not in TAGS for t in v):
+        raise ValueError(f"tags must list ids from {sorted(TAGS)}")
     return list(v)
 
 
@@ -84,7 +97,8 @@ def parse_structure(sid, d):
         "id": sid, "name": text(d, "name", 30, required=True), "icon": text(d, "icon", 4), "cells": cells,
         "cost": res_map(d, "cost"), "hp": whole(d, "hp", 0, 99, default=3), "defense": whole(d, "defense", 0, 9, default=0),
         "jobs": whole(d, "jobs", 0, 9, default=0), "produce": res_map(d, "produce"),
-        "housing": whole(d, "housing", 0, 99, default=0), "home": d.get("home") is True,
+        "housing": whole(d, "housing", 0, 99, default=0), "tags": tag_list(d),
+        "home": d.get("home") is True or "home" in d.get("tags", []),
         "storage": whole(d, "storage", 0, 999, default=0), "store": res_map(d, "store", CAPPED),
         "growth": whole(d, "growth", 0, 9, default=0),
         "terrain": terrain_list(d, "terrain", [t for t, v in TERRAIN.items() if v["build"]]),
@@ -107,8 +121,11 @@ def parse_structure(sid, d):
     for adj in adjs if isinstance(adjs, list) else [adjs]:
         if not isinstance(adj, dict):
             raise ValueError("perAdjacent must be an object or a list of them")
-        s["perAdjacent"].append({"terrain": adj.get("terrain"), "type": adj.get("type"), "home": adj.get("home") is True,
-                                 "gain": res_map(adj, "gain"), "max": whole(adj, "max", 1, 9, default=4)})
+        if adj.get("tag") is not None and adj["tag"] not in TAGS:
+            raise ValueError(f"perAdjacent tag must be one of {sorted(TAGS)}")
+        s["perAdjacent"].append({"terrain": adj.get("terrain"), "type": adj.get("type"), "tag": adj.get("tag"),
+                                 "home": adj.get("home") is True, "gain": res_map(adj, "gain", low=-99),
+                                 "max": whole(adj, "max", 1, 9, default=4)})
     s["rotations"] = [[[q, r] for q, r in rot] for rot in rotations(cells)]
     return s
 
