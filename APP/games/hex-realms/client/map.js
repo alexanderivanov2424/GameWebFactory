@@ -260,15 +260,12 @@
       fill(dimG, (game.dim || []).map((k) => hexAt(k, SIZE, { class: "hr-dim" })));
 
       // Territory: owner-coloured border round each region (the inside is not shaded).
-      // Weak land (game.claims) is dashed; borders share one translucent group so overlaps don't darken.
-      const weak = game.claims || {};
+      // Borders share one translucent group so overlaps don't darken.
       for (const pid of game.seats) {
         const mine = Object.keys(game.territory).filter((k) => game.territory[k] === pid);
         const line = { stroke: color(pid), "stroke-width": BORDER_W, "stroke-linecap": "round" };
         const same = (n) => game.territory[n] === pid;
-        const strong = mine.filter((k) => weak[k] !== pid), bought = mine.filter((k) => weak[k] === pid);
-        put(territoryG, svg("g", { opacity: 0.8 }, ...outline(strong, same, line, BORDER),
-            ...outline(bought, same, { ...line, "stroke-dasharray": "6 5", "stroke-linecap": "butt" }, BORDER)));
+        put(territoryG, svg("g", { opacity: 0.8 }, ...outline(mine, same, line, BORDER)));
       }
 
       // Structures: solid, in their colour, fused into one shape each.
@@ -467,7 +464,8 @@
         const cells = s ? s.cells : [u.at];
         if (!cells.every((k) => all.has(k))) continue;
         const live = items.filter((i) => i.on);
-        const plain = live.filter((i) => !i.tag);  // tagged items (builders) are blue
+        const blue = (i) => i.tag === "build" || i.tag === "of";  // builders and population counts
+        const plain = live.filter((i) => !blue(i));
         const plus = plain.some((i) => i.n > 0), minus = plain.some((i) => i.n < 0);
         const tone = !live.length ? "off" : !plain.length ? "count" : plus && minus ? "mix" : plus ? "pos" : "neg";
         if (s) put(resG, blobLine(cells, { class: `hr-res-line hr-res-${tone}` }));
@@ -478,7 +476,7 @@
         const widths = texts.map((t) => 8 + 7.5 * t.length);
         let left = x - (widths.reduce((a, w) => a + w, 0) + 3 * (items.length - 1)) / 2;
         items.forEach((i, j) => {
-          const cls = `hr-badge ${i.tag ? "hr-res-count" : i.n > 0 ? "hr-res-pos" : "hr-res-neg"}${i.on ? "" : " hr-res-off"}`;
+          const cls = `hr-badge ${blue(i) ? "hr-res-count" : i.n > 0 ? "hr-res-pos" : "hr-res-neg"}${i.on ? "" : " hr-res-off"}`;
           put(resG, svg("g", { class: cls },
             svg("rect", { x: left.toFixed(1), y: (y - 9).toFixed(1), width: widths[j].toFixed(1), height: 18, rx: 6 }),
             svg("text", { x: (left + widths[j] / 2).toFixed(1), y: y.toFixed(1) }, texts[j])));

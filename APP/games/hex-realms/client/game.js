@@ -6,7 +6,7 @@
   const { $, el, fill } = AppDom;
   const U = HexMap.util;
   // mode: build, shoot, found or claim (Esc cancels); sel: unit, structure or site; resView and tech: map and popup state.
-  const ui = { sel: null, mode: null, tab: "build", tech: null, resView: null, buildCat: null, trade: { give: "gold", get: "food" }, lastRot: 0,
+  const ui = { sel: null, mode: null, tab: "build", tech: null, resView: null, buildCat: null, trade: {}, lastRot: 0,
     key: null, flashSeen: null, turnStart: Date.now(), gameNumber: null };
   let state = null;
   let hover = null;
@@ -23,6 +23,7 @@
     onConnection(status) { $("connection").textContent = AppLobbyUI.connectionText(status, lobby.roomId); },
   });
   const showError = AppLobbyUI.errorBox($("error"));
+  fill($("rules"), HexText.rules.map(([title, html]) => { const p = el("p", {}, el("b", {}, `${title}. `)); p.insertAdjacentHTML("beforeend", html); return p; }));
   const renderButtons = AppLobbyUI.lobbyButtons(lobby, { join: $("join"), leave: $("leave"), ready: $("ready"), back: $("back") });
   const renderSettings = AppLobbyUI.settingsForm($("settings"), lobby);
   const updateTurnAlert = AppLobbyUI.turnAlert($("map"));
@@ -118,7 +119,6 @@
         HexHud.players($("p-players"), c);
         HexHud.selection($("p-selection"), c);
         HexHud.orders($("p-orders"), c);
-        HexHud.trade($("p-trade"), c);
       });
     } else {
       fill($("topbar"), el("span", { className: "hr-turn" }, `Turn ${c.game.turn} / ${c.game.turnLimit}`), el("span", { className: "muted" }, "Spectating"));
@@ -192,7 +192,7 @@
         el("div", {}, HexHud.fmt.structInfo(names, d).terrains),
         el("div", { className: "hr-here neg" })), HexHud.structCard(names, d));
     }
-    else if (m.type === "claim") fill(box, `Extending territory: click a green cell to make it yours at once (${HexHud.fmt.costText(names.claim.cost)} each, no refund). Each bought cell costs ${names.claim.upkeep} gold a turn. Bought land is weak (dashed): it's lost to an enemy unit on or next to it, if it's cut off from your cities' free land, or to another realm's Town Hall. Esc to stop. `, cancel);
+    else if (m.type === "claim") fill(box, HexText.claim.hint(HexHud.fmt.costText(names.claim.cost), names.claim), cancel);
     else if (m.type === "shoot") fill(box, "Click an enemy unit or structure in range. ", cancel);
     else fill(box, "Found a city here: R turns the footprint, click it (or Confirm) to place. ",
       HexHud.fmt.btn("Confirm", confirmFound, { cls: "endturn" }), cancel);
@@ -259,7 +259,7 @@
     if (def.storage) for (const r of Object.keys(c.priv.report.caps || {})) add(r, `+${def.storage} room`, "pos");
     for (const [r, n] of Object.entries(def.store || {})) add(r, `+${n} room`, "pos");
     if (def.jobs) add("people", `−${def.jobs} when working`, "neg");
-    const housing = (def.housing || 0) + (def.home ? c.priv.homeHousing || 0 : 0);
+    const housing = (def.housing || 0) + Object.entries(c.priv.housingBonus || {}).reduce((n, [tag, b]) => n + ((def.tags || []).includes(tag) ? b : 0), 0);
     if (housing) add("housing", `+${housing}`, "pos");
     const idle = Math.max(0, c.priv.report.idle), now = Math.min(idle, def.hammers);
     add("turns", `🔨 ${def.hammers}${now ? ` · ${now} builder${now === 1 ? "" : "s"} now` : " · no idle people"}`, "");
@@ -278,8 +278,7 @@
     const near = [...new Set(around.map((n) => idx.structAt[n]).filter(Boolean))].map((id) => g.structures[id]).filter((s) => s.owner === c.you);
     for (const adj of def.perAdjacent || []) {
       const count = adj.terrain ? around.filter((n) => g.cells[n] === adj.terrain).length
-        : near.filter((s) => (adj.type ? s.type === adj.type : adj.tag ? (c.content.structures[s.type]?.tags || []).includes(adj.tag)
-          : c.content.structures[s.type]?.home)).length;
+        : near.filter((s) => (adj.type ? s.type === adj.type : (c.content.structures[s.type]?.tags || []).includes(adj.tag))).length;
       for (const [r, n] of Object.entries(adj.gain || {})) plus(r, n * Math.min(count, adj.max));
     }
     for (const [r, n] of Object.entries((c.priv.typeBonus || {})[kind] || {})) plus(r, n);

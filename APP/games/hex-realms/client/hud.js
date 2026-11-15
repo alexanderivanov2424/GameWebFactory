@@ -54,7 +54,7 @@
     const terrains = names(content, "terrain", d.terrain || []) + (d.coast ? " · touching water" : "");
     const build = `${costText(d.cost)} · 🔨 ${d.hammers} (each idle person builds 1 🔨 a turn)`;
     const byTag = (d.perAdjacent || []).filter((a) => a.tag).flatMap((a) => Object.entries(a.gain || {}).map(([res, n]) => ({ n, res, tag: a.tag })));
-    return { text: d.text || "", res: resListText(d), stats, hp, terrains, build, tags: d.tags || [], byTag };
+    return { text: HexText.structures[d.id] || "", res: resListText(d), stats, hp, terrains, build, tags: d.tags || [], byTag };
   }
 
   // Footprint picture (unturned) in the structure's colour, with its icon.
@@ -226,7 +226,7 @@
         const ud = content.units[ut];
         if (!ud) continue;
         kids.push(el("div", { className: "hr-recruit" },
-          btn(`Recruit ${ud.name}`, () => act.send({ action: "recruit", structure: sel.id, kind: ut }), { disabled: !!why, title: why || ud.text || "" }),
+          btn(`Recruit ${ud.name}`, () => act.send({ action: "recruit", structure: sel.id, kind: ut }), { disabled: !!why, title: why || HexText.units[ut] || "" }),
           el("span", { className: "small" }, costText(ud.cost)),
           unitStats(ud), why ? el("div", { className: "muted small" }, why) : null));
       }
@@ -234,13 +234,15 @@
         def.jobs > 0 ? btn(s.active === false ? "Switch on" : "Switch off", () => act.send({ action: "toggle", structure: sel.id }), { title: "Switched-off structures don't use workers." }) : null,
         s.type !== "town_hall" ? btn("Demolish", () => { if (confirm(`Demolish this ${def.name}? No refund, and goods stored in it are lost.`)) act.send({ action: "demolish", structure: sel.id }); }, { cls: "danger", title: "Remove it now (no refund)." }) : null);
       kids.push(row);
+      if (def.trade) kids.push(tradePanel(ctx, sel.id, def));
+      if (s.type === "town_hall") kids.push(el("div", { className: "hr-btnrow" }, claimButton(ctx)));
     }
     fill(box, ...kids);
   }
 
   // A placed structure's real output per turn, from the report's flows (positive entries).
   const output = (ctx, sid) => Object.fromEntries(ctx.priv.report.flows
-    .filter(([id, r, n]) => id === sid && n > 0 && ctx.content.resources.includes(r)).map(([, r, n]) => [r, n]));
+    .filter(([id, r, n, , tag]) => id === sid && n > 0 && !tag && ctx.content.resources.includes(r)).map(([, r, n]) => [r, n]));
 
   function siteText(ctx, cid, x) {
     const n = ctx.priv.building?.works?.[cid] || 0;
@@ -277,49 +279,62 @@
         el("span", { className: "spacer" }), btn("✕", () => act.send({ action: "demolish", structure: cid }), { cls: "small", title: "Demolish the site and get its cost back" }))));
   }
 
-  function trade(box, ctx) {
-    const rate = ctx.priv.report.tradeRate;
-    box.hidden = !(rate > 0);
-    if (box.hidden) return;
-    const t = ctx.ui.trade;
-    const resOpts = (value) => ["gold", "food", "wood", "stone", "metal"].map((r) => el("option", { value: r, selected: r === value }, `${resIcon(r)} ${resName(r)}`));
-    const give = el("select", { onchange: () => { t.give = give.value; } }, resOpts(t.give));
-    const get = el("select", { onchange: () => { t.get = get.value; } }, resOpts(t.get));
-    fill(box, el("h3", {}, "Trade"), el("div", { className: "row" }, "give", give, "get", get),
-      el("div", { className: "row" }, el("span", { className: "small muted" }, `Give ${rate} for 1`), el("span", { className: "spacer" }),
-        btn("Trade", () => ctx.act.send({ action: "trade", give: t.give, get: t.get }), { disabled: t.give === t.get })));
+  // A trade structure's standing trade: `def.trade` of one resource for 1 of another, every turn.
+  function tradePanel(ctx, sid, def) {
+    const { priv, content, ui, act } = ctx;
+    const on = priv.trades?.[sid];
+    const draft = on || ui.trade[sid] || { give: "wood", get: "gold" };
+    const send = (t) => act.send({ action: "trade", structure: sid, ...t });
+    const pick = (key) => {
+      const select = el("select", { onchange: () => {
+        const t = { ...draft, [key]: select.value };
+        ui.trade[sid] = t;
+        if (on && t.give !== t.get) send(t);
+        act.select("structure", sid);
+      } }, content.tradeGoods.map((r) => el("option", { value: r, selected: r === draft[key] }, `${resIcon(r)} ${resName(r)}`)));
+      return select;
+    };
+    const made = priv.report.trades.some(([id]) => id === sid);
+    return el("div", { className: "hr-trade", title: HexText.trade.help(def.trade) }, el("h3", {}, "Trade"),
+      el("div", { className: "row" }, `Give ${def.trade}`, pick("give"), "for 1", pick("get")),
+      el("div", { className: "row" },
+        btn(on ? "Stop trade" : "Enable trade", () => send(on ? { give: null } : draft), { cls: on ? "on" : "", disabled: !on && draft.give === draft.get }),
+        on ? el("span", { className: `small ${made ? "pos" : "neg"}` }, made ? HexText.trade.on : HexText.trade.off) : null));
   }
 
+  function claimButton(ctx) {
+    const { content, ui, act } = ctx;
+    const claiming = ui.mode?.type === "claim";
+    return btn(claiming ? "Extending territory… (Esc)" : `Extend territory (${costText(content.claim.cost)})`,
+      () => act.setMode(claiming ? null : { type: "claim" }),
+      { cls: claiming ? "on" : "", disabled: !claiming && !canPay(ctx, content.claim.cost), title: HexText.claim.help(content.claim) });
+  }
+
+  // Only structures you have unlocked; one category open at a time (clicking it again closes it).
   function build(box, ctx) {
     const { content, me, ui, act } = ctx;
     const mine = new Set(me.advances || []);
-    const buildable = Object.entries(content.structures).filter(([id]) => id !== "town_hall");
+    const buildable = Object.entries(content.structures).filter(([id, d]) => id !== "town_hall" && (!d.requires || mine.has(d.requires)));
     const cats = Object.entries(content.categories || {}).filter(([c]) => buildable.some(([, d]) => d.category === c));
-    // One category open at a time; clicking the open one closes it. Switching cancels a placement.
     const pick = (c) => { ui.buildCat = ui.buildCat === c ? null : c; act.setMode(ui.mode?.type === "build" ? null : ui.mode); };
     const tabs = el("div", { className: "hr-cats" }, cats.map(([c, label]) =>
       el("button", { className: `hr-cat${ui.buildCat === c ? " on" : ""}`, onclick: () => pick(c) }, label)));
     const items = buildable.filter(([, d]) => d.category === ui.buildCat).map(([id, d]) => {
-      let why = "";
-      if (d.requires && !mine.has(d.requires)) why = `Needs ${content.advances[d.requires]?.name || d.requires}`;
-      const poor = !why && !canPay(ctx, d.cost);
+      const poor = !canPay(ctx, d.cost);
       const si = structInfo(content, d);
       const tagText = si.byTag.map((b) => `${b.n > 0 ? "+" : "−"}${Math.abs(b.n)} ${resIcon(b.res)} for ${content.tags?.[b.tag]?.name || b.tag}`);
       const tags = si.tags.map((t) => content.tags?.[t]?.name || t).join(", ");
       const info = [tags ? `[${tags}]` : "", si.text, si.res, ...tagText, si.stats.join(". "), si.hp, `Build: ${si.build}`, `On: ${si.terrains}`].filter(Boolean).join("\n");
       const active = ui.mode?.type === "build" && ui.mode.kind === id;
-      return el("button", { className: `hr-build${active ? " on" : ""}`, disabled: !!why || poor, title: `${why ? `${why}\n` : poor ? "Can't afford\n" : ""}${info}`,
+      return el("button", { className: `hr-build${active ? " on" : ""}`, disabled: poor, title: `${poor ? "Can't afford\n" : ""}${info}`,
         onclick: () => (active ? act.setMode(null) : act.setMode({ type: "build", kind: id, rot: ui.lastRot || 0 })) },
-        el("span", { className: "hr-bicon" }, d.icon || "▪"), el("span", { className: "hr-bname" }, d.name), el("span", { className: "hr-bcost small" }, why || costText(d.cost)));
+        el("span", { className: "hr-bicon" }, d.icon || "▪"), el("span", { className: "hr-bname" }, d.name), el("span", { className: "hr-bcost small" }, costText(d.cost)));
     });
-    const claiming = ui.mode?.type === "claim", claimCost = content.claim?.cost || {};
-    const claim = btn(claiming ? "Extending territory… (Esc)" : `Extend territory (${costText(claimCost)})`,
-      () => act.setMode(claiming ? null : { type: "claim" }),
-      { cls: claiming ? "on" : "", disabled: !claiming && !canPay(ctx, claimCost), title: `Buy an explored cell next to your land, one at a time; it's yours at once (not next to an enemy unit). Bought land costs ${content.claim?.upkeep ?? 1} gold a turn per cell (unpaid cells are given up, farthest first) and is weak: an enemy unit on or next to it, being cut off from your cities' free land, or another realm's Town Hall reaching it make it nobody's.` });
-    fill(box, el("div", { className: "hr-btnrow" }, claim), tabs,
+    fill(box, tabs,
       ui.buildCat ? el("div", { className: "hr-buildgrid" }, items) : el("p", { className: "muted small" }, "Pick a category, then a structure."),
       el("p", { className: "muted small" }, "Click the map to place it. R or right-click turns it, Esc cancels. It goes anywhere inside your territory and becomes a construction site that idle people build over a few turns. Goods go straight to your stores."));
   }
 
-  window.HexHud = { topbar, players, selection, orders, trade, build, structCard, fmt: { costText, canPay, nameSpan, btn, cap, setResources, resIcon, resName, structInfo, resListEl } };
+
+  window.HexHud = { topbar, players, selection, orders, build, structCard, fmt: { costText, canPay, nameSpan, btn, cap, setResources, resIcon, resName, structInfo, resListEl } };
 })();

@@ -63,7 +63,7 @@
       const other = a.after.filter((x) => !inTree.has(x));  // prerequisites from the other tree
       return el("div", { className: `hr-tnode ${status}`, style: `left:${x}px;top:${y}px;width:${NODE_W}px;height:${NODE_H}px` },
         el("div", { className: "row" }, el("b", {}, owned.has(id) ? "✓ " : "", a.name), el("span", { className: "spacer" }), el("span", { className: "small" }, costText(a.cost))),
-        el("div", { className: "small muted hr-ttext" }, a.text),
+        el("div", { className: "small muted hr-ttext" }, HexText.advances[id]),
         other.length ? el("div", { className: "small muted" }, `After: ${other.map((x) => A[x]?.name || x).join(", ")}`) : null,
         el("div", { className: "hr-tfoot" }, owned.has(id) ? el("span", { className: "small pos" }, "Researched")
           : queued.has(id) ? el("span", { className: "small pos" }, "Queued: learnt as the turn resolves")
