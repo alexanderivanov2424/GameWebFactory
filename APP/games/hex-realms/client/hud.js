@@ -177,13 +177,15 @@
   }
 
   // A unit's stats as small chips like the resources: attack, defence, movement, health (hp: "5/8" for a
-  // unit on the map), then range and siege when it has them.
+  // unit on the map), then range and siege when it has them, and last the food it eats a turn ("−1 🍞", "0").
   const UNIT_STATS = [["attack", "⚔️", "Attack: dice it rolls when it attacks"], ["defense", "🛡️", "Defence: dice it rolls when attacked"],
     ["move", "👣", "Movement: steps a turn"], ["hp", "❤️", "Health"], ["range", "🏹", "Range: shoots this far instead of moving"],
     ["siege", "💥", "Siege: damage per hit on structures"]];
   function unitStats(def, hp) {
     return el("div", { className: "hr-ustats" }, UNIT_STATS.filter(([k]) => (k === "range" ? def.range : k === "siege" ? def.siege > 1 : true))
-      .map(([k, icon, title]) => el("span", { className: "hr-chip hr-ustat", title }, `${icon} `, el("b", {}, String(k === "hp" && hp ? hp : def[k])))));
+      .map(([k, icon, title]) => el("span", { className: "hr-chip hr-ustat", title }, `${icon} `, el("b", {}, String(k === "hp" && hp ? hp : def[k])))),
+      ((food) => el("span", { className: "hr-chip hr-ustat", title: "Food it eats each turn (from this turn's food production)" },
+        el("b", {}, food ? `−${food}` : "0"), ` ${resIcon("food")}`))(def.upkeep?.food || 0));
   }
 
   function selection(box, ctx) {
@@ -194,7 +196,7 @@
       const u = game.units[sel.id], def = u && content.units[u.type];
       if (!def) return fill(box);
       const own = u.owner === ctx.you, o = priv.orders;
-      const kids = [el("h3", {}, `${def.name} `, nameSpan(game, u.owner)), unitStats(def, `${u.hp}/${u.maxHp}`), def.text ? el("p", { className: "small" }, def.text) : null];
+      const kids = [el("h3", {}, `${def.name} `, nameSpan(game, u.owner)), unitStats(def, `${u.hp}/${u.maxHp}`)];
       if (own) {
         const auto = priv.auto?.[sel.id] || null, mode = auto?.mode;
         const standing = { explore: "Exploring (walks on its own each turn)", fight: "Fighting (attacks the nearest enemy unit it sees; holds when none)",
@@ -225,8 +227,7 @@
           action(btn("Clear orders", () => act.send({ action: "move", unit: sel.id, to: u.at })), "Cancel this unit's orders (it stays put)."),
           action(btn("Disband", () => { if (confirm(`Disband this ${def.name}?`)) act.send({ action: "disband", unit: sel.id }); }, { cls: "danger" }),
             "Remove the unit; its people come home."));
-        kids.push(el("p", { className: "hr-pending" }, pending), row,
-          el("p", { className: "muted small" }, "Click a highlighted cell to move there (red = attack), or any cell further away to walk there over several turns. Click the unit again to clear its orders (when it stands on a structure, that selects the structure; use Clear orders)."));
+        kids.push(el("p", { className: "hr-pending" }, pending), row);
       }
       return fill(box, ...kids);
     }
