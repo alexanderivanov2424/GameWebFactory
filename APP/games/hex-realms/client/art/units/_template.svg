@@ -1,9 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="25.2" height="25.2" viewBox="0 0 25.2 25.2">
-<!--
-  Hex Realms: template for one unit's art (copy it, e.g. to units/archer.svg). Blank on purpose.
-  The page is exactly the unit's disc on the map (radius SIZE * 0.42 in client/map.js): 25.2 x 25.2,
-  centre (12.6,12.6). The map fills that disc with the owner's colour underneath this art, so keep
-  the background transparent; the page corners fall outside the disc.
-  Keep the file self-contained: no linked images or fonts (convert text to paths).
--->
-</svg>

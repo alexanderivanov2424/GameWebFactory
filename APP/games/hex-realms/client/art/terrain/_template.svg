@@ -1,9 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="51.962" height="60" viewBox="0 0 51.962 60">
-<!--
-  Hex Realms: template for one terrain tile (copy it, e.g. to terrain/forest.svg). Blank on purpose.
-  The page is exactly one map hex (pointy-top, SIZE 30 in client/map.js): 51.962 wide (30 * sqrt 3) x 60 tall.
-  Hex corners: (25.981,0) (51.962,15) (51.962,45) (25.981,60) (0,45) (0,15). The four page corners
-  outside them overlap the neighbouring hexes, so leave them transparent.
-  Keep the file self-contained: no linked images or fonts (convert text to paths).
--->
-</svg>
