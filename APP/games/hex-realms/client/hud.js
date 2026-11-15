@@ -101,7 +101,6 @@
     return b;
   };
   const VIEW_TIP = "Click: show on the map what makes and uses it each turn.\n";
-  const stat = (label, value) => el("span", { className: "hr-stat" }, `${label} `, el("b", {}, String(value)));
 
   // A chip with an (empty) delta line under it, filled while placing a structure.
   const withDelta = (key, chip) => el("span", { className: "hr-dcol" }, chip, el("span", { className: `hr-delta hr-delta-${key}` }));
@@ -154,9 +153,14 @@
     }));
   }
 
-  function unitStats(def) {
-    return el("div", { className: "hr-stats" }, stat("atk", def.attack), stat("def", def.defense), stat("hp", def.hp), stat("move", def.move),
-      def.range ? stat("range", def.range) : null, def.siege > 1 ? stat("siege", def.siege) : null);
+  // A unit's stats as small chips like the resources: attack, defence, movement, health (hp: "5/8" for a
+  // unit on the map), then range and siege when it has them.
+  const UNIT_STATS = [["attack", "⚔️", "Attack: dice it rolls when it attacks"], ["defense", "🛡️", "Defence: dice it rolls when attacked"],
+    ["move", "👣", "Movement: steps a turn"], ["hp", "❤️", "Health"], ["range", "🏹", "Range: shoots this far instead of moving"],
+    ["siege", "💥", "Siege: damage per hit on structures"]];
+  function unitStats(def, hp) {
+    return el("div", { className: "hr-ustats" }, UNIT_STATS.filter(([k]) => (k === "range" ? def.range : k === "siege" ? def.siege > 1 : true))
+      .map(([k, icon, title]) => el("span", { className: "hr-chip hr-ustat", title }, `${icon} `, el("b", {}, String(k === "hp" && hp ? hp : def[k])))));
   }
 
   function selection(box, ctx) {
@@ -167,7 +171,7 @@
       const u = game.units[sel.id], def = u && content.units[u.type];
       if (!def) return fill(box);
       const own = u.owner === ctx.you, o = priv.orders;
-      const kids = [el("h3", {}, `${def.name} `, nameSpan(game, u.owner)), unitStats(def), el("p", { className: "small" }, `HP ${u.hp}/${u.maxHp}. ${def.text || ""}`)];
+      const kids = [el("h3", {}, `${def.name} `, nameSpan(game, u.owner)), unitStats(def, `${u.hp}/${u.maxHp}`), def.text ? el("p", { className: "small" }, def.text) : null];
       if (own) {
         const auto = priv.auto?.[sel.id] || null, mode = auto?.mode;
         const standing = { explore: "Exploring (walks on its own each turn)", fight: "Fighting (attacks the nearest enemy unit it sees; holds when none)",
@@ -215,7 +219,7 @@
         kids.push(el("div", { className: "hr-recruit" },
           btn(`Recruit ${ud.name}`, () => act.send({ action: "recruit", structure: sel.id, kind: ut }), { disabled: !!why, title: why || ud.text || "" }),
           el("span", { className: "small" }, costText(ud.cost)),
-          el("div", { className: "muted small" }, `atk ${ud.attack} def ${ud.defense} hp ${ud.hp} move ${ud.move}${ud.range ? ` range ${ud.range}` : ""}${why ? ` — ${why}` : ""}`)));
+          unitStats(ud), why ? el("div", { className: "muted small" }, why) : null));
       }
       const auto = priv.autoRecruit?.[sel.id];
       if (auto) kids.push(autoRecruit(ctx, sel.id, auto, Object.keys(recruits)));
