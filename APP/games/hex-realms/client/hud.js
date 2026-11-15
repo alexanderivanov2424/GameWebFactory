@@ -8,7 +8,7 @@
  *                               toggles the map's resource view (act.resView, ui.resView)
  *   HexHud.players(el, ctx)     colour, name, score, done tick, out, public resource snapshot
  *   HexHud.selection(el, ctx)   the selected unit / structure / construction site: stats, orders,
- *                               Recruit/Hold/Shoot/Found/Disband/Switch off/Demolish, automatic recruiting
+ *                               Recruit/Hold/Shoot/Found/Disband/Switch off/Demolish
  *   HexHud.orders(el, ctx)      your pending builds / recruits / research, each with a cancel button, and your
  *                               construction sites (progress, whether builders work there this turn, demolish)
  *   HexHud.trade(el, ctx)       give/get selects (only when the market rate is > 0)
@@ -234,30 +234,12 @@
           el("span", { className: "small" }, costText(ud.cost)),
           unitStats(ud), why ? el("div", { className: "muted small" }, why) : null));
       }
-      const auto = priv.autoRecruit?.[sel.id];
-      if (auto) kids.push(autoRecruit(ctx, sel.id, auto, Object.keys(recruits)));
       const row = el("div", { className: "hr-btnrow" },
         def.jobs > 0 ? btn(s.active === false ? "Switch on" : "Switch off", () => act.send({ action: "toggle", structure: sel.id }), { title: "Switched-off structures don't use workers." }) : null,
         s.type !== "town_hall" ? btn("Demolish", () => { if (confirm(`Demolish this ${def.name}? No refund, and goods stored in it are lost.`)) act.send({ action: "demolish", structure: sel.id }); }, { cls: "danger", title: "Remove it now (no refund)." }) : null);
       kids.push(row);
     }
     fill(box, ...kids);
-  }
-
-  // A military structure's automatic recruiting: which unit every turn (or Off), and the standing order its units get.
-  function autoRecruit(ctx, sid, auto, kinds) {
-    const { game, content, act } = ctx;
-    const send = () => act.send({ action: "autorecruit", structure: sid, kind: kind.value || null, order: order.value || null });
-    const kind = el("select", { onchange: send, title: "Recruit this unit every turn on its own, when you can pay and have people without a job." },
-      el("option", { value: "", selected: !auto.kind }, "Off"),
-      kinds.map((ut) => el("option", { value: ut, selected: auto.kind === ut }, content.units[ut]?.name || ut)));
-    const modes = [["", "No order"], ...(game.fog ? [["explore", "Explore"]] : []), ["fight", "Fight"], ["pillage", "Pillage"]];
-    const order = el("select", { onchange: send, title: "The standing order every unit trained here starts with (also ones you recruit by hand)." },
-      modes.map(([m, label]) => el("option", { value: m, selected: (auto.order || "") === m }, label)));
-    return el("div", { className: "hr-autorecruit" },
-      el("div", { className: "row small" }, "Recruit every turn", el("span", { className: "spacer" }), kind),
-      el("div", { className: "row small" }, "New units", el("span", { className: "spacer" }), order),
-      el("p", { className: "muted small" }, "Skips a turn when it can't pay or no one is free (it never takes people from jobs)."));
   }
 
   function siteText(ctx, cid, x) {
@@ -282,7 +264,7 @@
     const rows = [
       ...o.builds.map((b) => { const n = priv.building?.orders?.[b.id] || 0;
         return [b.id, `Build ${content.structures[b.type]?.name || b.type} (🔨 ${content.structures[b.type]?.hammers || 1}, ${n ? `${resIcon("people")} −${n}` : "no idle people yet"})`, b.cost]; }),
-      ...o.recruits.map((r) => [r.id, `${r.auto ? "Auto-recruit" : "Recruit"} ${content.units[r.type]?.name || r.type} at ${content.structures[game.structures[r.at]?.type]?.name || "?"}`, r.cost]),
+      ...o.recruits.map((r) => [r.id, `Recruit ${content.units[r.type]?.name || r.type} at ${content.structures[game.structures[r.at]?.type]?.name || "?"}`, r.cost]),
       ...o.research.map((r) => [r.id, `Research ${content.advances[r.advance]?.name || r.advance}`, r.cost]),
     ];
     const sites = Object.entries(game.sites || {}).filter(([, x]) => x.owner === ctx.you);

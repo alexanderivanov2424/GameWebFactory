@@ -12,15 +12,14 @@
 Turn resolution, in order: research; ranged shots (positions before anyone moves); movement
 step by step with battles (movement.py); towers shoot; settlers found cities; builds (two
 players ordering the same cell both fail and get refunds; the rest become construction sites); recruits appear on their structure (next to it
-when it's full, and ships on the water beside it) with its automatic standing order (recruiting.py); production into the stores, eating, wages and growth (economy.py, logistics.py);
+when it's full, and ships on the water beside it; recruiting.py); production into the stores, eating, wages and growth (economy.py, logistics.py);
 construction by the people who were idle this turn (construction.py); healing (+1 hp for units that didn't
 fight, full on or next to an own Barracks); players without a Town Hall are out. The game ends
 when one player is left (if it started with 2 or more) or after the last turn: highest score wins.
 Solo games (1 player) are a sandbox: they end at the turn limit with your score, or when you lose
 your last Town Hall. Bots plan as each turn starts (and are done at once); once no person is
 left in the game, it ends with the highest score winning. As each turn's planning starts, units on
-a standing order (Explore, Fight, Pillage, Travel) get this turn's order (standing.py), then structures set to recruit on their own place
-their recruit orders (recruiting.py), then bots plan.
+a standing order (Explore, Fight, Pillage, Travel) get this turn's order (standing.py), then bots plan.
 
 Score = population + units + 3 per advance + structure scores (Town Hall 4, University 2,
 Monument 10) + gold // 10.
@@ -57,7 +56,6 @@ SIZES = {"small": -3, "normal": 0, "large": 4, "huge": 8}
 ACTS = {name: getattr(orders, name) for name in
         ("build", "claim", "recruit", "move", "shoot", "hold", "auto", "found", "research", "cancel", "trade", "toggle",
          "staff", "growth", "demolish", "disband")}
-ACTS["autorecruit"] = recruiting.set_auto
 
 
 def map_radius(players, size):
@@ -228,7 +226,6 @@ class Match:
         self.snapshot()
         self._check_end()
         standing.plan_all(self)
-        recruiting.plan(self)
         self.plan_bots()
 
     def _found(self, ev):
@@ -400,8 +397,6 @@ class Match:
             "typeBonus": economy.type_bonus(self, pid), "homeHousing": economy.effect(self, pid, "homeHousing"),
             "reach": {uid: sorted(movement.reach(self, uid)) for uid, u in self.units.items() if u["owner"] == pid},
             "recruit": recruit,
-            "autoRecruit": {s["id"]: {"kind": s.get("autoRecruit"), "order": s.get("autoOrder")} for s in self.structures.values()
-                            if s["owner"] == pid and recruiting.can_auto(s["type"])},
             "found": {uid: [r for r in range(6) if not orders.found_problem(self, pid, u, r)]
                       for uid, u in self.units.items() if u["owner"] == pid and UNITS[u["type"]]["settler"]},
         }

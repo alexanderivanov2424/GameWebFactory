@@ -115,9 +115,8 @@ fields in `logic/content.py`). Tests: `tests/` (`python3 -I tools/run_tests.py h
 - `logic/explore.py`: `target` (where an exploring unit goes).
 - `logic/bots.py`: `plan(m, pid)`: the bot strategy (header lists it; constants at the top).
 - `logic/vision.py`: `update` (after every change via `Match.refresh`), `known_at`, `view`.
-- `logic/recruiting.py`: `spawn_cell` (on the structure first), `resolve` (recruit orders appear, take the
-  structure's `autoOrder` as `u["auto"]`), `set_auto` (the `autorecruit` message) and `plan` (each turn's
-  automatic recruit orders, marked `"auto": True`, only with people who have no job).
+- `logic/recruiting.py`: `spawn_cell` (on the structure first), `resolve` (recruit orders appear). Automatic
+  recruiting with a default order for new units was removed (2026-11-15, the user's call).
 - `logic/territory.py`: `territory` (strong + weak land, returns both maps), `unit_entered`, `threatened`,
   `bought` (weak cells paid for), `give_up` (unpaid land).
 - `logic/movement.py`, `logic/combat.py`, `logic/economy.py`, `logic/logistics.py`, `logic/mapgen.py`,

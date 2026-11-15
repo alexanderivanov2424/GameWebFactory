@@ -29,8 +29,7 @@ unit in sight), Pillage (attack the nearest enemy structure in sight, fighting e
 come close first) or a far-away destination (walk there over several turns). Your own units pass
 through each other while moving. Nothing can be built where an enemy unit stands (own units are fine), and a
 construction site with an enemy unit on it gets no work. Recruits appear on the structure that
-trains them. A military structure can be set to recruit a unit every turn on its own (when it can, and
-only with people who have no job), giving each unit it trains a standing order.
+trains them.
 Lose every Town Hall and you are out. Last
 realm standing wins; otherwise the highest score after the last turn.
 Full rules: logic/match.py (turn order, score), logic/economy.py, logic/combat.py,
@@ -69,10 +68,6 @@ the lobby envelope owns it):
     {"action": "growth", "on": true|false}             (turn your population growth on / off; kept across turns)
     {"action": "demolish", "structure": sid}           (a structure, no refund, not a Town Hall; or a
                                                         construction site id, cost refunded)
-    {"action": "autorecruit", "structure": sid, "kind": utype|null, "order": "explore"|"fight"|"pillage"|null}
-                                                       (a military structure (not the Town Hall) recruits `kind`
-                                                        every turn on its own when it can and people without a job
-                                                        are free; units trained there get `order` as a standing order)
     {"action": "disband", "unit": uid}
     {"action": "done", "done": true|false}             (End turn / take it back)
 
@@ -107,7 +102,7 @@ class Game(LobbyGame):
     }
     ACTIONS = {name: name for name in
                ("build", "claim", "recruit", "move", "shoot", "hold", "auto", "found", "research", "cancel", "trade", "toggle", "staff", "growth", "demolish",
-                "disband", "autorecruit", "done")}
+                "disband", "done")}
 
     def __init__(self, room):
         super().__init__(room)
@@ -207,11 +202,6 @@ class Game(LobbyGame):
 
     def disband(self, member, data):
         self.order(member, "disband", text_id(data, "unit"))
-
-    def autorecruit(self, member, data):
-        kind = text_id(data, "kind") if data.get("kind") else None
-        order = text_id(data, "order") if data.get("order") else None
-        self.order(member, "autorecruit", text_id(data, "structure"), kind, order)
 
     def done(self, member, data):
         turn = self.match.turn

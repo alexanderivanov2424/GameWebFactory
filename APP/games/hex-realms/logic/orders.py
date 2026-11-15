@@ -5,7 +5,6 @@ so a player can never order more than they have. Orders are private until the tu
 
     build(m, pid, stype, at, rot)   structure footprint anchored at `at`, `rot` 60-degree turns
     recruit(m, pid, sid, utype)     train a unit at a working structure (1 per structure per turn)
-    (autorecruit is recruiting.set_auto: a structure that recruits every turn on its own)
     move(m, pid, uid, to)           move along the cheapest path; ending on an enemy = attack;
                                     `to` = the unit's own cell clears its orders; a cell out of
                                     this turn's reach starts a Travel standing order (standing.py)

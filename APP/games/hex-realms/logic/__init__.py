@@ -3,7 +3,7 @@
 Modules:
     match.py     Match: one game's state, turn resolution order, eliminations, score, public/private
     orders.py    the orders a player gives while planning (validation, paying, refunds)
-    recruiting.py where recruits appear; structures that recruit on their own (with a standing order)
+    recruiting.py where recruits appear
     movement.py  paths (reach, path) and simultaneous step-by-step movement with collisions
     combat.py    dice battles, ranged shots, sieges of structures, tower fire
     territory.py strong land (structures' reach) and weak land (bought with gold, easily lost)
