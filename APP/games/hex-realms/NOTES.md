@@ -81,7 +81,8 @@ fields in `logic/content.py`). Tests: `tests/` (`python3 -I tools/run_tests.py h
   cells cost 2, hidden enemies don't block); resolution uses the truth, with real movement
   points, so hidden things are discovered by running into them. The client merges `view` into
   `game` in `onState`, so the rest of the page reads `game.cells` / `game.units` as before.
-- **A free first city**: everyone starts with Settlers and a Militia (`START_ESCORT`, on the nearest free land cell); the starting goods wait in
+- **A free first city**: everyone starts with Settlers and a Scout (`START_ESCORT`, on the nearest free land cell; 2026-11-15, the user's
+  call: 1 hp, attack 0, defense 0, move 4, `people` 0 so it uses no housing; no upkeep and not recruitable); the starting goods wait in
   `players[pid]["startGoods"]` until the first Town Hall. Players are out only with no Town
   Hall *and* no Settlers; a realm without a hall skips eating and new people.
 - **Construction by idle people** (`logic/construction.py`): a resolved build order becomes a site
@@ -104,7 +105,7 @@ fields in `logic/content.py`). Tests: `tests/` (`python3 -I tools/run_tests.py h
 ## Map
 - `server.py`: `SETTINGS`, `ACTIONS` (one thin method per message → `Match.act`), turn timer
   (`start_timer` / `timeout` / `after_resolve`).
-- `logic/match.py`: `Match`: setup (map, halls, militia), state helpers used by the other modules
+- `logic/match.py`: `Match`: setup (map, halls, the starting Scout), state helpers used by the other modules
   (`add_structure`, `add_unit` / `move_unit` (both unclaim weak land an enemy unit touches), `remove_unit`, `refresh` = territory cache), `act` / `set_done`,
   `resolve` (+ `_found`, `_builds`, `_heal`, `_eliminate`, `_check_end`), `score`,
   `remove`, `public`, `private` (orders, economy forecast, unit reach, recruit reasons, valid
@@ -152,7 +153,10 @@ fields in `logic/content.py`). Tests: `tests/` (`python3 -I tools/run_tests.py h
   and key handling (`selectAt` cycles unit -> structure -> site on repeated clicks), highlights and the build ghost (its green/red and the hint bar's "Here:" reason
   come from `buildProblem`, only a hint; the server decides). While placing (the user's layout, 2026-11-15) the
   bottom hint shows the name + controls, the terrains it goes on and the refusal reason (left) and `HexHud.structCard`
-  (right: footprint picture, HP, every effect); the top bar's `.hr-delta-<key>` slots under each chip show
+  (right: footprint picture, HP, every effect); the card's `.hr-sres` line lists what it makes and uses a turn
+  ("(+1 🪵, −1 👥)", 2026-11-15, the user's layout, replacing the "Makes" / "Needs n workers" bullets): `ghost()` fills
+  it with `outputAt` for the hovered spot, and a selected structure of yours shows its real output (its + flows); others'
+  and an unplaced one show the content's base output (per terrain for the Mine); the top bar's `.hr-delta-<key>` slots under each chip show
   `deltas()`: cost, output per turn at the hovered spot (`outputAt`, a copy of `economy.output` fed by the private
   `typeBonus` / `homeHousing`: keep the two in step), store room, "-n when working" on people, housing, and the
   hammers last. The turn countdown (approximate: restarts on reload).

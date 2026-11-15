@@ -19,12 +19,12 @@ def end_turn(m):
 
 
 class StartTests(unittest.TestCase):
-    def test_everyone_starts_with_settlers_and_militia(self):
+    def test_everyone_starts_with_settlers_and_a_scout(self):
         m = Match({"p1": "A", "p2": "B", "p3": "C"}, {"turns": 40, "mapSize": "normal", "seed": 7}, rng=random.Random(3))
         self.assertEqual(m.structures, {})
         for pid in m.seats:
             units = sorted((u for u in m.units.values() if u["owner"] == pid), key=lambda u: u["type"])
-            self.assertEqual([u["type"] for u in units], ["militia", "settlers"])
+            self.assertEqual([u["type"] for u in units], ["scout", "settlers"])
             self.assertLessEqual(hex_dist(units[0]["at"], units[1]["at"]), 2)
 
     def test_first_city_gets_the_starting_goods(self):

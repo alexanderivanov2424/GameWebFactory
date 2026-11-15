@@ -19,7 +19,8 @@ A simple strategy, in this order each turn:
      land's upkeep) towards the nearest such terrain.
   4. Recruit Settlers until it has 3 cities, then an army that grows with the turn number.
   5. Units: ranged ones shoot what's in range; everyone attacks enemies near its structures;
-     the oldest unit scouts (explore.target, like the Explore order) until a war needs it; from ATTACK_TURN an army of
+     units that can't fight (the starting Scout) always explore (explore.target, like the Explore order), and the
+     oldest fighting unit scouts too until a war needs it; from ATTACK_TURN an army of
      ATTACK_ARMY marches on the nearest enemy city it knows (or any enemy structure); the rest
      stay near home and hold.
 """
@@ -294,6 +295,9 @@ class Bot:
         known = self.known
         threats = self.threats()
         army = [u for u in self.units if not UNITS[u["type"]]["settler"] and not UNITS[u["type"]]["naval"]]
+        for u in [u for u in army if not UNITS[u["type"]]["attack"]]:  # can't fight (the starting Scout): always explores
+            self.explore(u)
+        army = [u for u in army if UNITS[u["type"]]["attack"]]
         enemy = [c for c, (owner, stype) in known.items() if owner != pid]
         halls = [c for c in enemy if known[c][1] == TOWN_HALL]
         target = None

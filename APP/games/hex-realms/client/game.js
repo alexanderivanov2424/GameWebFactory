@@ -323,6 +323,8 @@
       const cells = hover && def.rotations[m.rot].map((d) => U.add(hover, d));
       const problem = cells && buildProblem(c, def, cells);
       showDeltas(deltas(c, def, m.kind, cells && !problem ? cells : null));
+      const res = $("hint").querySelector(".hr-sres");  // the card's list: this spot's output (base without one)
+      if (res) fill(res, ...HexHud.fmt.resListEl(def, cells && !problem ? outputAt(c, def, m.kind, cells) : null));
       if (!cells) return map.setGhost(null);
       map.setGhost({ cells, ok: !problem, label: def.icon });
       if (here && problem) here.textContent = problem;

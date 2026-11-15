@@ -1,6 +1,6 @@
 """Hex Realms: a simultaneous-turn civilization game on a random hex map.
 
-Each player starts with Settlers (and a Militia beside them) and founds their first Town Hall wherever they choose (the
+Each player starts with Settlers (and a Scout beside them: 1 hp, can't fight, moves 4, uses no people) and founds their first Town Hall wherever they choose (the
 starting goods go into it). Fog of war (a setting): units and structures (further) reveal the
 map; cells once seen stay explored, enemy structures are remembered as last seen. Every turn all players plan at once, in
 secret: place structures (multi-cell footprints, turned in 60-degree steps) inside their
