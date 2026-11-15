@@ -237,8 +237,6 @@ def found_problem(m, pid, u, rot, planning=True):
     problem = site_problem(m, pid, TOWN_HALL, cells, seen=m.visible[pid] if planning else None)
     if problem:
         return problem
-    if any(c in m.unit_at and m.unit_at[c] != u["id"] for c in cells):
-        return "Move your other units off the site first."
     if planning:
         halls = [c for c, (owner, stype) in vision.known_at(m, pid).items() if stype == TOWN_HALL]
     else:

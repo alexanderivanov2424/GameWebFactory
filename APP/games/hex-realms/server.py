@@ -27,7 +27,7 @@ another realm's Town Hall reaches it. No roads. Units can be
 given standing orders kept across turns: Explore (clear the fog), Fight (attack the nearest enemy
 unit in sight), Pillage (attack the nearest enemy structure in sight, fighting enemy units that
 come close first) or a far-away destination (walk there over several turns). Your own units pass
-through each other while moving. Nothing can be built where an enemy unit stands, and a
+through each other while moving. Nothing can be built where an enemy unit stands (own units are fine), and a
 construction site with an enemy unit on it gets no work. Recruits appear on the structure that
 trains them. A military structure can be set to recruit a unit every turn on its own (when it can, and
 only with people who have no job), giving each unit it trains a standing order.
