@@ -21,8 +21,7 @@
  "store": {
   "food": 40
  },
- "growth": 1,
- "text": "Holds 40 food. Population grows 1 faster.",
+ "text": "Holds 40 food.",
  "category": "food",
  "hammers": 2,
  "color": "#c7963f"

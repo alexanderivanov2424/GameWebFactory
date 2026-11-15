@@ -21,7 +21,6 @@
  "hp": 15,
  "defense": 2,
  "housing": 4,
- "growth": 1,
  "storage": 10,
  "produce": {
   "gold": 1,

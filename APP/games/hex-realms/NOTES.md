@@ -27,23 +27,23 @@ fields in `logic/content.py`). Tests: `tests/` (`python3 -I tools/run_tests.py h
   filled food first, then oldest).
 - **Honest forecasts** (`economy.report`): `net` is income - upkeep, not capped by the stores (the
   user's call: 21 of 25 food, +7, -3 shows +4, not +1), and `wasted` is what won't fit at the end
-  of the turn, `growth` is the people you will really gain (0 with a
-  reason in `growthWhy`), and `idle` excludes builders. Units use housing (2026-11-15, the user's call):
-  growth needs `pop` + `soldiers` (people in units, plus this turn's recruit orders while planning) under
-  `housing`, so recruiting no longer frees room to regrow. Growth (2026-11-15, the user's rule) is a rate from
-  structures (`growth`: Town Hall 1, Granary 1; `growthRate`, its own top-bar chip and map view): up to that
-  many people a turn while housing has room and the food left at the end of the turn feeds them
-  (`economy.new_people`); a player can switch it off (`orders.growth`, `players[pid]["growthOff"]`). `flows` breaks the same numbers down per structure / unit / site
+  of the turn, `born` is the people you will really gain, `popNet` the population's change, and `idle` excludes
+  builders. **Population follows food** (2026-11-15, the user's rule; growth rates, the Growth off button and the
+  structures' `growth` field were removed): eating uses this turn's food production only, never the stores (the
+  user picked "production only"); short of it, `starvation` kills units first (newest first), then people. Any
+  surplus becomes new people at once (`economy.new_people`), as many as it feeds, while `pop` + `soldiers`
+  (people in units, plus this turn's recruit orders while planning) fit in `housing`; only the food left after
+  that (`foodLeft`, also `net["food"]`) goes into the stores. `flows` breaks the same numbers down per structure / unit / site
   (`economy.flows`: production +, unit upkeep -, each person's food (`FOOD_PER_PERSON`, 2026-11-15: 1 each)
   where they work / build / are idle at home, recruits' upkeep on their structure, bought land's gold on each
   bought cell, flow id "land:<key>") for the client's **resource view** (click a top-bar chip: `map.setResView` greyscales the
-  `hr-base` group and draws outlines and +n / -n badges above it). Population is four chips (the user's
-  layout): "👥 idle n", "👥 population n" (pop + people in units), "🏠 cap n", "🌱 +n" (this turn's growth). The "people" view shows idle people at
+  `hr-base` group and draws outlines and +n / -n badges above it). Population is three chips (the user's
+  layout): "👥 idle n", "👥 population n" (pop + people in units), "🏠 cap n". The "people" view shows idle people at
   home green +n (spread over the homes oldest first), people in jobs / units / recruits red -n, and
   builders blue -n (tagged "build" in the flow, which the map draws blue); "population" (2026-11-15, the user's
   request) shows blue "x/y" on each structure that houses people (flow tag "of", y = its housing, x = pop +
-  people in units filling the homes oldest first, the last home taking any overflow); "housing" and "growth" show
-  +n per structure that gives them.
+  people in units filling the homes oldest first, the last home taking any overflow); "housing" shows
+  +n per structure that gives it.
 - **No roads; land is bought** (2026-11-11, the user's call): roads (first carrying goods, then laid
   automatically) were removed. Structures go anywhere in your territory, with no "must touch"
   rule. `orders.claim` buys one cell for gold (`CLAIM_COST`) at once (2026-11-15, the user's call: not an
@@ -83,7 +83,7 @@ fields in `logic/content.py`). Tests: `tests/` (`python3 -I tools/run_tests.py h
   `game` in `onState`, so the rest of the page reads `game.cells` / `game.units` as before.
 - **A free first city**: everyone starts with Settlers and a Militia (`START_ESCORT`, on the nearest free land cell); the starting goods wait in
   `players[pid]["startGoods"]` until the first Town Hall. Players are out only with no Town
-  Hall *and* no Settlers; a realm without a hall skips eating and growth.
+  Hall *and* no Settlers; a realm without a hall skips eating and new people.
 - **Construction by idle people** (`logic/construction.py`): a resolved build order becomes a site
   (`m.sites`, cells in `m.cell_site`), kept apart from `m.structures` so nothing else has to skip
   unfinished buildings. A structure costs `hammers` (2026-11-15, the user's rule; was turns x
@@ -138,7 +138,7 @@ fields in `logic/content.py`). Tests: `tests/` (`python3 -I tools/run_tests.py h
   territory border (drawn just inside the cells, its outer edge on the cell edge (`BORDER`, `BORDER_W`, `outline`), so two realms' borders sit side by side; opaque lines in one group with the opacity, so overlaps don't darken) and as an outline on hover (`hoverG`, `shapeAt`), and the icon (emoji from the content, placeholder for art) at their middle; `setHighlights` / `setGhost` / `flash` only
   touch overlays (a selection, "sel" cells, is outlined round its outside only, in `selG`). `HexMap.util` has the client's hex maths (dist, neighbors, add).
 - `client/hud.js`: `HexHud`: top bar (stock + net, people: jobs / building / units / idle, housing cap,
-  growth rate + this turn's gain + Growth off / on, Jobs off / on, End turn), players, selection panel (unit / structure / site actions, Explore, recruit buttons with the server's reasons, automatic
+  Jobs off / on, End turn), players, selection panel (unit / structure / site actions, Explore, recruit buttons with the server's reasons, automatic
   recruiting selects), orders list, trade, build menu. `client/panels.js`: `HexPanels`: `techTree` (advances of one
   currency laid out by prerequisite depth, absolutely placed nodes over an SVG of links), last-turn report (dice faces), log.
   The tech tree opens in the `#tech` popup (`ui.tech` = the open currency tab), which covers row 2 of the `#hud` grid,

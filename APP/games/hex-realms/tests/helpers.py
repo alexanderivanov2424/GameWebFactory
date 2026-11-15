@@ -2,6 +2,7 @@
 
 import importlib
 import random
+from unittest import mock
 
 from gamekit.hexes import disk
 
@@ -9,6 +10,7 @@ GAME = "hex-realms"
 match_mod = importlib.import_module(f"games.{GAME}.logic.match")
 Match = match_mod.Match
 logistics = importlib.import_module(f"games.{GAME}.logic.logistics")
+content = importlib.import_module(f"games.{GAME}.logic.content")
 
 
 class FixedDice(random.Random):
@@ -43,6 +45,15 @@ def hall(m, pid, at="0,0"):
     s["stock"] = dict(match_mod.START_GOODS)
     m.refresh()
     return s["id"]
+
+
+def well_fed(test, food=99):
+    """For one test: every Town Hall makes `food` food a turn, so units and people never starve (eating
+    uses this turn's production only) in tests about something else."""
+    hall_def = content.STRUCTURES["town_hall"]
+    patch = mock.patch.dict(hall_def, {"produce": {**hall_def["produce"], "food": food}})
+    patch.start()
+    test.addCleanup(patch.stop)
 
 
 def unit(m, pid, utype, at):

@@ -189,7 +189,6 @@
       const text = r === "people" ? "where your people are this turn: green = idle at home, red = in a job, a unit or a recruit ordered there, blue = building"
         : r === "population" ? "blue = people living there / the housing it gives (your people and the people in your units, filling the oldest homes first)"
         : r === "housing" ? "green = the housing each structure gives (your people and the people in your units must fit in it)"
-        : r === "growth" ? "green = the growth each structure gives (people you can gain a turn, with free housing and food to feed them)"
         : "green = made there each turn, red = used each turn (units' upkeep; each person's food where they work, build or rest at home)";
       fill(box, `${resIcon(r)} ${resName(r)} view: ${text}. Faded = not working this turn. Click the resource again or Esc to leave. `,
         btn("Close (Esc)", () => act.resView(null)));
@@ -279,7 +278,6 @@
     if (def.jobs) add("people", `−${def.jobs} when working`, "neg");
     const housing = (def.housing || 0) + (def.home ? c.priv.homeHousing || 0 : 0);
     if (housing) add("housing", `+${housing}`, "pos");
-    if (def.growth) add("growth", `+${def.growth}`, "pos");
     const idle = Math.max(0, c.priv.report.idle), now = Math.min(idle, def.hammers);
     add("turns", `🔨 ${def.hammers}${now ? ` · ${now} builder${now === 1 ? "" : "s"} now` : " · no idle people"}`, "");
     return out;

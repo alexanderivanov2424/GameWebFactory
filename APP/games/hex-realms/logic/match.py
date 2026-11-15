@@ -12,7 +12,7 @@
 Turn resolution, in order: research; ranged shots (positions before anyone moves); movement
 step by step with battles (movement.py); towers shoot; settlers found cities; builds (two
 players ordering the same cell both fail and get refunds; the rest become construction sites); recruits appear on their structure (next to it
-when it's full, and ships on the water beside it; recruiting.py); production into the stores, eating, wages and growth (economy.py, logistics.py);
+when it's full, and ships on the water beside it; recruiting.py); production into the stores, eating, wages and new people (economy.py, logistics.py);
 construction by the people who were idle this turn (construction.py); healing (+1 hp for units that didn't
 fight, full on or next to an own Barracks); players without a Town Hall are out. The game ends
 when one player is left (if it started with 2 or more) or after the last turn: highest score wins.
@@ -31,7 +31,7 @@ State: cells {key: terrain}; structures {sid: {"id", "n", "type", "owner", "at",
 bought with gold one cell at a time, at once, 1 gold upkeep a turn each: orders.claim, territory.py); territory {key: pid} (strong
 land around Town Halls, free, plus the weak land still held: territory.py); players
 {pid: {"res" (gold/faith/science only: goods live in stores, see logistics.py), "pop", "advances", "done",
-"alive", "growthOff"}};
+"alive"}};
 orders {pid: {"builds", "recruits", "research": [...], "moves": {uid: [keys]}, "shots": {uid: key},
 "holds": [uid], "found": {uid: rot}}}; events (the last resolution, for the client to replay).
 """
@@ -55,7 +55,7 @@ START_POP = 3
 SIZES = {"small": -3, "normal": 0, "large": 4, "huge": 8}
 ACTS = {name: getattr(orders, name) for name in
         ("build", "claim", "recruit", "move", "shoot", "hold", "auto", "found", "research", "cancel", "trade", "toggle",
-         "staff", "growth", "demolish", "disband")}
+         "staff", "demolish", "disband")}
 
 
 def map_radius(players, size):

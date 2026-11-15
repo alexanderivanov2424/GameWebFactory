@@ -17,7 +17,7 @@ structures/<id>.json:
     list of these for several bonuses; a structure's output never goes below 0), tags [TAGS ids] (shown
     as pips; "home" = counts as a home), housing, home (counts as a home; same as the "home" tag), storage (all
     capped resources), store {res: n} (a structure with either is a store of goods: see
-    logistics.py), growth (people the realm can gain a turn: economy.py), terrain [ids] (default every "build" terrain), coast (a cell must touch water),
+    logistics.py), terrain [ids] (default every "build" terrain), coast (a cell must touch water),
     requires (advance id), recruits [unit ids], heals, shoots (dice) + range, trade (market
     rate: give n for 1), score, hammers (🔨 of work to build it, default 1: each idle person makes 1
     a turn; construction.py), category (a CATEGORIES id: the build menu's tabs), vision (fog of
@@ -47,8 +47,7 @@ RESOURCES = ["gold", "food", "wood", "stone", "metal", "faith", "science"]
 # Name and icon of each resource (plus people) for the client; icons are placeholders for art.
 RESOURCE_INFO = {"gold": ("Gold", "🪙"), "food": ("Food", "🍞"), "wood": ("Wood", "🪵"), "stone": ("Stone", "🪨"),
                  "metal": ("Metal", "🔩"), "faith": ("Faith", "🙏"), "science": ("Science", "🔬"),
-                 "people": ("People", "👥"), "population": ("Population", "👥"), "housing": ("Housing", "🏠"),
-                 "growth": ("Growth", "🌱"), "hammers": ("Hammers", "🔨")}
+                 "people": ("People", "👥"), "population": ("Population", "👥"), "housing": ("Housing", "🏠"), "hammers": ("Hammers", "🔨")}
 CAPPED = ["food", "wood", "stone", "metal"]  # goods: kept in stores (logistics.py)
 GLOBAL = ["gold", "faith", "science"]  # realm-wide, uncapped
 TERRAIN = {
@@ -101,7 +100,6 @@ def parse_structure(sid, d):
         "housing": whole(d, "housing", 0, 99, default=0), "tags": tag_list(d),
         "home": d.get("home") is True or "home" in d.get("tags", []),
         "storage": whole(d, "storage", 0, 999, default=0), "store": res_map(d, "store", CAPPED),
-        "growth": whole(d, "growth", 0, 9, default=0),
         "terrain": terrain_list(d, "terrain", [t for t, v in TERRAIN.items() if v["build"]]),
         "coast": d.get("coast") is True, "requires": d.get("requires"), "recruits": list(d.get("recruits", [])),
         "heals": d.get("heals") is True, "shoots": whole(d, "shoots", 0, 9, default=0), "range": whole(d, "range", 0, 5, default=0),

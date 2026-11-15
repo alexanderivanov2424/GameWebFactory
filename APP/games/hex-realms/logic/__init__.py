@@ -7,7 +7,7 @@ Modules:
     movement.py  paths (reach, path) and simultaneous step-by-step movement with collisions
     combat.py    dice battles, ranged shots, sieges of structures, tower fire
     territory.py strong land (structures' reach) and weak land (bought with gold, easily lost)
-    economy.py   workers, production, upkeep, growth
+    economy.py   workers, production, upkeep, feeding and new people
     logistics.py goods in the realm's stores: stock, spending, refunds, filling
     construction.py  construction sites: hammers built by idle people, finishing structures
     standing.py  standing orders kept across turns: Explore, Fight, Pillage, Travel (multi-turn moves)

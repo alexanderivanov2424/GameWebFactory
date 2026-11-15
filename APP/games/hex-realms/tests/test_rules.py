@@ -8,7 +8,7 @@ from gamekit import LobbyError
 from gamekit.hexes import dist as hex_dist
 
 h = importlib.import_module("games.hex-realms.tests.helpers")
-Match, blank, hall, rich, stock, unit = h.Match, h.blank, h.hall, h.rich, h.stock, h.unit
+Match, blank, hall, rich, stock, unit, well_fed = h.Match, h.blank, h.hall, h.rich, h.stock, h.unit, h.well_fed
 economy = importlib.import_module("games.hex-realms.logic.economy")
 movement = importlib.import_module("games.hex-realms.logic.movement")
 
@@ -130,14 +130,14 @@ class EconomyTests(unittest.TestCase):
         end_turn(self.m)
         self.assertEqual(p["pop"], food // economy.FOOD_PER_PERSON)
 
-    def test_growth_needs_housing(self):
+    def test_surplus_food_becomes_people_up_to_housing(self):
         p = self.m.players["p1"]
-        p["pop"] = self.report()["housing"]
+        p["pop"], food = 0, self.report()["income"]["food"]
         end_turn(self.m)
-        self.assertEqual(p["pop"], self.report()["housing"])
-        p["pop"] -= 1
+        self.assertEqual(p["pop"], food // economy.FOOD_PER_PERSON)  # as many as the surplus feeds
+        well_fed(self)
         end_turn(self.m)
-        self.assertEqual(p["pop"], self.report()["housing"])
+        self.assertEqual(p["pop"], self.report()["housing"])  # no further than the housing
 
     def test_stores_are_capped(self):
         self.m.structures[self.hall]["stock"]["wood"] = 25
@@ -175,6 +175,7 @@ class LogisticsTests(unittest.TestCase):
 class MovementTests(unittest.TestCase):
     def setUp(self):
         self.m = blank(face=1)  # dice never hit unless a test says so
+        well_fed(self)  # units eat from this turn's food production only
         hall(self.m, "p1", "-8,0"), hall(self.m, "p2", "8,0")
 
     def test_path_cost(self):
@@ -265,6 +266,7 @@ class MovementTests(unittest.TestCase):
 class CombatTests(unittest.TestCase):
     def setUp(self):
         self.m = blank(face=6)
+        well_fed(self)  # units eat from this turn's food production only
         self.h1, self.h2 = hall(self.m, "p1", "-8,0"), hall(self.m, "p2", "0,0")
 
     def test_archer_shoots_without_reply(self):
@@ -305,6 +307,7 @@ class CombatTests(unittest.TestCase):
 
 class CityTests(unittest.TestCase):
     def setUp(self):
+        well_fed(self)  # units eat from this turn's food production only
         self.m = blank()
         hall(self.m, "p1", "-8,0"), hall(self.m, "p2", "8,0")
 
@@ -334,6 +337,7 @@ class CityTests(unittest.TestCase):
 class FogTests(unittest.TestCase):
     def setUp(self):
         self.m = blank(fog="on", face=1)
+        well_fed(self)  # units eat from this turn's food production only
         hall(self.m, "p1", "-8,8"), hall(self.m, "p2", "8,-8")  # far away: they keep both players in
 
     def view(self, pid="p1"):
