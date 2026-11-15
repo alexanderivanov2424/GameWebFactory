@@ -43,8 +43,8 @@
   function structInfo(content, d) {
     const stats = [];
     if (d.housing) stats.push(`Housing ${d.housing}`);
-    if (d.storage) stats.push(`Stores ${d.storage} of each good`);
-    if (Object.keys(d.store || {}).length) stats.push(`Stores ${costText(d.store)}`);
+    const stored = (content.goods || []).map((r) => [r, (d.storage || 0) + ((d.store || {})[r] || 0)]).filter(([, n]) => n);
+    if (stored.length) stats.push(`Stores ${stored.map(([r, n]) => `${n} ${resIcon(r)}`).join(", ")}`);
     if (d.trade) stats.push(`Trade ${d.trade}:1`);
     if ((d.recruits || []).length) stats.push(`Trains ${names(content, "units", d.recruits)}`);
     if (d.heals) stats.push("Heals units on or next to it");
@@ -209,10 +209,6 @@
       structCard(content, def, s.maxHp ? `HP ${s.hp}/${s.maxHp}${def.defense ? ` · defense ${def.defense}` : ""}` : null, own ? output(ctx, sel.id) : null)];
     if (def.jobs || Object.keys(def.produce || {}).length) {
       kids.push(el("p", { className: `small ${s.working ? "pos" : "neg"}` }, s.working ? HexText.structure.working : s.active === false ? HexText.structure.off : HexText.structure.noWorkers));
-    }
-    if (own) {
-      const store = priv.stores[sel.id];
-      if (store) kids.push(el("p", { className: "small" }, `Holds ${Object.entries(store.cap).map(([r, n]) => `${r} ${store.stock[r] || 0}/${n}`).join(", ")}.`));
     }
     if (own) {
       const recruits = priv.recruit[sel.id] || {};

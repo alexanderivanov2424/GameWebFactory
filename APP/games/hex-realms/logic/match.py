@@ -345,7 +345,7 @@ class Match:
                         "resources": RESOURCES, "categories": CATEGORIES,
                         "tags": {t: {"name": n, "color": c} for t, (n, c) in TAGS.items()},
                         "claim": {"cost": orders.CLAIM_COST, "upkeep": territory.LAND_UPKEEP},
-                        "tradeGoods": economy.TRADE_GOODS,
+                        "tradeGoods": economy.TRADE_GOODS, "goods": logistics.GOODS,
                         "resourceInfo": {r: {"name": n, "icon": i} for r, (n, i) in RESOURCE_INFO.items()}},
             "players": {pid: {"name": self.names[pid], "color": p["color"], "res": self.shown[pid]["res"],
                               "pop": self.shown[pid]["pop"], "advances": p["advances"], "done": p["done"],
