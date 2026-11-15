@@ -98,6 +98,8 @@ fields in `logic/content.py`). Tests: `tests/` (`python3 -I tools/run_tests.py h
 - `logic/territory.py`: `territory` (strong + weak land, returns both maps), `unit_entered`, `claim_cells`, `threatened`.
 - `logic/movement.py`, `logic/combat.py`, `logic/economy.py`, `logic/logistics.py`, `logic/mapgen.py`,
   `logic/content.py`: see their headers.
+- `client/art/`: art files (not used by the map yet; it still draws colours and emoji icons). `terrain/_template.svg`
+  (one hex, 51.962 x 60) and `units/_template.svg` (the unit disc, 25.2 x 25.2) are blank pages at map size.
 - `client/map.js`: `HexMap.create`: pan (drag) / zoom (wheel) SVG map; terrain layer rebuilt only
   when `game.cells` changes, the rest per state;
   structures are solid in their content `color`, drawn by `blob` (cells at 80% with the gaps
