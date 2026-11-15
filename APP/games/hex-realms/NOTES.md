@@ -84,7 +84,10 @@ fields in `logic/content.py`). Tests: `tests/` (`python3 -I tools/run_tests.py h
 - **Construction by idle people** (`logic/construction.py`): a resolved build order becomes a site
   (`m.sites`, cells in `m.cell_site`), kept apart from `m.structures` so nothing else has to skip
   unfinished buildings. Each turn of work (`buildTurns`) needs `builders` people without a job,
-  counted before production and spent after it, oldest site first; jobs are filled first, so
+  counted before production and spent after it, oldest site first; a build order takes its builders as
+  soon as it's placed (2026-11-15, the user's call: `construction.forecast` counts this turn's orders after
+  the sites, `orders.build` is refused beyond `construction.free`, cancelling returns them; at resolution
+  the order becomes the newest site, so it gets them first thing); jobs are filled first, so
   players free builders with Switch off / Jobs off (`staff`) / Demolish. Sites show in `view.sites`
   (own always, others' only while seen; not remembered under fog). An enemy unit on any cell of a
   site stops its work (`construction.blocked`); building where a seen enemy unit stands is refused.

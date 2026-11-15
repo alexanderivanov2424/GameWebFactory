@@ -7,8 +7,11 @@ work, house, store, carry goods, claim territory, see, count for score or take h
     start(m, pid, b)              a resolved build order (orders.build) becomes a site
     plan(m, pid, idle)            [(site, works)] oldest first: which sites get their builders this
                                   turn from `idle` people
-    forecast(m, pid)              {"builders": people building this turn, "works": [site ids]}
-                                  for the planning screen (idle = economy.staffing's idle people)
+    forecast(m, pid, orders=True) {"builders": people building this turn, "works": [site ids],
+                                  "orders": [build order ids]} for the planning screen (idle =
+                                  economy.staffing's idle people): sites first, then this turn's build
+                                  orders, which take their builders as soon as they're placed
+    free(m, pid)                  idle people left after all of that (orders.build needs its builders)
     progress(m, pid, idle, ev)    sites that get their builders advance one turn; finished ones
                                   become structures
     remove(m, cid)                take a site off the map (orders.demolish refunds its cost)
@@ -18,8 +21,10 @@ needs `builders` idle people (default 1), people without a job (economy.staffing
 first, so switch structures off or demolish them to free builders). Sites are served oldest first;
 one that can't get all its builders waits this turn, and a later site that needs fewer may still
 get them. Each idle person works on one site a turn, so you build only as much as you have people
-for. Work happens at the end of resolution with the people idle this turn (after production), so a
-1-turn Hut ordered now stands next turn and a finished structure starts working the turn after. A
+for. A build order takes its builders from the idle people as soon as it's placed (refused without
+enough; cancelling gives them back): at resolution it becomes a site after every older one, so it gets
+them first thing. Work happens at the end of resolution with the people idle this turn (after
+production), so a 1-turn Hut ordered now stands next turn and a finished structure starts working the turn after. A
 site with an enemy unit on any of its cells gets no work (its builders go to other sites) and
 doesn't finish until the unit has gone.
 """
@@ -60,10 +65,21 @@ def plan(m, pid, idle):
     return out
 
 
-def forecast(m, pid):
+def forecast(m, pid, orders=True):
     idle = economy.staffing(m, pid)[1]
     works = [site["id"] for site, ok in plan(m, pid, idle) if ok]
-    return {"builders": sum(STRUCTURES[m.sites[c]["type"]]["builders"] for c in works), "works": works}
+    builders = sum(STRUCTURES[m.sites[c]["type"]]["builders"] for c in works)
+    placed = []
+    for b in m.orders[pid]["builds"] if orders else ():
+        need = STRUCTURES[b["type"]]["builders"]
+        if builders + need <= idle:
+            builders += need
+            placed.append(b["id"])
+    return {"builders": builders, "works": works, "orders": placed}
+
+
+def free(m, pid):
+    return economy.staffing(m, pid)[1] - forecast(m, pid)["builders"]
 
 
 def blocked(m, site):

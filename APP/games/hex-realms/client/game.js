@@ -137,7 +137,8 @@
     }
     renderTabs(c, playing);
     if (!playing) ui.resView = null;
-    map.setResView(c.game, ui.resView ? c.priv.report.flows.filter((f) => f[1] === ui.resView) : null);
+    map.setResView(c.game, ui.resView ? c.priv.report.flows.filter((f) => f[1] === ui.resView) : null,
+      Object.fromEntries((c.priv.orders?.builds || []).map((b) => [b.id, { cells: b.cells }])));
     renderHint(c);
     highlights(c);
     ghost();
@@ -197,7 +198,8 @@
       const d = names.structures[m.kind], si = HexHud.fmt.structInfo(names, d);
       const row = (label, text, cls = "") => el("div", { className: `hr-hintrow ${cls}` }, el("b", {}, label), " ", text);
       fill(box, el("div", { className: "hr-hintrow" }, el("b", {}, `${d.icon || ""} Placing ${d.name}`), ": click to build, R or right-click to turn, Esc to stop. ", cancel),
-        row("Effects:", si.effects.join(". ")), row("Placement:", si.placement.join(", ")), row("Build:", si.build),
+        row("Effects:", si.effects.join(". ")), row("Placement:", si.placement.join(", ")),
+        row("Build:", `${si.build}; placing it takes its builders from your idle people now (${c.priv.report.idle} idle; cancel to get them back)`),
         el("div", { className: "hr-hintrow hr-here" }));
     }
     else if (m.type === "claim") fill(box, `Extending territory: click a green cell to claim it and its free neighbours at the end of the turn (${HexHud.fmt.costText(names.claim.cost)} each; if another realm claims it too, nobody gets it). Each bought cell costs ${names.claim.upkeep} gold a turn. Bought land is weak (dashed): it's lost to an enemy unit on or next to it, if it's cut off from your first city's free land (or a Town Hall), or to another realm's Town Hall. Esc to stop. `, cancel);
@@ -256,6 +258,7 @@
       if (enemyUnit(k)) return "An enemy unit stands there.";
     }
     if (def.coast && !cells.some((k) => U.neighbors(k).some((n) => g.cells[n] === "water"))) return "It must touch water.";
+    if (def.builders > c.priv.report.idle) return `It needs ${def.builders} idle ${def.builders === 1 ? "person" : "people"} (you have ${Math.max(0, c.priv.report.idle)}): switch structures off to free people.`;
     return "";
   }
 

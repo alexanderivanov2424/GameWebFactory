@@ -13,11 +13,11 @@ upkeep is counted here).
                              (people you will gain, 0 if none), "growthWhy" (why not), "tradeRate",
                              "land" (cells of bought land paid for, in upkeep gold; with this turn's
                              claims while planning), "flows" (see flows())}
-    flows(m, pid, working, works, land=0, idle=0)  what each of pid's things adds or takes this turn, for the
+    flows(m, pid, working, building, land=0, idle=0)  what each of pid's things adds or takes this turn, for the
                              client's resource view: [[id, res, n, on], ...], n > 0 made, n < 0 used, on = False
                              for a structure that isn't working this turn (what it would make / need); plus
                              "people" (where your population is: [id, "people", n, True, tag], tag "work" (jobs),
-                             "build" (on a site), "unit" (in a unit), "train" (recruits ordered at a structure),
+                             "build" (on a site, or a build order placed this turn: its order id), "unit" (in a unit), "train" (recruits ordered at a structure),
                              "idle" (at home: spread over the homes, oldest first, up to their housing)) and
                              "housing" (the cap: [id, "housing", n, True] per structure that houses people)
     split_upkeep(have, made, need)  (from the stores, from production): where a good's upkeep comes from
@@ -100,7 +100,7 @@ def report(m, pid, resolving=False):
     """The forecast for this turn, as it will really resolve (see the module header)."""
     p = m.players[pid]
     working, left = staffing(m, pid)
-    building = construction.forecast(m, pid)
+    building = construction.forecast(m, pid, orders=not resolving)
     income = {r: 0 for r in RESOURCES}
     bonus, rates, housing = 0, [], 0
     home_bonus = effect(m, pid, "homeHousing")
@@ -149,10 +149,10 @@ def report(m, pid, resolving=False):
             "staffed": [s["id"] for s in working], "workers": p["pop"] - left, "builders": building["builders"],
             "idle": left - building["builders"], "housing": housing, "soldiers": soldiers, "caps": caps, "starve": starve, "growth": growth,
             "growthWhy": why, "tradeRate": min(rates) if rates else 0, "land": land,
-            "flows": flows(m, pid, working, building["works"], land, left - building["builders"])}
+            "flows": flows(m, pid, working, building, land, left - building["builders"])}
 
 
-def flows(m, pid, working, works, land=0, idle=0):
+def flows(m, pid, working, building, land=0, idle=0):
     """Per structure / unit / site: production (+), unit upkeep, and the people's food and the bought
     land's gold (-, on the first Town Hall); "people" (where they are, tagged) and "housing" (the cap).
     See the module header."""
@@ -174,8 +174,11 @@ def flows(m, pid, working, works, land=0, idle=0):
         out.append([halls[0]["id"], "food", -(p["pop"] // 2), True])
     if halls and land:
         out.append([halls[0]["id"], "gold", -land * territory.LAND_UPKEEP, True])
-    for cid in works:
+    for cid in building["works"]:
         out.append([cid, "people", STRUCTURES[m.sites[cid]["type"]]["builders"], True, "build"])
+    for b in m.orders[pid]["builds"]:
+        if b["id"] in building["orders"]:
+            out.append([b["id"], "people", STRUCTURES[b["type"]]["builders"], True, "build"])
     training = {}
     for r in m.orders[pid]["recruits"]:
         if r.get("people") and r["at"] in m.structures:

@@ -10,7 +10,9 @@ units move one cell per step at the same time and fight with dice wherever they 
 structure works if it has its workers (people, who need food and housing; the people in units
 still use housing). Short of food, everyone who can't eat dies, units first, then people. Ordered structures
 become construction sites that take a few turns of work, each turn needing builders: people
-without a job (switch structures off, all at once, or demolish them to free people). Gold, faith and
+without a job (switch structures off, all at once, or demolish them to free people). Placing a
+structure takes its builders from your idle people at once (refused without enough; cancelling gives
+them back), so its first turn of work happens this turn. Gold, faith and
 science are realm-wide; goods (food, wood, stone, metal) go into the realm's stores (Town
 Hall, Storage Yard, Granary). Production and upkeep happen at the same time; only what is left at the
 end of the turn is capped by the stores' room (the rest is lost). Structures go anywhere inside your territory.

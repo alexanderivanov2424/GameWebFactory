@@ -12,7 +12,8 @@
  *   map.focus(keys, zoom, ms)   glide (pan + zoom, eased) to centre `keys`; a Promise
  *   map.getView() / map.setView(view, ms)   save and glide back to a view ({x, y, k})
  *   map.mark(keys)              rings round cells (the combat replay.js is showing); [] clears
- *   map.setResView(game, flows | null)   the resource view: every other layer greyscale, and each thing in
+ *   map.setResView(game, flows | null, extra)   the resource view (extra: {id: {cells}} for things not on the
+ *                               map yet, e.g. build orders placed this turn): every other layer greyscale, and each thing in
  *                               flows ([[id, res, n, on, tag?]] from the report, one resource) outlined (green makes,
  *                               red uses, amber both, grey dashed not working) with its +n / -n badges; tagged
  *                               items (the "people" view: where they are) get blue "n tag" badges instead
@@ -476,14 +477,14 @@
     }
 
     // The resource view (header). Badges sit in a row above the thing: a structure's or site's middle, a unit's disc.
-    function setResView(game, flows) {
+    function setResView(game, flows, extra = {}) {
       root.classList.toggle("hr-resview", !!flows);
       fill(resG);
       if (!flows) return;
       const byId = {};
       for (const [id, , n, on, tag] of flows) (byId[id] ||= []).push({ n, on, tag });
       for (const [id, items] of Object.entries(byId)) {
-        const s = game.structures[id] || game.sites?.[id], u = !s && game.units[id];
+        const s = game.structures[id] || game.sites?.[id] || extra[id], u = !s && game.units[id];
         if (!s && !u) continue;
         const cells = s ? s.cells : [u.at];
         if (!cells.every((k) => all.has(k))) continue;
