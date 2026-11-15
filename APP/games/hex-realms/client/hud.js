@@ -7,7 +7,7 @@
  * HexHud.selection(el, ctx)   the selected unit, structure or site, with its actions
  * HexHud.orders(el, ctx)      pending builds, recruits, research, construction sites
  * HexHud.trade(el, ctx)       market give/get selects
- * HexHud.build(el, ctx)       build menu buttons
+ * HexHud.build(el, ctx)       build menu buttons (hover one: its structure card beside it)
  * HexHud.structCard(content, def, hp?, res?)  structure card (footprint, text, output, effects)
  * HexHud.fmt                  text helpers shared with panels.js (costs, icons, structInfo, resListEl); call setResources first
  * ctx = { game, priv, you, me, content, ui, act }; game.js fills the top bar's .hr-delta-<key> slots
@@ -99,7 +99,18 @@
     const b = el("button", { className: `hr-btn ${opts.cls || ""}`, onclick, disabled: !!opts.disabled, title: opts.title || "" }, text);
     return b;
   };
-  const VIEW_TIP = HexText.hud.viewTip;
+
+  // The structure card shown beside a build button while it's hovered (one floating element).
+  let popCard = null;
+  function showCard(button, card) {
+    popCard ||= document.body.appendChild(el("div", { className: "hr-panel hr-popcard" }));
+    fill(popCard, card);
+    popCard.hidden = false;
+    const b = button.getBoundingClientRect(), h = popCard.offsetHeight;
+    popCard.style.right = `${window.innerWidth - b.left + 8}px`;
+    popCard.style.top = `${Math.max(8, Math.min(b.top, window.innerHeight - h - 8))}px`;
+  }
+  const hideCard = () => { if (popCard) popCard.hidden = true; };
 
   // A chip with an empty delta line below it, filled by game.js while placing.
   const withDelta = (key, chip) => el("span", { className: "hr-dcol" }, chip, el("span", { className: `hr-delta hr-delta-${key}` }));
@@ -115,8 +126,7 @@
       const shown = r === "food" ? rep.income.food || 0 : priv.res[r] || 0;  // food isn't stored: show its production
       const full = capped !== undefined && shown >= capped;
       const flat = (ctx.content.flat || []).includes(r);  // what working structures give now, minus advances bought
-      const tip = flat ? HexText.hud.flatNote(resName(r), rep.income[r] || 0, (rep.income[r] || 0) - shown) : `${resName(r)}: income ${rep.income[r] || 0}, upkeep ${rep.upkeep[r] || 0}${r === "gold" && rep.land ? HexText.hud.landNote(rep.land) : ""}${capped !== undefined ? `, storage ${capped}` : ""}${r === "food" ? `.\n${HexText.hud.foodNote}` : ""}${(rep.wasted || {})[r] ? HexText.hud.wasted(rep.wasted[r]) : ""}`;
-      return withDelta(r, el("span", { className: `hr-chip hr-res-${r}${full ? " full" : ""}${ctx.ui.resView === r ? " on" : ""}`, onclick: () => ctx.act.resView(r), title: VIEW_TIP + tip },
+      return withDelta(r, el("span", { className: `hr-chip hr-res-${r}${full ? " full" : ""}${ctx.ui.resView === r ? " on" : ""}`, onclick: () => ctx.act.resView(r) },
         el("span", { className: "hr-ricon" }, resIcon(r)), " ", el("b", {}, String(shown)), capped !== undefined ? el("small", {}, `/${capped}`) : null,
         flat ? null : el("span", { className: net < 0 ? "neg" : net > 0 ? "pos" : "" }, ` (${signed(net)})`)));
     });
@@ -306,6 +316,7 @@
   // Only structures you have unlocked; one category open at a time (clicking it again closes it).
   function build(box, ctx) {
     const { content, me, ui, act } = ctx;
+    hideCard();  // its button is about to be replaced
     const mine = new Set(me.advances || []);
     const buildable = Object.entries(content.structures).filter(([id, d]) => id !== "town_hall" && (!d.requires || mine.has(d.requires)));
     const cats = Object.entries(content.categories || {}).filter(([c]) => buildable.some(([, d]) => d.category === c));
@@ -315,12 +326,13 @@
     const items = buildable.filter(([, d]) => d.category === ui.buildCat).map(([id, d]) => {
       const poor = !canPay(ctx, d.cost);
       const si = structInfo(content, d);
-      const tagText = si.byTag.map((b) => `${b.n > 0 ? "+" : "−"}${Math.abs(b.n)} ${resIcon(b.res)} for ${content.tags?.[b.tag]?.name || b.tag}`);
-      const tags = si.tags.map((t) => content.tags?.[t]?.name || t).join(", ");
-      const info = [tags ? `[${tags}]` : "", si.text, si.res, ...tagText, si.stats.join(". "), si.hp, `Build: ${si.build}`, `On: ${si.terrains}`].filter(Boolean).join("\n");
+      const card = () => [el("h3", {}, `${d.icon || ""} ${d.name}`), poor ? el("p", { className: "neg small" }, HexText.hud.cantAfford) : null,
+        structCard(content, d), el("p", { className: "small" }, `Build: ${si.build}`), el("p", { className: "small muted" }, `On: ${si.terrains}`)];
       const active = ui.mode?.type === "build" && ui.mode.kind === id;
-      return el("button", { className: `hr-build${active ? " on" : ""}`, disabled: poor, title: `${poor ? `${HexText.hud.cantAfford}\n` : ""}${info}`,
-        onclick: () => (active ? act.setMode(null) : act.setMode({ type: "build", kind: id, rot: ui.lastRot || 0 })) },
+      // Not `disabled` when you can't afford it: disabled buttons get no hover events in some browsers.
+      return el("button", { className: `hr-build${active ? " on" : ""}${poor ? " poor" : ""}`,
+        onmouseenter: (e) => showCard(e.currentTarget, card()), onmouseleave: hideCard,
+        onclick: () => (poor ? null : active ? act.setMode(null) : act.setMode({ type: "build", kind: id, rot: ui.lastRot || 0 })) },
         el("span", { className: "hr-bicon" }, d.icon || "▪"), el("span", { className: "hr-bname" }, d.name), el("span", { className: "hr-bcost small" }, costText(d.cost)));
     });
     fill(box, tabs,
