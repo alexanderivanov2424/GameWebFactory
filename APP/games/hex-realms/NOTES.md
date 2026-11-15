@@ -161,6 +161,9 @@ fields in `logic/content.py`). Tests: `tests/` (`python3 -I tools/run_tests.py h
   makes a Storage Yard or Granary the next limit. Free land is the first city's radius 2 (~27 cells);
   beyond it, land costs 2 gold per claim (up to 7 cells) and 1 gold a turn per cell, while the hall
   makes 1 gold, so expanding needs a gold economy (Market, Chapel with its advance, trade).
+- Hunger (2026-11-15, the user's rule): food short at the end of the turn kills everyone who can't eat,
+  units first (newest first, until the rest can be fed), then people (`economy.starvation`; the
+  forecast's `starve` warns on the people chip).
 - Farms (2026-11-15, the user's rules): plains only, 1 food, +1 per own Farm next to it, +1 if it touches
   water, so farms want clusters by rivers and lakes (a lone dry farm makes 1 food, a ring of farms ~3-4
   each). `perAdjacent` takes a list for several bonuses.

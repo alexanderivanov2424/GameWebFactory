@@ -120,11 +120,12 @@ class EconomyTests(unittest.TestCase):
         self.assertNotIn(farm, rep["staffed"])
         self.assertEqual(rep["idle"], self.m.players["p1"]["pop"])
 
-    def test_starving_loses_a_person(self):
+    def test_starving_kills_everyone_who_cant_eat(self):
         p = self.m.players["p1"]
         self.m.structures[self.hall]["stock"]["food"], p["pop"] = 0, 10
+        food = self.report()["income"]["food"]  # pop // 2 food feeds pop people
         end_turn(self.m)
-        self.assertEqual(p["pop"], 9)
+        self.assertEqual(p["pop"], 2 * food + 1)
 
     def test_growth_needs_housing(self):
         p = self.m.players["p1"]

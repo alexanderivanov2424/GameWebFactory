@@ -73,6 +73,8 @@
   function topbar(box, ctx) {
     const { game, priv } = ctx;
     const rep = priv.report;
+    const st = rep.starve || {};
+    const starving = [st.units ? `${st.units} unit${st.units === 1 ? "" : "s"}` : "", st.people ? `${st.people} ${st.people === 1 ? "person" : "people"}` : ""].filter(Boolean).join(", ");
     const chips = ctx.content.resources.map((r) => {
       const net = rep.net[r] || 0;
       const capped = rep.caps[r];
@@ -90,7 +92,8 @@
       el("span", { className: `hr-people${ctx.ui.resView === "people" ? " on" : ""}`, onclick: () => ctx.act.resView("people"), title: `Click: show on the map where your people are.\nPopulation ${priv.pop + rep.soldiers}: ${rep.workers} in jobs, ${rep.builders} building, ${rep.soldiers} in units (and recruits), ${rep.idle} idle.${rep.growth ? "" : `\nNo growth this turn: ${rep.growthWhy}`}` },
         el("span", { className: "hr-ricon" }, resIcon("people")), " ", el("b", {}, String(priv.pop + rep.soldiers)), ` (jobs ${rep.workers}`,
         rep.builders ? `, building ${rep.builders}` : "", rep.soldiers ? `, units ${rep.soldiers}` : "", `, idle ${rep.idle})`,
-        rep.growth ? el("span", { className: "pos" }, ` growth +${rep.growth}`) : null),
+        rep.growth ? el("span", { className: "pos" }, ` growth +${rep.growth}`) : null,
+        starving ? el("span", { className: "neg", title: "Not enough food (in your stores plus this turn's production) to feed everyone: whoever can't eat dies at the end of the turn, units first (newest first), then people." }, ` ⚠ starving: ${starving}`) : null),
       el("span", { className: `hr-people${priv.pop + rep.soldiers >= rep.housing ? " full" : ""}${ctx.ui.resView === "housing" ? " on" : ""}`, onclick: () => ctx.act.resView("housing"), title: `Click: show on the map which structures give housing.\nHousing ${rep.housing}: the population cap. Your people and the people in your units (${priv.pop + rep.soldiers}) must fit in it to grow.` },
         el("span", { className: "hr-ricon" }, resIcon("housing")), " cap ", el("b", {}, String(rep.housing))),
       btn("Jobs off", () => ctx.act.send({ action: "staff", on: false }), { cls: "small", title: "Switch off every structure with workers: they become idle and build your construction sites." }),

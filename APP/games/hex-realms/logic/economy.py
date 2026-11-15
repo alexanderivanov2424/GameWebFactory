@@ -8,7 +8,8 @@ upkeep is counted here).
                              capped by your stores), "wasted" {good: n that won't fit in your stores
                              at the end of the turn and is lost}, "staffed": [sid], "workers" (in jobs), "builders" (on
                              construction sites), "idle" (neither), "housing", "soldiers" (people in
-                             units, plus this turn's recruits while planning: they use housing too), "caps", "growth"
+                             units, plus this turn's recruits while planning: they use housing too), "caps", "starve"
+                             ({"units": n, "people": n} who will die of hunger this turn), "growth"
                              (people you will gain, 0 if none), "growthWhy" (why not), "tradeRate",
                              "land" (cells of bought land paid for, in upkeep gold; with this turn's
                              claims while planning), "flows" (see flows())}
@@ -20,13 +21,16 @@ upkeep is counted here).
                              "idle" (at home: spread over the homes, oldest first, up to their housing)) and
                              "housing" (the cap: [id, "housing", n, True] per structure that houses people)
     split_upkeep(have, made, need)  (from the stores, from production): where a good's upkeep comes from
+    starvation(m, pid, food, pop)   ([unit ids], people) who die when `food` (stores + this turn's
+                             production) can't feed pid's units and `pop` people: units first
     end_of_turn(m, pid, events)  production and upkeep together (then the stores' cap), eating, wages, growth
 
 Rules: every structure works, wherever it is, as long as it has its crew: people (population)
 fill jobs, food producers first, then oldest first. Gold, faith and science go straight to the
 realm; goods (food, wood, stone, metal) go into the realm's stores (logistics.py). Everyone eats: pop // 2 food, plus each unit's
 upkeep, plus LAND_UPKEEP gold per cell of bought land (territory.py). Production and upkeep happen at the same time (upkeep can use this turn's production), and
-only what is left is capped by the room in the stores; the rest is lost. Not enough food starves 1 person (or disbands a unit); gold below 0 gives up
+only what is left is capped by the room in the stores; the rest is lost. Not enough food: everyone who can't eat dies, units first (newest first,
+until the rest can be fed), then people (starvation()); gold below 0 gives up
 that many cells of bought land (territory.give_up), or with no bought land, the newest paid unit deserts. If the realm makes more food this turn than it eats (whether or not it all fits in
 the stores) and there is free housing (units use housing too: population + the people in your units
 must fit), population grows by 1 (+1 per Granary). People without a
@@ -129,6 +133,11 @@ def report(m, pid, resolving=False):
         over = (income[r] - from_income) - (logistics.room(m, pid, r) + from_stock)
         if over > 0:
             wasted[r] = over
+    starve = {"units": 0, "people": 0}
+    has_hall = any(s["owner"] == pid and s["type"] == TOWN_HALL for s in m.structures.values())
+    if has_hall and have["food"] + income["food"] < upkeep["food"]:
+        dead, people = starvation(m, pid, have["food"] + income["food"], p["pop"])
+        starve = {"units": len(dead), "people": people}
     if income["food"] <= upkeep["food"]:
         growth, why = 0, "Make more food than your people eat to grow."
     elif p["pop"] + soldiers >= housing:
@@ -138,7 +147,7 @@ def report(m, pid, resolving=False):
     return {"income": income, "upkeep": upkeep, "net": {r: income[r] - upkeep[r] for r in RESOURCES},
             "wasted": wasted,
             "staffed": [s["id"] for s in working], "workers": p["pop"] - left, "builders": building["builders"],
-            "idle": left - building["builders"], "housing": housing, "soldiers": soldiers, "caps": caps, "growth": growth,
+            "idle": left - building["builders"], "housing": housing, "soldiers": soldiers, "caps": caps, "starve": starve, "growth": growth,
             "growthWhy": why, "tradeRate": min(rates) if rates else 0, "land": land,
             "flows": flows(m, pid, working, building["works"], land, left - building["builders"])}
 
@@ -208,11 +217,14 @@ def end_of_turn(m, pid, events):
     eat = upkeep["food"]
     have = have["food"] + income["food"]
     if have < eat:
-        if p["pop"] > 0:
-            p["pop"] -= 1
-            events.append({"t": "starve", "owner": pid})
-        else:
-            _disband_newest(m, pid, lambda u: True, events)
+        dead, people = starvation(m, pid, have, p["pop"])
+        for uid in dead:
+            u = m.units[uid]
+            events.append({"t": "starved", "owner": pid, "unit": uid, "type": u["type"], "at": u["at"]})
+            m.remove_unit(uid)
+        if people:
+            p["pop"] -= people
+            events.append({"t": "starve", "owner": pid, "n": people})
     p["res"]["gold"] -= rep["upkeep"]["gold"]
     if p["res"]["gold"] < 0:
         short, p["res"]["gold"] = -p["res"]["gold"], 0
@@ -223,6 +235,22 @@ def end_of_turn(m, pid, events):
             _disband_newest(m, pid, lambda u: UNITS[u["type"]]["upkeep"].get("gold", 0) > 0, events)
     if rep["growth"] and have >= eat:
         p["pop"] += rep["growth"]
+
+
+def starvation(m, pid, food, pop):
+    """([unit ids], people) who die of hunger: units that eat, newest first, until the food feeds the
+    rest; then the people the food left can't feed (pop // 2 food feeds pop people)."""
+    eaters = sorted((u for u in m.units.values() if u["owner"] == pid and UNITS[u["type"]]["upkeep"].get("food", 0) > 0),
+                    key=lambda u: u["n"], reverse=True)
+    units_eat = sum(UNITS[u["type"]]["upkeep"]["food"] for u in eaters)
+    dead = []
+    for u in eaters:
+        if pop // 2 + units_eat <= food:
+            break
+        dead.append(u["id"])
+        units_eat -= UNITS[u["type"]]["upkeep"]["food"]
+    left = max(0, food - units_eat)
+    return dead, pop - min(pop, 2 * left + 1)
 
 
 def split_upkeep(have, made, need):
