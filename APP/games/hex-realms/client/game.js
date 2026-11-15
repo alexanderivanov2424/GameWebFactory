@@ -252,7 +252,7 @@
     const add = (k, text, cls) => (out[k] ||= []).push([text, cls]);
     for (const [r, n] of Object.entries(def.cost || {})) add(r, `−${n}`, "neg");
     for (const [r, n] of Object.entries(cells ? outputAt(c, def, kind, cells) : (Object.keys(def.onTerrain || {}).length ? {} : def.produce || {})))
-      if (n) add(r, `${n > 0 ? "+" : "−"}${Math.abs(n)}/turn`, n > 0 ? "pos" : "neg");
+      if (n) add(r, `${n > 0 ? "+" : "−"}${Math.abs(n)}${(c.content.flat || []).includes(r) ? "" : "/turn"}`, n > 0 ? "pos" : "neg");
     if (def.storage) for (const r of Object.keys(c.priv.report.caps || {})) add(r, `+${def.storage} room`, "pos");
     for (const [r, n] of Object.entries(def.store || {})) add(r, `+${n} room`, "pos");
     if (def.jobs) add("people", `−${def.jobs} when working`, "neg");

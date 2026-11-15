@@ -49,7 +49,8 @@ Player-facing text: `client/text.js`. Tests: `python3 -I tools/run_tests.py hex-
 - Under fog, a refusal must not reveal hidden things: planning checks pass the player's view
   (`seen=`, `planning=True`); resolution re-checks the truth and reports a "failed" event.
 - Tests place pieces by hand: `helpers.blank` turns fog off unless asked; call `m.refresh()` after placing.
-- Goods aren't in `players[pid]["res"]` (gold/faith/science only): use `logistics.stock` / `take` / `give`.
+- Only gold is in `players[pid]["res"]`: goods are in stores and faith/science are flat (working structures'
+  output minus `players[pid]["spent"]`), so always use `logistics.stock` / `take` / `give`.
 - Never use a `type` key in game messages (the lobby envelope owns it); build/recruit say `kind`.
 - Unit ids sort as strings ("u10" < "u9"); use the `n` field (or dict order) for age.
 - A new thing that takes cells must also be checked in `orders.site_problem`, the bots' free-cell checks and

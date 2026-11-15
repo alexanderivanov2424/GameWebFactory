@@ -114,9 +114,11 @@
       const capped = rep.caps[r];
       const shown = r === "food" ? rep.income.food || 0 : priv.res[r] || 0;  // food isn't stored: show its production
       const full = capped !== undefined && shown >= capped;
-      return withDelta(r, el("span", { className: `hr-chip hr-res-${r}${full ? " full" : ""}${ctx.ui.resView === r ? " on" : ""}`, onclick: () => ctx.act.resView(r), title: `${VIEW_TIP}${resName(r)}: income ${rep.income[r] || 0}, upkeep ${rep.upkeep[r] || 0}${r === "gold" && rep.land ? HexText.hud.landNote(rep.land) : ""}${capped !== undefined ? `, storage ${capped}` : ""}${r === "food" ? `.\n${HexText.hud.foodNote}` : ""}${(rep.wasted || {})[r] ? HexText.hud.wasted(rep.wasted[r]) : ""}` },
+      const flat = (ctx.content.flat || []).includes(r);  // what working structures give now, minus advances bought
+      const tip = flat ? HexText.hud.flatNote(resName(r), rep.income[r] || 0, (rep.income[r] || 0) - shown) : `${resName(r)}: income ${rep.income[r] || 0}, upkeep ${rep.upkeep[r] || 0}${r === "gold" && rep.land ? HexText.hud.landNote(rep.land) : ""}${capped !== undefined ? `, storage ${capped}` : ""}${r === "food" ? `.\n${HexText.hud.foodNote}` : ""}${(rep.wasted || {})[r] ? HexText.hud.wasted(rep.wasted[r]) : ""}`;
+      return withDelta(r, el("span", { className: `hr-chip hr-res-${r}${full ? " full" : ""}${ctx.ui.resView === r ? " on" : ""}`, onclick: () => ctx.act.resView(r), title: VIEW_TIP + tip },
         el("span", { className: "hr-ricon" }, resIcon(r)), " ", el("b", {}, String(shown)), capped !== undefined ? el("small", {}, `/${capped}`) : null,
-        el("span", { className: net < 0 ? "neg" : net > 0 ? "pos" : "" }, ` (${signed(net)})`)));
+        flat ? null : el("span", { className: net < 0 ? "neg" : net > 0 ? "pos" : "" }, ` (${signed(net)})`)));
     });
     const done = priv.done;
     const end = btn(done ? "Waiting for others… (undo)" : "End turn", () => ctx.act.send({ action: "done", done: !done }), { cls: done ? "waiting" : "endturn" });

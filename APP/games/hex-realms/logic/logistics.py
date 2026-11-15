@@ -1,6 +1,7 @@
 """Hex Realms: goods (wood, stone, metal) kept in storage structures. Food is never stored (economy.py).
 
-Gold, faith and science are realm-wide (players[pid]["res"]). Storage structures (Town Hall, Storage
+Gold is realm-wide (players[pid]["res"]). Faith and science are flat: what pid's working structures give
+now (economy.flat) minus players[pid]["spent"] (advances bought; can go below 0). Storage structures (Town Hall, Storage
 Yard) hold a "stock" up to their capacity. At end of turn, what's left of production after
 upkeep (economy.end_of_turn) fills the stores with room (Town Halls first, then oldest); the rest is lost.
 
@@ -15,7 +16,7 @@ upkeep (economy.end_of_turn) fills the stores with room (Town Halls first, then 
 
 from gamekit import LobbyError
 
-from .content import CAPPED, STRUCTURES, TOWN_HALL
+from .content import CAPPED, FLAT, STRUCTURES, TOWN_HALL
 
 GOODS = CAPPED
 
@@ -32,7 +33,11 @@ def stores(m, pid):
 
 
 def stock(m, pid):
+    from .economy import flat  # economy imports this module
     out = dict(m.players[pid]["res"])
+    made = flat(m, pid)
+    for r in FLAT:
+        out[r] = made[r] - m.players[pid]["spent"][r]
     for r in GOODS:
         out[r] = 0
     for s in stores(m, pid):
@@ -52,6 +57,9 @@ def take(m, pid, cost):
         raise LobbyError(f"Not enough {', '.join(short)}.")
     own = stores(m, pid)
     for r, n in cost.items():
+        if r in FLAT:
+            m.players[pid]["spent"][r] += n
+            continue
         if r not in GOODS:
             m.players[pid]["res"][r] -= n
             continue
@@ -81,6 +89,9 @@ def store(m, pid, good, n, own=None):
 def give(m, pid, amounts):
     own = stores(m, pid)
     for r, n in amounts.items():
+        if r in FLAT:
+            m.players[pid]["spent"][r] -= n
+            continue
         if r not in GOODS:
             m.players[pid]["res"][r] = m.players[pid]["res"].get(r, 0) + n
             continue

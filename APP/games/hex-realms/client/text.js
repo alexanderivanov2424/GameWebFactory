@@ -15,8 +15,9 @@ window.HexText = {
       everyone eats 1 food and every unit eats its upkeep from that turn's production. Food left over becomes new people
       at once, as many as it feeds, while there's housing (units use housing too); the rest is lost. When production
       falls short, whoever can't be fed dies: idle people first, then units (newest first), then people at work.`],
-    ["Goods", `Gold, faith and science go straight to your realm; wood, stone and metal go into your stores (Town
-      Halls, Storage Yards). What doesn't fit at the end of the turn is lost. A Market or Trading Hall can
+    ["Goods", `Gold goes straight to your realm; wood, stone and metal go into your stores (Town
+      Halls, Storage Yards). Faith and science aren't collected each turn: you have what your working structures give
+      right now, minus what you've spent on advances (it can drop below 0 if structures stop; nothing else happens). What doesn't fit at the end of the turn is lost. A Market or Trading Hall can
       trade every turn: select it and <b>Enable trade</b>.`],
     ["Building", `Structures cost <b>hammers</b> 🔨: every person without a job builds 1 🔨 a turn, oldest site first.
       Placing a structure takes builders from your idle people at once (cancel to get them back). Switch structures off
@@ -139,6 +140,7 @@ window.HexText = {
     jobsOn: "Switch every structure with workers back on.",
     viewTip: "Click: show on the map what makes and uses it each turn.\n",
     foodNote: "Food can't be stored: the number is this turn's production, and everyone eats from it. In brackets: what's left over (it becomes new people while housing has room; the rest is lost) or, if negative, the shortfall",
+    flatNote: (name, made, spent) => `${name}: ${made} from your working structures, ${spent} spent on advances. Not collected each turn: it's what your structures give right now, minus what advances cost. It drops if a structure stops working (it can go below 0; nothing else happens).`,
     landNote: (n) => ` (${n} cells of bought land)`,
     wasted: (n) => `, ${n} won't fit in your stores at the end of the turn (lost)`,
     starving: "This turn's food production can't feed everyone: whoever can't eat dies at the end of the turn, idle people first, then units (newest first), then people at work.",

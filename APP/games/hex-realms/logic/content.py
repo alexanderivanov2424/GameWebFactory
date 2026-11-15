@@ -41,8 +41,9 @@ RESOURCE_INFO = {"gold": ("Gold", "🪙"), "food": ("Food", "🍞"), "wood": ("W
                  "metal": ("Metal", "🔩"), "faith": ("Faith", "🙏"), "science": ("Science", "🔬"),
                  "people": ("People", "👥"), "population": ("Population", "👥"), "housing": ("Housing", "🏠"), "hammers": ("Hammers", "🔨")}
 CAPPED = ["wood", "stone", "metal"]  # goods: kept in stores (logistics.py)
-GLOBAL = ["gold", "faith", "science"]  # realm-wide, uncapped
-SPENDABLE = GLOBAL + CAPPED  # what costs may ask for (food is never stored, so never spent)
+GLOBAL = ["gold"]  # realm-wide, kept from turn to turn, uncapped
+FLAT = ["faith", "science"]  # what working structures give now, minus what advances spent (logistics.py)
+SPENDABLE = GLOBAL + FLAT + CAPPED  # what costs may ask for (food is never stored, so never spent)
 TERRAIN = {
     "plains": {"name": "Plains", "move": 2, "cover": False, "build": True},
     "desert": {"name": "Desert", "move": 2, "cover": False, "build": True},

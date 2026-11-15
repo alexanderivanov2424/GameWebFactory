@@ -4,8 +4,9 @@ Each player starts with Settlers and a Scout and founds their first Town Hall an
 everyone plans in secret at once: build inside their territory, train units, order moves and attacks,
 research, set up trade. When all have ended their turn (or the timer runs out), orders resolve together:
 units move step by step and fight with dice where they meet. Structures are built by idle people;
-production, eating and population are settled per realm (logic/economy.py). Gold, faith and science
-are realm-wide; goods sit in stores. Only Town Halls spread land: free land around each city (first
+production, eating and population are settled per realm (logic/economy.py). Gold is realm-wide, food
+is never stored, goods sit in stores, and faith and science are flat (what working structures give now,
+minus what advances cost; may go below 0). Only Town Halls spread land: free land around each city (first
 come, first served) and weak land bought with gold (1 gold upkeep a turn per cell). Fog of war (a
 setting) hides what your units and structures don't see. Standing orders (Explore, Fight, Pillage,
 Travel) carry over turns. Lose every Town Hall and you are out; the last realm standing wins,

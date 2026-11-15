@@ -66,9 +66,9 @@ def stock(m, pid):
 
 
 def rich(m, pid, n=99):
-    """n of everything: gold/faith/science in the realm, goods in pid's first Town Hall (over its cap)."""
-    for r in m.players[pid]["res"]:
-        m.players[pid]["res"][r] = n
+    """n of everything: gold in the realm, n more faith/science, goods in pid's first Town Hall (over its cap)."""
+    m.players[pid]["res"]["gold"] = n
+    m.players[pid]["spent"] = {"faith": -n, "science": -n}
     hall_of(m, pid)["stock"] = {r: n for r in ("wood", "stone", "metal")}
 
 

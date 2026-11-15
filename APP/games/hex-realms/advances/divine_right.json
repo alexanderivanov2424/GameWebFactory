@@ -1,7 +1,7 @@
 {
  "name": "Divine Right",
  "cost": {
-  "faith": 20
+  "faith": 4
  },
  "housing": {
   "home": 1

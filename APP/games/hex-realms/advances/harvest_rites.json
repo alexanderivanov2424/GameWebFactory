@@ -1,7 +1,7 @@
 {
  "name": "Harvest Rites",
  "cost": {
-  "faith": 12
+  "faith": 2
  },
  "bonus": {
   "farm": {

@@ -24,12 +24,12 @@ from gamekit import LobbyError
 from gamekit.hexes import disk, dist, neighbors, parse
 
 from . import bots, combat, construction, economy, logistics, movement, orders, recruiting, standing, territory, vision
-from .content import ADVANCES, CATEGORIES, RESOURCE_INFO, TAGS, RESOURCES, STRUCTURES, TERRAIN, TOWN_HALL, UNITS, footprint
+from .content import ADVANCES, CATEGORIES, FLAT, RESOURCE_INFO, TAGS, RESOURCES, STRUCTURES, TERRAIN, TOWN_HALL, UNITS, footprint
 from .economy import end_of_turn, report, staffing
 from .mapgen import generate
 
 COLORS = ["#d9483b", "#3b7dd9", "#e0b030", "#3ba55d", "#a05cc8", "#e07b22"]
-START_RES = {"gold": 10, "faith": 0, "science": 0}  # realm-wide
+START_RES = {"gold": 10}  # realm-wide
 START_GOODS = {"wood": 10, "stone": 5}  # put into the first Town Hall when it's founded
 START_UNIT = "settlers"
 START_ESCORT = "scout"  # starts on a free land cell next to the settlers
@@ -65,7 +65,7 @@ class Match:
         self.sites, self.cell_site = {}, {}
         self.claims = {}  # {key: pid}: weak land bought with gold (orders.claim)
         self.territory = {}  # {key: pid}: strong land, first come first served (territory.py)
-        self.players = {pid: {"res": dict(START_RES), "pop": START_POP, "advances": [], "done": False, "alive": True,
+        self.players = {pid: {"res": dict(START_RES), "pop": START_POP, "advances": [], "spent": {"faith": 0, "science": 0}, "done": False, "alive": True,
                               "color": COLORS[i % len(COLORS)], "startGoods": dict(START_GOODS)}
                         for i, pid in enumerate(self.seats)}
         self.orders = {pid: empty_orders() for pid in self.seats}
@@ -345,7 +345,7 @@ class Match:
                         "resources": RESOURCES, "categories": CATEGORIES,
                         "tags": {t: {"name": n, "color": c} for t, (n, c) in TAGS.items()},
                         "claim": {"cost": orders.CLAIM_COST, "upkeep": territory.LAND_UPKEEP},
-                        "tradeGoods": economy.TRADE_GOODS, "goods": logistics.GOODS,
+                        "tradeGoods": economy.TRADE_GOODS, "goods": logistics.GOODS, "flat": FLAT,
                         "resourceInfo": {r: {"name": n, "icon": i} for r, (n, i) in RESOURCE_INFO.items()}},
             "players": {pid: {"name": self.names[pid], "color": p["color"], "res": self.shown[pid]["res"],
                               "pop": self.shown[pid]["pop"], "advances": p["advances"], "done": p["done"],

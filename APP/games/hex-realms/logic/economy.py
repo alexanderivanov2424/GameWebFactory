@@ -1,7 +1,8 @@
 """Hex Realms: production, upkeep, trade, eating and new people.
 
 A structure works if its crew is there: people fill jobs, food producers first, then oldest first.
-Gold, faith and science go to the realm; wood, stone and metal go into the stores (logistics.py). Everyone eats
+Gold goes to the realm; wood, stone and metal go into the stores (logistics.py). Faith and science are
+flat: what working structures give right now, minus what advances spent (flat(), logistics.stock). Everyone eats
 FOOD_PER_PERSON food, units eat their upkeep, bought land costs LAND_UPKEEP gold per cell, and each
 working trade structure with a trade set gives `trade` of one resource for 1 of another (only when
 affordable). Production and upkeep happen together; only what is left is capped by store room.
@@ -14,6 +15,7 @@ units that eat (newest first), then people at work (jobs and building).
     output(m, s)                      what structure s makes when it works
     housing(m, s)                     the housing structure s gives (with advance bonuses)
     staffing(m, pid)                  (working structures in job order, idle people)
+    flat(m, pid)                      {faith, science} that pid's working structures give now
     report(m, pid, resolving=False)   the turn's forecast (see report())
     end_of_turn(m, pid, events)       apply the report: goods, gold, hunger, new people
     starvation(m, pid, short, idle)   ([unit ids], people) who die when food production is `short`
@@ -22,7 +24,7 @@ units that eat (newest first), then people at work (jobs and building).
 from gamekit.hexes import neighbors
 
 from . import construction, logistics, territory
-from .content import ADVANCES, CAPPED, GLOBAL, RESOURCES, STRUCTURES, UNITS
+from .content import ADVANCES, CAPPED, FLAT, GLOBAL, RESOURCES, STRUCTURES, UNITS
 
 FOOD_PER_PERSON = 1
 TRADE_GOODS = ["gold", "food", "wood", "stone", "metal"]
@@ -108,6 +110,15 @@ def staffing(m, pid):
     return working, left
 
 
+def flat(m, pid):
+    out = dict.fromkeys(FLAT, 0)
+    for s in staffing(m, pid)[0]:
+        for r, n in output(m, s).items():
+            if r in out:
+                out[r] += n
+    return out
+
+
 # --- The turn's forecast -----------------------------------------------------------------------
 
 def report(m, pid, resolving=False):
@@ -141,7 +152,7 @@ def report(m, pid, resolving=False):
     idle = left - building["builders"]
     food = _food(m, pid, income["food"], upkeep["food"], room - p["pop"] - soldiers, idle) if m.has_hall(pid) \
         else {"starve": {"units": 0, "people": 0}, "born": 0, "popNet": 0}
-    net = {r: income[r] - upkeep[r] for r in RESOURCES}
+    net = {r: 0 if r in FLAT else income[r] - upkeep[r] for r in RESOURCES}
     return {"income": income, "upkeep": upkeep, "net": net, "wasted": _wasted(m, pid, have, income, upkeep),
             "staffed": [s["id"] for s in working], "workers": p["pop"] - left, "builders": building["builders"],
             "idle": idle, "housing": room, "soldiers": soldiers,

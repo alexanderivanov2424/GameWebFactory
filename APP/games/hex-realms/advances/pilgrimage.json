@@ -1,7 +1,7 @@
 {
  "name": "Pilgrimage",
  "cost": {
-  "faith": 30
+  "faith": 6
  },
  "bonus": {
   "chapel": {
