@@ -175,7 +175,7 @@ class LogisticsTests(unittest.TestCase):
 class MovementTests(unittest.TestCase):
     def setUp(self):
         self.m = blank(face=1)  # dice never hit unless a test says so
-        well_fed(self)  # units eat from this turn's food production only
+        well_fed(self)  # units never starve in these tests
         hall(self.m, "p1", "-8,0"), hall(self.m, "p2", "8,0")
 
     def test_path_cost(self):
@@ -266,7 +266,7 @@ class MovementTests(unittest.TestCase):
 class CombatTests(unittest.TestCase):
     def setUp(self):
         self.m = blank(face=6)
-        well_fed(self)  # units eat from this turn's food production only
+        well_fed(self)  # units never starve in these tests
         self.h1, self.h2 = hall(self.m, "p1", "-8,0"), hall(self.m, "p2", "0,0")
 
     def test_archer_shoots_without_reply(self):
@@ -307,7 +307,7 @@ class CombatTests(unittest.TestCase):
 
 class CityTests(unittest.TestCase):
     def setUp(self):
-        well_fed(self)  # units eat from this turn's food production only
+        well_fed(self)  # units never starve in these tests
         self.m = blank()
         hall(self.m, "p1", "-8,0"), hall(self.m, "p2", "8,0")
 
@@ -337,7 +337,7 @@ class CityTests(unittest.TestCase):
 class FogTests(unittest.TestCase):
     def setUp(self):
         self.m = blank(fog="on", face=1)
-        well_fed(self)  # units eat from this turn's food production only
+        well_fed(self)  # units never starve in these tests
         hall(self.m, "p1", "-8,8"), hall(self.m, "p2", "8,-8")  # far away: they keep both players in
 
     def view(self, pid="p1"):

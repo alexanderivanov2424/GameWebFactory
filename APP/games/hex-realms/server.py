@@ -8,10 +8,11 @@ territory, train units, order moves and attacks, research advances, trade at a m
 everyone has pressed End turn (or the turn timer runs out), all orders resolve together:
 units move one cell per step at the same time and fight with dice wherever they meet. Every
 structure works if it has its workers (people, who need food and housing; the people in units
-still use housing). Every person eats 1 food a turn. The population follows food production
-(no growth rate): eating uses this turn's food production only, never the stores; short of it, everyone
-it can't feed dies, units first, then people. Any surplus becomes new people at once, as many as it
-feeds, while housing has room; only the food left after that goes into the stores. Ordered structures
+still use housing). Every person eats 1 food a turn. There is no growth rate: everyone eats
+this turn's food production first, then the stored food; only when both run out does everyone they can't
+feed die, units first, then people. The population grows only to match production: a production surplus
+becomes new people at once, as many as it feeds, while housing has room; only the food left after that
+goes into the stores. A drop in production doesn't shrink the population while the stores last. Ordered structures
 become construction sites that cost hammers (🔨): every person without a job builds 1 hammer a turn
 (switch structures off, all at once, or demolish them to free people), oldest site first, each site
 taking as many as it still needs. Placing a structure takes its builders from your idle people at once

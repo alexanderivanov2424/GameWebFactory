@@ -29,11 +29,12 @@ fields in `logic/content.py`). Tests: `tests/` (`python3 -I tools/run_tests.py h
   user's call: 21 of 25 food, +7, -3 shows +4, not +1), and `wasted` is what won't fit at the end
   of the turn, `born` is the people you will really gain, `popNet` the population's change, and `idle` excludes
   builders. **Population follows food** (2026-11-15, the user's rule; growth rates, the Growth off button and the
-  structures' `growth` field were removed): eating uses this turn's food production only, never the stores (the
-  user picked "production only"); short of it, `starvation` kills units first (newest first), then people. Any
-  surplus becomes new people at once (`economy.new_people`), as many as it feeds, while `pop` + `soldiers`
-  (people in units, plus this turn's recruit orders while planning) fit in `housing`; only the food left after
-  that (`foodLeft`, also `net["food"]`) goes into the stores. `flows` breaks the same numbers down per structure / unit / site
+  structures' `growth` field were removed): everyone eats this turn's food production first, then the stores (the
+  user's later rule: a drop in production doesn't shrink the population while the stores last); when both run out,
+  `starvation` kills units first (newest first), then people. Only a production surplus makes people, at once
+  (`economy.new_people`), as many as it feeds, while `pop` + `soldiers` (people in units, plus this turn's recruit
+  orders while planning) fit in `housing`; only the food left after that goes into the stores (`foodNet`, also
+  `net["food"]`: negative while the stores feed people). `flows` breaks the same numbers down per structure / unit / site
   (`economy.flows`: production +, unit upkeep -, each person's food (`FOOD_PER_PERSON`, 2026-11-15: 1 each)
   where they work / build / are idle at home, recruits' upkeep on their structure, bought land's gold on each
   bought cell, flow id "land:<key>") for the client's **resource view** (click a top-bar chip: `map.setResView` greyscales the

@@ -48,8 +48,8 @@ def hall(m, pid, at="0,0"):
 
 
 def well_fed(test, food=99):
-    """For one test: every Town Hall makes `food` food a turn, so units and people never starve (eating
-    uses this turn's production only) in tests about something else."""
+    """For one test: every Town Hall makes `food` food a turn, so units and people never starve in tests
+    about something else."""
     hall_def = content.STRUCTURES["town_hall"]
     patch = mock.patch.dict(hall_def, {"produce": {**hall_def["produce"], "food": food}})
     patch.start()
