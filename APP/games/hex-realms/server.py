@@ -7,7 +7,8 @@ secret: place structures (multi-cell footprints, turned in 60-degree steps) insi
 territory, train units, order moves and attacks, research advances, trade at a market. When
 everyone has pressed End turn (or the turn timer runs out), all orders resolve together:
 units move one cell per step at the same time and fight with dice wherever they meet. Every
-structure works if it has its workers (people, who need food and housing). Ordered structures
+structure works if it has its workers (people, who need food and housing; the people in units
+still use housing). Ordered structures
 become construction sites that take a few turns of work, each turn needing builders: people
 without a job (switch structures off, all at once, or demolish them to free people). Gold, faith and
 science are realm-wide; goods (food, wood, stone, metal) go into the realm's stores (Town

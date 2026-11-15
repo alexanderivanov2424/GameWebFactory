@@ -7,7 +7,8 @@ upkeep is counted here).
     report(m, pid, resolving=False)  this turn's forecast (resolving: claims are already land, not orders): {"income", "upkeep", "net" (income - upkeep, not
                              capped by your stores), "wasted" {good: n that won't fit in your stores
                              at the end of the turn and is lost}, "staffed": [sid], "workers" (in jobs), "builders" (on
-                             construction sites), "idle" (neither), "housing", "caps", "growth"
+                             construction sites), "idle" (neither), "housing", "soldiers" (people in
+                             units, plus this turn's recruits while planning: they use housing too), "caps", "growth"
                              (people you will gain, 0 if none), "growthWhy" (why not), "tradeRate",
                              "land" (cells of bought land paid for, in upkeep gold; with this turn's
                              claims while planning), "flows" (see flows())}
@@ -23,7 +24,8 @@ realm; goods (food, wood, stone, metal) go into the realm's stores (logistics.py
 upkeep, plus LAND_UPKEEP gold per cell of bought land (territory.py). Production and upkeep happen at the same time (upkeep can use this turn's production), and
 only what is left is capped by the room in the stores; the rest is lost. Not enough food starves 1 person (or disbands a unit); gold below 0 gives up
 that many cells of bought land (territory.give_up), or with no bought land, the newest paid unit deserts. If the realm makes more food this turn than it eats (whether or not it all fits in
-the stores) and there is free housing, population grows by 1 (+1 per Granary). People without a
+the stores) and there is free housing (units use housing too: population + the people in your units
+must fit), population grows by 1 (+1 per Granary). People without a
 job build (construction.py). A realm without a Town Hall (settlers before their first city)
 skips all of this.
 """
@@ -105,6 +107,9 @@ def report(m, pid, resolving=False):
             income[r] += n
         if STRUCTURES[s["type"]]["trade"]:
             rates.append(STRUCTURES[s["type"]]["trade"])
+    soldiers = sum(UNITS[u["type"]]["people"] for u in m.units.values() if u["owner"] == pid)
+    if not resolving:  # recruits ordered this turn: their people already left the population
+        soldiers += sum(r.get("people", 0) for r in m.orders[pid]["recruits"])
     upkeep = {r: 0 for r in RESOURCES}
     upkeep["food"] = p["pop"] // 2
     for u in m.units.values():
@@ -123,21 +128,21 @@ def report(m, pid, resolving=False):
             wasted[r] = over
     if income["food"] <= upkeep["food"]:
         growth, why = 0, "Make more food than your people eat to grow."
-    elif p["pop"] >= housing:
-        growth, why = 0, "Housing is full: build homes to grow."
+    elif p["pop"] + soldiers >= housing:
+        growth, why = 0, "Housing is full (units use housing too): build homes to grow."
     else:
-        growth, why = min(1 + bonus, housing - p["pop"]), ""
+        growth, why = min(1 + bonus, housing - p["pop"] - soldiers), ""
     return {"income": income, "upkeep": upkeep, "net": {r: income[r] - upkeep[r] for r in RESOURCES},
             "wasted": wasted,
             "staffed": [s["id"] for s in working], "workers": p["pop"] - left, "builders": building["builders"],
-            "idle": left - building["builders"], "housing": housing, "caps": caps, "growth": growth,
+            "idle": left - building["builders"], "housing": housing, "soldiers": soldiers, "caps": caps, "growth": growth,
             "growthWhy": why, "tradeRate": min(rates) if rates else 0, "land": land,
             "flows": flows(m, pid, working, building["works"], land)}
 
 
 def flows(m, pid, working, works, land=0):
     """Per structure / unit / site: production (+), unit upkeep, and the people's food and the bought
-    land's gold (-, on the first Town Hall), and for "people": jobs and builders (-) and housing (+). See the module header."""
+    land's gold (-, on the first Town Hall), and for "people": jobs, builders and units' housing (-) and housing (+). See the module header."""
     p, on = m.players[pid], {s["id"] for s in working}
     home_bonus = effect(m, pid, "homeHousing")
     out = []
@@ -162,6 +167,8 @@ def flows(m, pid, working, works, land=0):
         for r, n in UNITS[u["type"]]["upkeep"].items():
             if n:
                 out.append([u["id"], r, -n, True])
+        if UNITS[u["type"]]["people"]:
+            out.append([u["id"], "people", -UNITS[u["type"]]["people"], True])
     return out
 
 

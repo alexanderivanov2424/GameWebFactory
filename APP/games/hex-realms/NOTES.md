@@ -28,7 +28,9 @@ fields in `logic/content.py`). Tests: `tests/` (`python3 -I tools/run_tests.py h
 - **Honest forecasts** (`economy.report`): `net` is income - upkeep, not capped by the stores (the
   user's call: 21 of 25 food, +7, -3 shows +4, not +1), and `wasted` is what won't fit at the end
   of the turn, `growth` is the people you will really gain (0 with a
-  reason in `growthWhy`), and `idle` excludes builders. Growth needs more food made than eaten,
+  reason in `growthWhy`), and `idle` excludes builders. Units use housing (2026-11-15, the user's call):
+  growth needs `pop` + `soldiers` (people in units, plus this turn's recruit orders while planning) under
+  `housing`, so recruiting no longer frees room to regrow. Growth needs more food made than eaten,
   not food that fits in the stores. `flows` breaks the same numbers down per structure / unit / site
   (`economy.flows`: production +, unit upkeep -, the people's food on the first Town Hall, and for
   "people" jobs / builders - and housing +) for the client's **resource view** (click a top-bar chip:

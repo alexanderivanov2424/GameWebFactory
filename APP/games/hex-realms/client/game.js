@@ -182,7 +182,7 @@
     box.hidden = !m && !ui.resView;
     if (!m && ui.resView) {
       const { resIcon, resName, btn } = HexHud.fmt, r = ui.resView;
-      const text = r === "people" ? "red = people working or building there this turn, green = housing it gives"
+      const text = r === "people" ? "red = people working or building there this turn, or in a unit (units use housing), green = housing it gives"
         : "green = made there each turn, red = used each turn (units' upkeep; your people's food on your Town Hall)";
       fill(box, `${resIcon(r)} ${resName(r)} view: ${text}. Faded = not working this turn. Click the resource again or Esc to leave. `,
         btn("Close (Esc)", () => act.resView(null)));

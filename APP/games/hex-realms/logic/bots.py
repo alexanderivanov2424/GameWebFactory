@@ -143,7 +143,7 @@ class Bot:
         cities = len(self.halls)
         full = lambda r: rep["caps"].get(r, 0) - stock.get(r, 0) <= 4
         out = []
-        if m.players[pid]["pop"] + 1 >= rep["housing"]:
+        if m.players[pid]["pop"] + rep["soldiers"] + 1 >= rep["housing"]:
             out.append("house" if stock.get("stone", 0) >= 6 else "hut")
         if rep["net"]["food"] <= 1:
             out.append("farm")
