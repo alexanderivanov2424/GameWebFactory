@@ -5,6 +5,7 @@ import random
 import unittest
 
 from gamekit import LobbyError
+from gamekit.hexes import dist as hex_dist
 
 h = importlib.import_module("games.hex-realms.tests.helpers")
 Match, blank, hall, rich, stock, unit = h.Match, h.blank, h.hall, h.rich, h.stock, h.unit
@@ -18,11 +19,13 @@ def end_turn(m):
 
 
 class StartTests(unittest.TestCase):
-    def test_everyone_starts_with_settlers_only(self):
+    def test_everyone_starts_with_settlers_and_militia(self):
         m = Match({"p1": "A", "p2": "B", "p3": "C"}, {"turns": 40, "mapSize": "normal", "seed": 7}, rng=random.Random(3))
         self.assertEqual(m.structures, {})
         for pid in m.seats:
-            self.assertEqual([u["type"] for u in m.units.values() if u["owner"] == pid], ["settlers"])
+            units = sorted((u for u in m.units.values() if u["owner"] == pid), key=lambda u: u["type"])
+            self.assertEqual([u["type"] for u in units], ["militia", "settlers"])
+            self.assertLessEqual(hex_dist(units[0]["at"], units[1]["at"]), 2)
 
     def test_first_city_gets_the_starting_goods(self):
         m = Match({"p1": "A", "p2": "B"}, {"turns": 40, "mapSize": "normal", "seed": 7}, rng=random.Random(3))

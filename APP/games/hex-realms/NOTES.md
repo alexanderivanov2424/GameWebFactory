@@ -81,7 +81,7 @@ fields in `logic/content.py`). Tests: `tests/` (`python3 -I tools/run_tests.py h
   cells cost 2, hidden enemies don't block); resolution uses the truth, with real movement
   points, so hidden things are discovered by running into them. The client merges `view` into
   `game` in `onState`, so the rest of the page reads `game.cells` / `game.units` as before.
-- **A free first city**: everyone starts with Settlers; the starting goods wait in
+- **A free first city**: everyone starts with Settlers and a Militia (`START_ESCORT`, on the nearest free land cell); the starting goods wait in
   `players[pid]["startGoods"]` until the first Town Hall. Players are out only with no Town
   Hall *and* no Settlers; a realm without a hall skips eating and growth.
 - **Construction by idle people** (`logic/construction.py`): a resolved build order becomes a site

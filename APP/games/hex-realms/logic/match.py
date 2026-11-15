@@ -42,7 +42,7 @@ orders {pid: {"builds", "claims", "recruits", "research": [...], "moves": {uid: 
 import random
 
 from gamekit import LobbyError
-from gamekit.hexes import neighbors
+from gamekit.hexes import disk, dist, neighbors, parse
 
 from . import bots, combat, construction, economy, logistics, movement, orders, recruiting, standing, territory, vision
 from .content import ADVANCES, CATEGORIES, RESOURCE_INFO, TAGS, RESOURCES, STRUCTURES, TERRAIN, TOWN_HALL, UNITS, footprint
@@ -53,6 +53,7 @@ COLORS = ["#d9483b", "#3b7dd9", "#e0b030", "#3ba55d", "#a05cc8", "#e07b22"]
 START_RES = {"gold": 10, "faith": 0, "science": 0}  # realm-wide
 START_GOODS = {"food": 10, "wood": 12, "stone": 6}  # put into the first Town Hall when it's founded
 START_UNIT = "settlers"
+START_ESCORT = "militia"  # starts on a free land cell next to the settlers
 START_POP = 3
 SIZES = {"small": -3, "normal": 0, "large": 4, "huge": 8}
 ACTS = {name: getattr(orders, name) for name in
@@ -98,6 +99,10 @@ class Match:
         self.result = None
         for pid, at in zip(self.seats, starts):
             self.add_unit(pid, START_UNIT, at)  # they found the first Town Hall where they choose
+            near = [k for k in sorted(disk(2, parse(at)), key=lambda k: (dist(k, at), k)) if k != at and k in self.cells
+                    and TERRAIN[self.cells[k]]["move"] is not None and k not in self.unit_at]
+            if near:
+                self.add_unit(pid, START_ESCORT, near[0])
         self.turn = 1
         self.step = 0
         self.events = []
