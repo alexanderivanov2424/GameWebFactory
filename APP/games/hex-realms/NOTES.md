@@ -147,8 +147,12 @@ fields in `logic/content.py`). Tests: `tests/` (`python3 -I tools/run_tests.py h
   it used to only flash the cells (a new `game.step`); Esc or the Skip button stops it.
 - `client/game.js`: UI state (`ui.sel`, `ui.mode` build / shoot / found + rotation, tab, `ui.tech`, `ui.resView`), click
   and key handling (`selectAt` cycles unit -> structure -> site on repeated clicks), highlights and the build ghost (its green/red and the hint bar's "Here:" reason
-  come from `buildProblem`, only a hint; the server decides; while placing, the bottom hint bar shows the structure's
-  effects, placement rules and build cost from `HexHud.fmt.structInfo`, which the build menu tooltip uses too), the turn countdown (approximate: restarts on reload).
+  come from `buildProblem`, only a hint; the server decides). While placing (the user's layout, 2026-11-15) the
+  bottom hint shows the name + controls, the terrains it goes on and the refusal reason (left) and `HexHud.structCard`
+  (right: footprint picture, HP, every effect); the top bar's `.hr-delta-<key>` slots under each chip show
+  `deltas()`: cost, output per turn at the hovered spot (`outputAt`, a copy of `economy.output` fed by the private
+  `typeBonus` / `homeHousing`: keep the two in step), store room, "-n when working" on people, housing, and the
+  build turns last. The turn countdown (approximate: restarts on reload).
 - `tests/`: `test_rules.py` (Match on a blank all-plains map: `helpers.blank`, `hall` (with the
   starting goods), `unit`, `rich`, `stock` = what a player can spend), `test_lobby.py` (Sim: secrecy, done, timer, leaving).
 

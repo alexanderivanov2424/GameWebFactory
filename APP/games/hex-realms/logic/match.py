@@ -44,7 +44,7 @@ import random
 from gamekit import LobbyError
 from gamekit.hexes import neighbors
 
-from . import bots, combat, construction, logistics, movement, orders, recruiting, standing, territory, vision
+from . import bots, combat, construction, economy, logistics, movement, orders, recruiting, standing, territory, vision
 from .content import ADVANCES, CATEGORIES, RESOURCE_INFO, RESOURCES, STRUCTURES, TERRAIN, TOWN_HALL, UNITS, footprint
 from .economy import end_of_turn, report, staffing
 from .mapgen import generate
@@ -402,7 +402,8 @@ class Match:
 
     def private(self, pid):
         """{"view": the map as pid sees it} for everyone (pid None = a spectator: the whole map),
-        plus pid's stock, orders, standing orders ("auto"), units with orders ("ordered"), forecast (economy report; "building" = construction.forecast) and
+        plus pid's stock, orders, standing orders ("auto"), units with orders ("ordered"), forecast (economy report; "building" = construction.forecast; "typeBonus" =
+        economy.type_bonus, for the placing preview) and
         planning help while they're still playing."""
         staffed = {s["id"] for x in self.alive() for s in staffing(self, x)[0]}
         out = {"view": vision.view(self, pid, staffed)}
@@ -421,6 +422,7 @@ class Match:
                      if u["owner"] == pid and u.get("auto")},
             "ordered": self.ordered(pid),
             "building": construction.forecast(self, pid),
+            "typeBonus": economy.type_bonus(self, pid), "homeHousing": economy.effect(self, pid, "homeHousing"),
             "reach": {uid: sorted(movement.reach(self, uid)) for uid, u in self.units.items() if u["owner"] == pid},
             "recruit": recruit,
             "autoRecruit": {s["id"]: {"kind": s.get("autoRecruit"), "order": s.get("autoOrder")} for s in self.structures.values()

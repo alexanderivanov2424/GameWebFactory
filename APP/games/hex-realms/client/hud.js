@@ -14,15 +14,19 @@
  *   HexHud.build(el, ctx)       one button per buildable structure (starts build mode)
  *   HexHud.fmt                  small text helpers shared with panels.js (cost, nameSpan, resource icons);
  *                               fmt.setResources(content.resourceInfo) first (game.js does, each render)
- *   HexHud.fmt.structInfo(content, def)  {effects: [text], placement: [text], build: text}: a structure
- *                               described from its content fields (build menu tooltip, the placing hint)
+ *   HexHud.fmt.structInfo(content, def)  {text, stats: [text], hp: text, terrains: text, build: text}: a
+ *                               structure described from its content fields (build menu tooltip, placing panel)
+ *   HexHud.structCard(content, def)  the placing hint's right-hand section: a small picture of the
+ *                               footprint, HP below it, then every effect
+ *   Top bar deltas: each resource / people / housing chip has an empty .hr-delta.hr-delta-<key> below it
+ *                   (plus one for "turns" at the end), filled by game.js while placing a structure
  *
  * ctx = { game, priv, you, me (public player entry), content, ui, act } where ui is the page's
  * persistent UI state ({sel, mode, trade, resView}) and act = { send(msg), select(kind, id), setMode(mode), centre(key), resView(res) }.
  * Every function replaces the children of its element, so call them on each render.
  */
 (() => {
-  const { el, fill } = AppDom;
+  const { el, svg, fill } = AppDom;
   const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1);
   let RES = {};  // {res: {name, icon}} from the content
   const setResources = (info) => { RES = info || {}; };
@@ -33,29 +37,47 @@
   const names = (content, kind, ids) => ids.map((id) => content[kind][id]?.name || id).join(", ");
   // What a structure does and where it may go, read from its content (the server's rules decide).
   function structInfo(content, d) {
-    // The content's text words its bonuses; the plain stats fill in for structures without one.
-    const effects = [d.text || ""];
-    if (!d.text) {
-      if (Object.keys(d.produce || {}).length && !Object.keys(d.onTerrain || {}).length) effects.push(`Makes ${costText(d.produce)} a turn`);
-      if (d.housing) effects.push(`Housing ${d.housing}`);
-      if (d.storage) effects.push(`Stores ${d.storage} of each good`);
-      if (Object.keys(d.store || {}).length) effects.push(`Stores ${costText(d.store)}`);
-      if (d.growth) effects.push(`Growth +${d.growth}`);
-      if (d.trade) effects.push(`Trade ${d.trade}:1`);
-      if ((d.recruits || []).length) effects.push(`Trains ${names(content, "units", d.recruits)}`);
-      if (d.heals) effects.push("Heals units on or next to it");
-      if (d.shoots) effects.push(`Shoots ${plural(d.shoots, "die")} (range ${d.range})`);
-      if (d.score) effects.push(`+${d.score} score`);
-    }
-    if (d.jobs) effects.push(`Needs ${plural(d.jobs, "worker")}`);
-    effects.push(d.hp ? `HP ${d.hp}${d.defense ? `, defense ${d.defense}` : ""}` : "Can't be attacked");
-    const placement = [`${plural(d.cells.length, "cell")}, all inside your territory`,
-      `on ${names(content, "terrain", d.terrain || [])}`];
-    if (d.coast) placement.push("touching water");
-    if (d.requires) placement.push(`needs ${content.advances[d.requires]?.name || d.requires}`);
-    placement.push("not on a structure, construction site or enemy unit");
+    const stats = [];
+    if (Object.keys(d.produce || {}).length && !Object.keys(d.onTerrain || {}).length) stats.push(`Makes ${costText(d.produce)} a turn`);
+    if (d.jobs) stats.push(`Needs ${plural(d.jobs, "worker")}`);
+    if (d.housing) stats.push(`Housing ${d.housing}`);
+    if (d.storage) stats.push(`Stores ${d.storage} of each good`);
+    if (Object.keys(d.store || {}).length) stats.push(`Stores ${costText(d.store)}`);
+    if (d.growth) stats.push(`Growth +${d.growth}`);
+    if (d.trade) stats.push(`Trade ${d.trade}:1`);
+    if ((d.recruits || []).length) stats.push(`Trains ${names(content, "units", d.recruits)}`);
+    if (d.heals) stats.push("Heals units on or next to it");
+    if (d.shoots) stats.push(`Shoots ${plural(d.shoots, "die")} (range ${d.range})`);
+    if (d.score) stats.push(`+${d.score} score`);
+    if (d.vision) stats.push(`Sees ${d.vision} cells`);
+    const hp = d.hp ? `HP ${d.hp}${d.defense ? ` · defense ${d.defense}` : ""}` : "Can't be attacked";
+    const terrains = names(content, "terrain", d.terrain || []) + (d.coast ? " · touching water" : "");
     const build = `${costText(d.cost)}, ${plural(d.buildTurns, "turn")} of work by ${plural(d.builders, "idle person")} each`;
-    return { effects: effects.filter(Boolean), placement, build };
+    return { text: d.text || "", stats, hp, terrains, build };
+  }
+
+  // A small picture of a structure's footprint (unturned) in its colour, its icon in the middle.
+  function structPicture(d, px = 64) {
+    const { center, key } = HexMap.util, s = 30;
+    const cs = d.cells.map(([q, r]) => center(key(q, r)));
+    const corners = ([x, y]) => Array.from({ length: 6 }, (_, i) => {
+      const a = (Math.PI / 180) * (60 * i - 30);
+      return [x + s * Math.cos(a), y + s * Math.sin(a)];
+    });
+    const all = cs.flatMap(corners);
+    const xs = all.map((p) => p[0]), ys = all.map((p) => p[1]);
+    const [x0, y0, x1, y1] = [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)];
+    const mid = [cs.reduce((a, p) => a + p[0], 0) / cs.length, cs.reduce((a, p) => a + p[1], 0) / cs.length];
+    return svg("svg", { viewBox: `${(x0 - 2).toFixed(1)} ${(y0 - 2).toFixed(1)} ${(x1 - x0 + 4).toFixed(1)} ${(y1 - y0 + 4).toFixed(1)}`, width: px, height: px, class: "hr-spic" },
+      ...cs.map((c) => svg("polygon", { points: corners(c).map((p) => p.map((v) => v.toFixed(1)).join(",")).join(" "), fill: d.color || "#888", stroke: "#10131a", "stroke-width": 2 })),
+      svg("text", { x: mid[0].toFixed(1), y: mid[1].toFixed(1), "font-size": 34, "text-anchor": "middle", "dominant-baseline": "central" }, d.icon || ""));
+  }
+
+  function structCard(content, d) {
+    const si = structInfo(content, d);
+    return el("div", { className: "hr-scard" }, structPicture(d), el("div", { className: "hr-shp" }, si.hp),
+      si.text ? el("div", { className: "hr-stext" }, si.text) : null,
+      el("ul", { className: "hr-sstats" }, si.stats.map((t) => el("li", {}, t))));
   }
   const canPay = (ctx, cost) => Object.entries(cost || {}).every(([r, n]) => (ctx.priv.res[r] || 0) >= n);
   const nameSpan = (game, pid) => {
@@ -70,6 +92,9 @@
   const VIEW_TIP = "Click: show on the map what makes and uses it each turn.\n";
   const stat = (label, value) => el("span", { className: "hr-stat" }, `${label} `, el("b", {}, String(value)));
 
+  // A chip with an (empty) delta line under it, filled while placing a structure.
+  const withDelta = (key, chip) => el("span", { className: "hr-dcol" }, chip, el("span", { className: `hr-delta hr-delta-${key}` }));
+
   function topbar(box, ctx) {
     const { game, priv } = ctx;
     const rep = priv.report;
@@ -79,9 +104,9 @@
       const net = rep.net[r] || 0;
       const capped = rep.caps[r];
       const full = capped !== undefined && priv.res[r] >= capped;
-      return el("span", { className: `hr-chip hr-res-${r}${full ? " full" : ""}${ctx.ui.resView === r ? " on" : ""}`, onclick: () => ctx.act.resView(r), title: `${VIEW_TIP}${resName(r)}: income ${rep.income[r] || 0}, upkeep ${rep.upkeep[r] || 0}${r === "gold" && rep.land ? ` (${rep.land} cells of bought land)` : ""}${capped !== undefined ? `, storage ${capped}` : ""}${(rep.wasted || {})[r] ? `, ${rep.wasted[r]} won't fit in your stores at the end of the turn (lost)` : ""}` },
+      return withDelta(r, el("span", { className: `hr-chip hr-res-${r}${full ? " full" : ""}${ctx.ui.resView === r ? " on" : ""}`, onclick: () => ctx.act.resView(r), title: `${VIEW_TIP}${resName(r)}: income ${rep.income[r] || 0}, upkeep ${rep.upkeep[r] || 0}${r === "gold" && rep.land ? ` (${rep.land} cells of bought land)` : ""}${capped !== undefined ? `, storage ${capped}` : ""}${(rep.wasted || {})[r] ? `, ${rep.wasted[r]} won't fit in your stores at the end of the turn (lost)` : ""}` },
         el("span", { className: "hr-ricon" }, resIcon(r)), " ", el("b", {}, String(priv.res[r])), capped !== undefined ? el("small", {}, `/${capped}`) : null,
-        el("span", { className: net < 0 ? "neg" : net > 0 ? "pos" : "" }, ` (${signed(net)})`));
+        el("span", { className: net < 0 ? "neg" : net > 0 ? "pos" : "" }, ` (${signed(net)})`)));
     });
     const done = priv.done;
     const end = btn(done ? "Waiting for others… (undo)" : "End turn", () => ctx.act.send({ action: "done", done: !done }), { cls: done ? "waiting" : "endturn" });
@@ -89,13 +114,14 @@
       el("span", { className: "hr-turn" }, `Turn ${game.turn} / ${game.turnLimit}`),
       game.turnSeconds > 0 ? el("span", { id: "hr-timer", className: "hr-timer" }) : null,
       el("span", { className: "hr-chips" }, chips),
-      el("span", { className: `hr-people${ctx.ui.resView === "people" ? " on" : ""}`, onclick: () => ctx.act.resView("people"), title: `Click: show on the map where your people are.\nPopulation ${priv.pop + rep.soldiers}: ${rep.workers} in jobs, ${rep.builders} building, ${rep.soldiers} in units (and recruits), ${rep.idle} idle.${rep.growth ? "" : `\nNo growth this turn: ${rep.growthWhy}`}` },
+      withDelta("people", el("span", { className: `hr-people${ctx.ui.resView === "people" ? " on" : ""}`, onclick: () => ctx.act.resView("people"), title: `Click: show on the map where your people are.\nPopulation ${priv.pop + rep.soldiers}: ${rep.workers} in jobs, ${rep.builders} building, ${rep.soldiers} in units (and recruits), ${rep.idle} idle.${rep.growth ? "" : `\nNo growth this turn: ${rep.growthWhy}`}` },
         el("span", { className: "hr-ricon" }, resIcon("people")), " ", el("b", {}, String(priv.pop + rep.soldiers)), ` (jobs ${rep.workers}`,
         rep.builders ? `, building ${rep.builders}` : "", rep.soldiers ? `, units ${rep.soldiers}` : "", `, idle ${rep.idle})`,
         rep.growth ? el("span", { className: "pos" }, ` growth +${rep.growth}`) : null,
-        starving ? el("span", { className: "neg", title: "Not enough food (in your stores plus this turn's production) to feed everyone: whoever can't eat dies at the end of the turn, units first (newest first), then people." }, ` ⚠ starving: ${starving}`) : null),
-      el("span", { className: `hr-people${priv.pop + rep.soldiers >= rep.housing ? " full" : ""}${ctx.ui.resView === "housing" ? " on" : ""}`, onclick: () => ctx.act.resView("housing"), title: `Click: show on the map which structures give housing.\nHousing ${rep.housing}: the population cap. Your people and the people in your units (${priv.pop + rep.soldiers}) must fit in it to grow.` },
-        el("span", { className: "hr-ricon" }, resIcon("housing")), " cap ", el("b", {}, String(rep.housing))),
+        starving ? el("span", { className: "neg", title: "Not enough food (in your stores plus this turn's production) to feed everyone: whoever can't eat dies at the end of the turn, units first (newest first), then people." }, ` ⚠ starving: ${starving}`) : null)),
+      withDelta("housing", el("span", { className: `hr-people${priv.pop + rep.soldiers >= rep.housing ? " full" : ""}${ctx.ui.resView === "housing" ? " on" : ""}`, onclick: () => ctx.act.resView("housing"), title: `Click: show on the map which structures give housing.\nHousing ${rep.housing}: the population cap. Your people and the people in your units (${priv.pop + rep.soldiers}) must fit in it to grow.` },
+        el("span", { className: "hr-ricon" }, resIcon("housing")), " cap ", el("b", {}, String(rep.housing)))),
+      withDelta("turns", null),
       btn("Jobs off", () => ctx.act.send({ action: "staff", on: false }), { cls: "small", title: "Switch off every structure with workers: they become idle and build your construction sites." }),
       btn("Jobs on", () => ctx.act.send({ action: "staff", on: true }), { cls: "small", title: "Switch every structure with workers back on." }),
       el("span", { className: "spacer" }), end);
@@ -269,7 +295,7 @@
       if (d.requires && !mine.has(d.requires)) why = `Needs ${content.advances[d.requires]?.name || d.requires}`;
       const poor = !why && !canPay(ctx, d.cost);
       const si = structInfo(content, d);
-      const info = [si.effects.join(". "), `Build: ${si.build}`, `Place: ${si.placement.join(", ")}`].join("\n");
+      const info = [si.text, si.stats.join(". "), si.hp, `Build: ${si.build}`, `On: ${si.terrains}`].filter(Boolean).join("\n");
       const active = ui.mode?.type === "build" && ui.mode.kind === id;
       return el("button", { className: `hr-build${active ? " on" : ""}`, disabled: !!why || poor, title: `${why ? `${why}\n` : poor ? "Can't afford\n" : ""}${info}`,
         onclick: () => (active ? act.setMode(null) : act.setMode({ type: "build", kind: id, rot: ui.lastRot || 0 })) },
@@ -284,5 +310,5 @@
       el("p", { className: "muted small" }, "Click the map to place it. R or right-click turns it, Esc cancels. It goes anywhere inside your territory and becomes a construction site that idle people build over a few turns. Goods go straight to your stores."));
   }
 
-  window.HexHud = { topbar, players, selection, orders, trade, build, fmt: { costText, canPay, nameSpan, btn, cap, setResources, resIcon, resName, structInfo } };
+  window.HexHud = { topbar, players, selection, orders, trade, build, structCard, fmt: { costText, canPay, nameSpan, btn, cap, setResources, resIcon, resName, structInfo } };
 })();

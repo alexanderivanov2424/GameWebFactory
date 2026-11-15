@@ -173,6 +173,15 @@
     #hint { position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%); max-width: 62vw; z-index: 5; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
     #hint .hr-hintrow { flex-basis: 100%; }
     #hint .hr-here:empty { display: none; }
+    #hint.hr-hintbuild { align-items: flex-start; flex-wrap: nowrap; gap: 12px; }
+    .hr-hintmain { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+    .hr-scard { flex: none; width: 220px; border-left: 1px solid #364055; padding-left: 12px; font-size: 0.85rem; }
+    .hr-spic { display: block; }
+    .hr-shp { font-weight: 700; margin: 2px 0 4px; }
+    .hr-stext { margin-bottom: 2px; }
+    .hr-sstats { margin: 2px 0 0; padding-left: 16px; color: #c3cad8; }
+    .hr-dcol { display: inline-flex; flex-direction: column; align-items: center; }
+    .hr-delta { font-size: 0.75rem; white-space: nowrap; margin-top: 1px; } .hr-delta:empty { display: none; }
     /* Combat replay (replay.js): a bar at the top, you on the left, the other side on the right. */
     #replay { position: absolute; inset: 0; z-index: 7; pointer-events: none; color: #e7eaf0; }
     #replay > * { pointer-events: auto; position: absolute; }

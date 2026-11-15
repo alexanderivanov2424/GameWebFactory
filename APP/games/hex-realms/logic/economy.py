@@ -3,6 +3,8 @@ upkeep is counted here).
 
     effect(m, pid, name)     sum of an advance effect key over pid's advances
     output(m, s)             what structure s makes in a turn when it works
+    type_bonus(m, pid)       {stype: {res: n}}: what pid's advances add to every structure of a type
+                             (TYPE_BONUS; sent to the client for the placing preview)
     staffing(m, pid)         (working structures in job order, people without a job)
     report(m, pid, resolving=False)  this turn's forecast (resolving: claims are already land, not orders): {"income", "upkeep", "net" (income - upkeep, not
                              capped by your stores), "wasted" {good: n that won't fit in your stores
@@ -44,6 +46,7 @@ from . import construction, logistics, territory
 from .content import ADVANCES, CAPPED, RESOURCES, STRUCTURES, TOWN_HALL, UNITS
 
 FOOD_FIRST = ("food",)
+TYPE_BONUS = {"farm": ("farmFood", "food"), "chapel": ("chapelGold", "gold")}  # stype: (advance effect, res)
 
 
 def effect(m, pid, name):
@@ -66,11 +69,18 @@ def output(m, s):
             count = sum(1 for o in others if (o["type"] == adj["type"] if adj["type"] else STRUCTURES[o["type"]]["home"]))
         for r, n in adj["gain"].items():
             out[r] = out.get(r, 0) + n * min(count, adj["max"])
-    if s["type"] == "farm":
-        out["food"] = out.get("food", 0) + effect(m, s["owner"], "farmFood")
-    if s["type"] == "chapel":
-        out["gold"] = out.get("gold", 0) + effect(m, s["owner"], "chapelGold")
+    for r, n in type_bonus(m, s["owner"]).get(s["type"], {}).items():
+        out[r] = out.get(r, 0) + n
     return {r: n for r, n in out.items() if n}
+
+
+def type_bonus(m, pid):
+    out = {}
+    for stype, (name, r) in TYPE_BONUS.items():
+        n = effect(m, pid, name)
+        if n:
+            out[stype] = {r: n}
+    return out
 
 
 def output_keys(stype):

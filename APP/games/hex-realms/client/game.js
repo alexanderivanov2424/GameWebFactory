@@ -182,6 +182,7 @@
   function renderHint(c) {
     const m = ui.mode, box = $("hint");
     box.hidden = !m && !ui.resView;
+    box.classList.toggle("hr-hintbuild", m?.type === "build");
     if (!m && ui.resView) {
       const { resIcon, resName, btn } = HexHud.fmt, r = ui.resView;
       const text = r === "people" ? "where your people are this turn: work = in a job, build = on a construction site, train = recruits ordered there, unit = in a unit (units use housing too), idle = at home"
@@ -195,12 +196,13 @@
     const cancel = HexHud.fmt.btn("Cancel (Esc)", () => act.setMode(null));
     const names = c.content;
     if (m.type === "build") {
-      const d = names.structures[m.kind], si = HexHud.fmt.structInfo(names, d);
-      const row = (label, text, cls = "") => el("div", { className: `hr-hintrow ${cls}` }, el("b", {}, label), " ", text);
-      fill(box, el("div", { className: "hr-hintrow" }, el("b", {}, `${d.icon || ""} Placing ${d.name}`), ": click to build, R or right-click to turn, Esc to stop. ", cancel),
-        row("Effects:", si.effects.join(". ")), row("Placement:", si.placement.join(", ")),
-        row("Build:", `${si.build}; placing it takes its builders from your idle people now (${c.priv.report.idle} idle; cancel to get them back)`),
-        el("div", { className: "hr-hintrow hr-here" }));
+      // Left: name + controls, then the terrains it can go on (and why the hovered spot is refused);
+      // right: the structure card. What it costs and makes shows under the top bar (showDeltas).
+      const d = names.structures[m.kind];
+      fill(box, el("div", { className: "hr-hintmain" },
+        el("div", {}, el("b", {}, `${d.icon || ""} ${d.name}`), ": click to place · R to turn · Esc to cancel"),
+        el("div", {}, HexHud.fmt.structInfo(names, d).terrains),
+        el("div", { className: "hr-here neg" })), HexHud.structCard(names, d));
     }
     else if (m.type === "claim") fill(box, `Extending territory: click a green cell to claim it and its free neighbours at the end of the turn (${HexHud.fmt.costText(names.claim.cost)} each; if another realm claims it too, nobody gets it). Each bought cell costs ${names.claim.upkeep} gold a turn. Bought land is weak (dashed): it's lost to an enemy unit on or next to it, if it's cut off from your first city's free land (or a Town Hall), or to another realm's Town Hall. Esc to stop. `, cancel);
     else if (m.type === "shoot") fill(box, "Click an enemy unit or structure in range. ", cancel);
@@ -262,20 +264,65 @@
     return "";
   }
 
+  // What placing `def` changes, keyed like the top bar's delta slots: its cost (-n, once), what it would
+  // make each turn at `cells` (+n/turn; just its base output without a spot), room in the stores, the
+  // person it takes while working (people, not the cap), housing, and last the turns to build it.
+  function deltas(c, def, kind, cells) {
+    const out = {};
+    const add = (k, text, cls) => (out[k] ||= []).push([text, cls]);
+    for (const [r, n] of Object.entries(def.cost || {})) add(r, `−${n}`, "neg");
+    for (const [r, n] of Object.entries(cells ? outputAt(c, def, kind, cells) : (Object.keys(def.onTerrain || {}).length ? {} : def.produce || {})))
+      if (n) add(r, `${n > 0 ? "+" : "−"}${Math.abs(n)}/turn`, n > 0 ? "pos" : "neg");
+    if (def.storage) for (const r of Object.keys(c.priv.report.caps || {})) add(r, `+${def.storage} room`, "pos");
+    for (const [r, n] of Object.entries(def.store || {})) add(r, `+${n} room`, "pos");
+    if (def.jobs) add("people", `−${def.jobs} when working`, "neg");
+    const housing = (def.housing || 0) + (def.home ? c.priv.homeHousing || 0 : 0);
+    if (housing) add("housing", `+${housing}`, "pos");
+    add("turns", `⏳ ${def.buildTurns} turn${def.buildTurns === 1 ? "" : "s"} · ${def.builders} builder${def.builders === 1 ? "" : "s"}`, "");
+    return out;
+  }
+
+  // A preview of economy.output for `def` placed on `cells` (anchor first), from what you see; the server decides.
+  function outputAt(c, def, kind, cells) {
+    const g = c.game, out = {};
+    const plus = (r, n) => { out[r] = (out[r] || 0) + n; };
+    const base = Object.keys(def.onTerrain || {}).length ? def.onTerrain[g.cells[cells[0]]] || {} : def.produce || {};
+    for (const [r, n] of Object.entries(base)) plus(r, n);
+    for (const k of cells) for (const [r, n] of Object.entries((def.perCell || {})[g.cells[k]] || {})) plus(r, n);
+    const mine = new Set(cells);
+    const around = [...new Set(cells.flatMap((k) => U.neighbors(k)))].filter((n) => n in g.cells && !mine.has(n));
+    const near = [...new Set(around.map((n) => idx.structAt[n]).filter(Boolean))].map((id) => g.structures[id]).filter((s) => s.owner === c.you);
+    for (const adj of def.perAdjacent || []) {
+      const count = adj.terrain ? around.filter((n) => g.cells[n] === adj.terrain).length
+        : near.filter((s) => (adj.type ? s.type === adj.type : c.content.structures[s.type]?.home)).length;
+      for (const [r, n] of Object.entries(adj.gain || {})) plus(r, n * Math.min(count, adj.max));
+    }
+    for (const [r, n] of Object.entries((c.priv.typeBonus || {})[kind] || {})) plus(r, n);
+    return out;
+  }
+
+  // Fill the top bar's delta slots (empty them when d is null).
+  function showDeltas(d) {
+    for (const span of document.querySelectorAll("#topbar .hr-delta")) {
+      const key = [...span.classList].find((x) => x.startsWith("hr-delta-"))?.slice(9);
+      fill(span, ...((d && d[key]) || []).flatMap(([text, cls], i) => [i ? " " : null, el("span", { className: cls }, text)]));
+    }
+  }
+
   function ghost() {
     const m = ui.mode, here = $("hint").querySelector(".hr-here");
     if (here) here.textContent = "";
+    showDeltas(null);
     if (!state || state.phase === "lobby" || !m || !state.private) return map.setGhost(null);
     const c = ctx();
-    if (m.type === "build" && hover) {
+    if (m.type === "build") {
       const def = c.content.structures[m.kind];
-      const cells = def.rotations[m.rot].map((d) => U.add(hover, d));
-      const problem = buildProblem(c, def, cells);
+      const cells = hover && def.rotations[m.rot].map((d) => U.add(hover, d));
+      const problem = cells && buildProblem(c, def, cells);
+      showDeltas(deltas(c, def, m.kind, cells && !problem ? cells : null));
+      if (!cells) return map.setGhost(null);
       map.setGhost({ cells, ok: !problem, label: def.icon });
-      if (here) {
-        here.className = `hr-hintrow hr-here ${problem ? "neg" : "pos"}`;
-        here.textContent = problem ? `Here: ${problem}` : "Here: it fits.";
-      }
+      if (here && problem) here.textContent = problem;
     } else if (m.type === "found") {
       const u = c.game.units[m.unit];
       const th = c.content.structures.town_hall;
