@@ -6,7 +6,7 @@ upkeep is counted here).
     type_bonus(m, pid)       {stype: {res: n}}: what pid's advances add to every structure of a type
                              (TYPE_BONUS; sent to the client for the placing preview)
     staffing(m, pid)         (working structures in job order, people without a job)
-    report(m, pid, resolving=False)  this turn's forecast (resolving: claims are already land, not orders): {"income", "upkeep", "net" (income - upkeep, not
+    report(m, pid, resolving=False)  this turn's forecast (resolving: this turn's orders have happened): {"income", "upkeep", "net" (income - upkeep, not
                              capped by your stores), "wasted" {good: n that won't fit in your stores
                              at the end of the turn and is lost}, "staffed": [sid], "workers" (in jobs), "builders" (on
                              construction sites), "idle" (neither), "housing", "soldiers" (people in
@@ -14,8 +14,7 @@ upkeep is counted here).
                              ({"units": n, "people": n} who will die of hunger this turn), "growthRate"
                              (the realm's growth: people it can gain a turn), "growth" (people you will
                              gain, 0 if none), "growthWhy" (why not), "growthOff" (the player turned it off), "tradeRate",
-                             "land" (cells of bought land paid for, in upkeep gold; with this turn's
-                             claims while planning), "flows" (see flows())}
+                             "land" (cells of bought land paid for, in upkeep gold), "flows" (see flows())}
     flows(m, pid, working, building, land=0, idle=0)  what each of pid's things adds or takes this turn, for the
                              client's resource view: [[id, res, n, on], ...], n > 0 made, n < 0 used, on = False
                              for a structure that isn't working this turn (what it would make / need); plus
@@ -146,7 +145,7 @@ def report(m, pid, resolving=False):
         for rec in m.orders[pid]["recruits"]:
             for r, n in UNITS[rec["type"]]["upkeep"].items():
                 upkeep[r] += n
-    land = territory.bought(m, pid, pending=not resolving)
+    land = territory.bought(m, pid)
     upkeep["gold"] += land * territory.LAND_UPKEEP
     stores = logistics.stores(m, pid)
     caps = {r: sum(logistics.capacity(s).get(r, 0) for s in stores) for r in CAPPED}

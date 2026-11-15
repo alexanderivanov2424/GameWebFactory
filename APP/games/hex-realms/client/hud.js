@@ -273,7 +273,6 @@
     const rows = [
       ...o.builds.map((b) => { const n = content.structures[b.type]?.builders || 0;
         return [b.id, `Build ${content.structures[b.type]?.name || b.type} (${resIcon("people")} −${n})`, b.cost]; }),
-      ...(o.claims || []).map((c) => [c.id, `Claim land @${c.at}`, c.cost]),
       ...o.recruits.map((r) => [r.id, `${r.auto ? "Auto-recruit" : "Recruit"} ${content.units[r.type]?.name || r.type} at ${content.structures[game.structures[r.at]?.type]?.name || "?"}`, r.cost]),
       ...o.research.map((r) => [r.id, `Research ${content.advances[r.advance]?.name || r.advance}`, r.cost]),
     ];
@@ -325,7 +324,7 @@
     const claiming = ui.mode?.type === "claim", claimCost = content.claim?.cost || {};
     const claim = btn(claiming ? "Extending territory… (Esc)" : `Extend territory (${costText(claimCost)})`,
       () => act.setMode(claiming ? null : { type: "claim" }),
-      { cls: claiming ? "on" : "", disabled: !claiming && !canPay(ctx, claimCost), title: `Claim an explored cell next to your land, with its free neighbours, at the end of the turn (not next to an enemy unit). Bought land costs ${content.claim?.upkeep ?? 1} gold a turn per cell (unpaid cells are given up, farthest first) and is weak: an enemy unit on or next to it, being cut off from your cities' free land, or another realm's Town Hall reaching it make it nobody's.` });
+      { cls: claiming ? "on" : "", disabled: !claiming && !canPay(ctx, claimCost), title: `Buy an explored cell next to your land, one at a time; it's yours at once (not next to an enemy unit). Bought land costs ${content.claim?.upkeep ?? 1} gold a turn per cell (unpaid cells are given up, farthest first) and is weak: an enemy unit on or next to it, being cut off from your cities' free land, or another realm's Town Hall reaching it make it nobody's.` });
     fill(box, el("div", { className: "hr-btnrow" }, claim), tabs,
       ui.buildCat ? el("div", { className: "hr-buildgrid" }, items) : el("p", { className: "muted small" }, "Pick a category, then a structure."),
       el("p", { className: "muted small" }, "Click the map to place it. R or right-click turns it, Esc cancels. It goes anywhere inside your territory and becomes a construction site that idle people build over a few turns. Goods go straight to your stores."));

@@ -20,7 +20,7 @@ Hall, Storage Yard, Granary). Production and upkeep happen at the same time; onl
 end of the turn is capped by the stores' room (the rest is lost). Structures go anywhere inside your territory.
 Structures don't spread land, except Town Halls: each city gets free land (2 cells around it). That land is strong: first come, first served, it stays yours while the
 hall stands, and cells two realms reach in the same turn go to no one. Gold buys weak land (claim an
-explored cell next to yours, with its free neighbours), which costs 1 gold a turn per cell (unpaid
+explored cell next to yours, one at a time; it's yours at once), which costs 1 gold a turn per cell (unpaid
 cells are given up, farthest from your Town Halls first): it goes back to no one when an enemy unit
 stands on or next to it (nor can you claim there), when it's cut off from your strong land, or when
 another realm's Town Hall reaches it. No roads. Units can be
@@ -47,8 +47,8 @@ units, construction sites, territory, events as they see them; spectators see ev
 Game messages (all only while planning; any order un-readies you; never use a "type" key,
 the lobby envelope owns it):
     {"action": "build", "kind": stype, "at": "q,r", "rot": 0-5}
-    {"action": "claim", "at": "q,r"}                   (2 gold; at resolution the cell and its free neighbours become
-                                                        your weak land, 1 gold upkeep a turn per cell)
+    {"action": "claim", "at": "q,r"}                   (2 gold; the cell becomes your weak land at once, no cancel;
+                                                        1 gold upkeep a turn per cell)
     {"action": "recruit", "structure": sid, "kind": utype}
     {"action": "move", "unit": uid, "to": "q,r"}      (to = own cell clears the unit's orders)
     {"action": "shoot", "unit": uid, "at": "q,r"}

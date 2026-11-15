@@ -360,10 +360,6 @@
         const [x, y] = middle(b.cells);
         put(orderG, svg("text", { x, y: y + 1, class: "hr-icon hr-ghosttext" }, def?.icon || ""));
       }
-      for (const c of o.claims || []) {
-        put(orderG, hexAt(c.at, SIZE * 0.8, { fill: mine, "fill-opacity": 0.25, stroke: mine, "stroke-width": 2.5, "stroke-dasharray": "4 4" }),
-          svg("text", { x: center(c.at)[0], y: center(c.at)[1] + 1, class: "hr-icon hr-ghosttext" }, "⚑"));
-      }
       for (const [uid, path] of Object.entries(o.moves)) {
         const u = game.units[uid];
         if (!u) continue;

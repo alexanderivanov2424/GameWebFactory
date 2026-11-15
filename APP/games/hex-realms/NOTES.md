@@ -44,8 +44,8 @@ fields in `logic/content.py`). Tests: `tests/` (`python3 -I tools/run_tests.py h
   +n per structure that gives them.
 - **No roads; land is bought** (2026-11-11, the user's call): roads (first carrying goods, then laid
   automatically) were removed. Structures go anywhere in your territory, with no "must touch"
-  rule. `orders.claim` is an order paid in gold (`CLAIM_COST`); at resolution (`Match._claims`,
-  before builds) the cell and its free neighbours become weak land (`m.claims`).
+  rule. `orders.claim` buys one cell for gold (`CLAIM_COST`) at once (2026-11-15, the user's call: not an
+  order, no cancel; it goes into `m.claims` and `refresh` runs, so a hidden enemy unit takes it straight back).
 - **Strong and weak land** (`logic/territory.py`, 2026-11-14, the user's rules; 2026-11-15: structures no
   longer spread land, bought land has upkeep): Town Halls' reach is strong, free land: every Town Hall
   reaches `CITY_RADIUS` (2026-11-15: new cities too, not only the first). First come, first served (`m.territory` is kept between refreshes; a cell stays its
@@ -55,11 +55,10 @@ fields in `logic/content.py`). Tests: `tests/` (`python3 -I tools/run_tests.py h
   passing through counts mid-move), when another player's Town Hall reaches it, or when it's
   no longer connected to its owner's strong land (both in `territory.territory`, run by `refresh`);
   your own Town Hall reaching it makes it strong (it leaves `m.claims`). Each weak cell costs
-  `LAND_UPKEEP` gold a turn (`economy.report`'s upkeep and `land`, with this turn's claim orders while
-  planning (`resolving=False`), since claims resolve before production); gold short at the end of the
+  `LAND_UPKEEP` gold a turn (`economy.report`'s upkeep and `land`); gold short at the end of the
   turn gives up that many weak cells, farthest from the owner's halls first (`territory.give_up`, a
   `landLost` event), and only with none left does a paid unit desert. Claims need no enemy unit
-  on or next to the target (`claim_problem` checks what you see, `_claims` the truth). The client
+  on or next to the target (`claim_problem` checks what you see; `refresh` then drops a cell a hidden one threatens). The client
   gets `claims` in the view and draws weak land with a dashed border (territory is never shaded inside).
 - **Standing orders** (`logic/standing.py`, 2026-11-11 feedback): `u["auto"]` (explore / fight /
   pillage / travel, plus `u["goal"]` for travel) survives the per-turn order reset; `standing.plan_all`
@@ -118,7 +117,7 @@ fields in `logic/content.py`). Tests: `tests/` (`python3 -I tools/run_tests.py h
 - `logic/recruiting.py`: `spawn_cell` (on the structure first), `resolve` (recruit orders appear, take the
   structure's `autoOrder` as `u["auto"]`), `set_auto` (the `autorecruit` message) and `plan` (each turn's
   automatic recruit orders, marked `"auto": True`, only with people who have no job).
-- `logic/territory.py`: `territory` (strong + weak land, returns both maps), `unit_entered`, `claim_cells`, `threatened`,
+- `logic/territory.py`: `territory` (strong + weak land, returns both maps), `unit_entered`, `threatened`,
   `bought` (weak cells paid for), `give_up` (unpaid land).
 - `logic/movement.py`, `logic/combat.py`, `logic/economy.py`, `logic/logistics.py`, `logic/mapgen.py`,
   `logic/content.py`: see their headers.

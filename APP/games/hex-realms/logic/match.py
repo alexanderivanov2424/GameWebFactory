@@ -10,9 +10,7 @@
     match.result               None while playing; then {"winner": pid or None, "reason", "scores"}
 
 Turn resolution, in order: research; ranged shots (positions before anyone moves); movement
-step by step with battles (movement.py); towers shoot; settlers found cities; land claims (two
-players claiming one cell both fail and get refunds, as does one with an enemy unit on or next to it;
-neighbours two claims share go to no one); builds (two
+step by step with battles (movement.py); towers shoot; settlers found cities; builds (two
 players ordering the same cell both fail and get refunds; the rest become construction sites); recruits appear on their structure (next to it
 when it's full, and ships on the water beside it) with its automatic standing order (recruiting.py); production into the stores, eating, wages and growth (economy.py, logistics.py);
 construction by the people who were idle this turn (construction.py); healing (+1 hp for units that didn't
@@ -31,11 +29,11 @@ State: cells {key: terrain}; structures {sid: {"id", "n", "type", "owner", "at",
 "hp", "active", "stock" (goods in a store)}} with cell_structure {key: sid}; units {uid: {"id", "n", "type", "owner", "at",
 "hp", "auto" (a standing order: standing.py), "goal" (where a Travel order goes)}} with unit_at {key: uid}; sites {cid: {"id", "n", "type", "owner", "at", "rot", "cells", "cost",
 "done" (turns of work so far)}} with cell_site {key: cid} (construction.py); claims {key: pid} (weak land
-bought with gold, 1 gold upkeep a turn each: orders.claim, territory.py); territory {key: pid} (strong
+bought with gold one cell at a time, at once, 1 gold upkeep a turn each: orders.claim, territory.py); territory {key: pid} (strong
 land around Town Halls, free, plus the weak land still held: territory.py); players
 {pid: {"res" (gold/faith/science only: goods live in stores, see logistics.py), "pop", "advances", "done",
 "alive", "growthOff"}};
-orders {pid: {"builds", "claims", "recruits", "research": [...], "moves": {uid: [keys]}, "shots": {uid: key},
+orders {pid: {"builds", "recruits", "research": [...], "moves": {uid: [keys]}, "shots": {uid: key},
 "holds": [uid], "found": {uid: rot}}}; events (the last resolution, for the client to replay).
 """
 
@@ -67,7 +65,7 @@ def map_radius(players, size):
 
 
 def empty_orders():
-    return {"builds": [], "claims": [], "recruits": [], "research": [], "moves": {}, "shots": {}, "holds": [], "found": {}}
+    return {"builds": [], "recruits": [], "research": [], "moves": {}, "shots": {}, "holds": [], "found": {}}
 
 
 class Match:
@@ -210,7 +208,6 @@ class Match:
         movement.resolve(self, ev)
         combat.towers(self, ev)
         self._found(ev)
-        self._claims(ev)
         self._builds(ev)
         recruiting.resolve(self, ev)
         self.refresh()
@@ -251,33 +248,6 @@ class Match:
                     hall["stock"] = self.players[pid].pop("startGoods")
                 ev.append({"t": "founded", "owner": pid, "at": at})
                 self.log.append(f"Turn {self.turn}: {self.names[pid]} founded a city.")
-
-    def _claims(self, ev):
-        """Bought land (orders.claim), weak land (territory.py): two players claiming the same cell
-        both fail (refunded), as does a claim with an enemy unit on or next to it or no longer next
-        to your land; free neighbours two claims share go to no one."""
-        wanted, takes = {}, {}
-        for pid in self.alive():
-            for c in self.orders[pid]["claims"]:
-                wanted.setdefault(c["at"], []).append(pid)
-        for pid in self.alive():
-            for c in self.orders[pid]["claims"]:
-                at = c["at"]
-                owner = self.territory.get(at)
-                why = "Another realm claimed it too." if len(wanted[at]) > 1 else \
-                    "That cell already belongs to a realm." if owner not in (None, pid) else \
-                    "An enemy unit is on or next to it." if territory.threatened(self, pid, at) else \
-                    "It's no longer next to your land." if not any(self.territory.get(n) == pid for n in neighbors(at)) else None
-                if why:
-                    orders.refund(self, pid, c["cost"])
-                    ev.append({"t": "failed", "owner": pid, "what": "claim", "at": at, "why": why})
-                    continue
-                ev.append({"t": "claimed", "owner": pid, "at": at})
-                for k in territory.claim_cells(self, at):
-                    takes.setdefault(k, set()).add(pid)
-        for k, pids in takes.items():
-            if len(pids) == 1:
-                self.claims[k] = next(iter(pids))
 
     def _builds(self, ev):
         claims = {}
@@ -387,7 +357,7 @@ class Match:
             "content": {"structures": STRUCTURES, "units": UNITS, "advances": ADVANCES, "terrain": TERRAIN,
                         "resources": RESOURCES, "categories": CATEGORIES,
                         "tags": {t: {"name": n, "color": c} for t, (n, c) in TAGS.items()},
-                        "claim": {"cost": orders.CLAIM_COST, "radius": territory.CLAIM_RADIUS, "upkeep": territory.LAND_UPKEEP},
+                        "claim": {"cost": orders.CLAIM_COST, "upkeep": territory.LAND_UPKEEP},
                         "resourceInfo": {r: {"name": n, "icon": i} for r, (n, i) in RESOURCE_INFO.items()}},
             "players": {pid: {"name": self.names[pid], "color": p["color"], "res": self.shown[pid]["res"],
                               "pop": self.shown[pid]["pop"], "advances": p["advances"], "done": p["done"],

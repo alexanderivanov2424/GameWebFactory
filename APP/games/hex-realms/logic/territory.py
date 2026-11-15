@@ -2,14 +2,11 @@
 
     territory(m)             (the new {key: pid}, the weak cells still held {key: pid}) from
                              m.territory and m.claims; Match.refresh stores both
-    bought(m, pid, pending=False)  the weak cells pid pays upkeep for (LAND_UPKEEP each a turn);
-                             pending: also the cells pid's claim orders this turn would take (forecast)
+    bought(m, pid)           how many weak cells pid pays upkeep for (LAND_UPKEEP each a turn)
     give_up(m, pid, n)       pid can't pay for n cells: drop n weak cells, farthest from pid's Town
                              Halls first; returns how many went
     unit_entered(m, uid)     an enemy unit standing on or next to weak land unclaims it at once
                              (Match.move_unit / add_unit call it, so passing through counts)
-    claim_cells(m, at)       the cells a claim at `at` would take: it and its neighbours that are on
-                             the map and nobody's
     threatened(m, pid, k, seen=None)  an enemy unit of pid's stands on or next to k (seen: only units
                              on those cells count, for checks made with what pid knows)
 
@@ -33,7 +30,6 @@ from gamekit.hexes import disk, dist, neighbors, parse
 
 from .content import TOWN_HALL
 
-CLAIM_RADIUS = 1  # a claim holds the cell and its free neighbours
 CITY_RADIUS = 2  # free land around every Town Hall
 LAND_UPKEEP = 1  # gold a turn per weak (bought) cell
 
@@ -93,16 +89,8 @@ def unit_entered(m, uid):
                 del m.territory[k]
 
 
-def claim_cells(m, at):
-    return [k for k in disk(CLAIM_RADIUS, parse(at)) if k in m.cells and k not in m.territory]
-
-
-def bought(m, pid, pending=False):
-    cells = {k for k, p in m.claims.items() if p == pid}
-    if pending:
-        for c in m.orders[pid]["claims"]:
-            cells.update(claim_cells(m, c["at"]))
-    return len(cells)
+def bought(m, pid):
+    return sum(1 for p in m.claims.values() if p == pid)
 
 
 def give_up(m, pid, n):

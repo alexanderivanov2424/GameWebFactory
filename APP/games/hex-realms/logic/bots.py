@@ -247,7 +247,7 @@ class Bot:
         if not targets or not options:
             return False
         best = min(options, key=lambda k: (min(dist(k, t) for t in targets), self.near_hall(k), k))
-        if report(m, pid)["net"]["gold"] < len(territory.claim_cells(m, best)) * territory.LAND_UPKEEP:
+        if report(m, pid)["net"]["gold"] < territory.LAND_UPKEEP:
             return False  # can't keep paying for it
         return try_act(m, pid, "claim", best)
 

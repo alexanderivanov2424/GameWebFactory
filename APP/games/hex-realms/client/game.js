@@ -205,7 +205,7 @@
         el("div", {}, HexHud.fmt.structInfo(names, d).terrains),
         el("div", { className: "hr-here neg" })), HexHud.structCard(names, d));
     }
-    else if (m.type === "claim") fill(box, `Extending territory: click a green cell to claim it and its free neighbours at the end of the turn (${HexHud.fmt.costText(names.claim.cost)} each; if another realm claims it too, nobody gets it). Each bought cell costs ${names.claim.upkeep} gold a turn. Bought land is weak (dashed): it's lost to an enemy unit on or next to it, if it's cut off from your cities' free land, or to another realm's Town Hall. Esc to stop. `, cancel);
+    else if (m.type === "claim") fill(box, `Extending territory: click a green cell to make it yours at once (${HexHud.fmt.costText(names.claim.cost)} each, no refund). Each bought cell costs ${names.claim.upkeep} gold a turn. Bought land is weak (dashed): it's lost to an enemy unit on or next to it, if it's cut off from your cities' free land, or to another realm's Town Hall. Esc to stop. `, cancel);
     else if (m.type === "shoot") fill(box, "Click an enemy unit or structure in range. ", cancel);
     else fill(box, "Found a city here: R turns the footprint, click it (or Confirm) to place. ",
       HexHud.fmt.btn("Confirm", confirmFound, { cls: "endturn" }), cancel);
@@ -219,9 +219,8 @@
   // Cells you could claim (the server decides): explored, nobody's, next to your territory, no enemy unit on or next to it.
   function claimable(c) {
     const g = c.game;
-    const pending = new Set((c.priv.orders.claims || []).map((x) => x.at));
     const enemyUnit = (k) => idx.unitAt[k] && g.units[idx.unitAt[k]].owner !== c.you;
-    return Object.keys(g.cells).filter((k) => !(k in g.territory) && !pending.has(k) && U.neighbors(k).some((n) => g.territory[n] === c.you)
+    return Object.keys(g.cells).filter((k) => !(k in g.territory) && U.neighbors(k).some((n) => g.territory[n] === c.you)
       && !enemyUnit(k) && !U.neighbors(k).some(enemyUnit));
   }
 

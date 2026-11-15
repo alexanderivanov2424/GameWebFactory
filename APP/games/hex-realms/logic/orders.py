@@ -11,10 +11,10 @@ so a player can never order more than they have. Orders are private until the tu
                                     this turn's reach starts a Travel standing order (standing.py)
     shoot(m, pid, uid, at)          ranged unit: shoot a cell instead of moving
     hold(m, pid, uid)               toggle: stay put and defend with 1 more die
-    claim(m, pid, at)               for CLAIM_COST (gold): at resolution, an unowned explored cell next
-                                    to your territory becomes your weak land with its free neighbours
+    claim(m, pid, at)               for CLAIM_COST (gold), at once (not an order: no cancel): an unowned
+                                    explored cell next to your territory becomes your weak land
                                     (territory.py); not with an enemy unit (that you see) on or next
-                                    to it; cancel refunds it
+                                    to it (one you don't see takes it back at once)
     auto(m, pid, uid, mode)         toggle a standing order kept across turns (standing.py): explore
                                     (clear fog), fight (nearest enemy unit) or pillage (nearest enemy
                                     structure, fighting enemy units that come close)
@@ -201,8 +201,6 @@ def claim_problem(m, pid, at):
         return "Claim a cell next to your territory."
     if territory.threatened(m, pid, at, m.visible[pid]):
         return "An enemy unit is on or next to that cell."
-    if any(c["at"] == at for c in m.orders[pid]["claims"]):
-        return "You're claiming that cell already."
     return None
 
 
@@ -211,7 +209,8 @@ def claim(m, pid, at):
     if problem:
         raise LobbyError(problem)
     pay(m, pid, CLAIM_COST)
-    m.orders[pid]["claims"].append({"id": m.new_id("o"), "at": at, "cost": dict(CLAIM_COST)})
+    m.claims[at] = pid
+    m.refresh()  # it's land now (a hidden enemy unit on or next to it takes it straight back)
 
 
 def auto(m, pid, uid, mode):
@@ -274,7 +273,7 @@ def research(m, pid, aid):
 
 def cancel(m, pid, oid):
     o = m.orders[pid]
-    for kind in ("builds", "claims", "recruits", "research"):
+    for kind in ("builds", "recruits", "research"):
         for x in o[kind]:
             if x["id"] == oid:
                 o[kind].remove(x)

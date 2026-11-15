@@ -116,7 +116,6 @@
           lines.push(line(el("b", { className: "neg" }, "Destroyed "), nameSpan(game, e.owner), ` ${structName(e.type)}`, e.by ? [" by ", nameSpan(game, e.by)] : null, where(e.at)));
           break;
         case "built": lines.push(line("Built ", nameSpan(game, e.owner), ` ${structName(e.type)}`, where(e.at))); break;
-        case "claimed": lines.push(line("Claimed ", nameSpan(game, e.owner), " land", where(e.at))); break;
         case "site": lines.push(line("Started building ", nameSpan(game, e.owner), ` ${structName(e.type)}`, where(e.at))); break;
         case "failed":
           if (e.owner === you) lines.push(line(el("span", { className: "neg" }, "Failed: "), `${e.what === "claim" ? "Land claim" : content.structures[e.what]?.name || unitName(e.what)} — ${e.why}`, where(e.at)));
