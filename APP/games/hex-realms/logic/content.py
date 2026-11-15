@@ -50,7 +50,6 @@ RESOURCE_INFO = {"gold": ("Gold", "🪙"), "food": ("Food", "🍞"), "wood": ("W
 CAPPED = ["food", "wood", "stone", "metal"]  # goods: kept in stores (logistics.py)
 GLOBAL = ["gold", "faith", "science"]  # realm-wide, uncapped
 TERRAIN = {
-    "grass": {"name": "Grassland", "move": 2, "cover": False, "build": True},
     "plains": {"name": "Plains", "move": 2, "cover": False, "build": True},
     "desert": {"name": "Desert", "move": 2, "cover": False, "build": True},
     "forest": {"name": "Forest", "move": 4, "cover": True, "build": True},

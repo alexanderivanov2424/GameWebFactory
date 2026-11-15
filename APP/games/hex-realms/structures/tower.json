@@ -18,7 +18,6 @@
  "territory": 2,
  "requires": "masonry",
  "terrain": [
-  "grass",
   "plains",
   "forest",
   "hills",

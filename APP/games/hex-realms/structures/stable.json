@@ -20,7 +20,6 @@
  ],
  "requires": "horsemanship",
  "terrain": [
-  "grass",
   "plains"
  ],
  "text": "Trains knights.",

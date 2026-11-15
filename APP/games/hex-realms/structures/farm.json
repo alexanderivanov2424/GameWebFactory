@@ -23,15 +23,15 @@
   "food": 2
  },
  "perCell": {
-  "grass": {
+  "plains": {
    "food": 1
   }
  },
  "terrain": [
-  "grass",
-  "plains"
+  "plains",
+  "hills"
  ],
- "text": "+1 food for each of its cells on grassland.",
+ "text": "+1 food for each of its cells on plains.",
  "category": "food",
  "buildTurns": 2,
  "builders": 1,

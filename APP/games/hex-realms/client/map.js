@@ -25,7 +25,7 @@
   const SQ3 = Math.sqrt(3);
   const DIRS = [[1, 0], [0, 1], [-1, 1], [-1, 0], [0, -1], [1, -1]]; // DIRS[i] faces angle 60*i
   const COLORS = {
-    grass: "#5c9a47", plains: "#b3b46f", desert: "#d8bf7c", forest: "#2f6d3c",
+    plains: "#5c9a47", desert: "#d8bf7c", forest: "#2f6d3c",
     hills: "#8c7b55", mountain: "#8a8f9b", water: "#3a6ea6",
   };
   // Terrain art: PNGs in art/terrain/ (208 x 240 = one hex at 4x), drawn over the flat colour. Each terrain lists
@@ -33,7 +33,7 @@
   // Terrains not listed here keep the flat colour and line glyph.
   const ART_DIR = new URL("art/terrain/", document.currentScript?.src || location.href).href;
   const TERRAIN_ART = {
-    grass: [["grass.png", 1]],
+    plains: [["plains.png", 1]],
     desert: [["desert.png", 1]],
     forest: [["forest.png", 1]],
     mountain: [["mountain_1.png", 99], ["mountain_2.png", 1]],

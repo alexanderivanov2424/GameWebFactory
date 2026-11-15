@@ -1,7 +1,7 @@
 """Hex Realms: unit paths and simultaneous movement.
 
 Movement points are in half steps: a unit with move 2 has 4. Entering a cell costs its
-terrain's "move" (grass 2, forest 4...); naval units move on water only (2 per cell).
+terrain's "move" (plains 2, forest 4...); naval units move on water only (2 per cell).
 Mountains and water stop land units. Own structures can be crossed. A cell with an enemy unit
 or enemy structure can only be the last
 cell of a path: moving into it is an attack (it costs one step, 2).

@@ -98,7 +98,7 @@ fields in `logic/content.py`). Tests: `tests/` (`python3 -I tools/run_tests.py h
 - `logic/territory.py`: `territory` (strong + weak land, returns both maps), `unit_entered`, `claim_cells`, `threatened`.
 - `logic/movement.py`, `logic/combat.py`, `logic/economy.py`, `logic/logistics.py`, `logic/mapgen.py`,
   `logic/content.py`: see their headers.
-- `client/art/`: PNG art at 4x map size (sharp at the 3x max zoom). `terrain/<terrain>[_n].png` (208 x 240, one
+- `client/art/`: PNG art at 4x map size (sharp at the 3x max zoom). `terrain/<terrain>[_n].png` (e.g. plains.png, mountain_1.png) (208 x 240, one
   pointy-top hex 207.85 wide; corners (103.9,0) (207.8,60) (207.8,180) (103.9,240) (0,180) (0,60)) is drawn over the
   flat colour for the terrains listed in map.js's `TERRAIN_ART` (variants with weights, picked per cell by a hash of
   the cell key, so every viewer sees the same map; add a new file there). `terrain/terrain_template.png` (hex outline)
@@ -124,7 +124,7 @@ fields in `logic/content.py`). Tests: `tests/` (`python3 -I tools/run_tests.py h
 - `client/game.js`: UI state (`ui.sel`, `ui.mode` build / shoot / found + rotation, tab, `ui.tech`), click
   and key handling (`selectAt` cycles unit -> structure -> site on repeated clicks), highlights and the build ghost (its green/red is only a hint; the server
   decides), the turn countdown (approximate: restarts on reload).
-- `tests/`: `test_rules.py` (Match on a blank all-grass map: `helpers.blank`, `hall` (with the
+- `tests/`: `test_rules.py` (Match on a blank all-plains map: `helpers.blank`, `hall` (with the
   starting goods), `unit`, `rich`, `stock` = what a player can spend), `test_lobby.py` (Sim: secrecy, done, timer, leaving).
 
 ## Balance notes

@@ -7,7 +7,7 @@
 Terrain comes in Voronoi-style patches (each cell takes the terrain of its nearest random seed
 point). Starts sit evenly around a ring 3 cells in from the edge; the 2 rings around each start
 are overwritten with the same fair pattern (open land next to the hall, then forest, hills and
-grass), and the map is regenerated until every start can walk to every other.
+plains), and the map is regenerated until every start can walk to every other.
 """
 
 import random
@@ -16,9 +16,8 @@ from gamekit.hexes import dist, disk, neighbors, parse, ring
 
 from .content import TERRAIN
 
-WEIGHTS = {"grass": 4, "plains": 3, "forest": 3, "hills": 2, "mountain": 1, "desert": 1, "water": 1.6}
-START_RING2 = ["forest", "forest", "grass", "hills", "grass", "plains", "forest", "grass", "hills", "plains", "grass", "grass"]
-OPEN = ["grass", "plains"]
+WEIGHTS = {"plains": 7, "forest": 3, "hills": 2, "mountain": 1, "desert": 1, "water": 1.6}
+START_RING2 = ["forest", "forest", "plains", "hills", "plains", "plains", "forest", "plains", "hills", "plains", "plains", "plains"]
 
 
 def pick(rng, weights):
@@ -50,7 +49,7 @@ def _attempt(rng, radius, players):
         q, r = parse(s)
         for k in ring(1, (q, r)) + [s]:
             if k in cells:
-                cells[k] = OPEN[rng.randrange(2)] if k != s else "grass"
+                cells[k] = "plains"
         for k, t in zip(ring(2, (q, r)), START_RING2):
             if k in cells:
                 cells[k] = t
