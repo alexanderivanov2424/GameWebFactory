@@ -12,7 +12,7 @@ Costs are paid when given and refunded when cancelled or failed, so orders never
     found(m, pid, uid, rot)         settlers found a Town Hall where they stand
     research(m, pid, aid)           buy an advance
     cancel(m, pid, oid)             undo a build / claim / recruit / research order
-    trade(m, pid, give, get)        market exchange, at once
+    trade(m, pid, sid, give, get)   set a trade structure's trade, made every turn (give None: stop)
     toggle(m, pid, sid)             switch a structure with jobs off or on
     staff(m, pid, on)               switch every structure with jobs off or on
     demolish(m, pid, sid)           a construction site (refunded) or a structure (no refund)
@@ -24,21 +24,11 @@ from gamekit.hexes import dist, neighbors
 
 from .content import ADVANCES, STRUCTURES, TERRAIN, TOWN_HALL, UNITS, footprint
 from . import construction, logistics, standing, territory, vision
-from .economy import report
+from .economy import TRADE_GOODS
 from .movement import path
 
 CITY_SPACING = 5
 CLAIM_COST = {"gold": 2}
-TRADE_GOODS = ["gold", "food", "wood", "stone", "metal"]
-
-
-def pay(m, pid, cost):
-    """From the realm's stores (logistics.py), plus realm gold/faith/science."""
-    logistics.take(m, pid, cost)
-
-
-def refund(m, pid, cost):
-    logistics.give(m, pid, cost)
 
 
 def own_unit(m, pid, uid):
@@ -102,7 +92,7 @@ def build(m, pid, stype, at, rot):
         raise LobbyError(problem)
     if any(m.territory.get(c) != pid for c in cells):
         raise LobbyError("Build inside your territory (claim more land with gold).")
-    pay(m, pid, d["cost"])
+    logistics.take(m, pid, d["cost"])
     o["builds"].append({"id": m.new_id("o"), "type": stype, "at": at, "rot": rot % 6, "cells": cells, "cost": dict(d["cost"])})
 
 
@@ -112,7 +102,7 @@ def recruit_problem(m, pid, s, utype):
         return f"{sd['name']} can't train that."
     if ud["requires"] and ud["requires"] not in m.players[pid]["advances"]:
         return f"Research {ADVANCES[ud['requires']]['name']} first."
-    if ud["needs"] and not any(x["owner"] == pid and x["type"] == ud["needs"] for x in m.structures.values()):
+    if ud["needs"] and not m.structures_of(pid, ud["needs"]):
         return f"{ud['name']} needs a {STRUCTURES[ud['needs']]['name']}."
     if any(r["at"] == s["id"] for r in m.orders[pid]["recruits"]):
         return "One unit per structure per turn."
@@ -128,7 +118,7 @@ def recruit(m, pid, sid, utype):
     p = m.players[pid]
     if p["pop"] < ud["people"]:
         raise LobbyError(f"{ud['name']} needs {ud['people']} people.")
-    pay(m, pid, ud["cost"])
+    logistics.take(m, pid, ud["cost"])
     p["pop"] -= ud["people"]
     m.orders[pid]["recruits"].append({"id": m.new_id("o"), "type": utype, "at": sid, "cost": dict(ud["cost"]),
                                       "people": ud["people"]})
@@ -193,7 +183,7 @@ def claim(m, pid, at):
     problem = claim_problem(m, pid, at)
     if problem:
         raise LobbyError(problem)
-    pay(m, pid, CLAIM_COST)
+    logistics.take(m, pid, CLAIM_COST)
     m.claims[at] = pid
     m.refresh()  # it's land now (a hidden enemy unit on or next to it takes it straight back)
 
@@ -252,7 +242,7 @@ def research(m, pid, aid):
     missing = [ADVANCES[x]["name"] for x in a["after"] if x not in p["advances"]]
     if missing:
         raise LobbyError(f"Research {', '.join(missing)} first.")
-    pay(m, pid, a["cost"])
+    logistics.take(m, pid, a["cost"])
     m.orders[pid]["research"].append({"id": m.new_id("o"), "advance": aid, "cost": dict(a["cost"])})
 
 
@@ -262,22 +252,22 @@ def cancel(m, pid, oid):
         for x in o[kind]:
             if x["id"] == oid:
                 o[kind].remove(x)
-                refund(m, pid, x["cost"])
+                logistics.give(m, pid, x["cost"])
                 m.players[pid]["pop"] += x.get("people", 0)
                 return
     raise LobbyError("No such order.")
 
 
-def trade(m, pid, give, get):
+def trade(m, pid, sid, give, get):
+    s = own_structure(m, pid, sid)
+    if not STRUCTURES[s["type"]]["trade"]:
+        raise LobbyError("That structure doesn't trade.")
+    if give is None:
+        s["trade"] = None
+        return
     if give not in TRADE_GOODS or get not in TRADE_GOODS or give == get:
         raise LobbyError("Trade gold, food, wood, stone or metal for another one.")
-    rate = report(m, pid)["tradeRate"]
-    if not rate:
-        raise LobbyError("You need a working Market or Trading Hall.")
-    if get in logistics.GOODS and not logistics.room(m, pid, get):
-        raise LobbyError(f"No room left for {get} in your stores.")
-    pay(m, pid, {give: rate})
-    refund(m, pid, {get: 1})
+    s["trade"] = {"give": give, "get": get}
 
 
 def toggle(m, pid, sid):
@@ -288,7 +278,7 @@ def toggle(m, pid, sid):
 
 
 def staff(m, pid, on):
-    own = [s for s in m.structures.values() if s["owner"] == pid and STRUCTURES[s["type"]]["jobs"]]
+    own = [s for s in m.structures_of(pid) if STRUCTURES[s["type"]]["jobs"]]
     if not own:
         raise LobbyError("You have no structures with workers.")
     for s in own:
@@ -301,7 +291,7 @@ def demolish(m, pid, sid):
         if site["owner"] != pid:
             raise LobbyError("That's not your construction site.")
         construction.remove(m, sid)
-        refund(m, pid, site["cost"])
+        logistics.give(m, pid, site["cost"])
         return
     s = own_structure(m, pid, sid)
     if s["type"] == TOWN_HALL:

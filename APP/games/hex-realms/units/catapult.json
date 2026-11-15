@@ -16,6 +16,5 @@
  "upkeep": {
   "food": 1,
   "gold": 1
- },
- "text": "Each hit on a structure does 3 damage."
+ }
 }

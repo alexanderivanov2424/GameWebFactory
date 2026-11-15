@@ -14,6 +14,5 @@
  "settler": true,
  "upkeep": {
   "food": 1
- },
- "text": "Founds a new Town Hall where it stands (at least 5 cells from any other)."
+ }
 }

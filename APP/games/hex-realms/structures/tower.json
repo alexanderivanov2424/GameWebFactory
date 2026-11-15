@@ -26,7 +26,6 @@
   "desert",
   "mountain"
  ],
- "text": "Shoots the nearest enemy unit within 2 after movement.",
  "category": "defense",
  "vision": 5,
  "hammers": 4,

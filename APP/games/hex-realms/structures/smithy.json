@@ -23,7 +23,6 @@
   "metal": 1
  },
  "requires": "bronze_working",
- "text": "+1 metal. Builds catapults; swordsmen and knights need one too.",
  "recruits": [
   "catapult"
  ],

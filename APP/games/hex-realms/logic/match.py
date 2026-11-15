@@ -152,6 +152,17 @@ class Match:
     def alive(self):
         return [pid for pid in self.seats if self.players[pid]["alive"]]
 
+    def structures_of(self, pid, stype=None):
+        """pid's structures, oldest first (only one type if given)."""
+        return [s for s in self.structures.values() if s["owner"] == pid and stype in (None, s["type"])]
+
+    def units_of(self, pid):
+        """pid's units, oldest first."""
+        return [u for u in self.units.values() if u["owner"] == pid]
+
+    def has_hall(self, pid):
+        return any(s["owner"] == pid and s["type"] == TOWN_HALL for s in self.structures.values())
+
     # --- Planning -------------------------------------------------------------------------------
 
     def act(self, pid, name, *args):
@@ -243,7 +254,7 @@ class Match:
                 problem = "Another player built there too." if any(len(claims[c]) > 1 for c in b["cells"]) else \
                     orders.site_problem(self, pid, b["type"], b["cells"])
                 if problem:
-                    orders.refund(self, pid, b["cost"])
+                    logistics.give(self, pid, b["cost"])
                     ev.append({"t": "failed", "owner": pid, "what": b["type"], "at": b["at"], "why": problem})
                 else:
                     construction.start(self, pid, b)
@@ -261,8 +272,7 @@ class Match:
 
     def _eliminate(self, ev):
         for pid in self.alive():
-            if not any(s["owner"] == pid and s["type"] == TOWN_HALL for s in self.structures.values()) and \
-                    not any(u["owner"] == pid and UNITS[u["type"]]["settler"] for u in self.units.values()):
+            if not self.has_hall(pid) and not any(UNITS[u["type"]]["settler"] for u in self.units_of(pid)):
                 self.knock_out(pid)
                 ev.append({"t": "eliminated", "owner": pid})
                 self.log.append(f"Turn {self.turn}: {self.names[pid]} lost their last Town Hall.")
@@ -270,10 +280,10 @@ class Match:
     def knock_out(self, pid):
         self.players[pid]["alive"] = False
         self.players[pid]["done"] = False
-        for uid in [u for u, x in self.units.items() if x["owner"] == pid]:
-            self.remove_unit(uid)
-        for sid in [s for s, x in self.structures.items() if x["owner"] == pid]:
-            self.remove_structure(sid)
+        for u in self.units_of(pid):
+            self.remove_unit(u["id"])
+        for s in self.structures_of(pid):
+            self.remove_structure(s["id"])
         for cid in [c for c, x in self.sites.items() if x["owner"] == pid]:
             construction.remove(self, cid)
         self.claims = {k: p for k, p in self.claims.items() if p != pid}
@@ -308,9 +318,8 @@ class Match:
         p = self.players[pid]
         if not p["alive"]:
             return 0
-        own_units = sum(1 for u in self.units.values() if u["owner"] == pid)
-        built = sum(STRUCTURES[s["type"]]["score"] for s in self.structures.values() if s["owner"] == pid)
-        return p["pop"] + own_units + 3 * len(p["advances"]) + built + p["res"]["gold"] // 10
+        built = sum(STRUCTURES[s["type"]]["score"] for s in self.structures_of(pid))
+        return p["pop"] + len(self.units_of(pid)) + 3 * len(p["advances"]) + built + p["res"]["gold"] // 10
 
     def remove(self, pid):
         if pid not in self.players or not self.players[pid]["alive"]:
@@ -347,11 +356,7 @@ class Match:
         """pid's units that have an order this turn or a standing order (greyed out on the map)."""
         o = self.orders[pid]
         busy = set(o["moves"]) | set(o["shots"]) | set(o["holds"]) | set(o["found"])
-        return sorted(uid for uid, u in self.units.items() if u["owner"] == pid and (uid in busy or u.get("auto")))
-
-    def stores(self, pid):
-        """{sid: {"stock", "cap"}} for pid's storage structures."""
-        return {s["id"]: {"stock": s["stock"], "cap": logistics.capacity(s)} for s in logistics.stores(self, pid)}
+        return sorted(u["id"] for u in self.units_of(pid) if u["id"] in busy or u.get("auto"))
 
     def private(self, pid):
         """The map as pid sees it ("view"; pid None = spectator, whole map), plus pid's stock, orders and planning help."""
@@ -359,23 +364,21 @@ class Match:
         out = {"view": vision.view(self, pid, staffed)}
         if pid not in self.players or not self.players[pid]["alive"] or self.result is not None:
             return out
-        p = self.players[pid]
-        recruit = {}
-        for s in self.structures.values():
-            if s["owner"] == pid and STRUCTURES[s["type"]]["recruits"]:
-                recruit[s["id"]] = {u: orders.recruit_problem(self, pid, s, u) or "" for u in STRUCTURES[s["type"]]["recruits"]}
+        p, own, units = self.players[pid], self.structures_of(pid), self.units_of(pid)
         return {
             **out,
             "res": logistics.stock(self, pid), "pop": p["pop"], "done": p["done"],
-            "stores": self.stores(pid), "orders": self.orders[pid], "report": report(self, pid),
-            "auto": {uid: {"mode": u["auto"], "goal": u.get("goal")} for uid, u in self.units.items()
-                     if u["owner"] == pid and u.get("auto")},
+            "stores": {s["id"]: {"stock": s["stock"], "cap": logistics.capacity(s)} for s in logistics.stores(self, pid)},
+            "trades": {s["id"]: s["trade"] for s in own if s.get("trade")},
+            "orders": self.orders[pid], "report": report(self, pid),
+            "auto": {u["id"]: {"mode": u["auto"], "goal": u.get("goal")} for u in units if u.get("auto")},
             "ordered": self.ordered(pid),
             "building": construction.forecast(self, pid),
-            "typeBonus": economy.type_bonus(self, pid), "homeHousing": economy.effect(self, pid, "homeHousing"),
-            "reach": {uid: sorted(movement.reach(self, uid)) for uid, u in self.units.items() if u["owner"] == pid},
-            "recruit": recruit,
-            "found": {uid: [r for r in range(6) if not orders.found_problem(self, pid, u, r)]
-                      for uid, u in self.units.items() if u["owner"] == pid and UNITS[u["type"]]["settler"]},
+            "typeBonus": economy.type_bonus(self, pid), "housingBonus": economy.housing_bonus(self, pid),
+            "reach": {u["id"]: sorted(movement.reach(self, u["id"])) for u in units},
+            "recruit": {s["id"]: {ut: orders.recruit_problem(self, pid, s, ut) or "" for ut in STRUCTURES[s["type"]]["recruits"]}
+                        for s in own if STRUCTURES[s["type"]]["recruits"]},
+            "found": {u["id"]: [r for r in range(6) if not orders.found_problem(self, pid, u, r)]
+                      for u in units if UNITS[u["type"]]["settler"]},
         }
 

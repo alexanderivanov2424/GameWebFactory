@@ -13,14 +13,11 @@ from .content import STRUCTURES, UNITS
 
 def sight(m, pid):
     out = set()
-    for u in m.units.values():
-        if u["owner"] == pid:
-            out.update(disk(UNITS[u["type"]]["vision"], parse(u["at"])))
-    for s in m.structures.values():
-        if s["owner"] == pid:
-            radius = STRUCTURES[s["type"]]["vision"]
-            for c in s["cells"]:
-                out.update(disk(radius, parse(c)))
+    for u in m.units_of(pid):
+        out.update(disk(UNITS[u["type"]]["vision"], parse(u["at"])))
+    for s in m.structures_of(pid):
+        for c in s["cells"]:
+            out.update(disk(STRUCTURES[s["type"]]["vision"], parse(c)))
     return out & m.cells.keys()
 
 
@@ -61,10 +58,9 @@ def known_at(m, pid):
         for c, sid in m.cell_structure.items():
             out[c] = (m.structures[sid]["owner"], m.structures[sid]["type"])
         return out
-    for s in m.structures.values():
-        if s["owner"] == pid:
-            for c in s["cells"]:
-                out[c] = (pid, s["type"])
+    for s in m.structures_of(pid):
+        for c in s["cells"]:
+            out[c] = (pid, s["type"])
     for s in m.memory[pid].values():
         for c in s["cells"]:
             out.setdefault(c, (s["owner"], s["type"]))

@@ -7,7 +7,7 @@
 
 from gamekit.hexes import neighbors
 
-from . import movement, orders
+from . import logistics, movement
 from .content import TERRAIN, UNITS
 
 
@@ -28,7 +28,7 @@ def resolve(m, events):
             s = m.structures.get(r["at"])
             spot = spawn_cell(m, pid, s, r["type"]) if s and s["owner"] == pid else None
             if spot is None:
-                orders.refund(m, pid, r["cost"])
+                logistics.give(m, pid, r["cost"])
                 m.players[pid]["pop"] += r["people"]
                 events.append({"t": "failed", "owner": pid, "what": r["type"], "at": s["at"] if s else None,
                                "why": "No room to place it."})

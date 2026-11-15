@@ -9,19 +9,20 @@ structures/<id>.json:
     name, icon, color ("#rrggbb" map colour), cells [[q, r], ...] (axial, first = anchor)
     cost {res: n}, hp (0 = unattackable), defense (dice it rolls back), jobs (people to work)
     produce {res: n} (output never below 0), onTerrain {terrain: {res: n}} (anchor's terrain, replaces produce)
-    perCell {terrain: {res: n}} (per own cell), perAdjacent {"terrain"|"type"|"tag"|"home", "gain", "max"} (or a list)
-    tags [TAG ids], home (same as "home" tag), housing, storage (cap on capped goods), store {res: n}
+    perCell {terrain: {res: n}} (per own cell), perAdjacent {"terrain"|"type"|"tag", "gain", "max"} (or a list)
+    tags [TAG ids], housing, storage (cap on capped goods), store {res: n}
     terrain [ids] (default: buildable), coast (touches water), requires (advance), recruits [unit ids]
     heals, shoots (dice) + range, trade (give n for 1), score, hammers (work to build, default 1)
-    category (CATEGORIES id), vision (cells seen around each cell, default 3), text
+    category (CATEGORIES id), vision (cells seen around each cell, default 3)
 units/<id>.json:
     name, icon, art (client/art/units/ file, drawn instead of icon), cost {res: n}, people (default 1)
     attack, defense, hp, move (steps), range (shoots instead of moving), siege (damage per hit on structures)
     vsMounted (extra dice vs mounted), mounted, naval (water only), settler (founds a Town Hall)
-    requires (advance), needs (structure type owned), upkeep {res: n}, vision (default 2), text
+    requires (advance), needs (structure type owned), upkeep {res: n}, vision (default 2)
 advances/<id>.json:
-    name, cost {"science"|"faith": n}, after [advance ids], effect {key: n}, text
-    Effect keys: towerDice, farmFood, homeHousing, defendDice, chapelGold, attackDice
+    name, cost {"science"|"faith": n}, after [advance ids], effect {towerDice|attackDice|defendDice: n},
+    bonus {structure type: {res: n}} (added to its output), housing {tag: n} (per own structure with the tag)
+Descriptions players read are in client/text.js, not here.
 """
 
 import logging
@@ -55,7 +56,7 @@ CATEGORIES = {"defense": "Defense", "homes": "Homes", "food": "Food", "industry"
 TAGS = {"industrial": ("Industrial", "#a0643c"), "food": ("Food", "#c9a93a"), "home": ("Home", "#c97b5b"),
         "storage": ("Storage", "#4f86c6"), "military": ("Military", "#b8433a"), "defense": ("Defense", "#7d8794"),
         "trade": ("Trade", "#d9b13b"), "culture": ("Culture", "#8e5bb5"), "civic": ("Civic", "#5f9e8f")}
-EFFECTS = {"towerDice", "farmFood", "homeHousing", "defendDice", "chapelGold", "attackDice"}
+EFFECTS = {"towerDice", "defendDice", "attackDice"}
 
 
 def res_map(data, k, keys=RESOURCES, low=0):
@@ -89,13 +90,12 @@ def parse_structure(sid, d):
         "cost": res_map(d, "cost"), "hp": whole(d, "hp", 0, 99, default=3), "defense": whole(d, "defense", 0, 9, default=0),
         "jobs": whole(d, "jobs", 0, 9, default=0), "produce": res_map(d, "produce"),
         "housing": whole(d, "housing", 0, 99, default=0), "tags": tag_list(d),
-        "home": d.get("home") is True or "home" in d.get("tags", []),
         "storage": whole(d, "storage", 0, 999, default=0), "store": res_map(d, "store", CAPPED),
         "terrain": terrain_list(d, "terrain", [t for t, v in TERRAIN.items() if v["build"]]),
         "coast": d.get("coast") is True, "requires": d.get("requires"), "recruits": list(d.get("recruits", [])),
         "heals": d.get("heals") is True, "shoots": whole(d, "shoots", 0, 9, default=0), "range": whole(d, "range", 0, 5, default=0),
         "trade": whole(d, "trade", 0, 9, default=0), "vision": whole(d, "vision", 0, 9, default=3),
-        "score": whole(d, "score", 0, 99, default=0), "text": text(d, "text", 300),
+        "score": whole(d, "score", 0, 99, default=0),
         "hammers": whole(d, "hammers", 1, 99, default=1),
     }
     s["color"] = d.get("color", "#a0a0a0")
@@ -114,7 +114,7 @@ def parse_structure(sid, d):
         if adj.get("tag") is not None and adj["tag"] not in TAGS:
             raise ValueError(f"perAdjacent tag must be one of {sorted(TAGS)}")
         s["perAdjacent"].append({"terrain": adj.get("terrain"), "type": adj.get("type"), "tag": adj.get("tag"),
-                                 "home": adj.get("home") is True, "gain": res_map(adj, "gain", low=-99),
+                                 "gain": res_map(adj, "gain", low=-99),
                                  "max": whole(adj, "max", 1, 9, default=4)})
     s["rotations"] = [[[q, r] for q, r in rot] for rot in rotations(cells)]
     return s
@@ -128,7 +128,7 @@ def parse_unit(uid, d):
         "siege": whole(d, "siege", 1, 9, default=1), "vsMounted": whole(d, "vsMounted", 0, 9, default=0),
         "mounted": d.get("mounted") is True, "naval": d.get("naval") is True, "settler": d.get("settler") is True,
         "requires": d.get("requires"), "needs": d.get("needs"), "upkeep": res_map(d, "upkeep"),
-        "vision": whole(d, "vision", 0, 9, default=2), "text": text(d, "text", 300),
+        "vision": whole(d, "vision", 0, 9, default=2),
     }
 
 
@@ -139,8 +139,14 @@ def parse_advance(aid, d):
     effect = d.get("effect", {})
     if not isinstance(effect, dict) or any(k not in EFFECTS or type(v) is not int for k, v in effect.items()):
         raise ValueError(f"effect keys must be from {sorted(EFFECTS)}")
+    bonus = d.get("bonus", {})
+    if not isinstance(bonus, dict) or any(t not in STRUCTURES for t in bonus):
+        raise ValueError("bonus must map structure types to {res: n}")
+    housing = d.get("housing", {})
+    if not isinstance(housing, dict) or any(t not in TAGS or type(n) is not int for t, n in housing.items()):
+        raise ValueError(f"housing must map tags from {sorted(TAGS)} to whole numbers")
     return {"id": aid, "name": text(d, "name", 30, required=True), "cost": cost, "after": list(d.get("after", [])),
-            "effect": dict(effect), "text": text(d, "text", 300)}
+            "effect": dict(effect), "bonus": {t: res_map(bonus, t) for t in bonus}, "housing": dict(housing)}
 
 
 STRUCTURES = load_json_dir(HERE / "structures", parse_structure, log)

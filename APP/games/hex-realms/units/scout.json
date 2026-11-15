@@ -6,6 +6,5 @@
  "attack": 0,
  "defense": 0,
  "hp": 1,
- "move": 4,
- "text": "Your starting explorer: fast, but it can't fight. Uses no people or housing and eats nothing."
+ "move": 4
 }

@@ -27,14 +27,13 @@
   "gold": 2
  },
  "perAdjacent": {
-  "home": true,
   "gain": {
    "gold": 1
   },
-  "max": 4
+  "max": 4,
+  "tag": "home"
  },
  "trade": 3,
- "text": "+1 gold per Hut/House next to it (up to 4). Lets you trade 3:1.",
  "category": "trade",
  "hammers": 6,
  "color": "#cf6a35"

@@ -27,7 +27,7 @@ def capacity(s):
 
 
 def stores(m, pid):
-    return sorted((s for s in m.structures.values() if s["owner"] == pid and capacity(s)),
+    return sorted((s for s in m.structures_of(pid) if capacity(s)),
                   key=lambda s: (s["type"] != TOWN_HALL, s["n"]))
 
 

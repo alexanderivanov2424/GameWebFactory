@@ -23,7 +23,6 @@
   "desert",
   "mountain"
  ],
- "text": "Blocks enemy units until knocked down.",
  "category": "defense",
  "hammers": 1,
  "color": "#9a9ca2"

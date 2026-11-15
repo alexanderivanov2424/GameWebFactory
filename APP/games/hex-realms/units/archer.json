@@ -15,6 +15,5 @@
  "upkeep": {
   "food": 1,
   "gold": 1
- },
- "text": "Shoots up to 2 cells away instead of moving; the target can't hit back."
+ }
 }

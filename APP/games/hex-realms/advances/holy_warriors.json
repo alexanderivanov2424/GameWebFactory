@@ -5,6 +5,5 @@
  },
  "effect": {
   "defendDice": 1
- },
- "text": "Units defending in your territory roll 1 more die."
+ }
 }

@@ -83,7 +83,7 @@ def bought(m, pid):
 
 
 def give_up(m, pid, n):
-    halls = [c for s in m.structures.values() if s["owner"] == pid and s["type"] == TOWN_HALL for c in s["cells"]]
+    halls = [c for s in m.structures_of(pid, TOWN_HALL) for c in s["cells"]]
     mine = sorted((k for k, p in m.claims.items() if p == pid),
                   key=lambda k: (-min((dist(k, h) for h in halls), default=0), k))
     for k in mine[:n]:

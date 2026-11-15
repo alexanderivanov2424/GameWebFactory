@@ -8,6 +8,5 @@
  ],
  "effect": {
   "attackDice": 1
- },
- "text": "All units roll 1 more die when attacking."
+ }
 }

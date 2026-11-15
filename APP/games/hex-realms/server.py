@@ -2,7 +2,7 @@
 
 Each player starts with Settlers and a Scout and founds their first Town Hall anywhere. Every turn
 everyone plans in secret at once: build inside their territory, train units, order moves and attacks,
-research, trade. When all have ended their turn (or the timer runs out), orders resolve together:
+research, set up trade. When all have ended their turn (or the timer runs out), orders resolve together:
 units move step by step and fight with dice where they meet. Structures are built by idle people;
 production, eating and population are settled per realm (logic/economy.py). Gold, faith and science
 are realm-wide; goods sit in stores. Only Town Halls spread land: free land around each city (first
@@ -24,7 +24,7 @@ Game messages ({"action": name, ...fields}; planning only, any order un-readies 
     found      unit, rot 0-5
     research   advance
     cancel     order                       a build / claim / recruit / research order
-    trade      give, get
+    trade      structure, give, get        a trade structure trades every turn; no give = stop
     toggle     structure
     staff      on true|false               every structure with jobs
     demolish   structure                   a structure (no refund) or a site id (refunded)
@@ -38,11 +38,39 @@ from gamekit.validate import whole_number
 from .logic.match import Match
 
 
-def text_id(data, k):
-    v = data.get(k)
-    if not isinstance(v, str) or not 0 < len(v) <= 40:
-        raise LobbyError(f"Missing {k}.")
-    return v
+def field(k, optional=False):
+    def read(data):
+        v = data.get(k)
+        if v is None and optional:
+            return None
+        if not isinstance(v, str) or not 0 < len(v) <= 40:
+            raise LobbyError(f"Missing {k}.")
+        return v
+    return read
+
+
+def rotation(data):
+    return whole_number(data.get("rot", 0), "Rotation", 0, 5)
+
+
+# Game message action -> readers for the arguments of the orders.py function of the same name.
+ORDERS = {
+    "build": (field("kind"), field("at"), rotation),
+    "claim": (field("at"),),
+    "recruit": (field("structure"), field("kind")),
+    "move": (field("unit"), field("to")),
+    "shoot": (field("unit"), field("at")),
+    "hold": (field("unit"),),
+    "auto": (field("unit"), field("mode")),
+    "found": (field("unit"), rotation),
+    "research": (field("advance"),),
+    "cancel": (field("order"),),
+    "trade": (field("structure"), field("give", optional=True), field("get", optional=True)),
+    "toggle": (field("structure"),),
+    "staff": (lambda data: data.get("on") is True,),
+    "demolish": (field("structure"),),
+    "disband": (field("unit"),),
+}
 
 
 class Game(LobbyGame):
@@ -57,9 +85,7 @@ class Game(LobbyGame):
         "bots": Int("Bots", default=0, low=0, high=5, hint="computer players"),
         "seed": Int("Map seed", default=0, low=0, high=999999, hint="0 = a new random map"),
     }
-    ACTIONS = {name: name for name in
-               ("build", "claim", "recruit", "move", "shoot", "hold", "auto", "found", "research", "cancel", "trade", "toggle", "staff", "demolish",
-                "disband", "done")}
+    ACTIONS = {**{name: "order" for name in ORDERS}, "done": "done"}
 
     def __init__(self, room):
         super().__init__(room)
@@ -107,55 +133,11 @@ class Game(LobbyGame):
         elif self.match.turn != turn:
             self.start_timer()
 
-    def order(self, member, name, *args):
-        self.match.act(member.id, name, *args)
-
     # --- Messages -------------------------------------------------------------------------------
 
-    def build(self, member, data):
-        self.order(member, "build", text_id(data, "kind"), text_id(data, "at"), whole_number(data.get("rot", 0), "Rotation", 0, 5))
-
-    def claim(self, member, data):
-        self.order(member, "claim", text_id(data, "at"))
-
-    def recruit(self, member, data):
-        self.order(member, "recruit", text_id(data, "structure"), text_id(data, "kind"))
-
-    def move(self, member, data):
-        self.order(member, "move", text_id(data, "unit"), text_id(data, "to"))
-
-    def shoot(self, member, data):
-        self.order(member, "shoot", text_id(data, "unit"), text_id(data, "at"))
-
-    def hold(self, member, data):
-        self.order(member, "hold", text_id(data, "unit"))
-
-    def auto(self, member, data):
-        self.order(member, "auto", text_id(data, "unit"), text_id(data, "mode"))
-
-    def found(self, member, data):
-        self.order(member, "found", text_id(data, "unit"), whole_number(data.get("rot", 0), "Rotation", 0, 5))
-
-    def research(self, member, data):
-        self.order(member, "research", text_id(data, "advance"))
-
-    def cancel(self, member, data):
-        self.order(member, "cancel", text_id(data, "order"))
-
-    def trade(self, member, data):
-        self.order(member, "trade", text_id(data, "give"), text_id(data, "get"))
-
-    def toggle(self, member, data):
-        self.order(member, "toggle", text_id(data, "structure"))
-
-    def staff(self, member, data):
-        self.order(member, "staff", data.get("on") is True)
-
-    def demolish(self, member, data):
-        self.order(member, "demolish", text_id(data, "structure"))
-
-    def disband(self, member, data):
-        self.order(member, "disband", text_id(data, "unit"))
+    def order(self, member, data):
+        action = data["action"]
+        self.match.act(member.id, action, *(read(data) for read in ORDERS[action]))
 
     def done(self, member, data):
         turn = self.match.turn

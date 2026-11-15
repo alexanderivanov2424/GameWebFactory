@@ -161,7 +161,7 @@ class Bot:
                 try_act(m, pid, "staff", True)
             return
         working = staffing(m, pid)[0]
-        jobs = [s for s in working if STRUCTURES[s["type"]]["jobs"] and not economy.output_keys(s["type"]) & {"food"}]
+        jobs = [s for s in working if STRUCTURES[s["type"]]["jobs"] and not economy.makes_food(s["type"])]
         if jobs:
             try_act(m, pid, "toggle", max(jobs, key=lambda s: s["n"])["id"])
 

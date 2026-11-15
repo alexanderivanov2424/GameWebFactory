@@ -19,13 +19,12 @@
   "food": 1
  },
  "perAdjacent": {
-  "home": true,
   "gain": {
    "food": 1
   },
-  "max": 4
+  "max": 4,
+  "tag": "home"
  },
- "text": "+1 food, and +1 more per Hut or House next to it (up to 4).",
  "category": "food",
  "hammers": 2,
  "color": "#e39b5b"

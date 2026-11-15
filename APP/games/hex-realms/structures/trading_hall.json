@@ -29,7 +29,6 @@
  },
  "trade": 2,
  "requires": "trade",
- "text": "Lets you trade 2:1.",
  "category": "trade",
  "hammers": 8,
  "color": "#b04a35"

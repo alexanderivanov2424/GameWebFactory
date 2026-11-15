@@ -22,7 +22,6 @@
  ],
  "requires": "sailing",
  "coast": true,
- "text": "Must touch water. Builds galleys.",
  "category": "military",
  "hammers": 6,
  "color": "#356489"
