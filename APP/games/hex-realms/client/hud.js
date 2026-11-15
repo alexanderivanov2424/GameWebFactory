@@ -234,7 +234,7 @@
 
   function siteText(ctx, cid, x) {
     const works = (ctx.priv.building?.works || []).includes(cid);
-    return `${x.done}/${x.turns} turns, ${x.builders} builder${x.builders > 1 ? "s" : ""} a turn — ${x.done >= x.turns ? "finishing (blocked by an enemy unit)" : works ? "building this turn" : "waiting for idle people"}`;
+    return `${x.done}/${x.turns} turns, ${resIcon("people")} −${x.builders} — ${x.done >= x.turns ? "finishing (blocked by an enemy unit)" : works ? "building this turn" : "waiting for idle people"}`;
   }
 
   function site(box, ctx) {
@@ -253,7 +253,7 @@
     const o = priv.orders;
     const rows = [
       ...o.builds.map((b) => { const n = content.structures[b.type]?.builders || 0;
-        return [b.id, `Build ${content.structures[b.type]?.name || b.type} (${n} builder${n === 1 ? "" : "s"})`, b.cost]; }),
+        return [b.id, `Build ${content.structures[b.type]?.name || b.type} (${resIcon("people")} −${n})`, b.cost]; }),
       ...(o.claims || []).map((c) => [c.id, `Claim land @${c.at}`, c.cost]),
       ...o.recruits.map((r) => [r.id, `${r.auto ? "Auto-recruit" : "Recruit"} ${content.units[r.type]?.name || r.type} at ${content.structures[game.structures[r.at]?.type]?.name || "?"}`, r.cost]),
       ...o.research.map((r) => [r.id, `Research ${content.advances[r.advance]?.name || r.advance}`, r.cost]),
