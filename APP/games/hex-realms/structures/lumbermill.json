@@ -15,8 +15,7 @@
   "industrial"
  ],
  "cost": {
-  "stone": 2,
-  "gold": 3
+  "stone": 2
  },
  "jobs": 1,
  "produce": {
