@@ -1,31 +1,22 @@
-"""Hex Realms: the orders a player gives while planning a turn (validated, nothing resolves yet).
+"""Hex Realms: the orders a player gives while planning a turn. Checked when given; nothing resolves here.
 
-Costs are paid when an order is given (goods from the Town Halls and the stores linked to them) and refunded when it's cancelled or fails at resolution,
-so a player can never order more than they have. Orders are private until the turn resolves.
+Costs are paid when given and refunded when cancelled or failed, so orders never exceed the stock.
 
-    build(m, pid, stype, at, rot)   structure footprint anchored at `at`, `rot` 60-degree turns
-    recruit(m, pid, sid, utype)     train a unit at a working structure (1 per structure per turn)
-    move(m, pid, uid, to)           move along the cheapest path; ending on an enemy = attack;
-                                    `to` = the unit's own cell clears its orders; a cell out of
-                                    this turn's reach starts a Travel standing order (standing.py)
-    shoot(m, pid, uid, at)          ranged unit: shoot a cell instead of moving
-    hold(m, pid, uid)               toggle: stay put and defend with 1 more die
-    claim(m, pid, at)               for CLAIM_COST (gold), at once (not an order: no cancel): an unowned
-                                    explored cell next to your territory becomes your weak land
-                                    (territory.py); not with an enemy unit (that you see) on or next
-                                    to it (one you don't see takes it back at once)
-    auto(m, pid, uid, mode)         toggle a standing order kept across turns (standing.py): explore
-                                    (clear fog), fight (nearest enemy unit) or pillage (nearest enemy
-                                    structure, fighting enemy units that come close)
-    found(m, pid, uid, rot)         settlers found a Town Hall where they stand (instead of moving)
-    research(m, pid, aid)           buy an advance (takes effect at the start of resolution)
-    cancel(m, pid, oid)             undo a build / claim / recruit / research order (refund)
-    trade(m, pid, give, get)        market: give `rate` of one resource for 1 of another, at once
-    toggle(m, pid, sid)             switch a structure with jobs off/on (frees its workers)
-    staff(m, pid, on)               switch every structure with jobs off (on=False) or on at once
-    demolish(m, pid, sid)           at once: a construction site (cost refunded) or a structure (no
-                                    refund, its goods are lost, recruits there cancelled); never a Town Hall
-    disband(m, pid, uid)            remove one of your units at once (its people come home)
+    build(m, pid, stype, at, rot)   structure footprint anchored at `at`
+    recruit(m, pid, sid, utype)     train a unit at a working structure (1 per structure a turn)
+    move(m, pid, uid, to)           cheapest path; onto an enemy attacks; out of reach = Travel
+    shoot(m, pid, uid, at)          ranged unit shoots a cell instead of moving
+    hold(m, pid, uid)               toggle: stay put, defend with 1 more die
+    claim(m, pid, at)               weak land for gold, at once (no cancel)
+    auto(m, pid, uid, mode)         toggle a standing order: explore, fight, pillage
+    found(m, pid, uid, rot)         settlers found a Town Hall where they stand
+    research(m, pid, aid)           buy an advance
+    cancel(m, pid, oid)             undo a build / claim / recruit / research order
+    trade(m, pid, give, get)        market exchange, at once
+    toggle(m, pid, sid)             switch a structure with jobs off or on
+    staff(m, pid, on)               switch every structure with jobs off or on
+    demolish(m, pid, sid)           a construction site (refunded) or a structure (no refund)
+    disband(m, pid, uid)            remove one of your units at once
 """
 
 from gamekit import LobbyError

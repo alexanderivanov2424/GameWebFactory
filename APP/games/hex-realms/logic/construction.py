@@ -1,29 +1,20 @@
-"""Hex Realms: construction sites. Structures cost hammers (🔨), and idle people make them.
+"""Hex Realms: construction sites. Structures cost hammers (🔨) that idle people build.
 
-A build order that resolves becomes a site (m.sites, cells in m.cell_site), not a structure yet. A
-site holds its cells (nothing else can be built or founded there) but does nothing: it doesn't
-work, house, store, carry goods, claim territory, see, count for score or take hits.
+A build order that resolves becomes a site (m.sites, cells in m.cell_site). A site holds its cells
+but does nothing (no work, housing, storage, territory, sight, score or hits) until finished.
 
-    start(m, pid, b)              a resolved build order (orders.build) becomes a site
-    left(site)                    hammers still needed
-    plan(m, pid, idle)            ([(site, n)], idle left): hammers each of pid's sites gets this turn
-                                  from `idle` people, oldest first
-    forecast(m, pid, orders=True) {"builders": people building this turn, "works": {site id: n},
-                                  "orders": {build order id: n}} for the planning screen (idle =
-                                  economy.staffing's idle people): sites first, then this turn's build
-                                  orders, which take their builders as soon as they're placed
-    progress(m, pid, idle, ev)    sites get their hammers; finished ones become structures
-    remove(m, cid)                take a site off the map (orders.demolish refunds its cost)
+    start(m, pid, b)                 a resolved build order becomes a site
+    left(site)                       hammers still needed
+    plan(m, pid, idle)               ([(site, n)], idle left): hammers per site this turn, oldest first
+    forecast(m, pid, orders=True)    {"builders", "works": {site: n}, "orders": {build order: n}} for the planning screen
+    progress(m, pid, idle, events)   sites get hammers; finished ones become structures
+    remove(m, cid)                   take a site off the map (demolish refunds its cost)
 
-Rules (2026-11-15, the user's): a structure costs `hammers` (content, default 1) besides its goods.
-Every idle person (no job: economy.staffing fills jobs first, so switch structures off or demolish
-them to free people) builds 1 hammer a turn on one site: sites are served oldest first, each taking
-as many idle people as it still needs hammers, then this turn's build orders in the order they were
-placed (they take their builders as soon as they're placed; with nobody idle they just wait). So a
-3-hammer structure with 3 idle people is built in one turn. Work happens at the end of resolution
-with the people idle this turn (after production), and a finished structure starts working the turn
-after. A site with an enemy unit on any of its cells gets no work (its builders go to other sites)
-and doesn't finish until the unit has gone.
+Rules: a structure costs `hammers` (content, default 1). Each idle person (no job: staffing fills
+jobs first) builds 1 hammer a turn; sites are served oldest first, then this turn's build orders in
+placement order (they take builders as soon as placed). Work happens at the end of resolution with
+the people idle after production; a finished structure works from the next turn. A site with an
+enemy unit on any of its cells gets no work and doesn't finish until it leaves.
 """
 
 from .content import STRUCTURES

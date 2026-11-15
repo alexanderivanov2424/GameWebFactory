@@ -1,20 +1,9 @@
-"""Hex Realms: fog of war.
+"""Hex Realms: fog of war: what each player sees, has explored and remembers, and their map view.
 
-Each player sees every cell within `vision` of their units (content default 2) and structures
-(default 3: buildings see further than units). Cells once seen stay explored: their terrain is
-known for good. Enemy units show only on cells you see now; enemy structures show as you last saw
-them (`memory`), refreshed whenever you see them again and forgotten once you see they're gone.
-With the "fog" setting off, or for spectators and players who are out, everything is visible.
-
-    update(m)                 recompute m.visible / m.explored / m.memory for every player
-    sees(m, pid, k)           pid sees cell k right now
-    known_at(m, pid)          {key: (owner, type)} for the structures pid knows of (own + remembered)
-    view(m, pid, staffed)     the map part of the state for pid (pid None = everything); construction
-                              sites ("sites") show to their owner, and to others only while seen
-
-Planning uses only what the player knows (movement.reach, orders.*); resolution uses the truth,
-so a unit that walks into a hidden enemy fights it, and one that meets unknown rough terrain
-stops when its movement runs out.
+    update(m)              recompute visible / explored / memory for every player
+    sees(m, pid, k)        pid sees cell k now
+    known_at(m, pid)       {key: (owner, type)} of structures pid knows (own + remembered)
+    view(m, pid, staffed)  the map part of pid's state (pid None = everything)
 """
 
 from gamekit.hexes import disk, parse

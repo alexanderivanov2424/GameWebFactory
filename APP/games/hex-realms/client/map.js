@@ -1,27 +1,18 @@
 /*
- * Hex Realms: the pannable, zoomable SVG hex map (terrain: PNG art from art/terrain/ (TERRAIN_ART) or a flat colour, territory (weak land dashed), structures, units,
- * your pending orders (Travel goals dashed; units with orders greyed out), highlights, build ghost, event flashes). No game rules here.
+ * Hex Realms map: the pannable, zoomable SVG hex map (terrain, territory, units, orders, highlights). No rules here.
+ * Keys are pointy-top axial "q,r". Drag pans, wheel zooms, a click reports a cell.
  *
- *   const map = HexMap.create(element, { onCell(key), onHover(key|null), onRightClick(key) });
- *   map.draw(game, you, priv)   rebuild the dynamic layers from state (terrain only if the map changed)
- *   map.setHighlights({key: "reach"|"attack"|"range"|"sel"|"claim"|"goal"})   toggle classes on pre-made cell overlays
- *                               ("sel" cells also get one outline round their outside edge, none inside)
- *   map.setGhost({cells, ok, label} | null)   footprint preview under the mouse (small, rebuilt per hover)
- *   map.flash([{at, kind}])     brief pulsing markers (battle/siege cells)
- *   map.centre(key)             pan to a cell;  map.fit() resets the zoom
- *   map.focus(keys, zoom, ms)   glide (pan + zoom, eased) to centre `keys`; a Promise
- *   map.getView() / map.setView(view, ms)   save and glide back to a view ({x, y, k})
- *   map.mark(keys)              rings round cells (the combat replay.js is showing); [] clears
- *   map.setResView(game, flows | null, extra)   the resource view (extra: {id: {cells}} for things not on the
- *                               map yet, e.g. build orders placed this turn): every other layer greyscale, and each thing in
- *                               flows ([[id, res, n, on, tag?, of?]] from the report, one resource) outlined (green makes,
- *                               red uses, amber both, grey dashed not working) with its +n / -n badges; tagged
- *                               items (the "people" view's builders) get blue badges and outlines; tag "of" (the "population"
- *                               view) shows "n/of" instead of +n; id "land:<key>" (a bought cell's gold upkeep) badges that cell
- *   HexMap.util                 pointy-top axial helpers: parse, key, add, neighbors, dist, center, DIRS
- *
- * Pointy-top axial "q,r" keys: x = SIZE*sqrt(3)*(q + r/2), y = SIZE*1.5*r. Drag pans, the wheel zooms
- * around the pointer, a click without dragging reports the cell. Styles (.hr-*) live in index.html.
+ * HexMap.create(el, {onCell, onHover, onRightClick})  returns the map below
+ * map.draw(game, you, priv)          rebuild the dynamic layers
+ * map.setHighlights({key: kind})     reach, attack, range, sel, claim, goal
+ * map.setGhost({cells, ok, label})   build footprint under the mouse
+ * map.flash([{at, kind}])            pulse battle cells
+ * map.centre(key), map.fit()         pan to a cell; reset zoom
+ * map.focus(keys, zoom, ms)          glide to centre keys (Promise)
+ * map.getView(), map.setView(v, ms)  save and restore {x, y, k}
+ * map.mark(keys)                     rings round combat cells
+ * map.setResView(game, flows, extra) resource view
+ * HexMap.util                        axial helpers
  */
 (() => {
   const { svg, fill } = AppDom;
@@ -29,16 +20,14 @@
   const put = (node, ...children) => node.append(...children.flat(Infinity).filter((c) => c !== null && c !== undefined && c !== false));
   const SIZE = 30;
   const SQ3 = Math.sqrt(3);
-  const UNIT_R = SIZE * 0.42;  // a unit's disc
+  const UNIT_R = SIZE * 0.42;
   const DIRS = [[1, 0], [0, 1], [-1, 1], [-1, 0], [0, -1], [1, -1]]; // DIRS[i] faces angle 60*i
   const COLORS = {
     plains: "#5c9a47", desert: "#d8bf7c", forest: "#2f6d3c",
     hills: "#8c7b55", mountain: "#8a8f9b", water: "#3a6ea6",
   };
-  // Art files live in art/ next to this script. Units: art/units/<content "art"> (100 x 100 = the unit's disc at 4x),
-  // drawn over the disc instead of the icon. Terrain: PNGs in art/terrain/ (208 x 240 = one hex at 4x), drawn over the flat colour. Each terrain lists
-  // its variants as [file, weight]; a cell picks one from a hash of its key (the same for every viewer).
-  // Terrains not listed here keep the flat colour and line glyph.
+  // Art: units in art/units/<content "art"> (100x100) draw over the disc; terrain in art/terrain/ (208x240) over the flat colour.
+  // Each terrain lists variants as [file, weight]; a cell picks one by hashing its key. Unlisted terrains keep the flat colour.
   const ART_DIR = new URL("art/", document.currentScript?.src || location.href).href;
   const TERRAIN_ART = {
     plains: [["plains.png", 1]],
@@ -66,7 +55,7 @@
   const middle = (ks) => { const ps = ks.map(center); return [0, 1].map((i) => ps.reduce((a, p) => a + p[i], 0) / ps.length); };
   const hexAt = (k, s, attrs) => { const [x, y] = center(k); return svg("polygon", { points: pts(x, y, s), ...attrs }); };
 
-  // Edge i of a cell faces DIRS[i] and joins corners i and i+1: lines where the neighbour isn't in `same`.
+  // Edge i faces DIRS[i]; a line is drawn where the neighbour isn't in `same`.
   // `scale` < 1 draws the edges inset towards each cell's centre.
   function borders(cells, same, attrs, scale = 1) {
     const lines = [];
@@ -81,9 +70,8 @@
     return lines;
   }
 
-  // One solid shape for a group of cells: each cell inset to `scale` of its size, with the gaps
-  // between its own cells filled (a strip along each shared edge, a triangle where three meet),
-  // so only the outside edge is inset. A thin stroke of the same colour hides seams.
+  // One solid shape per group of cells: each inset to `scale`, gaps between its own cells filled,
+  // so only the outside edge is inset. A thin same-colour stroke hides seams.
   const BLOB = 0.8;
   function blob(cells, attrs, scale = BLOB) {
     const own = new Set(cells), out = [], seen = new Set();
@@ -104,10 +92,8 @@
     return out;
   }
 
-  // An inset outline round a region (`same(n)` says whether cell n is in it), drawn for `cells` (all of the
-  // region or part of it, e.g. only its weak land): their outside edges inset to `scale`, plus, where two
-  // region cells meet on the outside (a shared corner whose third cell isn't in the region), each cell's
-  // half of the short join between their inset corners (so parts drawn in different styles still meet).
+  // Inset outline round a region (`same(n)`: n is in it), drawn for `cells` (all or part of it).
+  // Where two region cells meet on the outside, each takes half the join so differently styled parts meet.
   function outline(cells, same, attrs, scale) {
     const out = borders(cells, same, attrs, scale);
     const inset = (k, [vx, vy]) => { const [x, y] = center(k); return [x + scale * (vx - x), y + scale * (vy - y)]; };
@@ -130,8 +116,7 @@
     return outline(cells, (n) => own.has(n), attrs, scale);
   }
 
-  // Territory borders: BORDER_W wide, inset (BORDER, a scale towards each cell's centre) by half their width so
-  // the line's outer edge lies on the cell's edge; two realms' borders then sit side by side, touching.
+  // Territory borders are inset by half their width, so two realms' borders sit side by side.
   const BORDER_W = 3;
   const BORDER = 1 - (BORDER_W / 2) / (SIZE * SQ3 / 2);
 
@@ -145,8 +130,7 @@
     return null;
   }
 
-  // A number in [0, 1) from a string (FNV-1a, then MurmurHash3's final mix to spread similar keys apart),
-  // so art variants are picked the same way on every page.
+  // A number in [0, 1) from a string (FNV-1a plus a murmur mix), so art variants match on every page.
   function hash01(text) {
     let h = 2166136261;
     for (let i = 0; i < text.length; i++) h = Math.imul(h ^ text.charCodeAt(i), 16777619);
@@ -155,7 +139,7 @@
     return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
   }
 
-  // The terrain art for cell k (an <image> covering its hex), or the line glyph when the terrain has no art.
+  // Terrain art for cell k (an image covering its hex), or the line glyph if there is none.
   function terrainArt(terrain, k, mapKey, x, y) {
     const variants = TERRAIN_ART[terrain];
     if (!variants) return glyph(terrain, x, y);
@@ -236,7 +220,7 @@
       applyView();
     }, { passive: false });
 
-    // Every cell of the hexagonal map; unexplored ones (not in game.cells under fog) are drawn as fog.
+    // Every map cell; unexplored ones (not in game.cells) are drawn as fog.
     function disk(radius) {
       const out = [];
       for (let q = -radius; q <= radius; q++) {
@@ -247,8 +231,7 @@
 
     function buildStatic(game, mapKey) {
       fill(terrainG); fill(hlG); hl = {}; hlClass = {};
-      // Top row first (y grows with r), left to right in a row: later cells paint over earlier ones, so a
-      // tile's art may spill up over the tiles above it (its image's top corners lie over them).
+      // Top row first, left to right: later cells paint over earlier ones, so art can spill upward.
       const keys = disk(game.radius).sort((a, b) => { const [qa, ra] = parse(a), [qb, rb] = parse(b); return ra - rb || qa - qb; });
       all = new Set(keys);
       for (const k of keys) {
@@ -276,9 +259,8 @@
       // Explored but not seen right now: dimmed (enemy units there aren't shown).
       fill(dimG, (game.dim || []).map((k) => hexAt(k, SIZE, { class: "hr-dim" })));
 
-      // Territory: a border in the owner's colour all round it (ownership shows here; the inside isn't shaded).
-      // Weak land (bought with gold, game.claims) has a dashed border. The border lines are opaque
-      // inside one translucent group, so where segments overlap (round caps, joins) they don't get darker.
+      // Territory: owner-coloured border round each region (the inside is not shaded).
+      // Weak land (game.claims) is dashed; borders share one translucent group so overlaps don't darken.
       const weak = game.claims || {};
       for (const pid of game.seats) {
         const mine = Object.keys(game.territory).filter((k) => game.territory[k] === pid);
@@ -289,7 +271,7 @@
             ...outline(bought, same, { ...line, "stroke-dasharray": "6 5", "stroke-linecap": "butt" }, BORDER)));
       }
 
-      // Structures: solid, in the structure's own colour (content "color"), fused into one shape each.
+      // Structures: solid, in their colour, fused into one shape each.
       shapeAt = {};
       const reasonFor = (sid, s, def) => {
         if (s.active === false) return "Switched off.";
@@ -315,7 +297,7 @@
         }
         put(structG, g);
       }
-      // Construction sites: the structure's colour, faded, with the hammers done / needed.
+      // Construction sites: faded structure colour, with hammers done and needed.
       const working = (priv && priv.building?.works) || {};
       for (const [cid, x] of Object.entries(game.sites || {})) {
         const def = content.structures[x.type];
@@ -330,7 +312,7 @@
           svg("text", { x: mx, y: my + 17, class: "hr-site-text" }, `${x.done}/${x.hammers}`)));
       }
 
-      // Units (yours that have an order this turn, or a standing order, greyed out).
+      // Units; yours with an order this turn or a standing order are greyed out.
       const ordered = new Set(priv?.ordered || []);
       for (const [uid, u] of Object.entries(game.units)) {
         const def = content.units[u.type];
@@ -410,8 +392,7 @@
         hl[k].setAttribute("class", `hr-hlcell hr-hl-${c}`);
         hlClass[k] = c;
       }
-      // "sel" cells are only filled; the selection (a unit's cell, or a whole structure) gets one
-      // outline round its outside edge, with no lines between its own cells.
+      // "sel" cells are only filled; the selection gets one outline round its outside edge.
       const sel = Object.keys(next).filter((k) => next[k] === "sel" && hl[k]);
       fill(selG, borders(sel, (n) => next[n] === "sel", { class: "hr-sel-line" }, (SIZE - 1) / SIZE));
     }
@@ -443,8 +424,7 @@
     }
     function fit() { view.k = 0.9; view.x = element.clientWidth / 2; view.y = element.clientHeight / 2; applyView(); }
 
-    // Smooth pan/zoom to `target` ({x, y, k}) over `ms` (0 = jump). Resolves when it gets there, or
-    // as soon as another glide starts.
+    // Eased pan/zoom to `target` over `ms` (0 = jump); resolves on arrival or when another glide starts.
     let anim = null, settle = null;
     function glide(target, ms) {
       cancelAnimationFrame(anim);
@@ -463,17 +443,17 @@
         anim = requestAnimationFrame(frame);
       });
     }
-    // Glide so the middle of `keys` is in the middle of the screen at zoom k.
+    // Glide to centre `keys` at zoom k.
     function focus(keys, k, ms) {
       const [x, y] = middle(keys);
       return glide({ k, x: element.clientWidth / 2 - x * k, y: element.clientHeight / 2 - y * k }, ms);
     }
-    // Rings round the cells of the combat being shown (replay.js); [] clears them.
+    // Rings round the cells of the combat being shown; [] clears them.
     function mark(keys) {
       fill(markG, keys.filter((k) => all.has(k)).map((k) => hexAt(k, SIZE - 3, { class: "hr-mark" })));
     }
 
-    // The resource view (header). Badges sit in a row above the thing: a structure's or site's middle, a unit's disc.
+    // Resource view. Badges sit above the thing: a structure's middle, a unit's disc.
     function setResView(game, flows, extra = {}) {
       root.classList.toggle("hr-resview", !!flows);
       fill(resG);
@@ -481,7 +461,7 @@
       const byId = {};
       for (const [id, , n, on, tag, of] of flows) (byId[id] ||= []).push({ n, on, tag, of });
       for (const [id, items] of Object.entries(byId)) {
-        const land = id.startsWith("land:");  // a bought cell's gold upkeep: badge on the cell itself
+        const land = id.startsWith("land:");  // a bought cell's upkeep: badge on the cell itself
         const s = game.structures[id] || game.sites?.[id] || extra[id] || (land ? { cells: [id.slice(5)] } : null), u = !s && game.units[id];
         if (!s && !u) continue;
         const cells = s ? s.cells : [u.at];

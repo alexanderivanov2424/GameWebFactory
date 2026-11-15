@@ -1,29 +1,19 @@
-"""Hex Realms: territory, strong (from Town Halls, free) and weak (bought with gold, with upkeep).
+"""Hex Realms: territory. Strong land comes free from Town Halls; weak land is bought with gold.
 
-    territory(m)             (the new {key: pid}, the weak cells still held {key: pid}) from
-                             m.territory and m.claims; Match.refresh stores both
-    bought(m, pid)           how many weak cells pid pays upkeep for (LAND_UPKEEP each a turn)
-    give_up(m, pid, n)       pid can't pay for n cells: drop n weak cells, farthest from pid's Town
-                             Halls first; returns how many went
-    unit_entered(m, uid)     an enemy unit standing on or next to weak land unclaims it at once
-                             (Match.move_unit / add_unit call it, so passing through counts)
-    threatened(m, pid, k, seen=None)  an enemy unit of pid's stands on or next to k (seen: only units
-                             on those cells count, for checks made with what pid knows)
+    territory(m)                      (new {key: pid}, weak cells still held {key: pid}); Match.refresh stores both
+    bought(m, pid)                    weak cells pid pays upkeep for
+    give_up(m, pid, n)                drop n weak cells pid can't pay for, farthest from its Town Halls first
+    unit_entered(m, uid)              an enemy unit on or next to weak land unclaims it (move_unit/add_unit call it)
+    threatened(m, pid, k, seen=None)  an enemy of pid stands on or next to k (seen: only units on those cells)
 
-Rules:
-- Strong land (free, no upkeep): structures don't spread land, except Town Halls: every Town Hall
-  reaches the cells within CITY_RADIUS of its cells. First come, first served: a cell stays its owner's while they still reach it, a
-  free cell goes to the one player reaching it, and to no one while two or more do (they got
-  there at the same time). Losing a Town Hall loses its free land.
-- Weak land (m.claims): cells bought with gold (orders.claim) that were nobody's at that moment.
-  Lost (back to no one) when:
-    * another player's Town Hall reaches it (their strong land overrides it); your own Town Hall
-      reaching it turns it into strong land (it leaves m.claims);
-    * an enemy unit stands on it or next to it (also blocks claiming it);
-    * it isn't connected, through that player's own land, to their strong land.
-  Each weak cell costs LAND_UPKEEP gold a turn (economy.py); a realm that can't pay gives up the
-  cells it can't pay for, farthest from its Town Halls first (give_up).
-Weak cells, once lost, don't come back on their own (buy them again).
+Strong land: every Town Hall reaches the cells within CITY_RADIUS. First come, first served: a cell
+stays with its owner while they still reach it; a free cell goes to the one player reaching it, and
+to no one while two or more do. Losing a Town Hall loses its free land.
+Weak land (m.claims): bought with orders.claim on cells nobody held. Lost when another player's Town
+Hall reaches it, when an enemy unit is on or next to it, or when it isn't connected through its
+owner's land to their strong land. Your own Town Hall reaching it makes it strong. Lost weak cells
+don't come back on their own. Each costs LAND_UPKEEP gold a turn (economy.py); a realm that can't
+pay loses the farthest cells first.
 """
 
 from gamekit.hexes import disk, dist, neighbors, parse
@@ -64,9 +54,8 @@ def territory(m):
             out[k] = cur
         elif len(owners) == 1:
             out[k] = next(iter(owners))
-    # Weak cells: only where no Town Hall reaches, with no enemy unit on or next to them.
+    # weak land: no Town Hall reach and no enemy next to it
     weak = {k: p for k, p in m.claims.items() if k in m.cells and k not in reach and not threatened(m, p, k)}
-    # ...and connected to their owner's strong land through their own cells.
     held = {}
     frontier = [(k, p) for k, p in out.items()]
     while frontier:

@@ -1,39 +1,21 @@
-"""Hex Realms: Match, one game from start to finish (no lobby, network or members).
+"""Hex Realms: Match, one game from start to finish (no lobby or network).
 
-    match = Match({"p1": "Ann", "p2": "Bob"}, settings, rng=random.Random(1), bots=["b1"])
-                               bots: seats played by the computer (bots.py plans their turns)
-    match.act(pid, "build", stype, at, rot)   any order from orders.py (raises LobbyError)
-    match.set_done(pid, True)  end your turn; when every player still in is done, the turn resolves
-    match.resolve()            resolve the turn now (also the turn timer's job, in server.py)
-    match.remove(pid)          pid left: their units and structures vanish
-    match.public() / match.private(pid)    what clients see
-    match.result               None while playing; then {"winner": pid or None, "reason", "scores"}
+    match.act(pid, name, *args)     an order from orders.py (raises LobbyError)
+    match.set_done(pid, True)       end your turn; the turn resolves once all live realms are done
+    match.resolve() / remove(pid)   resolve now (the timer calls this) / pid left
+    match.public() / private(pid)   what clients see
+    match.result                    None while playing, then {"winner", "reason", "scores"}
 
-Turn resolution, in order: research; ranged shots (positions before anyone moves); movement
-step by step with battles (movement.py); towers shoot; settlers found cities; builds (two
-players ordering the same cell both fail and get refunds; the rest become construction sites); recruits appear on their structure (next to it
-when it's full, and ships on the water beside it; recruiting.py); production into the stores, eating, wages and new people (economy.py, logistics.py);
-construction by the people who were idle this turn (construction.py); healing (+1 hp for units that didn't
-fight, full on or next to an own Barracks); players without a Town Hall are out. The game ends
-when one player is left (if it started with 2 or more) or after the last turn: highest score wins.
-Solo games (1 player) are a sandbox: they end at the turn limit with your score, or when you lose
-your last Town Hall. Bots plan as each turn starts (and are done at once); once no person is
-left in the game, it ends with the highest score winning. As each turn's planning starts, units on
-a standing order (Explore, Fight, Pillage, Travel) get this turn's order (standing.py), then bots plan.
+Resolution: research; ranged shots; movement and battles (movement.py); towers; settlers found
+cities; builds (a cell two players order fails for both); recruits; production, eating, wages and
+new people (economy.py); construction; healing; realms with no Town Hall are knocked out. The game
+ends when one realm is left (2+ started) or after the last turn. Solo games end at the turn limit
+or when the last Town Hall falls.
 
-Score = population + units + 3 per advance + structure scores (Town Hall 4, University 2,
-Monument 10) + gold // 10.
+Score = population + units + 3 per advance + structure scores + gold // 10.
 
-State: cells {key: terrain}; structures {sid: {"id", "n", "type", "owner", "at", "rot", "cells",
-"hp", "active", "stock" (goods in a store)}} with cell_structure {key: sid}; units {uid: {"id", "n", "type", "owner", "at",
-"hp", "auto" (a standing order: standing.py), "goal" (where a Travel order goes)}} with unit_at {key: uid}; sites {cid: {"id", "n", "type", "owner", "at", "rot", "cells", "cost",
-"done" (turns of work so far)}} with cell_site {key: cid} (construction.py); claims {key: pid} (weak land
-bought with gold one cell at a time, at once, 1 gold upkeep a turn each: orders.claim, territory.py); territory {key: pid} (strong
-land around Town Halls, free, plus the weak land still held: territory.py); players
-{pid: {"res" (gold/faith/science only: goods live in stores, see logistics.py), "pop", "advances", "done",
-"alive"}};
-orders {pid: {"builds", "recruits", "research": [...], "moves": {uid: [keys]}, "shots": {uid: key},
-"holds": [uid], "found": {uid: rot}}}; events (the last resolution, for the client to replay).
+Main dicts: cells, structures (cell_structure), units (unit_at), sites (cell_site), claims and
+territory ({key: pid}), players, orders (secret until resolution), events (for the client to replay).
 """
 
 import random
@@ -81,8 +63,8 @@ class Match:
         self.counter = 0
         self.structures, self.cell_structure, self.units, self.unit_at = {}, {}, {}, {}
         self.sites, self.cell_site = {}, {}
-        self.claims = {}  # {key: pid}: weak land bought with gold (orders.claim), part of territory (territory.py)
-        self.territory = {}  # {key: pid}, kept between refreshes: first come, first served (territory.py)
+        self.claims = {}  # {key: pid}: weak land bought with gold (orders.claim)
+        self.territory = {}  # {key: pid}: strong land, first come first served (territory.py)
         self.players = {pid: {"res": dict(START_RES), "pop": START_POP, "advances": [], "done": False, "alive": True,
                               "color": COLORS[i % len(COLORS)], "startGoods": dict(START_GOODS)}
                         for i, pid in enumerate(self.seats)}
@@ -94,7 +76,7 @@ class Match:
         self.vis_before = {}
         self.result = None
         for pid, at in zip(self.seats, starts):
-            self.add_unit(pid, START_UNIT, at)  # they found the first Town Hall where they choose
+            self.add_unit(pid, START_UNIT, at)
             near = [k for k in sorted(disk(2, parse(at)), key=lambda k: (dist(k, at), k)) if k != at and k in self.cells
                     and TERRAIN[self.cells[k]]["move"] is not None and k not in self.unit_at]
             if near:
@@ -346,8 +328,7 @@ class Match:
     # --- What clients see -----------------------------------------------------------------------
 
     def public(self):
-        """Everything but the map: the map part (cells, structures, units, territory, events) is in
-        each viewer's private state, cut down by fog of war (vision.view)."""
+        """Everything but the map, which is in each viewer's private state (vision.view)."""
         return {
             "turn": self.turn, "turnLimit": self.turn_limit, "step": self.step, "radius": self.radius,
             "seats": self.seats, "fog": self.fog, "bots": self.bots,
@@ -373,10 +354,7 @@ class Match:
         return {s["id"]: {"stock": s["stock"], "cap": logistics.capacity(s)} for s in logistics.stores(self, pid)}
 
     def private(self, pid):
-        """{"view": the map as pid sees it} for everyone (pid None = a spectator: the whole map),
-        plus pid's stock, orders, standing orders ("auto"), units with orders ("ordered"), forecast (economy report; "building" = construction.forecast; "typeBonus" =
-        economy.type_bonus, for the placing preview) and
-        planning help while they're still playing."""
+        """The map as pid sees it ("view"; pid None = spectator, whole map), plus pid's stock, orders and planning help."""
         staffed = {s["id"] for x in self.alive() for s in staffing(self, x)[0]}
         out = {"view": vision.view(self, pid, staffed)}
         if pid not in self.players or not self.players[pid]["alive"] or self.result is not None:

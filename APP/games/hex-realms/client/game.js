@@ -1,23 +1,11 @@
 /*
- * Hex Realms: the page glue. Connects to the lobby, keeps the UI state (selection, mode, rotation, tab),
- * turns clicks on the map into game messages, and re-renders the map (map.js) and panels (hud.js,
- * panels.js) from the state. The server validates everything; the ghost colours here are only a hint.
- *
- * Clicking a cell selects what's on it; clicking it again cycles unit -> structure -> construction site.
- * ui.resView: null | a resource, "people", "population" or "housing" shown on the map: greyscale, with what makes it (green +n) and
- * uses it (red -n) each turn, or for "people" where they are (blue "n work" badges), for "population" who lives in each
- * home (blue "x/y" badges), from the report's flows (click its
- * chip on the top bar again or Esc to leave).
- * ui.tech: null | the open tech tree tab (a currency: "science" / "faith"), shown in the #tech popup.
- * ui.mode: null | {type: "build", kind, rot} | {type: "shoot", unit} | {type: "found", unit, rot}
- * (Escape cancels; R or right-click turns). ui.sel: null | {kind: "unit"|"structure", id}; giving a unit a
- * command deselects it (clearing its orders keeps it selected).
- * When a turn resolves, replay.js plays its combats (Esc skips).
- * render() runs on each new state (redraws the map); refresh() on UI-only changes (no map redraw).
+ * Hex Realms page glue: the lobby connection, UI state, clicks on the map, and re-rendering the map and panels.
+ * No exports. The server validates everything; checks here are only hints (e.g. ghost colours).
  */
 (() => {
   const { $, el, fill } = AppDom;
   const U = HexMap.util;
+  // mode: build, shoot, found or claim (Esc cancels); sel: unit, structure or site; resView and tech: map and popup state.
   const ui = { sel: null, mode: null, tab: "build", tech: null, resView: null, buildCat: null, trade: { give: "gold", get: "food" }, lastRot: 0,
     key: null, flashSeen: null, turnStart: Date.now(), gameNumber: null };
   let state = null;
@@ -25,8 +13,7 @@
   let idx = { unitAt: {}, structAt: {} };
 
   const lobby = AppLobby.connect("hex-realms", {
-    // The map lives in private.view (fog of war: each viewer gets their own); merge it into game, and
-    // keep private only when it has your orders (you're still playing), as the panels expect.
+    // Fog of war: the map comes from private.view. Keep private only while you have orders.
     onState(newState) {
       const p = newState.private;
       state = { ...newState, game: newState.game && p?.view ? { ...newState.game, ...p.view } : newState.game, private: p?.orders ? p : null };
@@ -88,7 +75,7 @@
     map.draw(game, state.you, priv);
 
     const flashKey = `${state.gameNumber}:${game.step}`;
-    // A new resolution: replay its combats (replay.js), or just flash the cells when there's nothing to replay.
+    // New resolution: replay its combats, or just flash the cells if there is nothing to replay.
     if (ui.flashSeen !== null && ui.flashSeen !== flashKey && !replay.play(game, state.you)) map.flash(HexPanels.flashCells(game));
     ui.flashSeen = flashKey;
 
@@ -111,7 +98,7 @@
         el("div", { className: "row" }, HexHud.fmt.nameSpan(game, pid), el("span", { className: "spacer" }), el("b", {}, `${score} points`))));
   }
 
-  // Keep scroll positions while a panel's children are replaced.
+  // Panels are rebuilt on each render; keep their scroll position.
   function keep(box, fn) {
     const top = box.scrollTop;
     fn();
@@ -164,7 +151,7 @@
     });
   }
 
-  // The tech tree: a popup over the map with a tab per currency (science, faith); Esc or ✕ closes it.
+  // Tech tree popup: one tab per currency; Esc or ✕ closes it.
   function renderTech(c, playing) {
     const box = $("tech");
     box.hidden = !playing || !ui.tech;
@@ -198,8 +185,7 @@
     const cancel = HexHud.fmt.btn("Cancel (Esc)", () => act.setMode(null));
     const names = c.content;
     if (m.type === "build") {
-      // Left: name + controls, then the terrains it can go on (and why the hovered spot is refused);
-      // right: the structure card. What it costs and makes shows under the top bar (showDeltas).
+      // Left: name, controls and terrains (and why the spot is refused); right: the card. Costs show in the top bar.
       const d = names.structures[m.kind];
       fill(box, el("div", { className: "hr-hintmain" },
         el("div", {}, el("b", {}, `${d.icon || ""} ${d.name}`), ": click to place · R to turn · Esc to cancel"),
@@ -217,7 +203,7 @@
     return (u && c.game.units[u].owner !== c.you) || (s && c.game.structures[s].owner !== c.you && c.content.structures[c.game.structures[s].type].hp > 0);
   };
 
-  // Cells you could claim (the server decides): explored, nobody's, next to your territory, no enemy unit on or next to it.
+  // Cells you could claim (a hint; the server decides).
   function claimable(c) {
     const g = c.game;
     const enemyUnit = (k) => idx.unitAt[k] && g.units[idx.unitAt[k]].owner !== c.you;
@@ -246,8 +232,7 @@
     map.setHighlights(h);
   }
 
-  // Why the ghost's cells can't take this structure ("" if they look fine): a hint from what you see;
-  // the server decides.
+  // Why the ghost cells can't take this structure ("" if fine). A hint; the server decides.
   function buildProblem(c, def, cells) {
     const pending = new Set(c.priv.orders.builds.flatMap((b) => b.cells));
     const g = c.game;
@@ -264,9 +249,7 @@
     return "";
   }
 
-  // What placing `def` changes, keyed like the top bar's delta slots: its cost (-n, once), what it would
-  // make each turn at `cells` (+n/turn; just its base output without a spot), room in the stores, the
-  // person it takes while working (people, not the cap), housing, and last the turns to build it.
+  // What placing `def` changes, keyed by top-bar delta slot; output is previewed at `cells`.
   function deltas(c, def, kind, cells) {
     const out = {};
     const add = (k, text, cls) => (out[k] ||= []).push([text, cls]);
@@ -283,7 +266,7 @@
     return out;
   }
 
-  // A preview of economy.output for `def` placed on `cells` (anchor first), from what you see; the server decides.
+  // Preview of `def`'s output on `cells` (anchor first); the server decides.
   function outputAt(c, def, kind, cells) {
     const g = c.game, out = {};
     const plus = (r, n) => { out[r] = (out[r] || 0) + n; };
@@ -304,7 +287,7 @@
     return out;
   }
 
-  // Fill the top bar's delta slots (empty them when d is null).
+  // Fill the top bar's delta slots; null empties them.
   function showDeltas(d) {
     for (const span of document.querySelectorAll("#topbar .hr-delta")) {
       const key = [...span.classList].find((x) => x.startsWith("hr-delta-"))?.slice(9);
@@ -323,7 +306,7 @@
       const cells = hover && def.rotations[m.rot].map((d) => U.add(hover, d));
       const problem = cells && buildProblem(c, def, cells);
       showDeltas(deltas(c, def, m.kind, cells && !problem ? cells : null));
-      const res = $("hint").querySelector(".hr-sres");  // the card's list: this spot's output (base without one)
+      const res = $("hint").querySelector(".hr-sres");  // the card's list: this spot's output, or the base output without a spot
       if (res) fill(res, ...HexHud.fmt.resListEl(def, cells && !problem ? outputAt(c, def, m.kind, cells) : null));
       if (!cells) return map.setGhost(null);
       map.setGhost({ cells, ok: !problem, label: def.icon });
@@ -361,7 +344,7 @@
       act.setMode(null);
       return;
     }
-    if (m?.type === "claim") { act.send({ action: "claim", at: k }); return; }  // stays on: claim several
+    if (m?.type === "claim") { act.send({ action: "claim", at: k }); return; }  // stays in claim mode
     if (m?.type === "shoot") { act.send({ action: "shoot", unit: m.unit, at: k }); ui.sel = null; act.setMode(null); return; }
     if (m?.type === "found") {
       const u = c.game.units[m.unit];
@@ -373,8 +356,7 @@
       const u = c.game.units[sel.id];
       if (k === u.at && thingsAt(k).length > 1) { selectAt(k); return; }  // a structure under it: cycle to it
       if (k === u.at) { act.send({ action: "move", unit: sel.id, to: k }); return; }  // clear (stays selected)
-      // In reach: move (or attack) this turn. Further away (except onto another of your units, which
-      // selects it): walk there over several turns. Either way the unit is deselected.
+      // In reach: move or attack now; farther away walks over several turns. Either way it deselects.
       const own = idx.unitAt[k] && c.game.units[idx.unitAt[k]].owner === c.you;
       if ((c.priv.reach[sel.id] || []).includes(k) || !own) { act.send({ action: "move", unit: sel.id, to: k }); act.select(null); return; }
     }
@@ -384,7 +366,7 @@
   // Everything on a cell, top first: unit, structure, construction site.
   const thingsAt = (k) => [["unit", idx.unitAt[k]], ["structure", idx.structAt[k]], ["site", idx.siteAt[k]]].filter(([, id]) => id);
 
-  // Selects the first thing on the cell; clicking again moves on to the next one (and wraps round).
+  // Selects the first thing on the cell; each click moves to the next (wrapping).
   function selectAt(k) {
     const things = thingsAt(k);
     if (!things.length) { act.select(null); return; }
@@ -398,7 +380,7 @@
     else if (e.key === "r" || e.key === "R") rotate();
   });
 
-  // Your first Town Hall, else your first unit (settlers before the first city), else the middle.
+  // Your first Town Hall, else your first unit, else 0,0.
   function home() {
     const game = state?.game;
     if (!game?.structures) return "0,0";

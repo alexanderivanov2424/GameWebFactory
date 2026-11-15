@@ -1,32 +1,18 @@
 """Hex Realms: unit paths and simultaneous movement.
 
-Movement points are in half steps: a unit with move 2 has 4. Entering a cell costs its
-terrain's "move" (plains 2, forest 4...); naval units move on water only (2 per cell).
-Mountains and water stop land units. Own structures can be crossed. A cell with an enemy unit
-or enemy structure can only be the last
-cell of a path: moving into it is an attack (it costs one step, 2).
-
-    reach(m, uid)          {key: previous key} for every cell the unit can end on this turn, as its
-                           owner sees the map (fog: unexplored cells cost 2, hidden enemies are
-                           ignored, remembered structures count)
-    path(m, uid, to)       [keys] from the next cell to `to`, or None if out of reach
-    route(m, uid, goals)   [keys] to the cheapest of `goals` over any number of turns, or None
-                           (a step costing more than the unit's whole movement is never taken)
+    reach(m, uid)            {key: previous key}: cells the unit can end on this turn (owner's view)
+    path(m, uid, to)         keys from the next cell to `to`, or None if out of reach
+    route(m, uid, goals)     keys to the cheapest goal over any number of turns, or None
     this_turn(m, uid, keys)  the part of a route the unit can walk this turn
-    resolve(m, events)     moves every unit with an order, one cell per step, all at once
+    resolve(m, events)       moves every ordered unit, one cell per step, all at once
 
-Resolution uses the real map: each unit has its real movement points, and stops before a cell
-that's impassable or costs more than it has left (fog hid the terrain).
-
-Each step: (1) moving into an enemy structure is a siege; (2) enemy units moving through each
-other fight (both attacking); (3) enemy units moving into the same cell fight there (nobody
-enters); when one player's units move into the same cell, the lowest id goes and the others try
-again next step; (4) units move into free cells (chains of units following each other work);
-(5) a unit still blocked by an enemy attacks it (the blocker defends); one blocked by its own
-side swaps places with it (when they move into each other's cells) or passes over it (and any
-friends behind) to the next free cell on its path, paying for every cell crossed, and otherwise
-stops (its path ends on the friend). Any unit that fights stops
-for the rest of the turn, wherever it stands.
+Movement is in half steps (move 2 = 4 points). Land units stop at mountains and water; naval
+units move on water only. Own structures can be crossed. An enemy unit or structure can only be
+the last cell of a path; entering it is an attack (ATTACK_COST).
+Planning assumes unexplored cells cost 2 and hides enemy units; resolution uses the real map.
+Per step: (1) sieges; (2) enemy units swapping cells fight; (3) enemy units entering the same
+cell fight there; (4) free cells are entered; (5) a blocked unit attacks an enemy blocker, or swaps
+with or passes over a friend. A unit that fights stops for the rest of the turn.
 """
 
 import heapq
@@ -84,9 +70,8 @@ def is_target(m, u, k, known):
 
 
 def _search(m, u, limited, goals=None):
-    """Cheapest paths from u's cell as its owner sees the map: ({key: previous key}, goal reached).
-    limited: only cells within this turn's movement. goals: stop at the first of these reached.
-    A step that costs more than the unit's whole movement is never taken (a slow unit and a forest)."""
+    """Cheapest paths over the owner's known map: ({key: previous key}, goal reached).
+    limited: this turn's movement only. A step costing more than the unit's whole movement is never taken."""
     known = knowledge(m, u)
     budget = UNITS[u["type"]]["move"] * 2
     best, prev = {u["at"]: 0}, {}
@@ -136,8 +121,7 @@ def path(m, uid, to):
 
 
 def route(m, uid, goals):
-    """[keys] from the next cell to the cheapest of `goals` to get to, over any number of turns (as
-    the owner sees the map), or None if there's no known way."""
+    """Keys from the next cell to the cheapest of goals, over any number of turns, or None."""
     prev, goal = _search(m, m.units[uid], False, set(goals))
     return _walk_back(prev, goal) if goal else None
 
@@ -157,9 +141,8 @@ def this_turn(m, uid, keys):
 
 
 def pass_friends(m, uid, keys, left):
-    """Walk over the owner's own units at the front of `keys` to the first free cell after them, in
-    one go (cost of every cell crossed). False (nothing moves) if the path ends on a friend, the free
-    cell holds an enemy or an enemy structure, or the movement left doesn't cover it."""
+    """Walk over friends at the front of keys to the first free cell after them, in one go.
+    False (nothing moves) if the path ends on a friend, the free cell is enemy-held, or left can't pay."""
     u = m.units[uid]
     cost = 0
     for i, k in enumerate(keys):

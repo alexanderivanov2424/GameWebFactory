@@ -1,19 +1,16 @@
-"""Hex Realms: goods (food, wood, stone, metal) kept in a player's storage structures.
+"""Hex Realms: goods (food, wood, stone, metal) kept in storage structures.
 
-Gold, faith and science are realm-wide (players[pid]["res"], never stored anywhere). Goods live in
-structures: each storage structure (Town Hall, Storage Yard, Granary: content "storage" / "store")
-has a "stock" up to its capacity. Every store counts wherever it is: at the end of the turn what's left of
-the production after upkeep (economy.end_of_turn) goes into the stores with room (Town Halls first, then
-oldest), and anything that doesn't fit is lost.
+Gold, faith and science are realm-wide (players[pid]["res"]). Storage structures (Town Hall, Storage
+Yard, Granary) hold a "stock" up to their capacity. At end of turn, what's left of production after
+upkeep (economy.end_of_turn) fills the stores with room (Town Halls first, then oldest); the rest is lost.
 
-    stores(m, pid)            pid's storage structures (Town Halls first, then oldest)
-    stock(m, pid)             {res: amount} pid can spend now: goods in stores + gold/faith/science
-    capacity(s)               {good: room} of one storage structure (empty if it isn't one)
-    room(m, pid, good)        free space for `good` in pid's stores
-    take(m, pid, cost)        spend (LobbyError if short): goods from stores, in stores() order
-    store(m, pid, good, n)    put produce in: fills stores with room, returns what didn't fit (lost)
-    give(m, pid, amounts)     add (refunds, trades): like store, but what doesn't fit goes into the
-                              first store anyway (a refund is never lost)
+    stores(m, pid)           pid's storage structures, in fill order
+    stock(m, pid)            {res: amount} spendable now
+    capacity(s)              {good: room} of one storage structure
+    room(m, pid, good)       free space for good in pid's stores
+    take(m, pid, cost)       spend (LobbyError if short), goods from stores first
+    store(m, pid, good, n)   put produce in; returns what didn't fit
+    give(m, pid, amounts)    add (refunds, trades); what doesn't fit goes into the first store anyway
 """
 
 from gamekit import LobbyError

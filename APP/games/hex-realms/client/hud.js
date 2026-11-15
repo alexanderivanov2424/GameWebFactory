@@ -1,37 +1,16 @@
 /*
- * Hex Realms: the HUD panels around the map, all built from the state (no rules here).
+ * Hex Realms HUD: the panels around the map (top bar, players, selection, orders, trade, build menu), built from state.
+ * No rules here. Each function replaces its element's children, so call it on every render.
  *
- *   HexHud.topbar(el, ctx)      turn, countdown (#hr-timer, ticked by game.js), resources (+net), people (current:
- *                               jobs / building / units / idle), population (people + people in units, with this turn's
- *                               change), housing (the cap) as chips, Jobs off / Jobs on
- *                               (every structure with workers), End turn; clicking a resource, people, population or housing
- *                               toggles the map's resource view (act.resView, ui.resView)
- *   HexHud.players(el, ctx)     colour, name, score, done tick, out, public resource snapshot
- *   HexHud.selection(el, ctx)   the selected unit / structure / construction site: stats, orders,
- *                               Recruit/Hold/Shoot/Found/Disband/Switch off/Demolish
- *   HexHud.orders(el, ctx)      your pending builds / recruits / research, each with a cancel button, and your
- *                               construction sites (progress, whether builders work there this turn, demolish)
- *   HexHud.trade(el, ctx)       give/get selects (only when the market rate is > 0)
- *   HexHud.build(el, ctx)       one button per buildable structure (starts build mode)
- *   HexHud.fmt                  small text helpers shared with panels.js (cost, nameSpan, resource icons);
- *                               fmt.setResources(content.resourceInfo) first (game.js does, each render)
- *   HexHud.fmt.structInfo(content, def)  {text, res: "(+1 🪵, −1 👥)" text (base output and jobs; "" if neither), stats: [text], hp: text, terrains: text, build: text,
- *                               tags: [id], byTag: [{n, res, tag}] (perAdjacent per neighbour with a tag)}: a
- *                               structure described from its content fields (build menu tooltip, placing panel)
- *   HexHud.fmt.resListEl(def, res?)  that list as nodes ("+" green, "−" red; [] if neither): res = a real or
- *                               previewed output {res: n}, else the content's base output
- *   HexHud.structCard(content, def, hp?, res?)  the structure card: a small picture of the footprint, HP below it
- *                               (hp: live "HP 5/15" text for a placed one), its tags as pips, its text, what it makes
- *                               and uses as one list (.hr-sres; res: your placed structure's real output from the
- *                               report's flows, or the placing preview game.js fills in on hover), then every
- *                               effect ("−1 🍞 for [Industrial]" lines for tag bonuses). The placing hint's
- *                               right-hand section and the top of a selected structure's panel
- *   Top bar deltas: each resource / people / housing chip has an empty .hr-delta.hr-delta-<key> below it
- *                   (plus one for "turns" at the end), filled by game.js while placing a structure
- *
- * ctx = { game, priv, you, me (public player entry), content, ui, act } where ui is the page's
- * persistent UI state ({sel, mode, trade, resView}) and act = { send(msg), select(kind, id), setMode(mode), centre(key), resView(res) }.
- * Every function replaces the children of its element, so call them on each render.
+ * HexHud.topbar(el, ctx)      turn, timer, resources, people, population, housing, End turn
+ * HexHud.players(el, ctx)     players: colour, name, score, done, public resources
+ * HexHud.selection(el, ctx)   the selected unit, structure or site, with its actions
+ * HexHud.orders(el, ctx)      pending builds, recruits, research, construction sites
+ * HexHud.trade(el, ctx)       market give/get selects
+ * HexHud.build(el, ctx)       build menu buttons
+ * HexHud.structCard(content, def, hp?, res?)  structure card (footprint, text, output, effects)
+ * HexHud.fmt                  text helpers shared with panels.js (costs, icons, structInfo, resListEl); call setResources first
+ * ctx = { game, priv, you, me, content, ui, act }; game.js fills the top bar's .hr-delta-<key> slots
  */
 (() => {
   const { el, svg, fill } = AppDom;
@@ -43,9 +22,7 @@
   const costText = (cost) => Object.entries(cost || {}).map(([r, n]) => `${n}${resIcon(r)}`).join(" ") || "free";
   const plural = (n, word) => `${n} ${word}${n === 1 ? "" : "s"}`;
   const names = (content, kind, ids) => ids.map((id) => content[kind][id]?.name || id).join(", ");
-  // What a structure makes and uses a turn as one list, e.g. "(+1 🪵, −1 👥)": `res` is its output ({res: n}:
-  // the real one for a placed structure, a preview for a spot) or, when null, its base output from the content
-  // (per terrain for a structure that only works on some); workers are its jobs (people). Empty when it does neither.
+  // Output and jobs as one list, e.g. "(+1 🪵, −1 👥)"; res is a real or previewed output, else the base output.
   const order = (r) => { const i = Object.keys(RES).indexOf(r); return i < 0 ? 99 : i; };
   const resItems = (res) => Object.entries(res || {}).filter(([, n]) => n).sort((a, b) => order(a[0]) - order(b[0]))
     .map(([r, n]) => [`${n > 0 ? "+" : "−"}${Math.abs(n)} ${resIcon(r)}`, n > 0 ? "pos" : "neg"]);
@@ -80,7 +57,7 @@
     return { text: d.text || "", res: resListText(d), stats, hp, terrains, build, tags: d.tags || [], byTag };
   }
 
-  // A small picture of a structure's footprint (unturned) in its colour, its icon in the middle.
+  // Footprint picture (unturned) in the structure's colour, with its icon.
   function structPicture(d, px = 64) {
     const { center, key } = HexMap.util, s = 30;
     const cs = d.cells.map(([q, r]) => center(key(q, r)));
@@ -124,7 +101,7 @@
   };
   const VIEW_TIP = "Click: show on the map what makes and uses it each turn.\n";
 
-  // A chip with an (empty) delta line under it, filled while placing a structure.
+  // A chip with an empty delta line below it, filled by game.js while placing.
   const withDelta = (key, chip) => el("span", { className: "hr-dcol" }, chip, el("span", { className: `hr-delta hr-delta-${key}` }));
 
   function topbar(box, ctx) {
@@ -176,8 +153,7 @@
     }));
   }
 
-  // A unit's stats as small chips like the resources: attack, defence, movement, health (hp: "5/8" for a
-  // unit on the map), then range and siege when it has them, and last the food it eats a turn ("−1 🍞", "0").
+  // A unit's stats as chips: attack, defence, move, hp, range and siege if any, then food eaten per turn.
   const UNIT_STATS = [["attack", "⚔️", "Attack: dice it rolls when it attacks"], ["defense", "🛡️", "Defence: dice it rolls when attacked"],
     ["move", "👣", "Movement: steps a turn"], ["hp", "❤️", "Health"], ["range", "🏹", "Range: shoots this far instead of moving"],
     ["siege", "💥", "Siege: damage per hit on structures"]];
@@ -206,10 +182,10 @@
           : sel.id in o.found ? "Founding a city" : o.holds.includes(sel.id) ? "Holding position" : "No orders";
         const hold = o.holds.includes(sel.id) && !mode;
         const found = priv.found[sel.id] || [];
-        // A command deselects the unit (Clear orders keeps it selected to give a new one).
+        // A command deselects the unit; Clear orders keeps it selected.
         const command = (msg) => { act.send(msg); act.select(null); };
         const autoBtn = (m, label, title) => btn(mode === m ? `${label} (on)` : label, () => command({ action: "auto", unit: sel.id, mode: m }), { cls: mode === m ? "on" : "", title });
-        // Each action with a short description beside it (feedback: the bare buttons weren't clear).
+        // Each action has a short description beside it.
         const action = (b, text) => b && [b, el("span", { className: "small muted" }, text)];
         const row = el("div", { className: "hr-actions" },
           action(btn(hold ? "Hold (on)" : "Hold", () => command({ action: "hold", unit: sel.id }), { cls: hold ? "on" : "", title: "Roll one extra defence die this turn instead of moving." }),
@@ -262,7 +238,7 @@
     fill(box, ...kids);
   }
 
-  // Your structure's real output a turn (whether it works or not), from the report's flows: its + entries of a resource.
+  // A placed structure's real output per turn, from the report's flows (positive entries).
   const output = (ctx, sid) => Object.fromEntries(ctx.priv.report.flows
     .filter(([id, r, n]) => id === sid && n > 0 && ctx.content.resources.includes(r)).map(([, r, n]) => [r, n]));
 

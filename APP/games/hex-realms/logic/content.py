@@ -2,35 +2,26 @@
 
     from .content import STRUCTURES, UNITS, ADVANCES, TERRAIN, RESOURCES, footprint
 
-TERRAIN      {id: {"name", "move" (cost in half steps, None = impassable for land units),
-             "cover" (hitting a unit here needs 5+), "build" (ordinary structures allowed)}}
-RESOURCES    stock resources in display order; "people" is separate (population)
-RESOURCE_INFO  {res: (name, icon)} for the client, people, population and housing (the population cap) included
+TERRAIN      {id: {"name", "move" (half steps, None = impassable), "cover" (hits need 5+), "build"}}
+RESOURCES    stock resources in display order ("people" is separate)
+RESOURCE_INFO  {res: (name, icon)} for the client, incl. people, population, housing
 structures/<id>.json:
-    name, icon (an emoji or short text drawn on the map; placeholder for art), color ("#rrggbb", its
-    solid colour on the map; owners show on territory borders and hover), cells [[q, r], ...] (axial offsets, first = anchor),
-    cost {res: n}, hp (0 = can't be attacked), defense (dice it rolls back at attackers),
-    jobs (people needed to work), produce {res: n}, perCell {terrain: {res: n}} (per own cell),
-    onTerrain {terrain: {res: n}} (by the anchor's terrain, replaces produce), perAdjacent
-    {"terrain"|"type"|"tag"|"home": ..., "gain": {res: n (may be negative)}, "max": n} (per neighbouring
-    cell of that terrain / own structure of that type / with that tag / own home structure, up to max; a
-    list of these for several bonuses; a structure's output never goes below 0), tags [TAGS ids] (shown
-    as pips; "home" = counts as a home), housing, home (counts as a home; same as the "home" tag), storage (all
-    capped resources), store {res: n} (a structure with either is a store of goods: see
-    logistics.py), terrain [ids] (default every "build" terrain), coast (a cell must touch water),
-    requires (advance id), recruits [unit ids], heals, shoots (dice) + range, trade (market
-    rate: give n for 1), score, hammers (🔨 of work to build it, default 1: each idle person makes 1
-    a turn; construction.py), category (a CATEGORIES id: the build menu's tabs), vision (fog of
-    war: cells seen around each of its cells, default 3), text.
+    name, icon, color ("#rrggbb" map colour), cells [[q, r], ...] (axial, first = anchor)
+    cost {res: n}, hp (0 = unattackable), defense (dice it rolls back), jobs (people to work)
+    produce {res: n} (output never below 0), onTerrain {terrain: {res: n}} (anchor's terrain, replaces produce)
+    perCell {terrain: {res: n}} (per own cell), perAdjacent {"terrain"|"type"|"tag"|"home", "gain", "max"} (or a list)
+    tags [TAG ids], home (same as "home" tag), housing, storage (cap on capped goods), store {res: n}
+    terrain [ids] (default: buildable), coast (touches water), requires (advance), recruits [unit ids]
+    heals, shoots (dice) + range, trade (give n for 1), score, hammers (work to build, default 1)
+    category (CATEGORIES id), vision (cells seen around each cell, default 3), text
 units/<id>.json:
-    name, icon, art (a file in client/art/units/, drawn on the map instead of the icon), cost {res: n}, people (default 1), attack, defense, hp, move (steps), range
-    (shoots instead of moving), siege (damage per hit on structures, default 1), vsMounted (extra
-    dice against mounted), mounted, naval (water only), settler (can found a Town Hall),
-    requires (advance), needs (a structure type the owner must own), upkeep {res: n}, vision (cells
-    seen around it, default 2), text.
+    name, icon, art (client/art/units/ file, drawn instead of icon), cost {res: n}, people (default 1)
+    attack, defense, hp, move (steps), range (shoots instead of moving), siege (damage per hit on structures)
+    vsMounted (extra dice vs mounted), mounted, naval (water only), settler (founds a Town Hall)
+    requires (advance), needs (structure type owned), upkeep {res: n}, vision (default 2), text
 advances/<id>.json:
-    name, cost {"science"|"faith": n}, after [advance ids], effect {key: n}, text.
-    Effect keys: towerDice, farmFood, homeHousing, defendDice, chapelGold, attackDice.
+    name, cost {"science"|"faith": n}, after [advance ids], effect {key: n}, text
+    Effect keys: towerDice, farmFood, homeHousing, defendDice, chapelGold, attackDice
 """
 
 import logging
@@ -44,7 +35,7 @@ log = logging.getLogger(__name__)
 HERE = Path(__file__).resolve().parent.parent
 
 RESOURCES = ["gold", "food", "wood", "stone", "metal", "faith", "science"]
-# Name and icon of each resource (plus people) for the client; icons are placeholders for art.
+# For the client; icons are placeholders for art.
 RESOURCE_INFO = {"gold": ("Gold", "🪙"), "food": ("Food", "🍞"), "wood": ("Wood", "🪵"), "stone": ("Stone", "🪨"),
                  "metal": ("Metal", "🔩"), "faith": ("Faith", "🙏"), "science": ("Science", "🔬"),
                  "people": ("People", "👥"), "population": ("Population", "👥"), "housing": ("Housing", "🏠"), "hammers": ("Hammers", "🔨")}
@@ -60,7 +51,7 @@ TERRAIN = {
 }
 CATEGORIES = {"defense": "Defense", "homes": "Homes", "food": "Food", "industry": "Industry", "trade": "Trade",
               "military": "Military", "culture": "Learning & Faith", "city": "City"}  # build menu tabs, in order
-# Structure tags {id: (name, pip colour)}: shown on the structure card; perAdjacent can count them.
+# {id: (name, pip colour)}; perAdjacent can count them.
 TAGS = {"industrial": ("Industrial", "#a0643c"), "food": ("Food", "#c9a93a"), "home": ("Home", "#c97b5b"),
         "storage": ("Storage", "#4f86c6"), "military": ("Military", "#b8433a"), "defense": ("Defense", "#7d8794"),
         "trade": ("Trade", "#d9b13b"), "culture": ("Culture", "#8e5bb5"), "civic": ("Civic", "#5f9e8f")}
@@ -159,6 +150,6 @@ TOWN_HALL = "town_hall"
 
 
 def footprint(stype, at, rot):
-    """The keys covered by structure `stype` anchored at key `at` with `rot` 60-degree turns."""
+    """Keys covered by structure `stype` anchored at `at`, turned `rot` times (60 degrees each)."""
     q, r = (int(x) for x in at.split(","))
     return [f"{q + dq},{r + dr}" for dq, dr in STRUCTURES[stype]["rotations"][rot % 6]]

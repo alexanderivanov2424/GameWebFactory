@@ -1,21 +1,14 @@
 /*
- * Hex Realms: the combat replay that plays when a turn resolves. It glides the map to each combat you
- * saw (battles, shots, sieges, tower fire, in the order they happened), shows the dice on the left
- * (you) and right (the other side) of the screen round by round with the hits lit, then the result,
- * and moves on to the next one; at the end the view goes back to where it was. A Skip button (or Esc)
- * stops it. No rules here: everything comes from game.events (logic/combat.py's event shapes).
+ * Hex Realms: the combat replay played when a turn resolves. The map glides to each combat in order,
+ * the dice show round by round (you on the left, the other side on the right), then the result.
+ * Skip (or Esc) stops it. No rules here: everything comes from game.events.
  *
- *   const replay = HexReplay.create(map, { onChange(playing) })
- *   replay.play(game, you)   start (stops one already playing); false when there's nothing to show or
- *                            the player turned replays off (the caller flashes the cells instead)
- *   replay.skip()            stop now and put the view back
- *   replay.playing           true while it plays
- *   HexReplay.steps(game, you)   one step per combat: {cells, title, left, right, rounds, result}
+ *   HexReplay.create(map, { onChange(playing) })  replay: play(game, you) (false when nothing to show or
+ *                                                 replays are off), skip(), playing
+ *   HexReplay.steps(game, you)                    one step per combat: {cells, title, left, right, rounds, ...}
  *
- * Player settings (Settings -> Hex Realms, AppSettings.addPageSettings): SPEED_KEY (a multiplier:
- * "0.5" slow ... "4" very fast) and SKIP_KEY (true = never play). Durations below are at speed 1.
- * DOM: #replay (with #replay-bar, #replay-left, #replay-right) in index.html; #game gets the
- * "replaying" class while it plays (the side columns hide).
+ * Settings (Settings -> Hex Realms): SPEED_KEY (multiplier) and SKIP_KEY. Durations are at speed 1.
+ * DOM: #replay (#replay-bar, #replay-left, #replay-right); #game gets "replaying" while it plays.
  */
 (() => {
   const { $, el, fill } = AppDom;
@@ -30,10 +23,9 @@
       hint: "Don't play the replay; combat cells just flash and the Report tab lists the dice." },
   ]);
 
-  const HIT = 4;  // structures are hit on 4+ (units' need comes with each event)
+  const HIT = 4;  // structures are hit on 4+; units' need comes with each event
 
-  // Who fought in event e, as two sides {owner, name, icon, hp: [before, after] | null, dead, role};
-  // `rolls` are [aDice, bDice] per round, with the roll each side needs to hit.
+  // The two sides of event e: {owner, name, icon, hp, dead, role}; rounds are [aDice, bDice].
   function describe(e, game) {
     const content = game.content;
     const unit = (s, role) => ({ owner: s.owner, name: content.units[s.type]?.name || s.type, icon: content.units[s.type]?.icon || "",
@@ -99,7 +91,7 @@
       handlers.onChange?.(on);
     }
 
-    // A replay that starts while another plays (or glides back) keeps the first saved view.
+    // A replay started during another keeps the first saved view.
     function play(game, you) {
       if (replay.playing) { run++; setPlaying(false); }
       if (AppSettings.get(SKIP_KEY)) { skip(); return false; }

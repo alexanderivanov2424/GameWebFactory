@@ -1,54 +1,25 @@
-"""Hex Realms: workers, production, upkeep, feeding and new people (territory is territory.py; bought land's gold
-upkeep is counted here).
+"""Hex Realms: production, upkeep, eating and new people. Territory is in territory.py.
 
-    effect(m, pid, name)     sum of an advance effect key over pid's advances
-    output(m, s)             what structure s makes in a turn when it works
-    type_bonus(m, pid)       {stype: {res: n}}: what pid's advances add to every structure of a type
-                             (TYPE_BONUS; sent to the client for the placing preview)
-    staffing(m, pid)         (working structures in job order, people without a job)
-    report(m, pid, resolving=False)  this turn's forecast (resolving: this turn's orders have happened): {"income", "upkeep", "net" (income - upkeep, not
-                             capped by your stores; food: foodNet), "wasted" {good: n that won't fit in your stores
-                             at the end of the turn and is lost}, "staffed": [sid], "workers" (in jobs), "builders" (on
-                             construction sites), "idle" (neither), "housing", "soldiers" (people in
-                             units, plus this turn's recruits while planning: they use housing too), "caps", "starve"
-                             ({"units": n, "people": n} who will die of hunger this turn), "born" (people
-                             you will gain), "popNet" (the population's change: born - starved people - the
-                             people in starved units), "foodNet" (the change in stored food: production left after
-                             eating and the new people, or minus what the stores give when production falls
-                             short; also net["food"]), "tradeRate",
-                             "land" (cells of bought land paid for, in upkeep gold), "flows" (see flows())}
-    flows(m, pid, working, building, land=0, idle=0, living=0)  what each of pid's things adds or takes this turn, for the
-                             client's resource view: [[id, res, n, on], ...], n > 0 made, n < 0 used, on = False
-                             for a structure that isn't working this turn (what it would make / need); plus
-                             "people" (where your population is: idle people at home +n (spread over the homes,
-                             oldest first, up to their housing), people in jobs / units / recruits ordered at a
-                             structure -n, and builders -n tagged "build" ([id, "people", -n, True, "build"]:
-                             on a site, or a build order placed this turn: its order id)) and
-                             "housing" (the cap: [id, "housing", n, True] per structure that houses people),
-                             "population" (who lives where: [id, "population", x, True, "of", y] per structure
-                             that houses people, y its housing, x the `living` people (pop + people in units)
-                             spread over the homes oldest first, up to their housing; the last takes any overflow)
-    new_people(room, surplus)  how many people join: as many as the food `surplus` feeds, up to the housing `room`
-    split_upkeep(have, made, need)  (from the stores, from production): where a good's upkeep comes from
-    starvation(m, pid, food, pop)   ([unit ids], people) who die when `food` (this turn's food
-                             production + the stores) can't feed pid's units and `pop` people: units first
-    end_of_turn(m, pid, events)  production and upkeep together (then the stores' cap), eating, wages, new people
+A structure works if its crew is there: people fill jobs, food producers first, then oldest first.
+Gold, faith and science go to the realm; goods go into the stores (logistics.py). Everyone eats
+FOOD_PER_PERSON food, units eat their upkeep, and bought land costs LAND_UPKEEP gold per cell.
+Production and upkeep happen together; only what is left is capped by store room. Gold below 0 gives
+up bought land, or else the newest paid unit deserts. A realm without a Town Hall skips all of this.
 
-Rules: every structure works, wherever it is, as long as it has its crew: people (population)
-fill jobs, food producers first, then oldest first. Gold, faith and science go straight to the
-realm; goods (food, wood, stone, metal) go into the realm's stores (logistics.py). Everyone eats: FOOD_PER_PERSON food a person, plus each unit's
-upkeep (and this turn's recruits' while planning: they appear before eating), plus LAND_UPKEEP gold per cell of bought land (territory.py). Production and upkeep happen at the same time (upkeep can use this turn's production), and
-only what is left is capped by the room in the stores; the rest is lost; gold below 0 gives up
-that many cells of bought land (territory.give_up), or with no bought land, the newest paid unit deserts.
-Food (2026-11-15, the user's rules; there is no growth rate): everyone eats this turn's production
-first, then the stored food. Only when both run out does everyone they can't feed die at the end of the
-turn, units first (newest first, until the rest can be fed), then people (starvation()). The population
-grows only to match production: a production surplus becomes new people at once, as many as it feeds,
-while there is free housing (units use housing too: population + the people in your units must fit;
-new_people()); only the food left after that goes into the stores. A drop in production doesn't shrink the
-population while the stores last. People without a
-job build (construction.py). A realm without a Town Hall (settlers before their first city)
-skips all of this.
+Food: this turn's production is eaten first, then the stores; only when both run out do the ones who
+can't be fed die (units first). Population grows only from a production surplus: as many new people
+as it feeds, while housing has room. Food left over goes into the stores.
+
+    effect(m, pid, name)              sum of an advance effect over pid's advances
+    output(m, s)                      what structure s makes when it works
+    type_bonus(m, pid)                advance bonuses per structure type (for the placing preview)
+    staffing(m, pid)                  (working structures in job order, idle people)
+    report(m, pid, resolving=False)   the turn's forecast: income, upkeep, net, wasted, housing, ...
+    flows(...)                        each thing's resource flows, for the client's resource view
+    new_people(room, surplus)         people who join: the surplus feeds them, up to the room
+    split_upkeep(have, made, need)    where a good's upkeep comes from: stores first, then production
+    starvation(m, pid, food, pop)     ([unit ids], people) who die when the food can't feed them
+    end_of_turn(m, pid, events)       production, upkeep, eating, wages, new people
 """
 
 from gamekit.hexes import neighbors
@@ -120,7 +91,7 @@ def staffing(m, pid):
 
 
 def report(m, pid, resolving=False):
-    """The forecast for this turn, as it will really resolve (see the module header)."""
+    """The forecast for this turn, as it will resolve."""
     p = m.players[pid]
     working, left = staffing(m, pid)
     building = construction.forecast(m, pid, orders=not resolving)
@@ -187,10 +158,7 @@ def report(m, pid, resolving=False):
 
 
 def flows(m, pid, working, building, land=0, idle=0, living=0):
-    """Per structure / unit / site: production (+), unit upkeep, the people's food where they are (-:
-    on the structure they work in, the site they build, the home they're idle in; recruits ordered
-    this turn on their structure), the bought land's gold (-, on each bought cell: id "land:<key>"); "people" (where
-    they are), "housing" and "population" (who lives where). See the module header."""
+    """Each thing's resource flows as [id, res, n, on] rows (n > 0 made, n < 0 used), for the client's resource view."""
     p, on = m.players[pid], {s["id"] for s in working}
     home_bonus = effect(m, pid, "homeHousing")
     out = []
@@ -248,10 +216,9 @@ def end_of_turn(m, pid, events):
         if r not in CAPPED:
             p["res"][r] += income[r]
     have = logistics.stock(m, pid)
-    # Production and upkeep at once: upkeep comes out of the stores first, the rest out of this turn's
-    # production, and only what's left of the production goes into the stores (capped: the rest is lost).
+    # Upkeep comes from the stores first, then this turn's production; only the surplus is stored.
     for r in CAPPED:
-        if r == "food":  # production first, then the stores; only the production surplus makes people (report())
+        if r == "food":  # production, then the stores; only the surplus makes people (report())
             if rep["foodNet"] < 0:
                 logistics.take(m, pid, {r: -rep["foodNet"]})
             else:

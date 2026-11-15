@@ -1,79 +1,35 @@
-"""Hex Realms: a simultaneous-turn civilization game on a random hex map.
+"""Hex Realms: the lobby side (settings, messages, turn timer). The rules live in logic/.
 
-Each player starts with Settlers (and a Scout beside them: 1 hp, can't fight, moves 4, uses no people) and founds their first Town Hall wherever they choose (the
-starting goods go into it). Fog of war (a setting): units and structures (further) reveal the
-map; cells once seen stay explored, enemy structures are remembered as last seen. Every turn all players plan at once, in
-secret: place structures (multi-cell footprints, turned in 60-degree steps) inside their
-territory, train units, order moves and attacks, research advances, trade at a market. When
-everyone has pressed End turn (or the turn timer runs out), all orders resolve together:
-units move one cell per step at the same time and fight with dice wherever they meet. Every
-structure works if it has its workers (people, who need food and housing; the people in units
-still use housing). Every person eats 1 food a turn. There is no growth rate: everyone eats
-this turn's food production first, then the stored food; only when both run out does everyone they can't
-feed die, units first, then people. The population grows only to match production: a production surplus
-becomes new people at once, as many as it feeds, while housing has room; only the food left after that
-goes into the stores. A drop in production doesn't shrink the population while the stores last. Ordered structures
-become construction sites that cost hammers (🔨): every person without a job builds 1 hammer a turn
-(switch structures off, all at once, or demolish them to free people), oldest site first, each site
-taking as many as it still needs. Placing a structure takes its builders from your idle people at once
-(cancelling gives them back), so its work starts this turn. Gold, faith and
-science are realm-wide; goods (food, wood, stone, metal) go into the realm's stores (Town
-Hall, Storage Yard, Granary). Production and upkeep happen at the same time; only what is left at the
-end of the turn is capped by the stores' room (the rest is lost). Structures go anywhere inside your territory.
-Structures don't spread land, except Town Halls: each city gets free land (2 cells around it). That land is strong: first come, first served, it stays yours while the
-hall stands, and cells two realms reach in the same turn go to no one. Gold buys weak land (claim an
-explored cell next to yours, one at a time; it's yours at once), which costs 1 gold a turn per cell (unpaid
-cells are given up, farthest from your Town Halls first): it goes back to no one when an enemy unit
-stands on or next to it (nor can you claim there), when it's cut off from your strong land, or when
-another realm's Town Hall reaches it. No roads. Units can be
-given standing orders kept across turns: Explore (clear the fog), Fight (attack the nearest enemy
-unit in sight), Pillage (attack the nearest enemy structure in sight, fighting enemy units that
-come close first) or a far-away destination (walk there over several turns). Your own units pass
-through each other while moving. Nothing can be built where an enemy unit stands (own units are fine), and a
-construction site with an enemy unit on it gets no work. Recruits appear on the structure that
-trains them.
-Lose every Town Hall and you are out. Last
-realm standing wins; otherwise the highest score after the last turn.
-Full rules: logic/match.py (turn order, score), logic/economy.py, logic/combat.py,
-logic/movement.py, logic/orders.py, logic/logistics.py, logic/construction.py,
-logic/explore.py, logic/standing.py, logic/territory.py, logic/recruiting.py; content in structures/, units/,
-advances/ (fields in logic/content.py).
+Each player starts with Settlers and a Scout and founds their first Town Hall anywhere. Every turn
+everyone plans in secret at once: build inside their territory, train units, order moves and attacks,
+research, trade. When all have ended their turn (or the timer runs out), orders resolve together:
+units move step by step and fight with dice where they meet. Structures are built by idle people;
+production, eating and population are settled per realm (logic/economy.py). Gold, faith and science
+are realm-wide; goods sit in stores. Only Town Halls spread land: free land around each city (first
+come, first served) and weak land bought with gold (1 gold upkeep a turn per cell). Fog of war (a
+setting) hides what your units and structures don't see. Standing orders (Explore, Fight, Pillage,
+Travel) carry over turns. Lose every Town Hall and you are out; the last realm standing wins,
+otherwise the highest score after the last turn.
 
-Player options:  none (colors by seat)
-Settings:        mapSize (small/normal/large/huge), turns (turn limit), turnSeconds (0 = no timer),
-                 fog (on/off), bots (computer players added to the seats; logic/bots.py),
-                 seed (0 = random map)
-State: the public part has no map; each member's private state has "view" (cells, dim, structures,
-units, construction sites, territory, events as they see them; spectators see everything).
-Game messages (all only while planning; any order un-readies you; never use a "type" key,
-the lobby envelope owns it):
-    {"action": "build", "kind": stype, "at": "q,r", "rot": 0-5}
-    {"action": "claim", "at": "q,r"}                   (2 gold; the cell becomes your weak land at once, no cancel;
-                                                        1 gold upkeep a turn per cell)
-    {"action": "recruit", "structure": sid, "kind": utype}
-    {"action": "move", "unit": uid, "to": "q,r"}      (to = own cell clears the unit's orders)
-    {"action": "shoot", "unit": uid, "at": "q,r"}
-    {"action": "hold", "unit": uid}                    (toggle)
-    {"action": "move", ...} to a cell out of reach      a Travel standing order: it walks there over turns
-    {"action": "auto", "unit": uid, "mode": m}          (toggle a standing order, kept across turns; any other
-                                                        order for the unit stops it): "explore" (clear fog),
-                                                        "fight" (attack the nearest enemy unit you see, hold
-                                                        when none), "pillage" (attack the nearest enemy
-                                                        structure you see, fighting enemy units that come
-                                                        close first; hold when none)
-    {"action": "found", "unit": uid, "rot": 0-5}
-    {"action": "research", "advance": aid}
-    {"action": "cancel", "order": oid}                 (a build / claim / recruit / research order)
-    {"action": "trade", "give": res, "get": res}
-    {"action": "toggle", "structure": sid}
-    {"action": "staff", "on": true|false}              (switch every structure with jobs on / off)
-    {"action": "demolish", "structure": sid}           (a structure, no refund, not a Town Hall; or a
-                                                        construction site id, cost refunded)
-    {"action": "disband", "unit": uid}
-    {"action": "done", "done": true|false}             (End turn / take it back)
-
-Code: this file connects the game to the lobby (settings, messages, the turn timer). The rules
-live in logic/ (see logic/__init__.py for its modules).
+Settings: mapSize, turns, turnSeconds (0 = no timer), fog, bots, seed (0 = random).
+State: the public part has no map; each member's private state has "view", their fog-limited map.
+Game messages ({"action": name, ...fields}; planning only, any order un-readies you):
+    build      kind, at "q,r", rot 0-5
+    claim      at "q,r"                    2 gold, weak land at once (no cancel)
+    recruit    structure, kind
+    move       unit, to "q,r"              own cell clears orders; out of reach = Travel
+    shoot      unit, at "q,r"
+    hold       unit                        toggle
+    auto       unit, mode                  toggle a standing order: explore, fight, pillage
+    found      unit, rot 0-5
+    research   advance
+    cancel     order                       a build / claim / recruit / research order
+    trade      give, get
+    toggle     structure
+    staff      on true|false               every structure with jobs
+    demolish   structure                   a structure (no refund) or a site id (refunded)
+    disband    unit
+    done       done true|false             End turn / take it back
 """
 
 from gamekit import Choice, Int, LobbyError, LobbyGame, PatchState

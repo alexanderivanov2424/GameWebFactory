@@ -1,28 +1,12 @@
-"""Hex Realms: bots, computer players that plan their orders through the same rules as people.
+"""Hex Realms: computer players. They plan through the same Match.act checks as people and see only what their player knows.
 
     plan(m, pid)    give bot pid's orders for this turn, then mark it done
 
-Every order goes through Match.act, so bots pass the same checks as people, and they only use
-what pid knows (vision.known_at, m.visible, movement.reach), so fog of war applies to them too.
-A simple strategy, in this order each turn:
-  1. Settlers found a city where they stand if they can; otherwise they head for the nearest
-     explored site within CITY_RANGE that it knows is free (about CITY_SPACING + 2 from its own
-     cities), or wander.
-  2. Research the cheapest advance it can afford.
-  3. Builders: if a construction site gets no builders, switch off its newest working structure
-     that doesn't make food (once nothing is waiting, switch everything back on). Then build by
-     need (at most MAX_BUILDS a turn, only with idle people left over for builders): homes when
-     nearly full, farms when food is short, a lumbermill and a mine per city, storage when goods
-     are near the cap, then Barracks, Market, Chapel, College, Smithy, Towers, more farms, anywhere
-     in its territory (near the Town Hall preferred). If a farm / lumbermill / mine finds no land
-     it needs, it buys land (orders.claim, up to MAX_CLAIMS a turn, only while its gold income pays the
-     land's upkeep) towards the nearest such terrain.
-  4. Recruit Settlers until it has 3 cities, then an army that grows with the turn number.
-  5. Units: ranged ones shoot what's in range; everyone attacks enemies near its structures;
-     units that can't fight (the starting Scout) always explore (explore.target, like the Explore order), and the
-     oldest fighting unit scouts too until a war needs it; from ATTACK_TURN an army of
-     ATTACK_ARMY marches on the nearest enemy city it knows (or any enemy structure); the rest
-     stay near home and hold.
+Each turn: settlers found cities (or walk to a free site); research the cheapest advance;
+builders staff construction; build by need (homes, farms, a lumbermill and mine per city, storage,
+then military and culture), buying land for farms, mills and mines when none is free;
+recruit settlers up to 3 cities, then an army that grows with the turn; units shoot in range,
+defend near home, explore (the Scout always does), and from ATTACK_TURN march on the nearest enemy.
 """
 
 import random
@@ -97,8 +81,7 @@ class Bot:
                 try_act(m, pid, "move", u["id"], self.rng.choice(sorted(options)))
 
     def city_site(self, u):
-        """The nearest explored cell within CITY_RANGE where pid could found a city (as far as it
-        knows), preferring about CITY_SPACING + 2 from its own Town Halls."""
+        """Nearest known-free cell in CITY_RANGE for a city, about CITY_SPACING + 2 from its own halls."""
         m, pid = self.m, self.pid
         explored = m.explored[pid] if m.fog else m.cells
         halls = [c for c, (_, stype) in self.known.items() if stype == TOWN_HALL]
@@ -239,7 +222,7 @@ class Bot:
         return 0
 
     def claim_land(self, stype):
-        """Buy one cell of land (orders.claim) on the way to the nearest known land stype needs."""
+        """Buy one cell (orders.claim) towards the nearest known terrain stype needs."""
         m, pid = self.m, self.pid
         want = NEED_TERRAIN.get(stype)
         known = m.explored[pid] if m.fog else m.cells
@@ -249,7 +232,7 @@ class Bot:
             return False
         best = min(options, key=lambda k: (min(dist(k, t) for t in targets), self.near_hall(k), k))
         if report(m, pid)["net"]["gold"] < territory.LAND_UPKEEP:
-            return False  # can't keep paying for it
+            return False
         return try_act(m, pid, "claim", best)
 
     # --- Recruiting ----------------------------------------------------------------------------
@@ -295,7 +278,7 @@ class Bot:
         known = self.known
         threats = self.threats()
         army = [u for u in self.units if not UNITS[u["type"]]["settler"] and not UNITS[u["type"]]["naval"]]
-        for u in [u for u in army if not UNITS[u["type"]]["attack"]]:  # can't fight (the starting Scout): always explores
+        for u in [u for u in army if not UNITS[u["type"]]["attack"]]:  # can't fight (the Scout): always explores
             self.explore(u)
         army = [u for u in army if UNITS[u["type"]]["attack"]]
         enemy = [c for c, (owner, stype) in known.items() if owner != pid]

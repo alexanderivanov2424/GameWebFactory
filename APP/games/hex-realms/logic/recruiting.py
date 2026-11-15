@@ -1,9 +1,8 @@
 """Hex Realms: where recruited units appear.
 
-    spawn_cell(m, pid, s, utype)   the cell a new unit appears on: the structure itself (its anchor,
-                                   then its other cells), else a cell next to it (naval units need
-                                   water, so they appear beside their Shipyard); None if all are taken
-    resolve(m, events)             this turn's recruit orders appear (or fail: refunded, people back)
+    spawn_cell(m, pid, s, utype)  free cell for a new unit: the structure's cells, then beside it
+                                  (naval units need water)
+    resolve(m, events)            this turn's recruit orders appear, or fail (refunded, people back)
 """
 
 from gamekit.hexes import neighbors

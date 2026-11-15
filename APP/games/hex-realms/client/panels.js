@@ -1,20 +1,16 @@
 /*
- * Hex Realms: the tech tree (game.js shows it in a popup over the map) and the last-turn report (events as readable lines, plus the history log).
+ * Hex Realms: the tech tree popup and the last-turn report (events as lines, then the history log).
  *
- *   HexPanels.techTree(el, ctx, currency)   the advances bought with `currency` drawn as a tree (columns by
- *                                 prerequisite depth, lines prerequisite -> advance), each with its cost, text,
- *                                 status (researched / queued / ready / can't afford / locked) and Research button
- *   HexPanels.currencies(content)  the currencies advances are bought with (science, faith), one tab each
- *   HexPanels.report(el, ctx)     game.events (last resolution) with dice faces, then game.log
- *   HexPanels.flashCells(game)    [{at, kind}] for the map's event markers
- *
- * ctx is the one built in game.js (see hud.js). Event shapes come from logic/combat.py, match.py, economy.py.
+ *   HexPanels.techTree(box, ctx, currency)  advances bought with `currency`, as a tree with Research buttons
+ *   HexPanels.currencies(content)           currencies advances are bought with (science, faith)
+ *   HexPanels.report(box, ctx)              game.events as readable lines, then game.log
+ *   HexPanels.flashCells(game)              [{at, kind}] for the map's event markers
  */
 (() => {
   const { el, fill, svg } = AppDom;
   const { costText, canPay, nameSpan, btn } = HexHud.fmt;
 
-  // Advances are bought with one currency (science or faith): the first key of their cost.
+  // An advance's currency is the first key of its cost.
   const currencyOf = (a) => Object.keys(a.cost || {})[0] || "science";
   const currencies = (content) => {
     const found = new Set(Object.values(content.advances).map(currencyOf));
@@ -23,9 +19,7 @@
 
   const NODE_W = 230, NODE_H = 132, GAP_X = 70, GAP_Y = 18;
 
-  // The advances bought with `currency`, as a tree: columns by depth (one more than the deepest
-  // prerequisite in the same tree), each advance placed level with (the middle of) its prerequisites
-  // where there's room, and a line from each prerequisite to the advances it opens.
+  // Columns by depth in the prerequisite tree; each advance sits level with its prerequisites where there's room.
   function techTree(box, ctx, currency) {
     const { content, me, priv, act } = ctx;
     const A = content.advances;
@@ -87,7 +81,7 @@
     const { game, content, you } = ctx;
     const unitName = (t) => content.units[t]?.name || t;
     const structName = (t) => content.structures[t]?.name || t;
-    const needOf = (s) => s.need || (content.terrain[game.cells[s.at]]?.cover ? 5 : 4);  // the roll that hits unit side s
+    const needOf = (s) => s.need || (content.terrain[game.cells[s.at]]?.cover ? 5 : 4);  // event's hit roll, else by cover
     const who = (s) => el("span", {}, nameSpan(game, s.owner), ` ${unitName(s.type)}`);
     const where = (at) => (at ? el("a", { className: "hr-cell-link", onclick: () => ctx.act.centre(at), title: "Show on the map" }, ` @${at}`) : null);
     const line = (...kids) => el("div", { className: "hr-ev" }, ...kids);

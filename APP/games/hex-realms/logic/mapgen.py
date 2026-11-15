@@ -1,13 +1,8 @@
-"""Hex Realms: the random map, generated from a seed.
+"""Hex Realms: the random hex map, generated from a seed (Voronoi terrain patches, fair starts).
 
-    cells, starts = generate(radius, players, seed)
-    cells    {key: terrain id} for every cell of a hexagonal map of `radius`
-    starts   one key per player: the anchor of their first Town Hall (rotation 0)
-
-Terrain comes in Voronoi-style patches (each cell takes the terrain of its nearest random seed
-point). Starts sit evenly around a ring 3 cells in from the edge; the 2 rings around each start
-are overwritten with the same fair pattern (open land next to the hall, then forest, hills and
-plains), and the map is regenerated until every start can walk to every other.
+    generate(radius, players, seed) -> (cells, starts)
+    cells    {key: terrain id} over the hexagon of `radius`
+    starts   one anchor key per player (their first Town Hall)
 """
 
 import random
