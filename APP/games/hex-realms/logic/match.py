@@ -57,7 +57,7 @@ START_POP = 3
 SIZES = {"small": -3, "normal": 0, "large": 4, "huge": 8}
 ACTS = {name: getattr(orders, name) for name in
         ("build", "claim", "recruit", "move", "shoot", "hold", "auto", "found", "research", "cancel", "trade", "toggle",
-         "staff", "demolish", "disband")}
+         "staff", "growth", "demolish", "disband")}
 ACTS["autorecruit"] = recruiting.set_auto
 
 

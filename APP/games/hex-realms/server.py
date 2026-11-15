@@ -8,7 +8,9 @@ territory, train units, order moves and attacks, research advances, trade at a m
 everyone has pressed End turn (or the turn timer runs out), all orders resolve together:
 units move one cell per step at the same time and fight with dice wherever they meet. Every
 structure works if it has its workers (people, who need food and housing; the people in units
-still use housing). Short of food, everyone who can't eat dies, units first, then people. Ordered structures
+still use housing). Short of food, everyone who can't eat dies, units first, then people. Structures give
+growth (the Town Hall 1): each turn up to that many people are born, while housing has room and the
+food left at the end of the turn can feed them; players can turn growth off. Ordered structures
 become construction sites that take a few turns of work, each turn needing builders: people
 without a job (switch structures off, all at once, or demolish them to free people). Placing a
 structure takes its builders from your idle people at once (refused without enough; cancelling gives
@@ -65,6 +67,7 @@ the lobby envelope owns it):
     {"action": "trade", "give": res, "get": res}
     {"action": "toggle", "structure": sid}
     {"action": "staff", "on": true|false}              (switch every structure with jobs on / off)
+    {"action": "growth", "on": true|false}             (turn your population growth on / off; kept across turns)
     {"action": "demolish", "structure": sid}           (a structure, no refund, not a Town Hall; or a
                                                         construction site id, cost refunded)
     {"action": "autorecruit", "structure": sid, "kind": utype|null, "order": "explore"|"fight"|"pillage"|null}
@@ -104,7 +107,7 @@ class Game(LobbyGame):
         "seed": Int("Map seed", default=0, low=0, high=999999, hint="0 = a new random map"),
     }
     ACTIONS = {name: name for name in
-               ("build", "claim", "recruit", "move", "shoot", "hold", "auto", "found", "research", "cancel", "trade", "toggle", "staff", "demolish",
+               ("build", "claim", "recruit", "move", "shoot", "hold", "auto", "found", "research", "cancel", "trade", "toggle", "staff", "growth", "demolish",
                 "disband", "autorecruit", "done")}
 
     def __init__(self, room):
@@ -196,6 +199,9 @@ class Game(LobbyGame):
 
     def staff(self, member, data):
         self.order(member, "staff", data.get("on") is True)
+
+    def growth(self, member, data):
+        self.order(member, "growth", data.get("on") is True)
 
     def demolish(self, member, data):
         self.order(member, "demolish", text_id(data, "structure"))

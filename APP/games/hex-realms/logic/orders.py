@@ -24,6 +24,7 @@ so a player can never order more than they have. Orders are private until the tu
     trade(m, pid, give, get)        market: give `rate` of one resource for 1 of another, at once
     toggle(m, pid, sid)             switch a structure with jobs off/on (frees its workers)
     staff(m, pid, on)               switch every structure with jobs off (on=False) or on at once
+    growth(m, pid, on)              turn your population growth off / on (kept across turns)
     demolish(m, pid, sid)           at once: a construction site (cost refunded) or a structure (no
                                     refund, its goods are lost, recruits there cancelled); never a Town Hall
     disband(m, pid, uid)            remove one of your units at once (its people come home)
@@ -310,6 +311,10 @@ def staff(m, pid, on):
         raise LobbyError("You have no structures with workers.")
     for s in own:
         s["active"] = bool(on)
+
+
+def growth(m, pid, on):
+    m.players[pid]["growthOff"] = not on
 
 
 def demolish(m, pid, sid):

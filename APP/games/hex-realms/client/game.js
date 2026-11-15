@@ -187,6 +187,7 @@
       const { resIcon, resName, btn } = HexHud.fmt, r = ui.resView;
       const text = r === "people" ? "where your people are this turn: work = in a job, build = on a construction site, train = recruits ordered there, unit = in a unit (units use housing too), idle = at home"
         : r === "housing" ? "green = the housing each structure gives (your people and the people in your units must fit in it)"
+        : r === "growth" ? "green = the growth each structure gives (people you can gain a turn, with free housing and food to feed them)"
         : "green = made there each turn, red = used each turn (units' upkeep; your people's food on your Town Hall)";
       fill(box, `${resIcon(r)} ${resName(r)} view: ${text}. Faded = not working this turn. Click the resource again or Esc to leave. `,
         btn("Close (Esc)", () => act.resView(null)));
@@ -278,6 +279,7 @@
     if (def.jobs) add("people", `−${def.jobs} when working`, "neg");
     const housing = (def.housing || 0) + (def.home ? c.priv.homeHousing || 0 : 0);
     if (housing) add("housing", `+${housing}`, "pos");
+    if (def.growth) add("growth", `+${def.growth}`, "pos");
     add("turns", `⏳ ${def.buildTurns} turn${def.buildTurns === 1 ? "" : "s"} · ${def.builders} builder${def.builders === 1 ? "" : "s"}`, "");
     return out;
   }

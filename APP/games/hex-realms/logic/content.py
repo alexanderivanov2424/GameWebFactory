@@ -17,7 +17,7 @@ structures/<id>.json:
     list of these for several bonuses; a structure's output never goes below 0), tags [TAGS ids] (shown
     as pips; "home" = counts as a home), housing, home (counts as a home; same as the "home" tag), storage (all
     capped resources), store {res: n} (a structure with either is a store of goods: see
-    logistics.py), growth (extra growth per turn), terrain [ids] (default every "build" terrain), coast (a cell must touch water),
+    logistics.py), growth (people the realm can gain a turn: economy.py), terrain [ids] (default every "build" terrain), coast (a cell must touch water),
     requires (advance id), recruits [unit ids], heals, shoots (dice) + range, trade (market
     rate: give n for 1), score, buildTurns (turns of work to build it, default 1), builders (idle
     people it needs for each of those turns, default 1; construction.py), category (a CATEGORIES id: the build menu's tabs), vision (fog of
@@ -47,7 +47,8 @@ RESOURCES = ["gold", "food", "wood", "stone", "metal", "faith", "science"]
 # Name and icon of each resource (plus people) for the client; icons are placeholders for art.
 RESOURCE_INFO = {"gold": ("Gold", "🪙"), "food": ("Food", "🍞"), "wood": ("Wood", "🪵"), "stone": ("Stone", "🪨"),
                  "metal": ("Metal", "🔩"), "faith": ("Faith", "🙏"), "science": ("Science", "🔬"),
-                 "people": ("People", "👥"), "housing": ("Housing", "🏠")}
+                 "people": ("People", "👥"), "housing": ("Housing", "🏠"),
+                 "growth": ("Growth", "🌱")}
 CAPPED = ["food", "wood", "stone", "metal"]  # goods: kept in stores (logistics.py)
 GLOBAL = ["gold", "faith", "science"]  # realm-wide, uncapped
 TERRAIN = {

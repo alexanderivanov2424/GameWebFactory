@@ -11,8 +11,9 @@ upkeep is counted here).
                              at the end of the turn and is lost}, "staffed": [sid], "workers" (in jobs), "builders" (on
                              construction sites), "idle" (neither), "housing", "soldiers" (people in
                              units, plus this turn's recruits while planning: they use housing too), "caps", "starve"
-                             ({"units": n, "people": n} who will die of hunger this turn), "growth"
-                             (people you will gain, 0 if none), "growthWhy" (why not), "tradeRate",
+                             ({"units": n, "people": n} who will die of hunger this turn), "growthRate"
+                             (the realm's growth: people it can gain a turn), "growth" (people you will
+                             gain, 0 if none), "growthWhy" (why not), "growthOff" (the player turned it off), "tradeRate",
                              "land" (cells of bought land paid for, in upkeep gold; with this turn's
                              claims while planning), "flows" (see flows())}
     flows(m, pid, working, building, land=0, idle=0)  what each of pid's things adds or takes this turn, for the
@@ -21,7 +22,10 @@ upkeep is counted here).
                              "people" (where your population is: [id, "people", n, True, tag], tag "work" (jobs),
                              "build" (on a site, or a build order placed this turn: its order id), "unit" (in a unit), "train" (recruits ordered at a structure),
                              "idle" (at home: spread over the homes, oldest first, up to their housing)) and
-                             "housing" (the cap: [id, "housing", n, True] per structure that houses people)
+                             "housing" (the cap: [id, "housing", n, True] per structure that houses people) and
+                             "growth" ([id, "growth", n, True] per structure that gives growth)
+    new_people(rate, room, pop, food_left)  how many people grow: up to `rate` and the housing `room`,
+                             as many as the food left at the end of the turn can feed
     split_upkeep(have, made, need)  (from the stores, from production): where a good's upkeep comes from
     starvation(m, pid, food, pop)   ([unit ids], people) who die when `food` (stores + this turn's
                              production) can't feed pid's units and `pop` people: units first
@@ -33,9 +37,11 @@ realm; goods (food, wood, stone, metal) go into the realm's stores (logistics.py
 upkeep, plus LAND_UPKEEP gold per cell of bought land (territory.py). Production and upkeep happen at the same time (upkeep can use this turn's production), and
 only what is left is capped by the room in the stores; the rest is lost. Not enough food: everyone who can't eat dies, units first (newest first,
 until the rest can be fed), then people (starvation()); gold below 0 gives up
-that many cells of bought land (territory.give_up), or with no bought land, the newest paid unit deserts. If the realm makes more food this turn than it eats (whether or not it all fits in
-the stores) and there is free housing (units use housing too: population + the people in your units
-must fit), population grows by 1 (+1 per Granary). People without a
+that many cells of bought land (territory.give_up), or with no bought land, the newest paid unit deserts. Growth (2026-11-15, the user's rule): structures give
+growth ("growth" in their content: Town Hall 1, Granary 1); each turn the population grows by up to
+that much, as long as there is free housing (units use housing too: population + the people in your
+units must fit) and the food left at the end of the turn can feed the new people (new_people()). A
+player can turn growth off ("growthOff", orders.growth); a turn with starvation has no growth. People without a
 job build (construction.py). A realm without a Town Hall (settlers before their first city)
 skips all of this.
 """
@@ -113,13 +119,13 @@ def report(m, pid, resolving=False):
     working, left = staffing(m, pid)
     building = construction.forecast(m, pid, orders=not resolving)
     income = {r: 0 for r in RESOURCES}
-    bonus, rates, housing = 0, [], 0
+    rate, rates, housing = 0, [], 0
     home_bonus = effect(m, pid, "homeHousing")
     for s in m.structures.values():
         if s["owner"] == pid:
             d = STRUCTURES[s["type"]]
             housing += d["housing"] + (home_bonus if d["home"] else 0)
-            bonus += d["growth"]
+            rate += d["growth"]
     for s in working:
         for r, n in output(m, s).items():
             income[r] += n
@@ -149,16 +155,23 @@ def report(m, pid, resolving=False):
     if has_hall and have["food"] + income["food"] < upkeep["food"]:
         dead, people = starvation(m, pid, have["food"] + income["food"], p["pop"])
         starve = {"units": len(dead), "people": people}
-    if income["food"] <= upkeep["food"]:
-        growth, why = 0, "Make more food than your people eat to grow."
+    food_left = max(0, have["food"] + income["food"] - upkeep["food"] - wasted.get("food", 0))
+    growth, why = 0, ""
+    if p.get("growthOff"):
+        why = "Growth is turned off."
+    elif not rate:
+        why = "Nothing gives growth (a Town Hall does)."
     elif p["pop"] + soldiers >= housing:
-        growth, why = 0, "Housing is full (units use housing too): build homes to grow."
+        why = "Housing is full (units use housing too): build homes to grow."
     else:
-        growth, why = min(1 + bonus, housing - p["pop"] - soldiers), ""
+        growth = new_people(rate, housing - p["pop"] - soldiers, p["pop"], food_left)
+        if not growth:
+            why = "Not enough food left at the end of the turn to feed a new person."
     return {"income": income, "upkeep": upkeep, "net": {r: income[r] - upkeep[r] for r in RESOURCES},
             "wasted": wasted,
             "staffed": [s["id"] for s in working], "workers": p["pop"] - left, "builders": building["builders"],
-            "idle": left - building["builders"], "housing": housing, "soldiers": soldiers, "caps": caps, "starve": starve, "growth": growth,
+            "idle": left - building["builders"], "housing": housing, "soldiers": soldiers, "caps": caps, "starve": starve, "growthRate": rate,
+            "growthOff": bool(p.get("growthOff")), "growth": growth,
             "growthWhy": why, "tradeRate": min(rates) if rates else 0, "land": land,
             "flows": flows(m, pid, working, building, land, left - building["builders"])}
 
@@ -180,6 +193,8 @@ def flows(m, pid, working, building, land=0, idle=0):
         housing = d["housing"] + (home_bonus if d["home"] else 0)
         if housing:
             out.append([s["id"], "housing", housing, True])
+        if d["growth"]:
+            out.append([s["id"], "growth", d["growth"], True])
     halls = [s for s in logistics.stores(m, pid) if s["type"] == TOWN_HALL]
     if halls and p["pop"] // 2:
         out.append([halls[0]["id"], "food", -(p["pop"] // 2), True])
@@ -265,6 +280,13 @@ def starvation(m, pid, food, pop):
         units_eat -= UNITS[u["type"]]["upkeep"]["food"]
     left = max(0, food - units_eat)
     return dead, pop - min(pop, 2 * left + 1)
+
+
+def new_people(rate, room, pop, food_left):
+    n = max(0, min(rate, room))
+    while n and (pop + n) // 2 - pop // 2 > food_left:  # pop // 2 food feeds pop people
+        n -= 1
+    return n
 
 
 def split_upkeep(have, made, need):

@@ -2,7 +2,8 @@
  * Hex Realms: the HUD panels around the map, all built from the state (no rules here).
  *
  *   HexHud.topbar(el, ctx)      turn, countdown (#hr-timer, ticked by game.js), resources (+net), people (current:
- *                               jobs / building / units / idle) and housing (the cap) as two chips, Jobs off / Jobs on
+ *                               jobs / building / units / idle), housing (the cap) and growth (rate, this turn's
+ *                               gain, Growth off / on) as chips, Jobs off / Jobs on
  *                               (every structure with workers), End turn; clicking a resource, people or housing
  *                               toggles the map's resource view (act.resView, ui.resView)
  *   HexHud.players(el, ctx)     colour, name, score, done tick, out, public resource snapshot
@@ -124,13 +125,18 @@
       el("span", { className: "hr-turn" }, `Turn ${game.turn} / ${game.turnLimit}`),
       game.turnSeconds > 0 ? el("span", { id: "hr-timer", className: "hr-timer" }) : null,
       el("span", { className: "hr-chips" }, chips),
-      withDelta("people", el("span", { className: `hr-people${ctx.ui.resView === "people" ? " on" : ""}`, onclick: () => ctx.act.resView("people"), title: `Click: show on the map where your people are.\nPopulation ${priv.pop + rep.soldiers}: ${rep.workers} in jobs, ${rep.builders} building, ${rep.soldiers} in units (and recruits), ${rep.idle} idle.${rep.growth ? "" : `\nNo growth this turn: ${rep.growthWhy}`}` },
+      withDelta("people", el("span", { className: `hr-people${ctx.ui.resView === "people" ? " on" : ""}`, onclick: () => ctx.act.resView("people"), title: `Click: show on the map where your people are.\nPopulation ${priv.pop + rep.soldiers}: ${rep.workers} in jobs, ${rep.builders} building, ${rep.soldiers} in units (and recruits), ${rep.idle} idle.` },
         el("span", { className: "hr-ricon" }, resIcon("people")), " ", el("b", {}, String(priv.pop + rep.soldiers)), ` (jobs ${rep.workers}`,
         rep.builders ? `, building ${rep.builders}` : "", rep.soldiers ? `, units ${rep.soldiers}` : "", `, idle ${rep.idle})`,
-        rep.growth ? el("span", { className: "pos" }, ` growth +${rep.growth}`) : null,
         starving ? el("span", { className: "neg", title: "Not enough food (in your stores plus this turn's production) to feed everyone: whoever can't eat dies at the end of the turn, units first (newest first), then people." }, ` ⚠ starving: ${starving}`) : null)),
       withDelta("housing", el("span", { className: `hr-people${priv.pop + rep.soldiers >= rep.housing ? " full" : ""}${ctx.ui.resView === "housing" ? " on" : ""}`, onclick: () => ctx.act.resView("housing"), title: `Click: show on the map which structures give housing.\nHousing ${rep.housing}: the population cap. Your people and the people in your units (${priv.pop + rep.soldiers}) must fit in it to grow.` },
         el("span", { className: "hr-ricon" }, resIcon("housing")), " cap ", el("b", {}, String(rep.housing)))),
+      withDelta("growth", el("span", { className: `hr-people${ctx.ui.resView === "growth" ? " on" : ""}`, onclick: () => ctx.act.resView("growth"),
+        title: `Click: show on the map which structures give growth.\nGrowth ${rep.growthRate}: people you can gain a turn, with free housing and enough food left at the end of the turn to feed them.${rep.growth ? `\nThis turn: +${rep.growth}.` : `\nNo growth this turn: ${rep.growthWhy}`}` },
+        el("span", { className: "hr-ricon" }, resIcon("growth")), " ", el("b", {}, String(rep.growthRate)),
+        rep.growth ? el("span", { className: "pos" }, ` (+${rep.growth} this turn)`) : el("span", { className: "muted" }, rep.growthOff ? " (off)" : " (none this turn)"))),
+      btn(rep.growthOff ? "Growth on" : "Growth off", () => ctx.act.send({ action: "growth", on: !!rep.growthOff }),
+        { cls: `small${rep.growthOff ? " on" : ""}`, title: rep.growthOff ? "Let your population grow again." : "Stop your population growing (kept across turns until you turn it back on)." }),
       withDelta("turns", null),
       btn("Jobs off", () => ctx.act.send({ action: "staff", on: false }), { cls: "small", title: "Switch off every structure with workers: they become idle and build your construction sites." }),
       btn("Jobs on", () => ctx.act.send({ action: "staff", on: true }), { cls: "small", title: "Switch every structure with workers back on." }),

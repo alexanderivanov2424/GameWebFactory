@@ -30,8 +30,10 @@ fields in `logic/content.py`). Tests: `tests/` (`python3 -I tools/run_tests.py h
   of the turn, `growth` is the people you will really gain (0 with a
   reason in `growthWhy`), and `idle` excludes builders. Units use housing (2026-11-15, the user's call):
   growth needs `pop` + `soldiers` (people in units, plus this turn's recruit orders while planning) under
-  `housing`, so recruiting no longer frees room to regrow. Growth needs more food made than eaten,
-  not food that fits in the stores. `flows` breaks the same numbers down per structure / unit / site
+  `housing`, so recruiting no longer frees room to regrow. Growth (2026-11-15, the user's rule) is a rate from
+  structures (`growth`: Town Hall 1, Granary 1; `growthRate`, its own top-bar chip and map view): up to that
+  many people a turn while housing has room and the food left at the end of the turn feeds them
+  (`economy.new_people`); a player can switch it off (`orders.growth`, `players[pid]["growthOff"]`). `flows` breaks the same numbers down per structure / unit / site
   (`economy.flows`: production +, unit upkeep -, the people's food and bought land's gold on the first
   Town Hall) for the client's **resource view** (click a top-bar chip: `map.setResView` greyscales the
   `hr-base` group and draws outlines and +n / -n badges above it). Population has two chips and views
@@ -134,8 +136,8 @@ fields in `logic/content.py`). Tests: `tests/` (`python3 -I tools/run_tests.py h
   between a structure's own cells filled, so only its outside is inset); owner colours show on the
   territory border (drawn just inside the cells, its outer edge on the cell edge (`BORDER`, `BORDER_W`, `outline`), so two realms' borders sit side by side; opaque lines in one group with the opacity, so overlaps don't darken) and as an outline on hover (`hoverG`, `shapeAt`), and the icon (emoji from the content, placeholder for art) at their middle; `setHighlights` / `setGhost` / `flash` only
   touch overlays (a selection, "sel" cells, is outlined round its outside only, in `selG`). `HexMap.util` has the client's hex maths (dist, neighbors, add).
-- `client/hud.js`: `HexHud`: top bar (stock + net, people: jobs / building / idle, growth only when
-  it will happen, Jobs off / on, End turn), players, selection panel (unit / structure / site actions, Explore, recruit buttons with the server's reasons, automatic
+- `client/hud.js`: `HexHud`: top bar (stock + net, people: jobs / building / units / idle, housing cap,
+  growth rate + this turn's gain + Growth off / on, Jobs off / on, End turn), players, selection panel (unit / structure / site actions, Explore, recruit buttons with the server's reasons, automatic
   recruiting selects), orders list, trade, build menu. `client/panels.js`: `HexPanels`: `techTree` (advances of one
   currency laid out by prerequisite depth, absolutely placed nodes over an SVG of links), last-turn report (dice faces), log.
   The tech tree opens in the `#tech` popup (`ui.tech` = the open currency tab), which covers row 2 of the `#hud` grid,
