@@ -34,8 +34,8 @@ window.HexText = {
       over several turns. Units with orders are greyed out. New units appear on the structure that trains them.`],
     ["Controls", `Click a cell again to cycle through what's on it. Click a resource on the top bar for its
       <b>resource view</b>: what makes it (green) and what uses it (red) each turn. <b>Tech tree</b> shows the science
-      and faith advances. After each turn a replay shows the fights you saw (Esc skips; Settings → Hex Realms sets its
-      speed).`],
+      and faith advances. After each turn a replay shows the fights you saw, one at a time: <b>Next</b> (or Enter) moves on,
+      Esc skips the rest; Settings → Hex Realms sets its speed.`],
   ],
 
   structures: {
@@ -176,7 +176,7 @@ window.HexText = {
   },
   // Settings -> Hex Realms.
   replay: {
-    speedHint: "How fast the end-of-turn combat replay moves from fight to fight.",
+    speedHint: "How fast the end-of-turn combat replay pans to each fight and rolls the dice (press Next to move on).",
     skipHint: "Don't play the replay; combat cells just flash and the Report tab lists the dice.",
   },
   claim: {

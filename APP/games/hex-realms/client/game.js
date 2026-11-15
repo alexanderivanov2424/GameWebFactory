@@ -384,6 +384,7 @@
   document.addEventListener("keydown", (e) => {
     if (!state || state.phase === "lobby" || /^(INPUT|SELECT|TEXTAREA)$/.test(e.target.tagName)) return;
     if (e.key === "Escape") { if (replay.playing) replay.skip(); else if (ui.tech) { ui.tech = null; refresh(); } else if (ui.mode) act.setMode(null); else if (ui.sel) act.select(null); else if (ui.resView) act.resView(null); }
+    else if ((e.key === "Enter" || e.key === " ") && replay.playing) { e.preventDefault(); replay.next(); }
     else if (e.key === "r" || e.key === "R") rotate();
   });
 
