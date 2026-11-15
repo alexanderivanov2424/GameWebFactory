@@ -10,8 +10,9 @@ units move one cell per step at the same time and fight with dice wherever they 
 structure works if it has its workers (people, who need food and housing). Ordered structures
 become construction sites that take a few turns of work, each turn needing builders: people
 without a job (switch structures off, all at once, or demolish them to free people). Gold, faith and
-science are realm-wide; goods (food, wood, stone, metal) go straight into the realm's stores (Town
-Hall, Storage Yard, Granary) up to their room. Structures go anywhere inside your territory.
+science are realm-wide; goods (food, wood, stone, metal) go into the realm's stores (Town
+Hall, Storage Yard, Granary). Production and upkeep happen at the same time; only what is left at the
+end of the turn is capped by the stores' room (the rest is lost). Structures go anywhere inside your territory.
 Land your structures reach is strong: first come, first served, it stays yours while they reach it,
 and cells two realms reach in the same turn go to no one. Gold buys weak land (claim an explored
 cell next to yours, with its free neighbours): it goes back to no one when an enemy unit stands on or

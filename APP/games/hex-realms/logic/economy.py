@@ -3,21 +3,23 @@
     effect(m, pid, name)     sum of an advance effect key over pid's advances
     output(m, s)             what structure s makes in a turn when it works
     staffing(m, pid)         (working structures in job order, people without a job)
-    report(m, pid)           this turn's forecast: {"income", "upkeep", "net" (what you will really
-                             gain: goods only up to the room in your stores), "wasted" {good: n that
-                             won't fit}, "staffed": [sid], "workers" (in jobs), "builders" (on
+    report(m, pid)           this turn's forecast: {"income", "upkeep", "net" (income - upkeep, not
+                             capped by your stores), "wasted" {good: n that won't fit in your stores
+                             at the end of the turn and is lost}, "staffed": [sid], "workers" (in jobs), "builders" (on
                              construction sites), "idle" (neither), "housing", "caps", "growth"
                              (people you will gain, 0 if none), "growthWhy" (why not), "tradeRate",
                              "flows" (see flows())}
     flows(m, pid, working, works)  what each of pid's things adds or takes this turn, for the client's
                              resource view: [[id, res, n, on], ...], n > 0 made, n < 0 used, on = False
                              for a structure that isn't working this turn (what it would make / need)
-    end_of_turn(m, pid, events)  production, eating, wages, growth
+    split_upkeep(have, made, need)  (from the stores, from production): where a good's upkeep comes from
+    end_of_turn(m, pid, events)  production and upkeep together (then the stores' cap), eating, wages, growth
 
 Rules: every structure works, wherever it is, as long as it has its crew: people (population)
 fill jobs, food producers first, then oldest first. Gold, faith and science go straight to the
-realm; goods (food, wood, stone, metal) go straight into the realm's stores (logistics.py), and what doesn't fit is lost. Everyone eats: pop // 2 food, plus each unit's
-upkeep. Not enough food starves 1 person (or disbands a unit); gold below 0 makes the newest paid
+realm; goods (food, wood, stone, metal) go into the realm's stores (logistics.py). Everyone eats: pop // 2 food, plus each unit's
+upkeep. Production and upkeep happen at the same time (upkeep can use this turn's production), and
+only what is left is capped by the room in the stores; the rest is lost. Not enough food starves 1 person (or disbands a unit); gold below 0 makes the newest paid
 unit desert. If the realm makes more food this turn than it eats (whether or not it all fits in
 the stores) and there is free housing, population grows by 1 (+1 per Granary). People without a
 job build (construction.py). A realm without a Town Hall (settlers before their first city)
@@ -109,15 +111,20 @@ def report(m, pid):
                 upkeep[r] += n
     stores = logistics.stores(m, pid)
     caps = {r: sum(logistics.capacity(s).get(r, 0) for s in stores) for r in CAPPED}
-    kept = {r: min(n, logistics.room(m, pid, r)) if r in CAPPED else n for r, n in income.items()}
+    have, wasted = logistics.stock(m, pid), {}
+    for r in CAPPED:  # as end_of_turn does it: upkeep first, then what's left of production must fit
+        from_stock, from_income = split_upkeep(have[r], income[r], upkeep[r])
+        over = (income[r] - from_income) - (logistics.room(m, pid, r) + from_stock)
+        if over > 0:
+            wasted[r] = over
     if income["food"] <= upkeep["food"]:
         growth, why = 0, "Make more food than your people eat to grow."
     elif p["pop"] >= housing:
         growth, why = 0, "Housing is full: build homes to grow."
     else:
         growth, why = min(1 + bonus, housing - p["pop"]), ""
-    return {"income": income, "upkeep": upkeep, "net": {r: kept[r] - upkeep[r] for r in RESOURCES},
-            "wasted": {r: income[r] - kept[r] for r in CAPPED if income[r] > kept[r]},
+    return {"income": income, "upkeep": upkeep, "net": {r: income[r] - upkeep[r] for r in RESOURCES},
+            "wasted": wasted,
             "staffed": [s["id"] for s in working], "workers": p["pop"] - left, "builders": building["builders"],
             "idle": left - building["builders"], "housing": housing, "caps": caps, "growth": growth,
             "growthWhy": why, "tradeRate": min(rates) if rates else 0,
@@ -157,16 +164,19 @@ def end_of_turn(m, pid, events):
     if not any(s["owner"] == pid and s["type"] == TOWN_HALL for s in m.structures.values()):
         return  # settlers still looking for a home: nothing to store, eat or grow yet
     rep = report(m, pid)
-    working, _ = staffing(m, pid)
-    for s in working:
-        for r, n in output(m, s).items():
-            if r in CAPPED:
-                logistics.store(m, pid, r, n)
-            else:
-                p["res"][r] += n
-    eat = rep["upkeep"]["food"]
-    have = logistics.stock(m, pid)["food"]
-    logistics.take(m, pid, {"food": min(eat, have)})
+    income, upkeep = rep["income"], rep["upkeep"]
+    for r in RESOURCES:
+        if r not in CAPPED:
+            p["res"][r] += income[r]
+    have = logistics.stock(m, pid)
+    # Production and upkeep at once: upkeep comes out of the stores first, the rest out of this turn's
+    # production, and only what's left of the production goes into the stores (capped: the rest is lost).
+    for r in CAPPED:
+        from_stock, from_income = split_upkeep(have[r], income[r], upkeep[r])
+        logistics.take(m, pid, {r: from_stock})
+        logistics.store(m, pid, r, income[r] - from_income)
+    eat = upkeep["food"]
+    have = have["food"] + income["food"]
     if have < eat:
         if p["pop"] > 0:
             p["pop"] -= 1
@@ -179,6 +189,12 @@ def end_of_turn(m, pid, events):
         _disband_newest(m, pid, lambda u: UNITS[u["type"]]["upkeep"].get("gold", 0) > 0, events)
     if rep["growth"] and have >= eat:
         p["pop"] += rep["growth"]
+
+
+def split_upkeep(have, made, need):
+    """(from the stores, from this turn's production): where `need` upkeep of a good comes from."""
+    from_stock = min(need, have)
+    return from_stock, min(made, need - from_stock)
 
 
 def _disband_newest(m, pid, which, events):

@@ -20,11 +20,14 @@ fields in `logic/content.py`). Tests: `tests/` (`python3 -I tools/run_tests.py h
 - **Multi-cell hex structures**: footprints are axial offsets; `gamekit.hexes.rotations`
   precomputes the 6 turns, sent in the content so the client draws ghosts.
 - **Goods in stores** (`logic/logistics.py`): goods live in stores (per-structure `stock`), all
-  usable wherever they are; production fills them (Town Halls first) and the rest is lost. Gold,
+  usable wherever they are. Production and upkeep happen at the same time (2026-11-15, the user's call:
+  upkeep comes out of the stores, then out of this turn's production, `economy.split_upkeep`); only what
+  is left at the end of the turn fills the stores (Town Halls first) and the rest is lost. Gold,
   faith and science are realm-wide. Every structure works if staffed (`logic/economy.py`: jobs
   filled food first, then oldest).
-- **Honest forecasts** (`economy.report`): `net` is what you will really gain (goods capped by the
-  room in your stores, `wasted` = the rest), `growth` is the people you will really gain (0 with a
+- **Honest forecasts** (`economy.report`): `net` is income - upkeep, not capped by the stores (the
+  user's call: 21 of 25 food, +7, -3 shows +4, not +1), and `wasted` is what won't fit at the end
+  of the turn, `growth` is the people you will really gain (0 with a
   reason in `growthWhy`), and `idle` excludes builders. Growth needs more food made than eaten,
   not food that fits in the stores. `flows` breaks the same numbers down per structure / unit / site
   (`economy.flows`: production +, unit upkeep -, the people's food on the first Town Hall, and for

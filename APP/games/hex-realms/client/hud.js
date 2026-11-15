@@ -46,7 +46,7 @@
       const net = rep.net[r] || 0;
       const capped = rep.caps[r];
       const full = capped !== undefined && priv.res[r] >= capped;
-      return el("span", { className: `hr-chip hr-res-${r}${full ? " full" : ""}${ctx.ui.resView === r ? " on" : ""}`, onclick: () => ctx.act.resView(r), title: `${VIEW_TIP}${resName(r)}: income ${rep.income[r] || 0}, upkeep ${rep.upkeep[r] || 0}${capped !== undefined ? `, storage ${capped}` : ""}${(rep.wasted || {})[r] ? `, ${rep.wasted[r]} won't fit in your stores (lost)` : ""}` },
+      return el("span", { className: `hr-chip hr-res-${r}${full ? " full" : ""}${ctx.ui.resView === r ? " on" : ""}`, onclick: () => ctx.act.resView(r), title: `${VIEW_TIP}${resName(r)}: income ${rep.income[r] || 0}, upkeep ${rep.upkeep[r] || 0}${capped !== undefined ? `, storage ${capped}` : ""}${(rep.wasted || {})[r] ? `, ${rep.wasted[r]} won't fit in your stores at the end of the turn (lost)` : ""}` },
         el("span", { className: "hr-ricon" }, resIcon(r)), " ", el("b", {}, String(priv.res[r])), capped !== undefined ? el("small", {}, `/${capped}`) : null,
         el("span", { className: net < 0 ? "neg" : net > 0 ? "pos" : "" }, ` (${signed(net)})`));
     });
