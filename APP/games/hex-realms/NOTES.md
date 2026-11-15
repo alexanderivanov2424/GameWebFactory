@@ -34,7 +34,8 @@ fields in `logic/content.py`). Tests: `tests/` (`python3 -I tools/run_tests.py h
   structures (`growth`: Town Hall 1, Granary 1; `growthRate`, its own top-bar chip and map view): up to that
   many people a turn while housing has room and the food left at the end of the turn feeds them
   (`economy.new_people`); a player can switch it off (`orders.growth`, `players[pid]["growthOff"]`). `flows` breaks the same numbers down per structure / unit / site
-  (`economy.flows`: production +, unit upkeep -, the people's food and bought land's gold on the first
+  (`economy.flows`: production +, unit upkeep -, each person's food (`FOOD_PER_PERSON`, 2026-11-15: 1 each)
+  where they work / build / are idle at home, recruits' upkeep on their structure, bought land's gold on the first
   Town Hall) for the client's **resource view** (click a top-bar chip: `map.setResView` greyscales the
   `hr-base` group and draws outlines and +n / -n badges above it). Population is three chips (the user's
   layout): "👥 idle n", "🏠 cap n", "🌱 +n" (this turn's growth). The "people" view shows idle people at
@@ -174,7 +175,7 @@ fields in `logic/content.py`). Tests: `tests/` (`python3 -I tools/run_tests.py h
   placing hint's right side and the top of a selected structure's panel). `perAdjacent` can count own
   neighbours with a `tag` and gains may be negative (Farm: -1 food per Industrial next to it, shown as
   "−1 🍞 for [Industrial]"); output never goes below 0. The `home` flag = the "home" tag.
-- Hunger (2026-11-15, the user's rule): food short at the end of the turn kills everyone who can't eat,
+- Hunger (2026-11-15, the user's rule): every person eats `FOOD_PER_PERSON` (1); food short at the end of the turn kills everyone who can't eat,
   units first (newest first, until the rest can be fed), then people (`economy.starvation`; the
   forecast's `starve` warns on the people chip).
 - Farms (2026-11-15, the user's rules): plains only, 1 food, +1 per own Farm next to it, +1 if it touches

@@ -188,7 +188,7 @@
       const text = r === "people" ? "where your people are this turn: green = idle at home, red = in a job, a unit or a recruit ordered there, blue = building"
         : r === "housing" ? "green = the housing each structure gives (your people and the people in your units must fit in it)"
         : r === "growth" ? "green = the growth each structure gives (people you can gain a turn, with free housing and food to feed them)"
-        : "green = made there each turn, red = used each turn (units' upkeep; your people's food on your Town Hall)";
+        : "green = made there each turn, red = used each turn (units' upkeep; each person's food where they work, build or rest at home)";
       fill(box, `${resIcon(r)} ${resName(r)} view: ${text}. Faded = not working this turn. Click the resource again or Esc to leave. `,
         btn("Close (Esc)", () => act.resView(null)));
       return;

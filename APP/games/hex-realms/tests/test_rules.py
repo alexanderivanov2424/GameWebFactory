@@ -126,9 +126,9 @@ class EconomyTests(unittest.TestCase):
     def test_starving_kills_everyone_who_cant_eat(self):
         p = self.m.players["p1"]
         self.m.structures[self.hall]["stock"]["food"], p["pop"] = 0, 10
-        food = self.report()["income"]["food"]  # pop // 2 food feeds pop people
+        food = self.report()["income"]["food"]
         end_turn(self.m)
-        self.assertEqual(p["pop"], 2 * food + 1)
+        self.assertEqual(p["pop"], food // economy.FOOD_PER_PERSON)
 
     def test_growth_needs_housing(self):
         p = self.m.players["p1"]

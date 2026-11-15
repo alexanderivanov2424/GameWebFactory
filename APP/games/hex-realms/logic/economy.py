@@ -34,8 +34,8 @@ upkeep is counted here).
 
 Rules: every structure works, wherever it is, as long as it has its crew: people (population)
 fill jobs, food producers first, then oldest first. Gold, faith and science go straight to the
-realm; goods (food, wood, stone, metal) go into the realm's stores (logistics.py). Everyone eats: pop // 2 food, plus each unit's
-upkeep, plus LAND_UPKEEP gold per cell of bought land (territory.py). Production and upkeep happen at the same time (upkeep can use this turn's production), and
+realm; goods (food, wood, stone, metal) go into the realm's stores (logistics.py). Everyone eats: FOOD_PER_PERSON food a person, plus each unit's
+upkeep (and this turn's recruits' while planning: they appear before eating), plus LAND_UPKEEP gold per cell of bought land (territory.py). Production and upkeep happen at the same time (upkeep can use this turn's production), and
 only what is left is capped by the room in the stores; the rest is lost. Not enough food: everyone who can't eat dies, units first (newest first,
 until the rest can be fed), then people (starvation()); gold below 0 gives up
 that many cells of bought land (territory.give_up), or with no bought land, the newest paid unit deserts. Growth (2026-11-15, the user's rule): structures give
@@ -53,6 +53,7 @@ from . import construction, logistics, territory
 from .content import ADVANCES, CAPPED, RESOURCES, STRUCTURES, TOWN_HALL, UNITS
 
 FOOD_FIRST = ("food",)
+FOOD_PER_PERSON = 1  # food each person eats a turn (units eat their own upkeep instead)
 TYPE_BONUS = {"farm": ("farmFood", "food"), "chapel": ("chapelGold", "gold")}  # stype: (advance effect, res)
 
 
@@ -136,10 +137,14 @@ def report(m, pid, resolving=False):
     if not resolving:  # recruits ordered this turn: their people already left the population
         soldiers += sum(r.get("people", 0) for r in m.orders[pid]["recruits"])
     upkeep = {r: 0 for r in RESOURCES}
-    upkeep["food"] = p["pop"] // 2
+    upkeep["food"] = p["pop"] * FOOD_PER_PERSON
     for u in m.units.values():
         if u["owner"] == pid:
             for r, n in UNITS[u["type"]]["upkeep"].items():
+                upkeep[r] += n
+    if not resolving:  # this turn's recruits appear before eating and paying wages
+        for rec in m.orders[pid]["recruits"]:
+            for r, n in UNITS[rec["type"]]["upkeep"].items():
                 upkeep[r] += n
     land = territory.bought(m, pid, pending=not resolving)
     upkeep["gold"] += land * territory.LAND_UPKEEP
@@ -178,9 +183,10 @@ def report(m, pid, resolving=False):
 
 
 def flows(m, pid, working, building, land=0, idle=0):
-    """Per structure / unit / site: production (+), unit upkeep, and the people's food and the bought
-    land's gold (-, on the first Town Hall); "people" (where they are, tagged) and "housing" (the cap).
-    See the module header."""
+    """Per structure / unit / site: production (+), unit upkeep, the people's food where they are (-:
+    on the structure they work in, the site they build, the home they're idle in; recruits ordered
+    this turn on their structure), the bought land's gold (-, on the first Town Hall); "people" (where
+    they are), "housing" and "growth". See the module header."""
     p, on = m.players[pid], {s["id"] for s in working}
     home_bonus = effect(m, pid, "homeHousing")
     out = []
@@ -191,33 +197,37 @@ def flows(m, pid, working, building, land=0, idle=0):
             out.append([s["id"], r, n, s["id"] in on])
         if d["jobs"] and s["id"] in on:
             out.append([s["id"], "people", -d["jobs"], True])
+            out.append([s["id"], "food", -d["jobs"] * FOOD_PER_PERSON, True])
         housing = d["housing"] + (home_bonus if d["home"] else 0)
         if housing:
             out.append([s["id"], "housing", housing, True])
         if d["growth"]:
             out.append([s["id"], "growth", d["growth"], True])
     halls = [s for s in logistics.stores(m, pid) if s["type"] == TOWN_HALL]
-    if halls and p["pop"] // 2:
-        out.append([halls[0]["id"], "food", -(p["pop"] // 2), True])
     if halls and land:
         out.append([halls[0]["id"], "gold", -land * territory.LAND_UPKEEP, True])
     for cid in building["works"]:
-        out.append([cid, "people", -STRUCTURES[m.sites[cid]["type"]]["builders"], True, "build"])
+        n = STRUCTURES[m.sites[cid]["type"]]["builders"]
+        out += [[cid, "people", -n, True, "build"], [cid, "food", -n * FOOD_PER_PERSON, True]]
     for b in m.orders[pid]["builds"]:
         if b["id"] in building["orders"]:
-            out.append([b["id"], "people", -STRUCTURES[b["type"]]["builders"], True, "build"])
+            n = STRUCTURES[b["type"]]["builders"]
+            out += [[b["id"], "people", -n, True, "build"], [b["id"], "food", -n * FOOD_PER_PERSON, True]]
     training = {}
     for r in m.orders[pid]["recruits"]:
-        if r.get("people") and r["at"] in m.structures:
-            training[r["at"]] = training.get(r["at"], 0) + r["people"]
-    for sid, n in training.items():
-        out.append([sid, "people", -n, True])
+        if r["at"] in m.structures:
+            t = training.setdefault(r["at"], {})
+            t["people"] = t.get("people", 0) + r.get("people", 0)
+            for res, n in UNITS[r["type"]]["upkeep"].items():
+                t[res] = t.get(res, 0) + n
+    for sid, t in training.items():
+        out += [[sid, res, -n, True] for res, n in t.items() if n]
     homes = [(s, h) for s, h in ((s, STRUCTURES[s["type"]]["housing"] + (home_bonus if STRUCTURES[s["type"]]["home"] else 0))
                                  for s in own) if h > 0]
     for i, (s, h) in enumerate(homes):  # idle people at home, the oldest homes first (the last takes any overflow)
         n = idle if i == len(homes) - 1 else min(idle, h)
         if n > 0:
-            out.append([s["id"], "people", n, True])
+            out += [[s["id"], "people", n, True], [s["id"], "food", -n * FOOD_PER_PERSON, True]]
             idle -= n
     for u in sorted((u for u in m.units.values() if u["owner"] == pid), key=lambda u: u["n"]):
         for r, n in UNITS[u["type"]]["upkeep"].items():
@@ -269,25 +279,23 @@ def end_of_turn(m, pid, events):
 
 def starvation(m, pid, food, pop):
     """([unit ids], people) who die of hunger: units that eat, newest first, until the food feeds the
-    rest; then the people the food left can't feed (pop // 2 food feeds pop people)."""
+    rest; then the people the food left can't feed (FOOD_PER_PERSON each)."""
     eaters = sorted((u for u in m.units.values() if u["owner"] == pid and UNITS[u["type"]]["upkeep"].get("food", 0) > 0),
                     key=lambda u: u["n"], reverse=True)
     units_eat = sum(UNITS[u["type"]]["upkeep"]["food"] for u in eaters)
     dead = []
     for u in eaters:
-        if pop // 2 + units_eat <= food:
+        if pop * FOOD_PER_PERSON + units_eat <= food:
             break
         dead.append(u["id"])
         units_eat -= UNITS[u["type"]]["upkeep"]["food"]
     left = max(0, food - units_eat)
-    return dead, pop - min(pop, 2 * left + 1)
+    return dead, pop - min(pop, left // FOOD_PER_PERSON)
 
 
 def new_people(rate, room, pop, food_left):
     n = max(0, min(rate, room))
-    while n and (pop + n) // 2 - pop // 2 > food_left:  # pop // 2 food feeds pop people
-        n -= 1
-    return n
+    return min(n, food_left // FOOD_PER_PERSON)
 
 
 def split_upkeep(have, made, need):

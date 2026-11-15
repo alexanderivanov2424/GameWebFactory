@@ -8,7 +8,7 @@ territory, train units, order moves and attacks, research advances, trade at a m
 everyone has pressed End turn (or the turn timer runs out), all orders resolve together:
 units move one cell per step at the same time and fight with dice wherever they meet. Every
 structure works if it has its workers (people, who need food and housing; the people in units
-still use housing). Short of food, everyone who can't eat dies, units first, then people. Structures give
+still use housing). Every person eats 1 food a turn. Short of food, everyone who can't eat dies, units first, then people. Structures give
 growth (the Town Hall 1): each turn up to that many people are born, while housing has room and the
 food left at the end of the turn can feed them; players can turn growth off. Ordered structures
 become construction sites that take a few turns of work, each turn needing builders: people
