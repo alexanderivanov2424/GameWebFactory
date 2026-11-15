@@ -233,7 +233,9 @@
 
     function buildStatic(game, mapKey) {
       fill(terrainG); fill(hlG); hl = {}; hlClass = {};
-      const keys = disk(game.radius);
+      // Top row first (y grows with r), left to right in a row: later cells paint over earlier ones, so a
+      // tile's art may spill up over the tiles above it (its image's top corners lie over them).
+      const keys = disk(game.radius).sort((a, b) => { const [qa, ra] = parse(a), [qb, rb] = parse(b); return ra - rb || qa - qb; });
       all = new Set(keys);
       for (const k of keys) {
         const [x, y] = center(k);
