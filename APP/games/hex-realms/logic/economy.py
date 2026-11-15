@@ -19,9 +19,10 @@ upkeep is counted here).
     flows(m, pid, working, building, land=0, idle=0)  what each of pid's things adds or takes this turn, for the
                              client's resource view: [[id, res, n, on], ...], n > 0 made, n < 0 used, on = False
                              for a structure that isn't working this turn (what it would make / need); plus
-                             "people" (where your population is: [id, "people", n, True, tag], tag "work" (jobs),
-                             "build" (on a site, or a build order placed this turn: its order id), "unit" (in a unit), "train" (recruits ordered at a structure),
-                             "idle" (at home: spread over the homes, oldest first, up to their housing)) and
+                             "people" (where your population is: idle people at home +n (spread over the homes,
+                             oldest first, up to their housing), people in jobs / units / recruits ordered at a
+                             structure -n, and builders -n tagged "build" ([id, "people", -n, True, "build"]:
+                             on a site, or a build order placed this turn: its order id)) and
                              "housing" (the cap: [id, "housing", n, True] per structure that houses people) and
                              "growth" ([id, "growth", n, True] per structure that gives growth)
     new_people(rate, room, pop, food_left)  how many people grow: up to `rate` and the housing `room`,
@@ -189,7 +190,7 @@ def flows(m, pid, working, building, land=0, idle=0):
         for r, n in output(m, s).items():
             out.append([s["id"], r, n, s["id"] in on])
         if d["jobs"] and s["id"] in on:
-            out.append([s["id"], "people", d["jobs"], True, "work"])
+            out.append([s["id"], "people", -d["jobs"], True])
         housing = d["housing"] + (home_bonus if d["home"] else 0)
         if housing:
             out.append([s["id"], "housing", housing, True])
@@ -201,29 +202,29 @@ def flows(m, pid, working, building, land=0, idle=0):
     if halls and land:
         out.append([halls[0]["id"], "gold", -land * territory.LAND_UPKEEP, True])
     for cid in building["works"]:
-        out.append([cid, "people", STRUCTURES[m.sites[cid]["type"]]["builders"], True, "build"])
+        out.append([cid, "people", -STRUCTURES[m.sites[cid]["type"]]["builders"], True, "build"])
     for b in m.orders[pid]["builds"]:
         if b["id"] in building["orders"]:
-            out.append([b["id"], "people", STRUCTURES[b["type"]]["builders"], True, "build"])
+            out.append([b["id"], "people", -STRUCTURES[b["type"]]["builders"], True, "build"])
     training = {}
     for r in m.orders[pid]["recruits"]:
         if r.get("people") and r["at"] in m.structures:
             training[r["at"]] = training.get(r["at"], 0) + r["people"]
     for sid, n in training.items():
-        out.append([sid, "people", n, True, "train"])
+        out.append([sid, "people", -n, True])
     homes = [(s, h) for s, h in ((s, STRUCTURES[s["type"]]["housing"] + (home_bonus if STRUCTURES[s["type"]]["home"] else 0))
                                  for s in own) if h > 0]
     for i, (s, h) in enumerate(homes):  # idle people at home, the oldest homes first (the last takes any overflow)
         n = idle if i == len(homes) - 1 else min(idle, h)
         if n > 0:
-            out.append([s["id"], "people", n, True, "idle"])
+            out.append([s["id"], "people", n, True])
             idle -= n
     for u in sorted((u for u in m.units.values() if u["owner"] == pid), key=lambda u: u["n"]):
         for r, n in UNITS[u["type"]]["upkeep"].items():
             if n:
                 out.append([u["id"], r, -n, True])
         if UNITS[u["type"]]["people"]:
-            out.append([u["id"], "people", UNITS[u["type"]]["people"], True, "unit"])
+            out.append([u["id"], "people", -UNITS[u["type"]]["people"], True])
     return out
 
 

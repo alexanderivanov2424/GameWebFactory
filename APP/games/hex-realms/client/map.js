@@ -16,7 +16,7 @@
  *                               map yet, e.g. build orders placed this turn): every other layer greyscale, and each thing in
  *                               flows ([[id, res, n, on, tag?]] from the report, one resource) outlined (green makes,
  *                               red uses, amber both, grey dashed not working) with its +n / -n badges; tagged
- *                               items (the "people" view: where they are) get blue "n tag" badges instead
+ *                               items (the "people" view's builders) get blue badges and outlines
  *   HexMap.util                 pointy-top axial helpers: parse, key, add, neighbors, dist, center, DIRS
  *
  * Pointy-top axial "q,r" keys: x = SIZE*sqrt(3)*(q + r/2), y = SIZE*1.5*r. Drag pans, the wheel zooms
@@ -489,13 +489,14 @@
         const cells = s ? s.cells : [u.at];
         if (!cells.every((k) => all.has(k))) continue;
         const live = items.filter((i) => i.on);
-        const plus = live.some((i) => i.n > 0), minus = live.some((i) => i.n < 0);
-        const tone = !live.length ? "off" : items.some((i) => i.tag) ? "count" : plus && minus ? "mix" : plus ? "pos" : "neg";
+        const plain = live.filter((i) => !i.tag);  // tagged items (builders) are blue
+        const plus = plain.some((i) => i.n > 0), minus = plain.some((i) => i.n < 0);
+        const tone = !live.length ? "off" : !plain.length ? "count" : plus && minus ? "mix" : plus ? "pos" : "neg";
         if (s) put(resG, blobLine(cells, { class: `hr-res-line hr-res-${tone}` }));
         else put(resG, svg("circle", { cx: center(u.at)[0], cy: center(u.at)[1], r: UNIT_R + 3, class: `hr-res-ring hr-res-${tone}` }));
         const [x, y0] = s ? middle(cells) : center(u.at);
         const y = y0 - (s ? 22 : UNIT_R + 10);
-        const texts = items.map((i) => (i.tag ? `${i.n} ${i.tag}` : i.n > 0 ? `+${i.n}` : `−${-i.n}`));
+        const texts = items.map((i) => (i.n > 0 ? `+${i.n}` : `−${-i.n}`));
         const widths = texts.map((t) => 8 + 7.5 * t.length);
         let left = x - (widths.reduce((a, w) => a + w, 0) + 3 * (items.length - 1)) / 2;
         items.forEach((i, j) => {

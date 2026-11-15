@@ -36,10 +36,11 @@ fields in `logic/content.py`). Tests: `tests/` (`python3 -I tools/run_tests.py h
   (`economy.new_people`); a player can switch it off (`orders.growth`, `players[pid]["growthOff"]`). `flows` breaks the same numbers down per structure / unit / site
   (`economy.flows`: production +, unit upkeep -, the people's food and bought land's gold on the first
   Town Hall) for the client's **resource view** (click a top-bar chip: `map.setResView` greyscales the
-  `hr-base` group and draws outlines and +n / -n badges above it). Population has two chips and views
-  (the user's call): "people" (current = pop + people in units) shows where everyone is with tagged
-  items (`[id, "people", n, True, tag]`: work / build / train / unit / idle, idle spread over the homes
-  oldest first; blue "n tag" badges), and "housing" (the cap) shows +n per structure that houses people.
+  `hr-base` group and draws outlines and +n / -n badges above it). Population is three chips (the user's
+  layout): "👥 idle n", "🏠 cap n", "🌱 +n" (this turn's growth). The "people" view shows idle people at
+  home green +n (spread over the homes oldest first), people in jobs / units / recruits red -n, and
+  builders blue -n (tagged "build" in the flow, which the map draws blue); "housing" and "growth" show
+  +n per structure that gives them.
 - **No roads; land is bought** (2026-11-11, the user's call): roads (first carrying goods, then laid
   automatically) were removed. Structures go anywhere in your territory, with no "must touch"
   rule. `orders.claim` is an order paid in gold (`CLAIM_COST`); at resolution (`Match._claims`,

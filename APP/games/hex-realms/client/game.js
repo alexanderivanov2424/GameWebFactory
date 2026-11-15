@@ -185,7 +185,7 @@
     box.classList.toggle("hr-hintbuild", m?.type === "build");
     if (!m && ui.resView) {
       const { resIcon, resName, btn } = HexHud.fmt, r = ui.resView;
-      const text = r === "people" ? "where your people are this turn: work = in a job, build = on a construction site, train = recruits ordered there, unit = in a unit (units use housing too), idle = at home"
+      const text = r === "people" ? "where your people are this turn: green = idle at home, red = in a job, a unit or a recruit ordered there, blue = building"
         : r === "housing" ? "green = the housing each structure gives (your people and the people in your units must fit in it)"
         : r === "growth" ? "green = the growth each structure gives (people you can gain a turn, with free housing and food to feed them)"
         : "green = made there each turn, red = used each turn (units' upkeep; your people's food on your Town Hall)";
