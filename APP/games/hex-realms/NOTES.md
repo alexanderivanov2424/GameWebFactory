@@ -98,10 +98,12 @@ fields in `logic/content.py`). Tests: `tests/` (`python3 -I tools/run_tests.py h
 - `logic/territory.py`: `territory` (strong + weak land, returns both maps), `unit_entered`, `claim_cells`, `threatened`.
 - `logic/movement.py`, `logic/combat.py`, `logic/economy.py`, `logic/logistics.py`, `logic/mapgen.py`,
   `logic/content.py`: see their headers.
-- `client/art/`: PNG art (not used by the map yet; it still draws colours and emoji icons), at 4x map size so it
-  stays sharp at the 3x max zoom. `terrain/_template.png` (one pointy-top hex: 208 x 240, the hex 207.85 wide;
-  corners (103.9,0) (207.8,60) (207.8,180) (103.9,240) (0,180) (0,60)) and `units/_template.png` (the unit
-  disc, radius SIZE * 0.42 = 12.6 on the map: 100 x 100) are transparent; the terrain one has a 1px black outline on the hex's outermost pixels (paint over it).
+- `client/art/`: PNG art at 4x map size (sharp at the 3x max zoom). `terrain/<terrain>[_n].png` (208 x 240, one
+  pointy-top hex 207.85 wide; corners (103.9,0) (207.8,60) (207.8,180) (103.9,240) (0,180) (0,60)) is drawn over the
+  flat colour for the terrains listed in map.js's `TERRAIN_ART` (variants with weights, picked per cell by a hash of
+  the cell key, so every viewer sees the same map; add a new file there). `terrain/terrain_template.png` (hex outline)
+  and `units/unit_template.png` (the unit disc, radius SIZE * 0.42 = 12.6 on the map: 100 x 100) are blank
+  templates; units and structures still draw emoji.
 - `client/map.js`: `HexMap.create`: pan (drag) / zoom (wheel) SVG map; terrain layer rebuilt only
   when `game.cells` changes, the rest per state;
   structures are solid in their content `color`, drawn by `blob` (cells at 80% with the gaps

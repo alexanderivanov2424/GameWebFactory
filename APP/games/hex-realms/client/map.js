@@ -1,5 +1,5 @@
 /*
- * Hex Realms: the pannable, zoomable SVG hex map (terrain, territory (weak land dashed), structures, units,
+ * Hex Realms: the pannable, zoomable SVG hex map (terrain: PNG art from art/terrain/ (TERRAIN_ART) or a flat colour, territory (weak land dashed), structures, units,
  * your pending orders (Travel goals dashed; units with orders greyed out), highlights, build ghost, event flashes). No game rules here.
  *
  *   const map = HexMap.create(element, { onCell(key), onHover(key|null), onRightClick(key) });
@@ -27,6 +27,16 @@
   const COLORS = {
     grass: "#5c9a47", plains: "#b3b46f", desert: "#d8bf7c", forest: "#2f6d3c",
     hills: "#8c7b55", mountain: "#8a8f9b", water: "#3a6ea6",
+  };
+  // Terrain art: PNGs in art/terrain/ (208 x 240 = one hex at 4x), drawn over the flat colour. Each terrain lists
+  // its variants as [file, weight]; a cell picks one from a hash of its key (the same for every viewer).
+  // Terrains not listed here keep the flat colour and line glyph.
+  const ART_DIR = new URL("art/terrain/", document.currentScript?.src || location.href).href;
+  const TERRAIN_ART = {
+    grass: [["grass.png", 1]],
+    desert: [["desert.png", 1]],
+    forest: [["forest.png", 1]],
+    mountain: [["mountain_1.png", 99], ["mountain_2.png", 1]],
   };
 
   const parse = (k) => k.split(",").map(Number);
@@ -123,6 +133,25 @@
     return null;
   }
 
+  // A number in [0, 1) from a string (FNV-1a, then MurmurHash3's final mix to spread similar keys apart),
+  // so art variants are picked the same way on every page.
+  function hash01(text) {
+    let h = 2166136261;
+    for (let i = 0; i < text.length; i++) h = Math.imul(h ^ text.charCodeAt(i), 16777619);
+    h = Math.imul(h ^ (h >>> 16), 0x85ebca6b);
+    h = Math.imul(h ^ (h >>> 13), 0xc2b2ae35);
+    return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
+  }
+
+  // The terrain art for cell k (an <image> covering its hex), or the line glyph when the terrain has no art.
+  function terrainArt(terrain, k, mapKey, x, y) {
+    const variants = TERRAIN_ART[terrain];
+    if (!variants) return glyph(terrain, x, y);
+    let roll = hash01(`${mapKey}|${k}`) * variants.reduce((sum, [, w]) => sum + w, 0);
+    const [file] = variants.find(([, w]) => (roll -= w) < 0) || variants[variants.length - 1];
+    return svg("image", { href: ART_DIR + file, x: x - 26, y: y - SIZE, width: 52, height: 2 * SIZE, class: "hr-art" });
+  }
+
   function create(element, handlers = {}) {
     const root = svg("svg", { class: "hr-svg" });
     const world = svg("g");
@@ -202,14 +231,14 @@
       return out;
     }
 
-    function buildStatic(game) {
+    function buildStatic(game, mapKey) {
       fill(terrainG); fill(hlG); hl = {}; hlClass = {};
       const keys = disk(game.radius);
       all = new Set(keys);
       for (const k of keys) {
         const [x, y] = center(k);
         const terrain = game.cells[k];
-        if (terrain) put(terrainG, svg("polygon", { points: pts(x, y), fill: COLORS[terrain] || "#777", class: "hr-cell" }), glyph(terrain, x, y));
+        if (terrain) put(terrainG, svg("polygon", { points: pts(x, y), fill: COLORS[terrain] || "#777", class: "hr-cell" }), terrainArt(terrain, k, mapKey, x, y));
         else put(terrainG, svg("polygon", { points: pts(x, y), class: "hr-fog" }));
         hl[k] = svg("polygon", { points: pts(x, y, SIZE - 1), class: "hr-hlcell" }); // transparent until highlighted (SVG fills black by default)
         put(hlG, hl[k]);
@@ -221,7 +250,7 @@
       if (game.cells !== cells) {
         const first = lastKey !== gkey;
         cells = game.cells; lastKey = gkey;
-        buildStatic(game);
+        buildStatic(game, gkey);
         if (first) { fit(); }
       }
       const players = game.players, content = game.content;
