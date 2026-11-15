@@ -268,8 +268,8 @@
       // Explored but not seen right now: dimmed (enemy units there aren't shown).
       fill(dimG, (game.dim || []).map((k) => hexAt(k, SIZE, { class: "hr-dim" })));
 
-      // Territory: faint tint plus a border in the owner's colour all round it (ownership shows here).
-      // Weak land (bought with gold, game.claims) is fainter with a dashed border. The border lines are opaque
+      // Territory: a border in the owner's colour all round it (ownership shows here; the inside isn't shaded).
+      // Weak land (bought with gold, game.claims) has a dashed border. The border lines are opaque
       // inside one translucent group, so where segments overlap (round caps, joins) they don't get darker.
       const weak = game.claims || {};
       for (const pid of game.seats) {
@@ -277,9 +277,7 @@
         const line = { stroke: color(pid), "stroke-width": BORDER_W, "stroke-linecap": "round" };
         const same = (n) => game.territory[n] === pid;
         const strong = mine.filter((k) => weak[k] !== pid), bought = mine.filter((k) => weak[k] === pid);
-        put(territoryG, strong.map((k) => hexAt(k, SIZE, { fill: color(pid), "fill-opacity": 0.16 })),
-          bought.map((k) => hexAt(k, SIZE, { fill: color(pid), "fill-opacity": 0.07 })),
-          svg("g", { opacity: 0.8 }, ...outline(strong, same, line, BORDER),
+        put(territoryG, svg("g", { opacity: 0.8 }, ...outline(strong, same, line, BORDER),
             ...outline(bought, same, { ...line, "stroke-dasharray": "6 5", "stroke-linecap": "butt" }, BORDER)));
       }
 

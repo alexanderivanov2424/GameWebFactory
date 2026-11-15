@@ -40,7 +40,7 @@ fields in `logic/content.py`). Tests: `tests/` (`python3 -I tools/run_tests.py h
   no longer connected to its owner's strong land (both in `territory.territory`, run by `refresh`);
   your own structure reaching it makes it strong (it leaves `m.claims`). Claims need no enemy unit
   on or next to the target (`claim_problem` checks what you see, `_claims` the truth). The client
-  gets `claims` in the view and draws weak land fainter with a dashed border.
+  gets `claims` in the view and draws weak land with a dashed border (territory is never shaded inside).
 - **Standing orders** (`logic/standing.py`, 2026-11-11 feedback): `u["auto"]` (explore / fight /
   pillage / travel, plus `u["goal"]` for travel) survives the per-turn order reset; `standing.plan_all`
   gives each such unit this turn's ordinary order (move / shoot / hold) as planning starts, and any
