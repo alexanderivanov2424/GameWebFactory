@@ -38,11 +38,9 @@ def blank(players=2, face=6, radius=10, fog="off", **settings):
 
 
 def hall(m, pid, at="0,0"):
-    """A Town Hall (cells at, at+(1,0), at+(0,1)) holding the starting goods; pid's first one is their
-    first city (free land around it)."""
+    """A Town Hall (cells at, at+(1,0), at+(0,1)) holding the starting goods."""
     s = m.add_structure(pid, "town_hall", at, 0)
     s["stock"] = dict(match_mod.START_GOODS)
-    m.players[pid].setdefault("capital", s["id"])
     m.refresh()
     return s["id"]
 

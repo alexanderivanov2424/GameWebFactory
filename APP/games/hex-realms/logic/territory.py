@@ -14,12 +14,10 @@
                              on those cells count, for checks made with what pid knows)
 
 Rules:
-- Strong land (free, no upkeep): structures don't spread land, except Town Halls. A player's first
-  city (players[pid]["capital"], the first Town Hall founded) reaches the cells within FIRST_CITY_RADIUS
-  of its cells; every other Town Hall only its own cells (so a later city can still buy land around
-  it). First come, first served: a cell stays its owner's while they still reach it, a
+- Strong land (free, no upkeep): structures don't spread land, except Town Halls: every Town Hall
+  reaches the cells within CITY_RADIUS of its cells. First come, first served: a cell stays its owner's while they still reach it, a
   free cell goes to the one player reaching it, and to no one while two or more do (they got
-  there at the same time). Losing the first city loses its free land.
+  there at the same time). Losing a Town Hall loses its free land.
 - Weak land (m.claims): cells bought with gold (orders.claim) that were nobody's at that moment.
   Lost (back to no one) when:
     * another player's Town Hall reaches it (their strong land overrides it); your own Town Hall
@@ -36,7 +34,7 @@ from gamekit.hexes import disk, dist, neighbors, parse
 from .content import TOWN_HALL
 
 CLAIM_RADIUS = 1  # a claim holds the cell and its free neighbours
-FIRST_CITY_RADIUS = 2  # free land around your first Town Hall
+CITY_RADIUS = 2  # free land around every Town Hall
 LAND_UPKEEP = 1  # gold a turn per weak (bought) cell
 
 
@@ -45,7 +43,7 @@ def _reach(m):
     for s in m.structures.values():
         if s["type"] != TOWN_HALL:
             continue
-        radius = FIRST_CITY_RADIUS if m.players[s["owner"]].get("capital") == s["id"] else 0
+        radius = CITY_RADIUS
         for c in s["cells"]:
             for k in disk(radius, parse(c)):
                 if k in m.cells:

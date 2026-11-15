@@ -32,9 +32,9 @@ State: cells {key: terrain}; structures {sid: {"id", "n", "type", "owner", "at",
 "hp", "auto" (a standing order: standing.py), "goal" (where a Travel order goes)}} with unit_at {key: uid}; sites {cid: {"id", "n", "type", "owner", "at", "rot", "cells", "cost",
 "done" (turns of work so far)}} with cell_site {key: cid} (construction.py); claims {key: pid} (weak land
 bought with gold, 1 gold upkeep a turn each: orders.claim, territory.py); territory {key: pid} (strong
-land from Town Halls (the first city's free land) plus the weak land still held: territory.py); players
+land around Town Halls, free, plus the weak land still held: territory.py); players
 {pid: {"res" (gold/faith/science only: goods live in stores, see logistics.py), "pop", "advances", "done",
-"alive", "capital" (the first Town Hall founded: its free land)}};
+"alive", "growthOff"}};
 orders {pid: {"builds", "claims", "recruits", "research": [...], "moves": {uid: [keys]}, "shots": {uid: key},
 "holds": [uid], "found": {uid: rot}}}; events (the last resolution, for the client to replay).
 """
@@ -247,9 +247,8 @@ class Match:
                 at = u["at"]
                 self.remove_unit(uid)
                 hall = self.add_structure(pid, TOWN_HALL, at, rot)
-                if "startGoods" in self.players[pid]:  # the first city: starting goods, free land
+                if "startGoods" in self.players[pid]:  # the first city gets the starting goods
                     hall["stock"] = self.players[pid].pop("startGoods")
-                    self.players[pid]["capital"] = hall["id"]
                 ev.append({"t": "founded", "owner": pid, "at": at})
                 self.log.append(f"Turn {self.turn}: {self.names[pid]} founded a city.")
 

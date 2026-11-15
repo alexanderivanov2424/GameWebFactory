@@ -46,10 +46,8 @@ fields in `logic/content.py`). Tests: `tests/` (`python3 -I tools/run_tests.py h
   rule. `orders.claim` is an order paid in gold (`CLAIM_COST`); at resolution (`Match._claims`,
   before builds) the cell and its free neighbours become weak land (`m.claims`).
 - **Strong and weak land** (`logic/territory.py`, 2026-11-14, the user's rules; 2026-11-15: structures no
-  longer spread land, bought land has upkeep): Town Halls' reach is strong, free land: the first city
-  (`players[pid]["capital"]`, set in `Match._found` with the starting goods; `helpers.hall` sets it for
-  the first hall it places) reaches `FIRST_CITY_RADIUS`, later halls only their own cells (so a far-away
-  city can still buy land around it). First come, first served (`m.territory` is kept between refreshes; a cell stays its
+  longer spread land, bought land has upkeep): Town Halls' reach is strong, free land: every Town Hall
+  reaches `CITY_RADIUS` (2026-11-15: new cities too, not only the first). First come, first served (`m.territory` is kept between refreshes; a cell stays its
   owner's while they still reach it, a free cell goes to the only player reaching it, nobody while
   two or more do). Bought land is weak, per cell in `m.claims`, and lost for good when an enemy
   unit stands on or next to it (`territory.unit_entered`, called by `Match.add_unit` / `move_unit`, so
@@ -168,7 +166,7 @@ fields in `logic/content.py`). Tests: `tests/` (`python3 -I tools/run_tests.py h
   you grow once, then need a Hut (2 wood) or House. Building takes turns and idle people (Farm 2
   turns x 1 builder, House 2 x 2, University 4 x 3, Monument 5 x 3), and every worker in a job is
   one builder fewer, so the opening is a choice between producing and building. The hall's 10-cap
-  makes a Storage Yard or Granary the next limit. Free land is the first city's radius 2 (~27 cells);
+  makes a Storage Yard or Granary the next limit. Free land is radius 2 around each Town Hall (~27 cells);
   beyond it, land costs 2 gold per claim (up to 7 cells) and 1 gold a turn per cell, while the hall
   makes 1 gold, so expanding needs a gold economy (Market, Chapel with its advance, trade).
 - Structure tags (2026-11-15, the user's call): `tags` in each structures/*.json (ids from `content.TAGS`, sent

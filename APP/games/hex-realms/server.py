@@ -18,8 +18,7 @@ them back), so its first turn of work happens this turn. Gold, faith and
 science are realm-wide; goods (food, wood, stone, metal) go into the realm's stores (Town
 Hall, Storage Yard, Granary). Production and upkeep happen at the same time; only what is left at the
 end of the turn is capped by the stores' room (the rest is lost). Structures go anywhere inside your territory.
-Structures don't spread land: your first city gives free land (2 cells around it), other Town Halls
-hold only their own cells. That land is strong: first come, first served, it stays yours while the
+Structures don't spread land, except Town Halls: each city gets free land (2 cells around it). That land is strong: first come, first served, it stays yours while the
 hall stands, and cells two realms reach in the same turn go to no one. Gold buys weak land (claim an
 explored cell next to yours, with its free neighbours), which costs 1 gold a turn per cell (unpaid
 cells are given up, farthest from your Town Halls first): it goes back to no one when an enemy unit
