@@ -104,7 +104,8 @@ fields in `logic/content.py`). Tests: `tests/` (`python3 -I tools/run_tests.py h
   the cell key, so every viewer sees the same map; add a new file there). Cells are drawn top row first, left
   to right, so a tile's art can spill up over the tiles above it (only inside its own 208 x 240 box). `terrain/terrain_template.png` (hex outline)
   and `units/unit_template.png` (the unit disc, radius SIZE * 0.42 = 12.6 on the map: 100 x 100) are blank
-  templates; units and structures still draw emoji.
+  templates. Units with an `art` file (units/*.json, a name in `units/`) draw it over their owner-coloured disc
+  instead of the icon (map only; panels keep the emoji); units without one and structures still draw emoji.
 - `client/map.js`: `HexMap.create`: pan (drag) / zoom (wheel) SVG map; terrain layer rebuilt only
   when `game.cells` changes, the rest per state;
   structures are solid in their content `color`, drawn by `blob` (cells at 80% with the gaps

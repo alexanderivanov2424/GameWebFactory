@@ -23,20 +23,24 @@
   const put = (node, ...children) => node.append(...children.flat(Infinity).filter((c) => c !== null && c !== undefined && c !== false));
   const SIZE = 30;
   const SQ3 = Math.sqrt(3);
+  const UNIT_R = SIZE * 0.42;  // a unit's disc
   const DIRS = [[1, 0], [0, 1], [-1, 1], [-1, 0], [0, -1], [1, -1]]; // DIRS[i] faces angle 60*i
   const COLORS = {
     plains: "#5c9a47", desert: "#d8bf7c", forest: "#2f6d3c",
     hills: "#8c7b55", mountain: "#8a8f9b", water: "#3a6ea6",
   };
-  // Terrain art: PNGs in art/terrain/ (208 x 240 = one hex at 4x), drawn over the flat colour. Each terrain lists
+  // Art files live in art/ next to this script. Units: art/units/<content "art"> (100 x 100 = the unit's disc at 4x),
+  // drawn over the disc instead of the icon. Terrain: PNGs in art/terrain/ (208 x 240 = one hex at 4x), drawn over the flat colour. Each terrain lists
   // its variants as [file, weight]; a cell picks one from a hash of its key (the same for every viewer).
   // Terrains not listed here keep the flat colour and line glyph.
-  const ART_DIR = new URL("art/terrain/", document.currentScript?.src || location.href).href;
+  const ART_DIR = new URL("art/", document.currentScript?.src || location.href).href;
   const TERRAIN_ART = {
     plains: [["plains.png", 1]],
     desert: [["desert.png", 1]],
     forest: [["forest.png", 1]],
     mountain: [["mountain_1.png", 99], ["mountain_2.png", 1]],
+    hills: [["hill.png", 1]],
+    water: [["ocean.png", 1]],
   };
 
   const parse = (k) => k.split(",").map(Number);
@@ -151,7 +155,7 @@
     if (!variants) return glyph(terrain, x, y);
     let roll = hash01(`${mapKey}|${k}`) * variants.reduce((sum, [, w]) => sum + w, 0);
     const [file] = variants.find(([, w]) => (roll -= w) < 0) || variants[variants.length - 1];
-    return svg("image", { href: ART_DIR + file, x: x - 26, y: y - SIZE, width: 52, height: 2 * SIZE, class: "hr-art" });
+    return svg("image", { href: ART_DIR + "terrain/" + file, x: x - 26, y: y - SIZE, width: 52, height: 2 * SIZE, class: "hr-art" });
   }
 
   function create(element, handlers = {}) {
@@ -327,8 +331,9 @@
         const [x, y] = center(u.at);
         const g = svg("g", { class: u.owner === you ? `hr-unit hr-mine${ordered.has(uid) ? " hr-ordered" : ""}` : "hr-unit" },
           svg("title", {}, `${def?.name || u.type} (${nameOf(u.owner)}) hp ${u.hp}/${u.maxHp}`),
-          svg("circle", { cx: x, cy: y, r: SIZE * 0.42, fill: color(u.owner) }),
-          svg("text", { x, y: y + 1, class: "hr-uicon" }, def?.icon || u.type.slice(0, 2)));
+          svg("circle", { cx: x, cy: y, r: UNIT_R, fill: color(u.owner) }),
+          def?.art ? svg("image", { href: ART_DIR + "units/" + encodeURIComponent(def.art), x: x - UNIT_R, y: y - UNIT_R, width: 2 * UNIT_R, height: 2 * UNIT_R, class: "hr-art" })
+            : svg("text", { x, y: y + 1, class: "hr-uicon" }, def?.icon || u.type.slice(0, 2)));
         if (u.maxHp <= 6) {
           const x0 = x - (u.maxHp - 1) * 3.5;
           for (let i = 0; i < u.maxHp; i++) put(g, svg("circle", { cx: x0 + i * 7, cy: y + SIZE * 0.62, r: 2.6, class: i < u.hp ? "hr-pip on" : "hr-pip" }));

@@ -1,6 +1,7 @@
 {
  "name": "Spearman",
  "icon": "Sp",
+ "art": "spearman.png",
  "cost": {
   "wood": 2,
   "gold": 4

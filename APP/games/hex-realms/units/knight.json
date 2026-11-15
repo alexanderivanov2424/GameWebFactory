@@ -1,6 +1,7 @@
 {
  "name": "Knight",
  "icon": "Kn",
+ "art": "knight.png",
  "cost": {
   "metal": 2,
   "food": 4,

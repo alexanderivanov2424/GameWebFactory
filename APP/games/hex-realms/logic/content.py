@@ -22,7 +22,7 @@ structures/<id>.json:
     people it needs for each of those turns, default 1; construction.py), category (a CATEGORIES id: the build menu's tabs), vision (fog of
     war: cells seen around each of its cells, default 3), text.
 units/<id>.json:
-    name, icon, cost {res: n}, people (default 1), attack, defense, hp, move (steps), range
+    name, icon, art (a file in client/art/units/, drawn on the map instead of the icon), cost {res: n}, people (default 1), attack, defense, hp, move (steps), range
     (shoots instead of moving), siege (damage per hit on structures, default 1), vsMounted (extra
     dice against mounted), mounted, naval (water only), settler (can found a Town Hall),
     requires (advance), needs (a structure type the owner must own), upkeep {res: n}, vision (cells
@@ -115,7 +115,7 @@ def parse_structure(sid, d):
 
 def parse_unit(uid, d):
     return {
-        "id": uid, "name": text(d, "name", 30, required=True), "icon": text(d, "icon", 3), "cost": res_map(d, "cost"),
+        "id": uid, "name": text(d, "name", 30, required=True), "icon": text(d, "icon", 3), "art": text(d, "art", 60), "cost": res_map(d, "cost"),
         "people": whole(d, "people", 0, 9, default=1), "attack": whole(d, "attack", 0, 9), "defense": whole(d, "defense", 0, 9),
         "hp": whole(d, "hp", 1, 20), "move": whole(d, "move", 0, 9), "range": whole(d, "range", 0, 5, default=0),
         "siege": whole(d, "siege", 1, 9, default=1), "vsMounted": whole(d, "vsMounted", 0, 9, default=0),

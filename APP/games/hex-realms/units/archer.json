@@ -1,6 +1,7 @@
 {
  "name": "Archer",
  "icon": "Ar",
+ "art": "archer.png",
  "cost": {
   "wood": 3,
   "gold": 4

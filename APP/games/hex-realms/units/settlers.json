@@ -1,6 +1,7 @@
 {
  "name": "Settlers",
  "icon": "Se",
+ "art": "settler.png",
  "cost": {
   "food": 8,
   "wood": 4
