@@ -52,9 +52,8 @@ def output(m, s):
     for c in s["cells"]:
         for r, n in d["perCell"].get(m.cells[c], {}).items():
             out[r] = out.get(r, 0) + n
-    adj = d.get("perAdjacent")
-    if adj:
-        around = {n for c in s["cells"] for n in neighbors(c) if n in m.cells} - set(s["cells"])
+    around = {n for c in s["cells"] for n in neighbors(c) if n in m.cells} - set(s["cells"])
+    for adj in d["perAdjacent"]:
         if adj["terrain"]:
             count = sum(1 for n in around if m.cells[n] == adj["terrain"])
         else:
@@ -73,8 +72,8 @@ def output(m, s):
 def output_keys(stype):
     d = STRUCTURES[stype]
     keys = set(d["produce"]) | {r for v in d["onTerrain"].values() for r in v} | {r for v in d["perCell"].values() for r in v}
-    if d.get("perAdjacent"):
-        keys |= set(d["perAdjacent"]["gain"])
+    for adj in d["perAdjacent"]:
+        keys |= set(adj["gain"])
     return keys
 
 

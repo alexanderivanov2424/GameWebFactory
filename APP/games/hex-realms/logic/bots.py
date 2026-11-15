@@ -40,7 +40,7 @@ CITIES = 3
 CITY_RANGE = 10
 ATTACK_TURN = 20
 ATTACK_ARMY = 5
-NEED_TERRAIN = {"farm": {"plains", "hills"}, "lumbermill": {"forest"}, "mine": {"hills", "mountain"}}
+NEED_TERRAIN = {"farm": {"plains"}, "lumbermill": {"forest"}, "mine": {"hills", "mountain"}}
 
 
 def try_act(m, pid, *args):
@@ -227,8 +227,10 @@ class Bot:
 
     def value(self, stype, cells, touching):
         terrain = self.m.cells
-        if stype == "farm":
-            return sum(2 if terrain[c] == "plains" else 1 for c in cells)
+        if stype == "farm":  # next to its other farms, touching water
+            own = lambda n: self.m.structures.get(self.m.cell_structure.get(n), {})
+            farms = {own(n)["id"] for n in touching if own(n).get("type") == "farm" and own(n)["owner"] == self.pid}
+            return len(farms) + any(terrain.get(n) == "water" for n in touching)
         if stype == "lumbermill":
             return sum(1 for n in touching if terrain.get(n) == "forest") * 2
         if stype == "windmill":

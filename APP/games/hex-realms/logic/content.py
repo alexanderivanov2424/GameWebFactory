@@ -12,8 +12,8 @@ structures/<id>.json:
     cost {res: n}, hp (0 = can't be attacked), defense (dice it rolls back at attackers),
     jobs (people needed to work), produce {res: n}, perCell {terrain: {res: n}} (per own cell),
     onTerrain {terrain: {res: n}} (by the anchor's terrain, replaces produce), perAdjacent
-    {"terrain"|"type"|"home": ..., "gain": {res: n}, "max": n} (per neighbouring forest cell /
-    structure of that type / home structure), housing, home (counts as a home), storage (all
+    {"terrain"|"type"|"home": ..., "gain": {res: n}, "max": n} (per neighbouring cell of that terrain /
+    own structure of that type / own home structure, up to max; a list of these for several bonuses), housing, home (counts as a home), storage (all
     capped resources), store {res: n} (a structure with either is a store of goods: see
     logistics.py), growth (extra growth per turn), terrain [ids] (default every "build" terrain), coast (a cell must touch water),
     requires (advance id), recruits [unit ids], heals, shoots (dice) + range, trade (market
@@ -102,12 +102,13 @@ def parse_structure(sid, d):
         raise ValueError(f"category must be one of {sorted(CATEGORIES)}")
     s["perCell"] = {t: res_map(d["perCell"], t) for t in d.get("perCell", {}) if t in TERRAIN}
     s["onTerrain"] = {t: res_map(d["onTerrain"], t) for t in d.get("onTerrain", {}) if t in TERRAIN}
-    adj = d.get("perAdjacent")
-    if adj is not None:
+    adjs = d.get("perAdjacent", [])
+    s["perAdjacent"] = []
+    for adj in adjs if isinstance(adjs, list) else [adjs]:
         if not isinstance(adj, dict):
-            raise ValueError("perAdjacent must be an object")
-        s["perAdjacent"] = {"terrain": adj.get("terrain"), "type": adj.get("type"), "home": adj.get("home") is True,
-                            "gain": res_map(adj, "gain"), "max": whole(adj, "max", 1, 9, default=4)}
+            raise ValueError("perAdjacent must be an object or a list of them")
+        s["perAdjacent"].append({"terrain": adj.get("terrain"), "type": adj.get("type"), "home": adj.get("home") is True,
+                                 "gain": res_map(adj, "gain"), "max": whole(adj, "max", 1, 9, default=4)})
     s["rotations"] = [[[q, r] for q, r in rot] for rot in rotations(cells)]
     return s
 

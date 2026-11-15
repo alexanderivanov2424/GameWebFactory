@@ -161,6 +161,9 @@ fields in `logic/content.py`). Tests: `tests/` (`python3 -I tools/run_tests.py h
   makes a Storage Yard or Granary the next limit. Free land is the first city's radius 2 (~27 cells);
   beyond it, land costs 2 gold per claim (up to 7 cells) and 1 gold a turn per cell, while the hall
   makes 1 gold, so expanding needs a gold economy (Market, Chapel with its advance, trade).
+- Farms (2026-11-15, the user's rules): plains only, 1 food, +1 per own Farm next to it, +1 if it touches
+  water, so farms want clusters by rivers and lakes (a lone dry farm makes 1 food, a ring of farms ~3-4
+  each). `perAdjacent` takes a list for several bonuses.
 - Sieges are slow on purpose: a Swordsman does ~2 damage a turn to a 15 hp Town Hall and takes
   ~1 back, so taking a city needs 3+ units or Catapults (3 damage per hit, from range, no reply,
   but towers shoot them).

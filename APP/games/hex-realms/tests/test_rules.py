@@ -120,13 +120,6 @@ class EconomyTests(unittest.TestCase):
         self.assertNotIn(farm, rep["staffed"])
         self.assertEqual(rep["idle"], self.m.players["p1"]["pop"])
 
-    def test_farm_gets_plains_bonus(self):
-        self.put("farm", "2,0")
-        with_plains = self.report()["income"]["food"]
-        for c in ("2,0", "3,0", "2,1"):
-            self.m.cells[c] = "hills"
-        self.assertEqual(self.report()["income"]["food"], with_plains - 3)
-
     def test_starving_loses_a_person(self):
         p = self.m.players["p1"]
         self.m.structures[self.hall]["stock"]["food"], p["pop"] = 0, 10

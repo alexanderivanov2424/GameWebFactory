@@ -20,18 +20,28 @@
  },
  "jobs": 1,
  "produce": {
-  "food": 2
+  "food": 1
  },
- "perCell": {
-  "plains": {
-   "food": 1
+ "perAdjacent": [
+  {
+   "type": "farm",
+   "gain": {
+    "food": 1
+   },
+   "max": 9
+  },
+  {
+   "terrain": "water",
+   "gain": {
+    "food": 1
+   },
+   "max": 1
   }
- },
- "terrain": [
-  "plains",
-  "hills"
  ],
- "text": "+1 food for each of its cells on plains.",
+ "terrain": [
+  "plains"
+ ],
+ "text": "+1 food per Farm next to it. +1 food if it touches water.",
  "category": "food",
  "buildTurns": 2,
  "builders": 1,
