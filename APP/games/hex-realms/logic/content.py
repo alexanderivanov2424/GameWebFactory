@@ -9,7 +9,7 @@ structures/<id>.json:
     name, icon, color ("#rrggbb" map colour), cells [[q, r], ...] (axial, first = anchor)
     cost {res: n} (no food), hp (0 = unattackable), defense (dice it rolls back), jobs (people to work)
     produce {res: n} (output never below 0), onTerrain {terrain: {res: n}} (anchor's terrain, replaces produce)
-    perCell {terrain: {res: n}} (per own cell), perAdjacent {"terrain"|"type"|"tag", "gain", "max"} (or a list)
+    perCell {terrain: {res: n}} (per own cell), perAdjacent {"terrain"|"type"|"tag", "gain", "max"} (or a list; terrain counts only cells with nothing built)
     tags [TAG ids], housing, storage (room for each stored good: wood, stone, metal), store {res: n}
     terrain [ids] (default: buildable), coast (touches water), requires (advance), recruits [unit ids]
     heals, shoots (dice) + range, trade (give n for 1), score, hammers (work to build, default 1)

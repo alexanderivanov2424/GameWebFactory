@@ -46,7 +46,7 @@ window.HexText = {
     farm: "Grows more with other Farms next to it, and by water.",
     house: "Housing.",
     hut: "Cheap housing.",
-    lumbermill: "Makes more wood for each forest cell next to it.",
+    lumbermill: "Makes more wood for each forest cell next to it with nothing built on it.",
     market: "Makes more gold for each Hut or House next to it. Can trade every turn.",
     mine: "Stone and metal from hills or mountains.",
     monument: "Worth a lot of score.",

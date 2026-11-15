@@ -274,7 +274,7 @@
     const around = [...new Set(cells.flatMap((k) => U.neighbors(k)))].filter((n) => n in g.cells && !mine.has(n));
     const near = [...new Set(around.map((n) => idx.structAt[n]).filter(Boolean))].map((id) => g.structures[id]).filter((s) => s.owner === c.you);
     for (const adj of def.perAdjacent || []) {
-      const count = adj.terrain ? around.filter((n) => g.cells[n] === adj.terrain).length
+      const count = adj.terrain ? around.filter((n) => g.cells[n] === adj.terrain && !idx.structAt[n] && !idx.siteAt[n]).length
         : near.filter((s) => (adj.type ? s.type === adj.type : (c.content.structures[s.type]?.tags || []).includes(adj.tag))).length;
       for (const [r, n] of Object.entries(adj.gain || {})) plus(r, n * Math.min(count, adj.max));
     }

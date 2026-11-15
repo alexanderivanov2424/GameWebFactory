@@ -76,7 +76,7 @@ def output(m, s):
             if m.structures[sid]["owner"] == s["owner"]]
     for adj in d["perAdjacent"]:
         if adj["terrain"]:
-            count = sum(1 for n in around if m.cells[n] == adj["terrain"])
+            count = sum(1 for n in around if m.cells[n] == adj["terrain"] and n not in m.cell_structure and n not in m.cell_site)
         else:
             count = sum(1 for o in near if (o["id"] == adj["type"] if adj["type"] else adj["tag"] in o["tags"]))
         _add(out, {r: n * min(count, adj["max"]) for r, n in adj["gain"].items()})
