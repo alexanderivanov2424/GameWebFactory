@@ -30,7 +30,7 @@ from .mapgen import generate
 
 COLORS = ["#d9483b", "#3b7dd9", "#e0b030", "#3ba55d", "#a05cc8", "#e07b22"]
 START_RES = {"gold": 10, "faith": 0, "science": 0}  # realm-wide
-START_GOODS = {"wood": 12, "stone": 6}  # put into the first Town Hall when it's founded
+START_GOODS = {"wood": 10, "stone": 5}  # put into the first Town Hall when it's founded
 START_UNIT = "settlers"
 START_ESCORT = "scout"  # starts on a free land cell next to the settlers
 START_POP = 3
