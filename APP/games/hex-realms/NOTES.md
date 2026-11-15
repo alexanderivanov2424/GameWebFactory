@@ -35,8 +35,8 @@ fields in `logic/content.py`). Tests: `tests/` (`python3 -I tools/run_tests.py h
   many people a turn while housing has room and the food left at the end of the turn feeds them
   (`economy.new_people`); a player can switch it off (`orders.growth`, `players[pid]["growthOff"]`). `flows` breaks the same numbers down per structure / unit / site
   (`economy.flows`: production +, unit upkeep -, each person's food (`FOOD_PER_PERSON`, 2026-11-15: 1 each)
-  where they work / build / are idle at home, recruits' upkeep on their structure, bought land's gold on the first
-  Town Hall) for the client's **resource view** (click a top-bar chip: `map.setResView` greyscales the
+  where they work / build / are idle at home, recruits' upkeep on their structure, bought land's gold on each
+  bought cell, flow id "land:<key>") for the client's **resource view** (click a top-bar chip: `map.setResView` greyscales the
   `hr-base` group and draws outlines and +n / -n badges above it). Population is four chips (the user's
   layout): "👥 idle n", "👥 population n" (pop + people in units), "🏠 cap n", "🌱 +n" (this turn's growth). The "people" view shows idle people at
   home green +n (spread over the homes oldest first), people in jobs / units / recruits red -n, and

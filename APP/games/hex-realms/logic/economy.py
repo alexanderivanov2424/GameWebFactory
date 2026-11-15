@@ -187,7 +187,7 @@ def report(m, pid, resolving=False):
 def flows(m, pid, working, building, land=0, idle=0, living=0):
     """Per structure / unit / site: production (+), unit upkeep, the people's food where they are (-:
     on the structure they work in, the site they build, the home they're idle in; recruits ordered
-    this turn on their structure), the bought land's gold (-, on the first Town Hall); "people" (where
+    this turn on their structure), the bought land's gold (-, on each bought cell: id "land:<key>"); "people" (where
     they are), "housing", "population" (who lives where) and "growth". See the module header."""
     p, on = m.players[pid], {s["id"] for s in working}
     home_bonus = effect(m, pid, "homeHousing")
@@ -205,9 +205,8 @@ def flows(m, pid, working, building, land=0, idle=0, living=0):
             out.append([s["id"], "housing", housing, True])
         if d["growth"]:
             out.append([s["id"], "growth", d["growth"], True])
-    halls = [s for s in logistics.stores(m, pid) if s["type"] == TOWN_HALL]
-    if halls and land:
-        out.append([halls[0]["id"], "gold", -land * territory.LAND_UPKEEP, True])
+    if land:  # each bought cell's upkeep on that cell ("land:<key>")
+        out += [[f"land:{k}", "gold", -territory.LAND_UPKEEP, True] for k in sorted(k for k, p in m.claims.items() if p == pid)]
     for cid, n in [*building["works"].items(), *building["orders"].items()]:  # sites, then this turn's build orders
         out += [[cid, "people", -n, True, "build"], [cid, "food", -n * FOOD_PER_PERSON, True]]
     training = {}

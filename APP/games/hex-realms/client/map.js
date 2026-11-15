@@ -17,7 +17,7 @@
  *                               flows ([[id, res, n, on, tag?, of?]] from the report, one resource) outlined (green makes,
  *                               red uses, amber both, grey dashed not working) with its +n / -n badges; tagged
  *                               items (the "people" view's builders) get blue badges and outlines; tag "of" (the "population"
- *                               view) shows "n/of" instead of +n
+ *                               view) shows "n/of" instead of +n; id "land:<key>" (a bought cell's gold upkeep) badges that cell
  *   HexMap.util                 pointy-top axial helpers: parse, key, add, neighbors, dist, center, DIRS
  *
  * Pointy-top axial "q,r" keys: x = SIZE*sqrt(3)*(q + r/2), y = SIZE*1.5*r. Drag pans, the wheel zooms
@@ -481,7 +481,8 @@
       const byId = {};
       for (const [id, , n, on, tag, of] of flows) (byId[id] ||= []).push({ n, on, tag, of });
       for (const [id, items] of Object.entries(byId)) {
-        const s = game.structures[id] || game.sites?.[id] || extra[id], u = !s && game.units[id];
+        const land = id.startsWith("land:");  // a bought cell's gold upkeep: badge on the cell itself
+        const s = game.structures[id] || game.sites?.[id] || extra[id] || (land ? { cells: [id.slice(5)] } : null), u = !s && game.units[id];
         if (!s && !u) continue;
         const cells = s ? s.cells : [u.at];
         if (!cells.every((k) => all.has(k))) continue;
@@ -492,7 +493,7 @@
         if (s) put(resG, blobLine(cells, { class: `hr-res-line hr-res-${tone}` }));
         else put(resG, svg("circle", { cx: center(u.at)[0], cy: center(u.at)[1], r: UNIT_R + 3, class: `hr-res-ring hr-res-${tone}` }));
         const [x, y0] = s ? middle(cells) : center(u.at);
-        const y = y0 - (s ? 22 : UNIT_R + 10);
+        const y = y0 - (land ? 0 : s ? 22 : UNIT_R + 10);
         const texts = items.map((i) => (i.tag === "of" ? `${i.n}/${i.of}` : i.n > 0 ? `+${i.n}` : `−${-i.n}`));
         const widths = texts.map((t) => 8 + 7.5 * t.length);
         let left = x - (widths.reduce((a, w) => a + w, 0) + 3 * (items.length - 1)) / 2;
