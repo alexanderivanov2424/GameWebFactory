@@ -3,7 +3,6 @@
  "icon": "m",
  "art": "militia.png",
  "cost": {
-  "food": 3,
   "gold": 2
  },
  "attack": 1,

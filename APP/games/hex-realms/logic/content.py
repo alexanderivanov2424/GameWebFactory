@@ -7,15 +7,15 @@ RESOURCES    stock resources in display order ("people" is separate)
 RESOURCE_INFO  {res: (name, icon)} for the client, incl. people, population, housing
 structures/<id>.json:
     name, icon, color ("#rrggbb" map colour), cells [[q, r], ...] (axial, first = anchor)
-    cost {res: n}, hp (0 = unattackable), defense (dice it rolls back), jobs (people to work)
+    cost {res: n} (no food), hp (0 = unattackable), defense (dice it rolls back), jobs (people to work)
     produce {res: n} (output never below 0), onTerrain {terrain: {res: n}} (anchor's terrain, replaces produce)
     perCell {terrain: {res: n}} (per own cell), perAdjacent {"terrain"|"type"|"tag", "gain", "max"} (or a list)
-    tags [TAG ids], housing, storage (cap on capped goods), store {res: n}
+    tags [TAG ids], housing, storage (room for each stored good: wood, stone, metal), store {res: n}
     terrain [ids] (default: buildable), coast (touches water), requires (advance), recruits [unit ids]
     heals, shoots (dice) + range, trade (give n for 1), score, hammers (work to build, default 1)
     category (CATEGORIES id), vision (cells seen around each cell, default 3)
 units/<id>.json:
-    name, icon, art (client/art/units/ file, drawn instead of icon), cost {res: n}, people (default 1)
+    name, icon, art (client/art/units/ file, drawn instead of icon), cost {res: n} (no food), people (default 1)
     attack, defense, hp, move (steps), range (shoots instead of moving), siege (damage per hit on structures)
     vsMounted (extra dice vs mounted), mounted, naval (water only), settler (founds a Town Hall)
     requires (advance), needs (structure type owned), upkeep {res: n}, vision (default 2)
@@ -40,8 +40,9 @@ RESOURCES = ["gold", "food", "wood", "stone", "metal", "faith", "science"]
 RESOURCE_INFO = {"gold": ("Gold", "🪙"), "food": ("Food", "🍞"), "wood": ("Wood", "🪵"), "stone": ("Stone", "🪨"),
                  "metal": ("Metal", "🔩"), "faith": ("Faith", "🙏"), "science": ("Science", "🔬"),
                  "people": ("People", "👥"), "population": ("Population", "👥"), "housing": ("Housing", "🏠"), "hammers": ("Hammers", "🔨")}
-CAPPED = ["food", "wood", "stone", "metal"]  # goods: kept in stores (logistics.py)
+CAPPED = ["wood", "stone", "metal"]  # goods: kept in stores (logistics.py)
 GLOBAL = ["gold", "faith", "science"]  # realm-wide, uncapped
+SPENDABLE = GLOBAL + CAPPED  # what costs may ask for (food is never stored, so never spent)
 TERRAIN = {
     "plains": {"name": "Plains", "move": 2, "cover": False, "build": True},
     "desert": {"name": "Desert", "move": 2, "cover": False, "build": True},
@@ -87,7 +88,7 @@ def parse_structure(sid, d):
         raise ValueError("cells must be [[0, 0], [q, r], ...]")
     s = {
         "id": sid, "name": text(d, "name", 30, required=True), "icon": text(d, "icon", 4), "cells": cells,
-        "cost": res_map(d, "cost"), "hp": whole(d, "hp", 0, 99, default=3), "defense": whole(d, "defense", 0, 9, default=0),
+        "cost": res_map(d, "cost", SPENDABLE), "hp": whole(d, "hp", 0, 99, default=3), "defense": whole(d, "defense", 0, 9, default=0),
         "jobs": whole(d, "jobs", 0, 9, default=0), "produce": res_map(d, "produce"),
         "housing": whole(d, "housing", 0, 99, default=0), "tags": tag_list(d),
         "storage": whole(d, "storage", 0, 999, default=0), "store": res_map(d, "store", CAPPED),
@@ -122,7 +123,7 @@ def parse_structure(sid, d):
 
 def parse_unit(uid, d):
     return {
-        "id": uid, "name": text(d, "name", 30, required=True), "icon": text(d, "icon", 3), "art": text(d, "art", 60), "cost": res_map(d, "cost"),
+        "id": uid, "name": text(d, "name", 30, required=True), "icon": text(d, "icon", 3), "art": text(d, "art", 60), "cost": res_map(d, "cost", SPENDABLE),
         "people": whole(d, "people", 0, 9, default=1), "attack": whole(d, "attack", 0, 9), "defense": whole(d, "defense", 0, 9),
         "hp": whole(d, "hp", 1, 20), "move": whole(d, "move", 0, 9), "range": whole(d, "range", 0, 5, default=0),
         "siege": whole(d, "siege", 1, 9, default=1), "vsMounted": whole(d, "vsMounted", 0, 9, default=0),

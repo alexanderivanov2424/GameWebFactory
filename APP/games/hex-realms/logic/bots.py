@@ -137,8 +137,6 @@ class Bot:
             out.append("mine")
         if any(full(r) for r in ("wood", "stone", "metal")) and have["storage_yard"] < cities:
             out.append("storage_yard")
-        if full("food") and have["granary"] < cities:
-            out.append("granary")
         if m.turn >= 6 and not have["barracks"]:
             out.append("barracks")
         for stype, turn in (("market", 10), ("chapel", 12), ("college", 14)):

@@ -1,7 +1,7 @@
-"""Hex Realms: goods (food, wood, stone, metal) kept in storage structures.
+"""Hex Realms: goods (wood, stone, metal) kept in storage structures. Food is never stored (economy.py).
 
 Gold, faith and science are realm-wide (players[pid]["res"]). Storage structures (Town Hall, Storage
-Yard, Granary) hold a "stock" up to their capacity. At end of turn, what's left of production after
+Yard) hold a "stock" up to their capacity. At end of turn, what's left of production after
 upkeep (economy.end_of_turn) fills the stores with room (Town Halls first, then oldest); the rest is lost.
 
     stores(m, pid)           pid's storage structures, in fill order

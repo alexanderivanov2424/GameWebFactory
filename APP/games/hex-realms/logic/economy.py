@@ -1,27 +1,28 @@
 """Hex Realms: production, upkeep, trade, eating and new people.
 
 A structure works if its crew is there: people fill jobs, food producers first, then oldest first.
-Gold, faith and science go to the realm; goods go into the stores (logistics.py). Everyone eats
+Gold, faith and science go to the realm; wood, stone and metal go into the stores (logistics.py). Everyone eats
 FOOD_PER_PERSON food, units eat their upkeep, bought land costs LAND_UPKEEP gold per cell, and each
 working trade structure with a trade set gives `trade` of one resource for 1 of another (only when
 affordable). Production and upkeep happen together; only what is left is capped by store room.
 Gold below 0 gives up bought land, or else the newest paid unit deserts. No Town Hall: none of this.
 
-Food: this turn's production is eaten first, then the stores; only when both run out do the ones who
-can't be fed die (units first). Population grows only from a production surplus: as many new people
-as it feeds, while housing has room.
+Food is never stored: each turn's production feeds everyone. A surplus becomes new people (as many as
+it feeds, while housing has room) and the rest is lost. A shortfall starves: idle people first, then
+units that eat (newest first), then people at work (jobs and building).
 
     output(m, s)                      what structure s makes when it works
     housing(m, s)                     the housing structure s gives (with advance bonuses)
     staffing(m, pid)                  (working structures in job order, idle people)
     report(m, pid, resolving=False)   the turn's forecast (see report())
     end_of_turn(m, pid, events)       apply the report: goods, gold, hunger, new people
+    starvation(m, pid, short, idle)   ([unit ids], people) who die when food production is `short`
 """
 
 from gamekit.hexes import neighbors
 
 from . import construction, logistics, territory
-from .content import ADVANCES, CAPPED, RESOURCES, STRUCTURES, UNITS
+from .content import ADVANCES, CAPPED, GLOBAL, RESOURCES, STRUCTURES, UNITS
 
 FOOD_PER_PERSON = 1
 TRADE_GOODS = ["gold", "food", "wood", "stone", "metal"]
@@ -112,9 +113,10 @@ def staffing(m, pid):
 def report(m, pid, resolving=False):
     """This turn's forecast, as it will resolve (resolving: this turn's orders have already happened).
 
-    income / upkeep / net {res: n}, wasted {good: n} (won't fit in the stores), staffed [sid],
-    workers / builders / idle (people), housing, soldiers (people in units and recruits), caps,
-    starve {"units", "people"}, born, popNet, foodNet (the stored food's change), land (bought cells),
+    income / upkeep / net {res: n} (net food: production left after everyone eats, or the shortfall),
+    wasted {good: n} (won't fit in the stores), staffed [sid], workers / builders / idle (people),
+    housing, soldiers (people in units and recruits), caps {good: room},
+    starve {"units", "people"}, born, popNet, land (bought cells),
     trades [[sid, give, rate, get]] (the trades that happen), flows (see flows())."""
     p = m.players[pid]
     working, left = staffing(m, pid)
@@ -136,12 +138,11 @@ def report(m, pid, resolving=False):
     have = logistics.stock(m, pid)
     trades = _trades(working, have, income, upkeep)
 
-    food = _food(m, pid, income["food"], upkeep["food"], have["food"], room - p["pop"] - soldiers) if m.has_hall(pid) \
-        else {"starve": {"units": 0, "people": 0}, "born": 0, "foodNet": income["food"], "popNet": 0}
-    net = {r: income[r] - upkeep[r] for r in RESOURCES}
-    net["food"] = food["foodNet"]
     idle = left - building["builders"]
-    return {"income": income, "upkeep": upkeep, "net": net, "wasted": _wasted(m, pid, have, income, upkeep, food["foodNet"]),
+    food = _food(m, pid, income["food"], upkeep["food"], room - p["pop"] - soldiers, idle) if m.has_hall(pid) \
+        else {"starve": {"units": 0, "people": 0}, "born": 0, "popNet": 0}
+    net = {r: income[r] - upkeep[r] for r in RESOURCES}
+    return {"income": income, "upkeep": upkeep, "net": net, "wasted": _wasted(m, pid, have, income, upkeep),
             "staffed": [s["id"] for s in working], "workers": p["pop"] - left, "builders": building["builders"],
             "idle": idle, "housing": room, "soldiers": soldiers,
             "caps": {r: sum(logistics.capacity(s).get(r, 0) for s in logistics.stores(m, pid)) for r in CAPPED},
@@ -154,37 +155,29 @@ def _trades(working, have, income, upkeep):
     out = []
     for s in sorted(working, key=lambda s: s["n"]):
         rate, t = STRUCTURES[s["type"]]["trade"], s.get("trade")
-        if rate and t and have[t["give"]] + income[t["give"]] - upkeep[t["give"]] >= rate:
+        if rate and t and have.get(t["give"], 0) + income[t["give"]] - upkeep[t["give"]] >= rate:
             upkeep[t["give"]] += rate
             income[t["get"]] += 1
             out.append([s["id"], t["give"], rate, t["get"]])
     return out
 
 
-def _food(m, pid, made, eat, stored, room):
-    """Who eats, starves or is born: production first, then the stores; only a surplus makes people."""
-    starve, born, food_net, pop_net = {"units": 0, "people": 0}, 0, made - eat, 0
+def _food(m, pid, made, eat, room, idle):
+    """Who is born or starves: a surplus makes people while housing has room, a shortfall starves."""
     if made >= eat:
         born = max(0, min(room, (made - eat) // FOOD_PER_PERSON))
-        food_net, pop_net = made - eat - born * FOOD_PER_PERSON, born
-    elif made + stored < eat:
-        dead, people = starvation(m, pid, made + stored, m.players[pid]["pop"])
-        starve = {"units": len(dead), "people": people}
-        eaten = eat - people * FOOD_PER_PERSON - sum(UNITS[m.units[u]["type"]]["upkeep"].get("food", 0) for u in dead)
-        food_net = max(-stored, made - eaten)
-        pop_net = -people - sum(UNITS[m.units[u]["type"]]["people"] for u in dead)
-    return {"starve": starve, "born": born, "foodNet": food_net, "popNet": pop_net}
+        return {"starve": {"units": 0, "people": 0}, "born": born, "popNet": born}
+    dead, people = starvation(m, pid, eat - made, idle)
+    return {"starve": {"units": len(dead), "people": people}, "born": 0,
+            "popNet": -people - sum(UNITS[m.units[u]["type"]]["people"] for u in dead)}
 
 
-def _wasted(m, pid, have, income, upkeep, food_net):
+def _wasted(m, pid, have, income, upkeep):
     """{good: n} of this turn's production that won't fit in the stores (as end_of_turn does it)."""
     wasted = {}
     for r in CAPPED:
-        if r == "food":
-            over = food_net - logistics.room(m, pid, r)
-        else:
-            from_stock, from_income = split_upkeep(have[r], income[r], upkeep[r])
-            over = (income[r] - from_income) - (logistics.room(m, pid, r) + from_stock)
+        from_stock, from_income = split_upkeep(have[r], income[r], upkeep[r])
+        over = (income[r] - from_income) - (logistics.room(m, pid, r) + from_stock)
         if over > 0:
             wasted[r] = over
     return wasted
@@ -236,21 +229,15 @@ def end_of_turn(m, pid, events):
     p = m.players[pid]
     rep = report(m, pid, resolving=True)
     income, upkeep = rep["income"], rep["upkeep"]
-    for r in RESOURCES:
-        if r not in CAPPED:
-            p["res"][r] += income[r] - upkeep[r]
+    for r in GLOBAL:
+        p["res"][r] += income[r] - upkeep[r]
     have = logistics.stock(m, pid)
-    if rep["foodNet"] < 0:
-        logistics.take(m, pid, {"food": -rep["foodNet"]})
-    else:
-        logistics.store(m, pid, "food", rep["foodNet"])
     for r in CAPPED:
-        if r != "food":
-            from_stock, from_income = split_upkeep(have[r], income[r], upkeep[r])
-            logistics.take(m, pid, {r: from_stock})
-            logistics.store(m, pid, r, income[r] - from_income)
-    if income["food"] + have["food"] < upkeep["food"]:
-        dead, people = starvation(m, pid, income["food"] + have["food"], p["pop"])
+        from_stock, from_income = split_upkeep(have[r], income[r], upkeep[r])
+        logistics.take(m, pid, {r: from_stock})
+        logistics.store(m, pid, r, income[r] - from_income)
+    if income["food"] < upkeep["food"]:
+        dead, people = starvation(m, pid, upkeep["food"] - income["food"], rep["idle"])
         for uid in dead:
             u = m.units[uid]
             events.append({"t": "starved", "owner": pid, "unit": uid, "type": u["type"], "at": u["at"]})
@@ -268,19 +255,21 @@ def end_of_turn(m, pid, events):
     p["pop"] += rep["born"]
 
 
-def starvation(m, pid, food, pop):
-    """([unit ids], people) who die of hunger: units that eat, newest first, until the food feeds the
-    rest; then the people the food left can't feed."""
-    eaters = [u for u in reversed(m.units_of(pid)) if UNITS[u["type"]]["upkeep"].get("food", 0) > 0]
-    units_eat = sum(UNITS[u["type"]]["upkeep"]["food"] for u in eaters)
+def starvation(m, pid, short, idle):
+    """([unit ids], people) who die when food production is `short` of what everyone eats: idle people
+    first, then units that eat (newest first), then people at work, until the rest can be fed."""
+    feeds = lambda food: -(-food // FOOD_PER_PERSON)  # people whose deaths free at least `food`
+    people = min(max(0, idle), feeds(short))
+    short -= people * FOOD_PER_PERSON
     dead = []
-    for u in eaters:
-        if pop * FOOD_PER_PERSON + units_eat <= food:
-            break
-        dead.append(u["id"])
-        units_eat -= UNITS[u["type"]]["upkeep"]["food"]
-    left = max(0, food - units_eat)
-    return dead, pop - min(pop, left // FOOD_PER_PERSON)
+    for u in reversed(m.units_of(pid)):
+        eats = UNITS[u["type"]]["upkeep"].get("food", 0)
+        if short > 0 and eats > 0:
+            dead.append(u["id"])
+            short -= eats
+    if short > 0:
+        people += min(m.players[pid]["pop"] - people, feeds(short))
+    return dead, people
 
 
 def split_upkeep(have, made, need):

@@ -3,7 +3,6 @@
  "icon": "Se",
  "art": "settler.png",
  "cost": {
-  "food": 8,
   "wood": 4
  },
  "people": 1,

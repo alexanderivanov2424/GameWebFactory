@@ -112,9 +112,10 @@
     const chips = ctx.content.resources.map((r) => {
       const net = rep.net[r] || 0;
       const capped = rep.caps[r];
-      const full = capped !== undefined && priv.res[r] >= capped;
+      const shown = r === "food" ? rep.income.food || 0 : priv.res[r] || 0;  // food isn't stored: show its production
+      const full = capped !== undefined && shown >= capped;
       return withDelta(r, el("span", { className: `hr-chip hr-res-${r}${full ? " full" : ""}${ctx.ui.resView === r ? " on" : ""}`, onclick: () => ctx.act.resView(r), title: `${VIEW_TIP}${resName(r)}: income ${rep.income[r] || 0}, upkeep ${rep.upkeep[r] || 0}${r === "gold" && rep.land ? HexText.hud.landNote(rep.land) : ""}${capped !== undefined ? `, storage ${capped}` : ""}${r === "food" ? `.\n${HexText.hud.foodNote}` : ""}${(rep.wasted || {})[r] ? HexText.hud.wasted(rep.wasted[r]) : ""}` },
-        el("span", { className: "hr-ricon" }, resIcon(r)), " ", el("b", {}, String(priv.res[r])), capped !== undefined ? el("small", {}, `/${capped}`) : null,
+        el("span", { className: "hr-ricon" }, resIcon(r)), " ", el("b", {}, String(shown)), capped !== undefined ? el("small", {}, `/${capped}`) : null,
         el("span", { className: net < 0 ? "neg" : net > 0 ? "pos" : "" }, ` (${signed(net)})`)));
     });
     const done = priv.done;
@@ -148,8 +149,8 @@
           el("span", { className: "spacer" }),
           !p.alive ? el("span", { className: "hr-outtag" }, "out") : p.done ? el("span", { className: "hr-tick", title: "Ended their turn" }, "✓") : null,
           el("b", { title: "Score" }, String(p.score))),
-        el("div", { className: "hr-psub", title: `Start of this turn: ${["gold", "food", "wood", "stone", "metal"].map((k) => `${resName(k)} ${r[k] ?? 0}`).join(", ")}, ${resName("people")} ${p.pop ?? 0}` },
-          ["gold", "food", "wood", "stone", "metal"].map((k) => `${resIcon(k)}${r[k] ?? 0}`).join(" ") + ` · ${resIcon("people")}${p.pop ?? 0} · ${(p.advances || []).length} adv`));
+        el("div", { className: "hr-psub", title: `Start of this turn: ${["gold", "wood", "stone", "metal"].map((k) => `${resName(k)} ${r[k] ?? 0}`).join(", ")}, ${resName("people")} ${p.pop ?? 0}` },
+          ["gold", "wood", "stone", "metal"].map((k) => `${resIcon(k)}${r[k] ?? 0}`).join(" ") + ` · ${resIcon("people")}${p.pop ?? 0} · ${(p.advances || []).length} adv`));
     }));
   }
 
