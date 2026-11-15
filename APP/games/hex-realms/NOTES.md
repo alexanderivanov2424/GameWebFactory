@@ -163,11 +163,11 @@ fields in `logic/content.py`). Tests: `tests/` (`python3 -I tools/run_tests.py h
 - Map radius = 9 + 3 per realm (bots count) + map size (small -3, large +4, huge +8), 2 less solo.
 - Bot-only test games (scratch, 80 turns, before build times and the weaker Town Hall): bots reach 2-3 cities, ~12 units, fight and siege from
   turn ~20 but rarely take a city; a turn with 5 bots takes under 0.2 s.
-- Start: 3 people, housing 4, and the goods in the Town Hall (25 of each at most); the hall makes
+- Start: 3 people, housing 4, and the goods in the Town Hall (10 of each at most); the hall makes
   only 1 gold and 2 food (no wood, stone, science or faith: the early game is slow on purpose), so
   you grow once, then need a Hut (2 wood) or House. Building takes turns and idle people (Farm 2
   turns x 1 builder, House 2 x 2, University 4 x 3, Monument 5 x 3), and every worker in a job is
-  one builder fewer, so the opening is a choice between producing and building. The hall's 25-cap
+  one builder fewer, so the opening is a choice between producing and building. The hall's 10-cap
   makes a Storage Yard or Granary the next limit. Free land is the first city's radius 2 (~27 cells);
   beyond it, land costs 2 gold per claim (up to 7 cells) and 1 gold a turn per cell, while the hall
   makes 1 gold, so expanding needs a gold economy (Market, Chapel with its advance, trade).
