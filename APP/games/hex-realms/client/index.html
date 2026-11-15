@@ -169,6 +169,8 @@
     .hr-die.hit { background: #d7463a; color: #fff; }
     .hr-log { padding: 2px 0; color: #b8c1d4; }
     #hint { position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%); max-width: 62vw; z-index: 5; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    #hint .hr-hintrow { flex-basis: 100%; }
+    #hint .hr-here:empty { display: none; }
     /* Combat replay (replay.js): a bar at the top, you on the left, the other side on the right. */
     #replay { position: absolute; inset: 0; z-index: 7; pointer-events: none; color: #e7eaf0; }
     #replay > * { pointer-events: auto; position: absolute; }

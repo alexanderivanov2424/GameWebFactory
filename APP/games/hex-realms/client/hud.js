@@ -13,6 +13,8 @@
  *   HexHud.build(el, ctx)       one button per buildable structure (starts build mode)
  *   HexHud.fmt                  small text helpers shared with panels.js (cost, nameSpan, resource icons);
  *                               fmt.setResources(content.resourceInfo) first (game.js does, each render)
+ *   HexHud.fmt.structInfo(content, def)  {effects: [text], placement: [text], build: text}: a structure
+ *                               described from its content fields (build menu tooltip, the placing hint)
  *
  * ctx = { game, priv, you, me (public player entry), content, ui, act } where ui is the page's
  * persistent UI state ({sel, mode, trade, resView}) and act = { send(msg), select(kind, id), setMode(mode), centre(key), resView(res) }.
@@ -26,6 +28,34 @@
   const resIcon = (r) => RES[r]?.icon || r;
   const resName = (r) => RES[r]?.name || cap(r);
   const costText = (cost) => Object.entries(cost || {}).map(([r, n]) => `${n}${resIcon(r)}`).join(" ") || "free";
+  const plural = (n, word) => `${n} ${word}${n === 1 ? "" : "s"}`;
+  const names = (content, kind, ids) => ids.map((id) => content[kind][id]?.name || id).join(", ");
+  // What a structure does and where it may go, read from its content (the server's rules decide).
+  function structInfo(content, d) {
+    // The content's text words its bonuses; the plain stats fill in for structures without one.
+    const effects = [d.text || ""];
+    if (!d.text) {
+      if (Object.keys(d.produce || {}).length && !Object.keys(d.onTerrain || {}).length) effects.push(`Makes ${costText(d.produce)} a turn`);
+      if (d.housing) effects.push(`Housing ${d.housing}`);
+      if (d.storage) effects.push(`Stores ${d.storage} of each good`);
+      if (Object.keys(d.store || {}).length) effects.push(`Stores ${costText(d.store)}`);
+      if (d.growth) effects.push(`Growth +${d.growth}`);
+      if (d.trade) effects.push(`Trade ${d.trade}:1`);
+      if ((d.recruits || []).length) effects.push(`Trains ${names(content, "units", d.recruits)}`);
+      if (d.heals) effects.push("Heals units on or next to it");
+      if (d.shoots) effects.push(`Shoots ${plural(d.shoots, "die")} (range ${d.range})`);
+      if (d.score) effects.push(`+${d.score} score`);
+    }
+    if (d.jobs) effects.push(`Needs ${plural(d.jobs, "worker")}`);
+    effects.push(d.hp ? `HP ${d.hp}${d.defense ? `, defense ${d.defense}` : ""}` : "Can't be attacked");
+    const placement = [`${plural(d.cells.length, "cell")}, all inside your territory`,
+      `on ${names(content, "terrain", d.terrain || [])}`];
+    if (d.coast) placement.push("touching water");
+    if (d.requires) placement.push(`needs ${content.advances[d.requires]?.name || d.requires}`);
+    placement.push("not on a structure, construction site or enemy unit");
+    const build = `${costText(d.cost)}, ${plural(d.buildTurns, "turn")} of work by ${plural(d.builders, "idle person")} each`;
+    return { effects: effects.filter(Boolean), placement, build };
+  }
   const canPay = (ctx, cost) => Object.entries(cost || {}).every(([r, n]) => (ctx.priv.res[r] || 0) >= n);
   const nameSpan = (game, pid) => {
     const p = game.players[pid];
@@ -231,9 +261,8 @@
       let why = "";
       if (d.requires && !mine.has(d.requires)) why = `Needs ${content.advances[d.requires]?.name || d.requires}`;
       const poor = !why && !canPay(ctx, d.cost);
-      const info = [d.text, `Build: ${d.buildTurns} turn${d.buildTurns > 1 ? "s" : ""}, ${d.builders} builder${d.builders > 1 ? "s" : ""} each turn`, d.jobs ? `Jobs: ${d.jobs}` : "", Object.keys(d.produce || {}).length ? `Produces: ${costText(d.produce)}` : "", d.housing ? `Housing: ${d.housing}` : "",
-        `Terrain: ${(d.terrain || []).map((t) => content.terrain[t]?.name || t).join(", ")}`, d.coast ? "Must touch water." : "", `${d.cells.length} cell${d.cells.length > 1 ? "s" : ""}`]
-        .filter(Boolean).join("\n");
+      const si = structInfo(content, d);
+      const info = [si.effects.join(". "), `Build: ${si.build}`, `Place: ${si.placement.join(", ")}`].join("\n");
       const active = ui.mode?.type === "build" && ui.mode.kind === id;
       return el("button", { className: `hr-build${active ? " on" : ""}`, disabled: !!why || poor, title: `${why ? `${why}\n` : poor ? "Can't afford\n" : ""}${info}`,
         onclick: () => (active ? act.setMode(null) : act.setMode({ type: "build", kind: id, rot: ui.lastRot || 0 })) },
@@ -248,5 +277,5 @@
       el("p", { className: "muted small" }, "Click the map to place it. R or right-click turns it, Esc cancels. It goes anywhere inside your territory and becomes a construction site that idle people build over a few turns. Goods go straight to your stores."));
   }
 
-  window.HexHud = { topbar, players, selection, orders, trade, build, fmt: { costText, canPay, nameSpan, btn, cap, setResources, resIcon, resName } };
+  window.HexHud = { topbar, players, selection, orders, trade, build, fmt: { costText, canPay, nameSpan, btn, cap, setResources, resIcon, resName, structInfo } };
 })();

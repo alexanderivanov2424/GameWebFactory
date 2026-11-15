@@ -191,7 +191,13 @@
     if (!m) return;
     const cancel = HexHud.fmt.btn("Cancel (Esc)", () => act.setMode(null));
     const names = c.content;
-    if (m.type === "build") fill(box, `Placing ${names.structures[m.kind].name}: click to build, R or right-click to turn, Esc to stop. `, cancel);
+    if (m.type === "build") {
+      const d = names.structures[m.kind], si = HexHud.fmt.structInfo(names, d);
+      const row = (label, text, cls = "") => el("div", { className: `hr-hintrow ${cls}` }, el("b", {}, label), " ", text);
+      fill(box, el("div", { className: "hr-hintrow" }, el("b", {}, `${d.icon || ""} Placing ${d.name}`), ": click to build, R or right-click to turn, Esc to stop. ", cancel),
+        row("Effects:", si.effects.join(". ")), row("Placement:", si.placement.join(", ")), row("Build:", si.build),
+        el("div", { className: "hr-hintrow hr-here" }));
+    }
     else if (m.type === "claim") fill(box, `Extending territory: click a green cell to claim it and its free neighbours at the end of the turn (${HexHud.fmt.costText(names.claim.cost)} each; if another realm claims it too, nobody gets it). Each bought cell costs ${names.claim.upkeep} gold a turn. Bought land is weak (dashed): it's lost to an enemy unit on or next to it, if it's cut off from your first city's free land (or a Town Hall), or to another realm's Town Hall. Esc to stop. `, cancel);
     else if (m.type === "shoot") fill(box, "Click an enemy unit or structure in range. ", cancel);
     else fill(box, "Found a city here: R turns the footprint, click it (or Confirm) to place. ",
@@ -233,22 +239,38 @@
     map.setHighlights(h);
   }
 
-  function buildOk(c, def, cells) {
+  // Why the ghost's cells can't take this structure ("" if they look fine): a hint from what you see;
+  // the server decides.
+  function buildProblem(c, def, cells) {
     const pending = new Set(c.priv.orders.builds.flatMap((b) => b.cells));
     const g = c.game;
     const enemyUnit = (k) => idx.unitAt[k] && g.units[idx.unitAt[k]].owner !== c.you;
-    return cells.every((k) => k in g.cells && g.territory[k] === c.you && (def.terrain || []).includes(g.cells[k]) && !idx.structAt[k] && !idx.siteAt[k] && !pending.has(k) && !enemyUnit(k))
-      && (!def.coast || cells.some((k) => U.neighbors(k).some((n) => g.cells[n] === "water")));
+    for (const k of cells) {
+      if (!(k in g.cells)) return "Part of it is off the map (or unexplored).";
+      if (g.territory[k] !== c.you) return "Part of it is outside your territory.";
+      if (!(def.terrain || []).includes(g.cells[k])) return `It can't go on ${(c.content.terrain[g.cells[k]]?.name || g.cells[k]).toLowerCase()}.`;
+      if (idx.structAt[k] || idx.siteAt[k]) return "Something is already built there.";
+      if (pending.has(k)) return "You already ordered a build there.";
+      if (enemyUnit(k)) return "An enemy unit stands there.";
+    }
+    if (def.coast && !cells.some((k) => U.neighbors(k).some((n) => g.cells[n] === "water"))) return "It must touch water.";
+    return "";
   }
 
   function ghost() {
-    const m = ui.mode;
+    const m = ui.mode, here = $("hint").querySelector(".hr-here");
+    if (here) here.textContent = "";
     if (!state || state.phase === "lobby" || !m || !state.private) return map.setGhost(null);
     const c = ctx();
     if (m.type === "build" && hover) {
       const def = c.content.structures[m.kind];
       const cells = def.rotations[m.rot].map((d) => U.add(hover, d));
-      map.setGhost({ cells, ok: buildOk(c, def, cells), label: def.icon });
+      const problem = buildProblem(c, def, cells);
+      map.setGhost({ cells, ok: !problem, label: def.icon });
+      if (here) {
+        here.className = `hr-hintrow hr-here ${problem ? "neg" : "pos"}`;
+        here.textContent = problem ? `Here: ${problem}` : "Here: it fits.";
+      }
     } else if (m.type === "found") {
       const u = c.game.units[m.unit];
       const th = c.content.structures.town_hall;

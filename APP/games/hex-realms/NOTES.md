@@ -138,8 +138,9 @@ fields in `logic/content.py`). Tests: `tests/` (`python3 -I tools/run_tests.py h
   `combat.side`). Player settings (speed, skip) via `AppSettings.addPageSettings`. game.js starts it where
   it used to only flash the cells (a new `game.step`); Esc or the Skip button stops it.
 - `client/game.js`: UI state (`ui.sel`, `ui.mode` build / shoot / found + rotation, tab, `ui.tech`, `ui.resView`), click
-  and key handling (`selectAt` cycles unit -> structure -> site on repeated clicks), highlights and the build ghost (its green/red is only a hint; the server
-  decides), the turn countdown (approximate: restarts on reload).
+  and key handling (`selectAt` cycles unit -> structure -> site on repeated clicks), highlights and the build ghost (its green/red and the hint bar's "Here:" reason
+  come from `buildProblem`, only a hint; the server decides; while placing, the bottom hint bar shows the structure's
+  effects, placement rules and build cost from `HexHud.fmt.structInfo`, which the build menu tooltip uses too), the turn countdown (approximate: restarts on reload).
 - `tests/`: `test_rules.py` (Match on a blank all-plains map: `helpers.blank`, `hall` (with the
   starting goods), `unit`, `rich`, `stock` = what a player can spend), `test_lobby.py` (Sim: secrecy, done, timer, leaving).
 
