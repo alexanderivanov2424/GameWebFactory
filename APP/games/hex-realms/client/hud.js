@@ -2,9 +2,9 @@
  * Hex Realms: the HUD panels around the map, all built from the state (no rules here).
  *
  *   HexHud.topbar(el, ctx)      turn, countdown (#hr-timer, ticked by game.js), resources (+net), people (current:
- *                               jobs / building / units / idle), housing (the cap) and growth (rate, this turn's
+ *                               jobs / building / units / idle), population (people + people in units), housing (the cap) and growth (rate, this turn's
  *                               gain, Growth off / on) as chips, Jobs off / Jobs on
- *                               (every structure with workers), End turn; clicking a resource, people or housing
+ *                               (every structure with workers), End turn; clicking a resource, people, population or housing
  *                               toggles the map's resource view (act.resView, ui.resView)
  *   HexHud.players(el, ctx)     colour, name, score, done tick, out, public resource snapshot
  *   HexHud.selection(el, ctx)   the selected unit / structure / construction site: stats, orders,
@@ -128,6 +128,8 @@
       withDelta("people", el("span", { className: `hr-people${ctx.ui.resView === "people" ? " on" : ""}`, onclick: () => ctx.act.resView("people"), title: `Click: show on the map where your people are (green idle, red in jobs / units, blue building).\n${rep.idle} idle. Population ${priv.pop + rep.soldiers}: ${rep.workers} in jobs, ${rep.builders} building, ${rep.soldiers} in units (and recruits), ${rep.idle} idle.` },
         el("span", { className: "hr-ricon" }, resIcon("people")), " idle ", el("b", {}, String(rep.idle)),
         starving ? el("span", { className: "neg", title: "Not enough food (in your stores plus this turn's production) to feed everyone: whoever can't eat dies at the end of the turn, units first (newest first), then people." }, ` ⚠ starving: ${starving}`) : null)),
+      withDelta("population", el("span", { className: `hr-people${ctx.ui.resView === "population" ? " on" : ""}`, onclick: () => ctx.act.resView("population"), title: `Click: show on the map how many people live in each structure that gives housing (living / housing).\nPopulation ${priv.pop + rep.soldiers}: ${priv.pop} people and ${rep.soldiers} in units (and recruits).` },
+        el("span", { className: "hr-ricon" }, resIcon("population")), " population ", el("b", {}, String(priv.pop + rep.soldiers)))),
       withDelta("housing", el("span", { className: `hr-people${priv.pop + rep.soldiers >= rep.housing ? " full" : ""}${ctx.ui.resView === "housing" ? " on" : ""}`, onclick: () => ctx.act.resView("housing"), title: `Click: show on the map which structures give housing.\nHousing ${rep.housing}: the population cap. Your people and the people in your units (${priv.pop + rep.soldiers}) must fit in it to grow.` },
         el("span", { className: "hr-ricon" }, resIcon("housing")), " cap ", el("b", {}, String(rep.housing)))),
       withDelta("growth", el("span", { className: `hr-people${ctx.ui.resView === "growth" ? " on" : ""}`, onclick: () => ctx.act.resView("growth"),

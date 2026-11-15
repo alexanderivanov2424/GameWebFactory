@@ -14,9 +14,10 @@
  *   map.mark(keys)              rings round cells (the combat replay.js is showing); [] clears
  *   map.setResView(game, flows | null, extra)   the resource view (extra: {id: {cells}} for things not on the
  *                               map yet, e.g. build orders placed this turn): every other layer greyscale, and each thing in
- *                               flows ([[id, res, n, on, tag?]] from the report, one resource) outlined (green makes,
+ *                               flows ([[id, res, n, on, tag?, of?]] from the report, one resource) outlined (green makes,
  *                               red uses, amber both, grey dashed not working) with its +n / -n badges; tagged
- *                               items (the "people" view's builders) get blue badges and outlines
+ *                               items (the "people" view's builders) get blue badges and outlines; tag "of" (the "population"
+ *                               view) shows "n/of" instead of +n
  *   HexMap.util                 pointy-top axial helpers: parse, key, add, neighbors, dist, center, DIRS
  *
  * Pointy-top axial "q,r" keys: x = SIZE*sqrt(3)*(q + r/2), y = SIZE*1.5*r. Drag pans, the wheel zooms
@@ -478,7 +479,7 @@
       fill(resG);
       if (!flows) return;
       const byId = {};
-      for (const [id, , n, on, tag] of flows) (byId[id] ||= []).push({ n, on, tag });
+      for (const [id, , n, on, tag, of] of flows) (byId[id] ||= []).push({ n, on, tag, of });
       for (const [id, items] of Object.entries(byId)) {
         const s = game.structures[id] || game.sites?.[id] || extra[id], u = !s && game.units[id];
         if (!s && !u) continue;
@@ -492,7 +493,7 @@
         else put(resG, svg("circle", { cx: center(u.at)[0], cy: center(u.at)[1], r: UNIT_R + 3, class: `hr-res-ring hr-res-${tone}` }));
         const [x, y0] = s ? middle(cells) : center(u.at);
         const y = y0 - (s ? 22 : UNIT_R + 10);
-        const texts = items.map((i) => (i.n > 0 ? `+${i.n}` : `−${-i.n}`));
+        const texts = items.map((i) => (i.tag === "of" ? `${i.n}/${i.of}` : i.n > 0 ? `+${i.n}` : `−${-i.n}`));
         const widths = texts.map((t) => 8 + 7.5 * t.length);
         let left = x - (widths.reduce((a, w) => a + w, 0) + 3 * (items.length - 1)) / 2;
         items.forEach((i, j) => {

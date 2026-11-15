@@ -15,14 +15,17 @@ upkeep is counted here).
                              (the realm's growth: people it can gain a turn), "growth" (people you will
                              gain, 0 if none), "growthWhy" (why not), "growthOff" (the player turned it off), "tradeRate",
                              "land" (cells of bought land paid for, in upkeep gold), "flows" (see flows())}
-    flows(m, pid, working, building, land=0, idle=0)  what each of pid's things adds or takes this turn, for the
+    flows(m, pid, working, building, land=0, idle=0, living=0)  what each of pid's things adds or takes this turn, for the
                              client's resource view: [[id, res, n, on], ...], n > 0 made, n < 0 used, on = False
                              for a structure that isn't working this turn (what it would make / need); plus
                              "people" (where your population is: idle people at home +n (spread over the homes,
                              oldest first, up to their housing), people in jobs / units / recruits ordered at a
                              structure -n, and builders -n tagged "build" ([id, "people", -n, True, "build"]:
                              on a site, or a build order placed this turn: its order id)) and
-                             "housing" (the cap: [id, "housing", n, True] per structure that houses people) and
+                             "housing" (the cap: [id, "housing", n, True] per structure that houses people),
+                             "population" (who lives where: [id, "population", x, True, "of", y] per structure
+                             that houses people, y its housing, x the `living` people (pop + people in units)
+                             spread over the homes oldest first, up to their housing; the last takes any overflow) and
                              "growth" ([id, "growth", n, True] per structure that gives growth)
     new_people(rate, room, pop, food_left)  how many people grow: up to `rate` and the housing `room`,
                              as many as the food left at the end of the turn can feed
@@ -178,14 +181,14 @@ def report(m, pid, resolving=False):
             "idle": left - building["builders"], "housing": housing, "soldiers": soldiers, "caps": caps, "starve": starve, "growthRate": rate,
             "growthOff": bool(p.get("growthOff")), "growth": growth,
             "growthWhy": why, "tradeRate": min(rates) if rates else 0, "land": land,
-            "flows": flows(m, pid, working, building, land, left - building["builders"])}
+            "flows": flows(m, pid, working, building, land, left - building["builders"], p["pop"] + soldiers)}
 
 
-def flows(m, pid, working, building, land=0, idle=0):
+def flows(m, pid, working, building, land=0, idle=0, living=0):
     """Per structure / unit / site: production (+), unit upkeep, the people's food where they are (-:
     on the structure they work in, the site they build, the home they're idle in; recruits ordered
     this turn on their structure), the bought land's gold (-, on the first Town Hall); "people" (where
-    they are), "housing" and "growth". See the module header."""
+    they are), "housing", "population" (who lives where) and "growth". See the module header."""
     p, on = m.players[pid], {s["id"] for s in working}
     home_bonus = effect(m, pid, "homeHousing")
     out = []
@@ -223,6 +226,10 @@ def flows(m, pid, working, building, land=0, idle=0):
         if n > 0:
             out += [[s["id"], "people", n, True], [s["id"], "food", -n * FOOD_PER_PERSON, True]]
             idle -= n
+    for i, (s, h) in enumerate(homes):  # everyone (people + units' people) living in the homes, oldest first
+        n = living if i == len(homes) - 1 else min(living, h)
+        out.append([s["id"], "population", n, True, "of", h])
+        living -= n
     for u in sorted((u for u in m.units.values() if u["owner"] == pid), key=lambda u: u["n"]):
         for r, n in UNITS[u["type"]]["upkeep"].items():
             if n:

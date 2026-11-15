@@ -37,10 +37,12 @@ fields in `logic/content.py`). Tests: `tests/` (`python3 -I tools/run_tests.py h
   (`economy.flows`: production +, unit upkeep -, each person's food (`FOOD_PER_PERSON`, 2026-11-15: 1 each)
   where they work / build / are idle at home, recruits' upkeep on their structure, bought land's gold on the first
   Town Hall) for the client's **resource view** (click a top-bar chip: `map.setResView` greyscales the
-  `hr-base` group and draws outlines and +n / -n badges above it). Population is three chips (the user's
-  layout): "👥 idle n", "🏠 cap n", "🌱 +n" (this turn's growth). The "people" view shows idle people at
+  `hr-base` group and draws outlines and +n / -n badges above it). Population is four chips (the user's
+  layout): "👥 idle n", "👥 population n" (pop + people in units), "🏠 cap n", "🌱 +n" (this turn's growth). The "people" view shows idle people at
   home green +n (spread over the homes oldest first), people in jobs / units / recruits red -n, and
-  builders blue -n (tagged "build" in the flow, which the map draws blue); "housing" and "growth" show
+  builders blue -n (tagged "build" in the flow, which the map draws blue); "population" (2026-11-15, the user's
+  request) shows blue "x/y" on each structure that houses people (flow tag "of", y = its housing, x = pop +
+  people in units filling the homes oldest first, the last home taking any overflow); "housing" and "growth" show
   +n per structure that gives them.
 - **No roads; land is bought** (2026-11-11, the user's call): roads (first carrying goods, then laid
   automatically) were removed. Structures go anywhere in your territory, with no "must touch"

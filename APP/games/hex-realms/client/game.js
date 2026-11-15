@@ -4,8 +4,9 @@
  * panels.js) from the state. The server validates everything; the ghost colours here are only a hint.
  *
  * Clicking a cell selects what's on it; clicking it again cycles unit -> structure -> construction site.
- * ui.resView: null | a resource, "people" or "housing" shown on the map: greyscale, with what makes it (green +n) and
- * uses it (red -n) each turn, or for "people" where they are (blue "n work" badges), from the report's flows (click its
+ * ui.resView: null | a resource, "people", "population" or "housing" shown on the map: greyscale, with what makes it (green +n) and
+ * uses it (red -n) each turn, or for "people" where they are (blue "n work" badges), for "population" who lives in each
+ * home (blue "x/y" badges), from the report's flows (click its
  * chip on the top bar again or Esc to leave).
  * ui.tech: null | the open tech tree tab (a currency: "science" / "faith"), shown in the #tech popup.
  * ui.mode: null | {type: "build", kind, rot} | {type: "shoot", unit} | {type: "found", unit, rot}
@@ -186,6 +187,7 @@
     if (!m && ui.resView) {
       const { resIcon, resName, btn } = HexHud.fmt, r = ui.resView;
       const text = r === "people" ? "where your people are this turn: green = idle at home, red = in a job, a unit or a recruit ordered there, blue = building"
+        : r === "population" ? "blue = people living there / the housing it gives (your people and the people in your units, filling the oldest homes first)"
         : r === "housing" ? "green = the housing each structure gives (your people and the people in your units must fit in it)"
         : r === "growth" ? "green = the growth each structure gives (people you can gain a turn, with free housing and food to feed them)"
         : "green = made there each turn, red = used each turn (units' upkeep; each person's food where they work, build or rest at home)";
