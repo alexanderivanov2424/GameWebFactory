@@ -15,7 +15,8 @@ A simple strategy, in this order each turn:
      nearly full, farms when food is short, a lumbermill and a mine per city, storage when goods
      are near the cap, then Barracks, Market, Chapel, College, Smithy, Towers, more farms, anywhere
      in its territory (near the Town Hall preferred). If a farm / lumbermill / mine finds no land
-     it needs, it buys land (orders.claim, up to MAX_CLAIMS a turn) towards the nearest such terrain.
+     it needs, it buys land (orders.claim, up to MAX_CLAIMS a turn, only while its gold income pays the
+     land's upkeep) towards the nearest such terrain.
   4. Recruit Settlers until it has 3 cities, then an army that grows with the turn number.
   5. Units: ranged ones shoot what's in range; everyone attacks enemies near its structures;
      the oldest unit scouts (explore.target, like the Explore order) until a war needs it; from ATTACK_TURN an army of
@@ -29,7 +30,7 @@ from collections import Counter
 from gamekit import LobbyError
 from gamekit.hexes import disk, dist, neighbors, parse
 
-from . import construction, economy, explore, logistics, movement, orders, vision
+from . import construction, economy, explore, logistics, movement, orders, territory, vision
 from .content import ADVANCES, STRUCTURES, TOWN_HALL, UNITS, footprint
 from .economy import report, staffing
 
@@ -244,6 +245,8 @@ class Bot:
         if not targets or not options:
             return False
         best = min(options, key=lambda k: (min(dist(k, t) for t in targets), self.near_hall(k), k))
+        if report(m, pid)["net"]["gold"] < len(territory.claim_cells(m, best)) * territory.LAND_UPKEEP:
+            return False  # can't keep paying for it
         return try_act(m, pid, "claim", best)
 
     # --- Recruiting ----------------------------------------------------------------------------

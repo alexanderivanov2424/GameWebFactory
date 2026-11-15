@@ -125,6 +125,7 @@
         case "founded": lines.push(line(el("b", {}, "Founded "), nameSpan(game, e.owner), " a new city", where(e.at))); break;
         case "research": lines.push(line("Researched ", nameSpan(game, e.owner), ` ${content.advances[e.advance]?.name || e.advance}`)); break;
         case "starve": lines.push(line(el("span", { className: "neg" }, "Famine "), nameSpan(game, e.owner), " ran out of food")); break;
+        case "landLost": lines.push(line(el("span", { className: "neg" }, "Unpaid land "), nameSpan(game, e.owner), ` gave up ${e.n} cell${e.n === 1 ? "" : "s"} of bought land (not enough gold for its upkeep)`)); break;
         case "desert": lines.push(line(el("span", { className: "neg" }, "Desertion "), nameSpan(game, e.owner), ` ${unitName(e.type)} left`, where(e.at))); break;
         case "eliminated": lines.push(line(el("b", { className: "neg" }, "Eliminated "), nameSpan(game, e.owner))); break;
         default: break;

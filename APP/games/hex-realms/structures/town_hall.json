@@ -19,7 +19,6 @@
  "defense": 2,
  "housing": 4,
  "storage": 25,
- "territory": 3,
  "produce": {
   "gold": 1,
   "food": 2

@@ -15,8 +15,7 @@ structures/<id>.json:
     {"terrain"|"type"|"home": ..., "gain": {res: n}, "max": n} (per neighbouring forest cell /
     structure of that type / home structure), housing, home (counts as a home), storage (all
     capped resources), store {res: n} (a structure with either is a store of goods: see
-    logistics.py), growth (extra growth per turn), territory (claim radius,
-    default 2), terrain [ids] (default every "build" terrain), coast (a cell must touch water),
+    logistics.py), growth (extra growth per turn), terrain [ids] (default every "build" terrain), coast (a cell must touch water),
     requires (advance id), recruits [unit ids], heals, shoots (dice) + range, trade (market
     rate: give n for 1), score, buildTurns (turns of work to build it, default 1), builders (idle
     people it needs for each of those turns, default 1; construction.py), category (a CATEGORIES id: the build menu's tabs), vision (fog of
@@ -87,7 +86,7 @@ def parse_structure(sid, d):
         "jobs": whole(d, "jobs", 0, 9, default=0), "produce": res_map(d, "produce"),
         "housing": whole(d, "housing", 0, 99, default=0), "home": d.get("home") is True,
         "storage": whole(d, "storage", 0, 999, default=0), "store": res_map(d, "store", CAPPED),
-        "growth": whole(d, "growth", 0, 9, default=0), "territory": whole(d, "territory", 0, 5, default=2),
+        "growth": whole(d, "growth", 0, 9, default=0),
         "terrain": terrain_list(d, "terrain", [t for t, v in TERRAIN.items() if v["build"]]),
         "coast": d.get("coast") is True, "requires": d.get("requires"), "recruits": list(d.get("recruits", [])),
         "heals": d.get("heals") is True, "shoots": whole(d, "shoots", 0, 9, default=0), "range": whole(d, "range", 0, 5, default=0),

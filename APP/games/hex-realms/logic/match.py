@@ -31,9 +31,10 @@ State: cells {key: terrain}; structures {sid: {"id", "n", "type", "owner", "at",
 "hp", "active", "stock" (goods in a store)}} with cell_structure {key: sid}; units {uid: {"id", "n", "type", "owner", "at",
 "hp", "auto" (a standing order: standing.py), "goal" (where a Travel order goes)}} with unit_at {key: uid}; sites {cid: {"id", "n", "type", "owner", "at", "rot", "cells", "cost",
 "done" (turns of work so far)}} with cell_site {key: cid} (construction.py); claims {key: pid} (weak land
-bought with gold: orders.claim, territory.py); territory {key: pid} (strong land from structures plus
-the weak land still held: territory.py); players {pid: {"res" (gold/faith/science only: goods live in
-stores, see logistics.py), "pop", "advances", "done", "alive"}};
+bought with gold, 1 gold upkeep a turn each: orders.claim, territory.py); territory {key: pid} (strong
+land from Town Halls (the first city's free land) plus the weak land still held: territory.py); players
+{pid: {"res" (gold/faith/science only: goods live in stores, see logistics.py), "pop", "advances", "done",
+"alive", "capital" (the first Town Hall founded: its free land)}};
 orders {pid: {"builds", "claims", "recruits", "research": [...], "moves": {uid: [keys]}, "shots": {uid: key},
 "holds": [uid], "found": {uid: rot}}}; events (the last resolution, for the client to replay).
 """
@@ -241,7 +242,9 @@ class Match:
                 at = u["at"]
                 self.remove_unit(uid)
                 hall = self.add_structure(pid, TOWN_HALL, at, rot)
-                hall["stock"] = self.players[pid].pop("startGoods", {})
+                if "startGoods" in self.players[pid]:  # the first city: starting goods, free land
+                    hall["stock"] = self.players[pid].pop("startGoods")
+                    self.players[pid]["capital"] = hall["id"]
                 ev.append({"t": "founded", "owner": pid, "at": at})
                 self.log.append(f"Turn {self.turn}: {self.names[pid]} founded a city.")
 
@@ -379,7 +382,7 @@ class Match:
             "seats": self.seats, "fog": self.fog, "bots": self.bots,
             "content": {"structures": STRUCTURES, "units": UNITS, "advances": ADVANCES, "terrain": TERRAIN,
                         "resources": RESOURCES, "categories": CATEGORIES,
-                        "claim": {"cost": orders.CLAIM_COST, "radius": territory.CLAIM_RADIUS},
+                        "claim": {"cost": orders.CLAIM_COST, "radius": territory.CLAIM_RADIUS, "upkeep": territory.LAND_UPKEEP},
                         "resourceInfo": {r: {"name": n, "icon": i} for r, (n, i) in RESOURCE_INFO.items()}},
             "players": {pid: {"name": self.names[pid], "color": p["color"], "res": self.shown[pid]["res"],
                               "pop": self.shown[pid]["pop"], "advances": p["advances"], "done": p["done"],

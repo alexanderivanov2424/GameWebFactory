@@ -1,15 +1,17 @@
-"""Hex Realms: workers, production, upkeep and growth (territory is territory.py).
+"""Hex Realms: workers, production, upkeep and growth (territory is territory.py; bought land's gold
+upkeep is counted here).
 
     effect(m, pid, name)     sum of an advance effect key over pid's advances
     output(m, s)             what structure s makes in a turn when it works
     staffing(m, pid)         (working structures in job order, people without a job)
-    report(m, pid)           this turn's forecast: {"income", "upkeep", "net" (income - upkeep, not
+    report(m, pid, resolving=False)  this turn's forecast (resolving: claims are already land, not orders): {"income", "upkeep", "net" (income - upkeep, not
                              capped by your stores), "wasted" {good: n that won't fit in your stores
                              at the end of the turn and is lost}, "staffed": [sid], "workers" (in jobs), "builders" (on
                              construction sites), "idle" (neither), "housing", "caps", "growth"
                              (people you will gain, 0 if none), "growthWhy" (why not), "tradeRate",
-                             "flows" (see flows())}
-    flows(m, pid, working, works)  what each of pid's things adds or takes this turn, for the client's
+                             "land" (cells of bought land paid for, in upkeep gold; with this turn's
+                             claims while planning), "flows" (see flows())}
+    flows(m, pid, working, works, land=0)  what each of pid's things adds or takes this turn, for the client's
                              resource view: [[id, res, n, on], ...], n > 0 made, n < 0 used, on = False
                              for a structure that isn't working this turn (what it would make / need)
     split_upkeep(have, made, need)  (from the stores, from production): where a good's upkeep comes from
@@ -18,9 +20,9 @@
 Rules: every structure works, wherever it is, as long as it has its crew: people (population)
 fill jobs, food producers first, then oldest first. Gold, faith and science go straight to the
 realm; goods (food, wood, stone, metal) go into the realm's stores (logistics.py). Everyone eats: pop // 2 food, plus each unit's
-upkeep. Production and upkeep happen at the same time (upkeep can use this turn's production), and
-only what is left is capped by the room in the stores; the rest is lost. Not enough food starves 1 person (or disbands a unit); gold below 0 makes the newest paid
-unit desert. If the realm makes more food this turn than it eats (whether or not it all fits in
+upkeep, plus LAND_UPKEEP gold per cell of bought land (territory.py). Production and upkeep happen at the same time (upkeep can use this turn's production), and
+only what is left is capped by the room in the stores; the rest is lost. Not enough food starves 1 person (or disbands a unit); gold below 0 gives up
+that many cells of bought land (territory.give_up), or with no bought land, the newest paid unit deserts. If the realm makes more food this turn than it eats (whether or not it all fits in
 the stores) and there is free housing, population grows by 1 (+1 per Granary). People without a
 job build (construction.py). A realm without a Town Hall (settlers before their first city)
 skips all of this.
@@ -28,7 +30,7 @@ skips all of this.
 
 from gamekit.hexes import neighbors
 
-from . import construction, logistics
+from . import construction, logistics, territory
 from .content import ADVANCES, CAPPED, RESOURCES, STRUCTURES, TOWN_HALL, UNITS
 
 FOOD_FIRST = ("food",)
@@ -85,7 +87,7 @@ def staffing(m, pid):
     return working, left
 
 
-def report(m, pid):
+def report(m, pid, resolving=False):
     """The forecast for this turn, as it will really resolve (see the module header)."""
     p = m.players[pid]
     working, left = staffing(m, pid)
@@ -109,6 +111,8 @@ def report(m, pid):
         if u["owner"] == pid:
             for r, n in UNITS[u["type"]]["upkeep"].items():
                 upkeep[r] += n
+    land = territory.bought(m, pid, pending=not resolving)
+    upkeep["gold"] += land * territory.LAND_UPKEEP
     stores = logistics.stores(m, pid)
     caps = {r: sum(logistics.capacity(s).get(r, 0) for s in stores) for r in CAPPED}
     have, wasted = logistics.stock(m, pid), {}
@@ -127,13 +131,13 @@ def report(m, pid):
             "wasted": wasted,
             "staffed": [s["id"] for s in working], "workers": p["pop"] - left, "builders": building["builders"],
             "idle": left - building["builders"], "housing": housing, "caps": caps, "growth": growth,
-            "growthWhy": why, "tradeRate": min(rates) if rates else 0,
-            "flows": flows(m, pid, working, building["works"])}
+            "growthWhy": why, "tradeRate": min(rates) if rates else 0, "land": land,
+            "flows": flows(m, pid, working, building["works"], land)}
 
 
-def flows(m, pid, working, works):
-    """Per structure / unit / site: production (+), unit upkeep and the people's food (-, on the first
-    Town Hall), and for "people": jobs and builders (-) and housing (+). See the module header."""
+def flows(m, pid, working, works, land=0):
+    """Per structure / unit / site: production (+), unit upkeep, and the people's food and the bought
+    land's gold (-, on the first Town Hall), and for "people": jobs and builders (-) and housing (+). See the module header."""
     p, on = m.players[pid], {s["id"] for s in working}
     home_bonus = effect(m, pid, "homeHousing")
     out = []
@@ -150,6 +154,8 @@ def flows(m, pid, working, works):
     halls = [s for s in logistics.stores(m, pid) if s["type"] == TOWN_HALL]
     if halls and p["pop"] // 2:
         out.append([halls[0]["id"], "food", -(p["pop"] // 2), True])
+    if halls and land:
+        out.append([halls[0]["id"], "gold", -land * territory.LAND_UPKEEP, True])
     for cid in works:
         out.append([cid, "people", -STRUCTURES[m.sites[cid]["type"]]["builders"], True])
     for u in sorted((u for u in m.units.values() if u["owner"] == pid), key=lambda u: u["n"]):
@@ -163,7 +169,7 @@ def end_of_turn(m, pid, events):
     p = m.players[pid]
     if not any(s["owner"] == pid and s["type"] == TOWN_HALL for s in m.structures.values()):
         return  # settlers still looking for a home: nothing to store, eat or grow yet
-    rep = report(m, pid)
+    rep = report(m, pid, resolving=True)
     income, upkeep = rep["income"], rep["upkeep"]
     for r in RESOURCES:
         if r not in CAPPED:
@@ -185,8 +191,12 @@ def end_of_turn(m, pid, events):
             _disband_newest(m, pid, lambda u: True, events)
     p["res"]["gold"] -= rep["upkeep"]["gold"]
     if p["res"]["gold"] < 0:
-        p["res"]["gold"] = 0
-        _disband_newest(m, pid, lambda u: UNITS[u["type"]]["upkeep"].get("gold", 0) > 0, events)
+        short, p["res"]["gold"] = -p["res"]["gold"], 0
+        lost = territory.give_up(m, pid, -(-short // territory.LAND_UPKEEP))
+        if lost:
+            events.append({"t": "landLost", "owner": pid, "n": lost})
+        else:
+            _disband_newest(m, pid, lambda u: UNITS[u["type"]]["upkeep"].get("gold", 0) > 0, events)
     if rep["growth"] and have >= eat:
         p["pop"] += rep["growth"]
 

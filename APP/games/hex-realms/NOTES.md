@@ -37,14 +37,21 @@ fields in `logic/content.py`). Tests: `tests/` (`python3 -I tools/run_tests.py h
   automatically) were removed. Structures go anywhere in your territory, with no "must touch"
   rule. `orders.claim` is an order paid in gold (`CLAIM_COST`); at resolution (`Match._claims`,
   before builds) the cell and its free neighbours become weak land (`m.claims`).
-- **Strong and weak land** (`logic/territory.py`, 2026-11-14, the user's rules): structures' reach is
-  strong land, first come, first served (`m.territory` is kept between refreshes; a cell stays its
+- **Strong and weak land** (`logic/territory.py`, 2026-11-14, the user's rules; 2026-11-15: structures no
+  longer spread land, bought land has upkeep): Town Halls' reach is strong, free land: the first city
+  (`players[pid]["capital"]`, set in `Match._found` with the starting goods; `helpers.hall` sets it for
+  the first hall it places) reaches `FIRST_CITY_RADIUS`, later halls only their own cells (so a far-away
+  city can still buy land around it). First come, first served (`m.territory` is kept between refreshes; a cell stays its
   owner's while they still reach it, a free cell goes to the only player reaching it, nobody while
   two or more do). Bought land is weak, per cell in `m.claims`, and lost for good when an enemy
   unit stands on or next to it (`territory.unit_entered`, called by `Match.add_unit` / `move_unit`, so
-  passing through counts mid-move), when any structure of another player reaches it, or when it's
+  passing through counts mid-move), when another player's Town Hall reaches it, or when it's
   no longer connected to its owner's strong land (both in `territory.territory`, run by `refresh`);
-  your own structure reaching it makes it strong (it leaves `m.claims`). Claims need no enemy unit
+  your own Town Hall reaching it makes it strong (it leaves `m.claims`). Each weak cell costs
+  `LAND_UPKEEP` gold a turn (`economy.report`'s upkeep and `land`, with this turn's claim orders while
+  planning (`resolving=False`), since claims resolve before production); gold short at the end of the
+  turn gives up that many weak cells, farthest from the owner's halls first (`territory.give_up`, a
+  `landLost` event), and only with none left does a paid unit desert. Claims need no enemy unit
   on or next to the target (`claim_problem` checks what you see, `_claims` the truth). The client
   gets `claims` in the view and draws weak land with a dashed border (territory is never shaded inside).
 - **Standing orders** (`logic/standing.py`, 2026-11-11 feedback): `u["auto"]` (explore / fight /
@@ -101,7 +108,8 @@ fields in `logic/content.py`). Tests: `tests/` (`python3 -I tools/run_tests.py h
 - `logic/recruiting.py`: `spawn_cell` (on the structure first), `resolve` (recruit orders appear, take the
   structure's `autoOrder` as `u["auto"]`), `set_auto` (the `autorecruit` message) and `plan` (each turn's
   automatic recruit orders, marked `"auto": True`, only with people who have no job).
-- `logic/territory.py`: `territory` (strong + weak land, returns both maps), `unit_entered`, `claim_cells`, `threatened`.
+- `logic/territory.py`: `territory` (strong + weak land, returns both maps), `unit_entered`, `claim_cells`, `threatened`,
+  `bought` (weak cells paid for), `give_up` (unpaid land).
 - `logic/movement.py`, `logic/combat.py`, `logic/economy.py`, `logic/logistics.py`, `logic/mapgen.py`,
   `logic/content.py`: see their headers.
 - `client/art/`: PNG art at 4x map size (sharp at the 3x max zoom). `terrain/<terrain>[_n].png` (e.g. plains.png, mountain_1.png) (208 x 240, one
@@ -144,8 +152,9 @@ fields in `logic/content.py`). Tests: `tests/` (`python3 -I tools/run_tests.py h
   you grow once, then need a Hut (2 wood) or House. Building takes turns and idle people (Farm 2
   turns x 1 builder, House 2 x 2, University 4 x 3, Monument 5 x 3), and every worker in a job is
   one builder fewer, so the opening is a choice between producing and building. The hall's 25-cap
-  makes a Storage Yard or Granary the next limit. Territory grows with structures (radius 2, the hall
-  3) or gold per claimed cell (2), so gold also buys room to expand.
+  makes a Storage Yard or Granary the next limit. Free land is the first city's radius 3 (~48 cells);
+  beyond it, land costs 2 gold per claim (up to 7 cells) and 1 gold a turn per cell, while the hall
+  makes 1 gold, so expanding needs a gold economy (Market, Chapel with its advance, trade).
 - Sieges are slow on purpose: a Swordsman does ~2 damage a turn to a 15 hp Town Hall and takes
   ~1 back, so taking a city needs 3+ units or Catapults (3 damage per hit, from range, no reply,
   but towers shoot them).

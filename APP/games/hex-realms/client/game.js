@@ -192,7 +192,7 @@
     const cancel = HexHud.fmt.btn("Cancel (Esc)", () => act.setMode(null));
     const names = c.content;
     if (m.type === "build") fill(box, `Placing ${names.structures[m.kind].name}: click to build, R or right-click to turn, Esc to stop. `, cancel);
-    else if (m.type === "claim") fill(box, `Extending territory: click a green cell to claim it and its free neighbours at the end of the turn (${HexHud.fmt.costText(names.claim.cost)} each; if another realm claims it too, nobody gets it). Bought land is weak (dashed): it's lost to an enemy unit on or next to it, if it's cut off from land your structures hold, or to another realm's structures. Esc to stop. `, cancel);
+    else if (m.type === "claim") fill(box, `Extending territory: click a green cell to claim it and its free neighbours at the end of the turn (${HexHud.fmt.costText(names.claim.cost)} each; if another realm claims it too, nobody gets it). Each bought cell costs ${names.claim.upkeep} gold a turn. Bought land is weak (dashed): it's lost to an enemy unit on or next to it, if it's cut off from your first city's free land (or a Town Hall), or to another realm's Town Hall. Esc to stop. `, cancel);
     else if (m.type === "shoot") fill(box, "Click an enemy unit or structure in range. ", cancel);
     else fill(box, "Found a city here: R turns the footprint, click it (or Confirm) to place. ",
       HexHud.fmt.btn("Confirm", confirmFound, { cls: "endturn" }), cancel);

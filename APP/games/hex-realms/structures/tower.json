@@ -15,7 +15,6 @@
  "defense": 2,
  "shoots": 2,
  "range": 2,
- "territory": 2,
  "requires": "masonry",
  "terrain": [
   "plains",

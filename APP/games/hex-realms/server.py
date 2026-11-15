@@ -13,11 +13,13 @@ without a job (switch structures off, all at once, or demolish them to free peop
 science are realm-wide; goods (food, wood, stone, metal) go into the realm's stores (Town
 Hall, Storage Yard, Granary). Production and upkeep happen at the same time; only what is left at the
 end of the turn is capped by the stores' room (the rest is lost). Structures go anywhere inside your territory.
-Land your structures reach is strong: first come, first served, it stays yours while they reach it,
-and cells two realms reach in the same turn go to no one. Gold buys weak land (claim an explored
-cell next to yours, with its free neighbours): it goes back to no one when an enemy unit stands on or
-next to it (nor can you claim there), when it's cut off from your strong land, or when another
-realm's structures reach it; your own structures reaching it make it strong. No roads. Units can be
+Structures don't spread land: your first city gives free land (3 cells around it), other Town Halls
+hold only their own cells. That land is strong: first come, first served, it stays yours while the
+hall stands, and cells two realms reach in the same turn go to no one. Gold buys weak land (claim an
+explored cell next to yours, with its free neighbours), which costs 1 gold a turn per cell (unpaid
+cells are given up, farthest from your Town Halls first): it goes back to no one when an enemy unit
+stands on or next to it (nor can you claim there), when it's cut off from your strong land, or when
+another realm's Town Hall reaches it. No roads. Units can be
 given standing orders kept across turns: Explore (clear the fog), Fight (attack the nearest enemy
 unit in sight), Pillage (attack the nearest enemy structure in sight, fighting enemy units that
 come close first) or a far-away destination (walk there over several turns). Your own units pass
@@ -41,7 +43,8 @@ units, construction sites, territory, events as they see them; spectators see ev
 Game messages (all only while planning; any order un-readies you; never use a "type" key,
 the lobby envelope owns it):
     {"action": "build", "kind": stype, "at": "q,r", "rot": 0-5}
-    {"action": "claim", "at": "q,r"}                   (2 gold; at resolution the cell and its free neighbours become your weak land)
+    {"action": "claim", "at": "q,r"}                   (2 gold; at resolution the cell and its free neighbours become
+                                                        your weak land, 1 gold upkeep a turn per cell)
     {"action": "recruit", "structure": sid, "kind": utype}
     {"action": "move", "unit": uid, "to": "q,r"}      (to = own cell clears the unit's orders)
     {"action": "shoot", "unit": uid, "at": "q,r"}
