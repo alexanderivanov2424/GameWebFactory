@@ -29,7 +29,7 @@
   {
    "type": "farm",
    "gain": {
-    "food": 1
+    "food": 2
    },
    "max": 9
   },
@@ -53,5 +53,6 @@
  ],
  "category": "food",
  "hammers": 2,
- "color": "#e3c75a"
+ "color": "#e3c75a",
+ "freeNear": "water"
 }

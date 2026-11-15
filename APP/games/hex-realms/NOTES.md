@@ -20,7 +20,9 @@ Player-facing text: `client/text.js`. Tests: `python3 -I tools/run_tests.py hex-
   (`resolving=True`), so the numbers players see are the numbers they get. `report.flows` breaks it down
   per structure / unit / site / bought cell for the client's resource view (`map.setResView`).
 - **Data-driven content.** Structures' output (`produce`, `onTerrain`, `perCell`, `perAdjacent` by terrain /
-  type / tag), tags, housing, storage, trade rates; advances' dice `effect`s, per-type output `bonus` and
+  type / tag; terrain only counts unbuilt cells), `boost` (+n to what adjacent own structures of a type / tag
+  make, while the booster works), `freeNear` (no workers while touching a terrain: `economy.jobs`), tags,
+  housing, storage, trade rates; advances' dice `effect`s, per-type output `bonus` and
   per-tag `housing`. A new structure, unit or advance is a JSON file plus its description in `text.js`; new
   behaviour that isn't a field yet belongs in `content.py` as a field, not as a special case by id.
 
@@ -31,7 +33,7 @@ Player-facing text: `client/text.js`. Tests: `python3 -I tools/run_tests.py hex-
   `private`.
 - `logic/orders.py`: one function per order; `site_problem` / `recruit_problem` / `found_problem` /
   `claim_problem` are shared with resolution and the private state.
-- `logic/economy.py`: staffing, output, housing, `report` (income, upkeep, trades, food, waste, flows),
+- `logic/economy.py`: staffing, jobs, output (with boosts), `preview` (pending builds), housing, `report` (income, upkeep, trades, food, waste, flows),
   `end_of_turn`. `logic/logistics.py`: goods in stores. `logic/construction.py`: sites built with hammers.
 - `logic/territory.py`: free land around Town Halls (first come, first served) plus bought land
   (`m.claims`: upkeep, lost to adjacent enemies or when cut off).

@@ -116,7 +116,6 @@
       HexHud.topbar($("topbar"), c);
       tick();
       keep($("col-left"), () => {
-        HexHud.players($("p-players"), c);
         HexHud.selection($("p-selection"), c);
         HexHud.orders($("p-orders"), c);
       });
@@ -133,7 +132,7 @@
   }
 
   function renderTabs(c, playing) {
-    const tabs = playing ? [["build", "Build"], ["report", "Report"]] : [["report", "Report"]];
+    const tabs = playing ? [["build", "Build"], ["players", "Players"], ["report", "Report"]] : [["players", "Players"], ["report", "Report"]];
     if (!tabs.some(([id]) => id === ui.tab) && ui.tab !== "none") ui.tab = tabs[0][0];
     fill($("tabs"), tabs.map(([id, label]) => el("button", {
       className: `hr-tab${ui.tab === id ? " on" : ""}`, onclick: () => { ui.tab = ui.tab === id ? "none" : id; refresh(); },
@@ -147,6 +146,7 @@
     if (body.hidden) return;
     keep(body, () => {
       if (ui.tab === "build") HexHud.build(body, c);
+      else if (ui.tab === "players") HexHud.players(body, c);
       else HexPanels.report(body, c);
     });
   }
@@ -255,7 +255,8 @@
       if (n) add(r, `${n > 0 ? "+" : "−"}${Math.abs(n)}${(c.content.flat || []).includes(r) ? "" : "/turn"}`, n > 0 ? "pos" : "neg");
     if (def.storage) for (const r of Object.keys(c.priv.report.caps || {})) add(r, `+${def.storage} room`, "pos");
     for (const [r, n] of Object.entries(def.store || {})) add(r, `+${n} room`, "pos");
-    if (def.jobs) add("people", `−${def.jobs} when working`, "neg");
+    const jobs = cells ? jobsAt(c, def, cells) : def.jobs || 0;
+    if (jobs) add("people", `−${jobs} when working`, "neg");
     const housing = (def.housing || 0) + Object.entries(c.priv.housingBonus || {}).reduce((n, [tag, b]) => n + ((def.tags || []).includes(tag) ? b : 0), 0);
     if (housing) add("housing", `+${housing}`, "pos");
     const idle = Math.max(0, c.priv.report.idle), now = Math.min(idle, def.hammers);
@@ -279,9 +280,18 @@
       for (const [r, n] of Object.entries(adj.gain || {})) plus(r, n * Math.min(count, adj.max));
     }
     for (const [r, n] of Object.entries((c.priv.typeBonus || {})[kind] || {})) plus(r, n);
-    for (const r of Object.keys(out)) if (out[r] < 0) out[r] = 0;  // penalties never make it negative
+    for (const r of Object.keys(out)) if (out[r] <= 0) delete out[r];  // penalties never make it negative
+    // Boosts from own working neighbours (+add to each resource it makes).
+    const working = new Set(c.priv.report.staffed || []);
+    const matches = (b) => (b.type ? b.type === kind : (def.tags || []).includes(b.tag));
+    const add = near.filter((s) => working.has(s.id)).reduce((n, s) =>
+      n + (c.content.structures[s.type]?.boost || []).filter(matches).reduce((x, b) => x + b.add, 0), 0);
+    if (add) for (const r of Object.keys(out)) out[r] += add;
     return out;
   }
+
+  // Workers it would need at `cells` (none while a freeNear structure touches that terrain).
+  const jobsAt = (c, def, cells) => (def.jobs && def.freeNear && cells.some((k) => U.neighbors(k).some((n) => c.game.cells[n] === def.freeNear)) ? 0 : def.jobs || 0);
 
   // Fill the top bar's delta slots; null empties them.
   function showDeltas(d) {
@@ -303,7 +313,8 @@
       const problem = cells && buildProblem(c, def, cells);
       showDeltas(deltas(c, def, m.kind, cells && !problem ? cells : null));
       const res = $("hint").querySelector(".hr-sres");  // the card's list: this spot's output, or the base output without a spot
-      if (res) fill(res, ...HexHud.fmt.resListEl(def, cells && !problem ? outputAt(c, def, m.kind, cells) : null));
+      if (res) fill(res, ...HexHud.fmt.resListEl(def, cells && !problem
+        ? { res: outputAt(c, def, m.kind, cells), jobs: jobsAt(c, def, cells), terrain: c.game.cells[cells[0]] } : null));
       if (!cells) return map.setGhost(null);
       map.setGhost({ cells, ok: !problem, label: def.icon });
       if (here && problem) here.textContent = problem;

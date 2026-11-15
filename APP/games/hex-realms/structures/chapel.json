@@ -20,7 +20,7 @@
  },
  "jobs": 1,
  "produce": {
-  "faith": 2
+  "faith": 1
  },
  "perAdjacent": {
   "gain": {

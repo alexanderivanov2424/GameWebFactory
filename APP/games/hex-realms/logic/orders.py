@@ -24,7 +24,7 @@ from gamekit.hexes import dist, neighbors
 
 from .content import ADVANCES, STRUCTURES, TERRAIN, TOWN_HALL, UNITS, footprint
 from . import construction, logistics, standing, territory, vision
-from .economy import TRADE_GOODS
+from .economy import TRADE_GOODS, jobs
 from .movement import path
 
 CITY_SPACING = 5
@@ -272,7 +272,7 @@ def trade(m, pid, sid, give, get):
 
 def toggle(m, pid, sid):
     s = own_structure(m, pid, sid)
-    if not STRUCTURES[s["type"]]["jobs"]:
+    if not jobs(m, s):
         raise LobbyError("That structure has no workers to send home.")
     s["active"] = not s["active"]
 

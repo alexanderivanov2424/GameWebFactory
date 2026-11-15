@@ -22,23 +22,32 @@
   const costText = (cost) => Object.entries(cost || {}).map(([r, n]) => `${n}${resIcon(r)}`).join(" ") || "free";
   const plural = (n, word) => `${n} ${word}${n === 1 ? "" : "s"}`;
   const names = (content, kind, ids) => ids.map((id) => content[kind][id]?.name || id).join(", ");
-  // Output and jobs as one list, e.g. "(+1 🪵, −1 👥)"; res is a real or previewed output, else the base output.
+  // Output and workers, e.g. "+3 🪵, −1 👥 (−1 👥)": the actual amounts (green / red = more / less than the base),
+  // then the base amounts in brackets. at = {res, jobs, terrain} where it stands (or would); without it only the base.
   const order = (r) => { const i = Object.keys(RES).indexOf(r); return i < 0 ? 99 : i; };
-  const resItems = (res) => Object.entries(res || {}).filter(([, n]) => n).sort((a, b) => order(a[0]) - order(b[0]))
-    .map(([r, n]) => [`${n > 0 ? "+" : "−"}${Math.abs(n)} ${resIcon(r)}`, n > 0 ? "pos" : "neg"]);
-  function resList(d, res = null) {
-    const terrain = Object.entries(d.onTerrain || {});
-    let items;
-    if (res || !terrain.length) items = resItems(res || d.produce);
-    else items = [[terrain.map(([t, out]) => `${resItems(out).map((i) => i[0]).join(" ")} on ${t}`).join(" or "), "pos"]];
-    if (d.jobs) items.push([`−${d.jobs} ${resIcon("people")}`, "neg"]);
-    return items;
+  const amount = (r, n) => `${n > 0 ? "+" : n < 0 ? "−" : ""}${Math.abs(n)} ${resIcon(r)}`;
+  const withJobs = (res, jobs) => ({ ...(res || {}), ...(jobs ? { people: -jobs } : {}) });
+  function baseOf(d, terrain = null) {
+    const t = d.onTerrain || {};
+    return withJobs(Object.keys(t).length ? t[terrain] || (terrain ? {} : null) : d.produce, d.jobs);
   }
-  const resListText = (d, res = null) => { const items = resList(d, res); return items.length ? `(${items.map((i) => i[0]).join(", ")})` : ""; };
-  const resListEl = (d, res = null) => {
-    const items = resList(d, res);
-    return items.length ? ["(", ...items.flatMap(([t, cls], i) => [i ? ", " : null, el("span", { className: cls }, t)]), ")"] : [];
-  };
+  function baseText(d) {
+    const t = Object.entries(d.onTerrain || {});
+    const sorted = (res) => Object.entries(res).filter(([, n]) => n).sort((a, b) => order(a[0]) - order(b[0]));
+    const items = t.length ? [t.map(([k, out]) => `${sorted(out).map(([r, n]) => amount(r, n)).join(" ")} on ${k}`).join(" or ")] : [];
+    items.push(...sorted(baseOf(d) || withJobs({}, d.jobs)).map(([r, n]) => amount(r, n)));
+    return items.length ? `(${items.join(", ")})` : "";
+  }
+  const resListText = (d) => baseText(d);
+  function resListEl(d, at = null) {
+    const base = baseText(d);
+    if (!at) return base ? [base] : [];
+    const want = baseOf(d, at.terrain) || {}, have = withJobs(at.res, at.jobs ?? d.jobs);
+    const keys = [...new Set([...Object.keys(want), ...Object.keys(have)])].filter((r) => want[r] || have[r]).sort((a, b) => order(a) - order(b));
+    const items = keys.map((r) => { const n = have[r] || 0, b = want[r] || 0;
+      return el("span", { className: n > b ? "pos" : n < b ? "neg" : "" }, amount(r, n)); });
+    return [...items.flatMap((x, i) => [i ? ", " : null, x]), base ? el("span", { className: "muted" }, ` ${base}`) : null];
+  }
   // What a structure does and where it may go, read from its content (the server's rules decide).
   function structInfo(content, d) {
     const stats = [];
@@ -50,6 +59,8 @@
     if (d.heals) stats.push("Heals units on or next to it");
     if (d.shoots) stats.push(`Shoots ${plural(d.shoots, "die")} (range ${d.range})`);
     if (d.score) stats.push(`+${d.score} score`);
+    for (const b of d.boost || []) stats.push(`+${b.add} to what each ${b.type ? content.structures[b.type]?.name || b.type : `${content.tags?.[b.tag]?.name || b.tag} structure`} next to it makes, while it works`);
+    if (d.freeNear && d.jobs) stats.push(`Needs no workers while touching ${(content.terrain[d.freeNear]?.name || d.freeNear).toLowerCase()}`);
     const hp = d.hp ? `HP ${d.hp}${d.defense ? ` · defense ${d.defense}` : ""}` : "Can't be attacked";
     const terrains = names(content, "terrain", d.terrain || []) + (d.coast ? " · touching water" : "");
     const build = `${costText(d.cost)} · 🔨 ${d.hammers} (each idle person builds 1 🔨 a turn)`;
@@ -81,12 +92,12 @@
   const tagLine = (content, b) => el("li", { title: HexText.structure.tagTitle(b.n > 0 ? "+" : "−", Math.abs(b.n), resName(b.res).toLowerCase(), content.tags?.[b.tag]?.name || b.tag) },
     el("span", { className: b.n > 0 ? "pos" : "neg" }, `${b.n > 0 ? "+" : "−"}${Math.abs(b.n)} ${resIcon(b.res)}`), " for ", pip(content, b.tag));
 
-  function structCard(content, d, hp, res = null) {
+  function structCard(content, d, hp, at = null) {
     const si = structInfo(content, d);
     return el("div", { className: "hr-scard" }, structPicture(d), el("div", { className: "hr-shp" }, hp || si.hp),
       si.tags.length ? el("div", { className: "hr-pips" }, si.tags.map((t) => pip(content, t))) : null,
       si.text ? el("div", { className: "hr-stext" }, si.text) : null,
-      si.res ? el("div", { className: "hr-sres", title: HexText.structure.resTitle }, ...resListEl(d, res)) : null,
+      si.res || at ? el("div", { className: "hr-sres", title: HexText.structure.resTitle }, ...resListEl(d, at)) : null,
       el("ul", { className: "hr-sstats" }, si.byTag.map((b) => tagLine(content, b)), si.stats.map((t) => el("li", {}, t))));
   }
   const canPay = (ctx, cost) => Object.entries(cost || {}).every(([r, n]) => (ctx.priv.res[r] || 0) >= n);
@@ -219,7 +230,8 @@
     if (!def) return fill(box);
     const own = s.owner === ctx.you;
     const kids = [el("h3", {}, `${def.name} `, nameSpan(game, s.owner)),
-      structCard(content, def, s.maxHp ? `HP ${s.hp}/${s.maxHp}${def.defense ? ` · defense ${def.defense}` : ""}` : null, own ? output(ctx, sel.id) : null)];
+      structCard(content, def, s.maxHp ? `HP ${s.hp}/${s.maxHp}${def.defense ? ` · defense ${def.defense}` : ""}` : null,
+        own ? { res: output(ctx, sel.id), jobs: priv.jobs?.[sel.id], terrain: game.cells[s.at] } : null)];
     if (def.jobs || Object.keys(def.produce || {}).length) {
       kids.push(el("p", { className: `small ${s.working ? "pos" : "neg"}` }, s.working ? HexText.structure.working : s.active === false ? HexText.structure.off : HexText.structure.noWorkers));
     }
@@ -266,15 +278,17 @@
   function orders(box, ctx) {
     const { priv, content, game, act } = ctx;
     const o = priv.orders;
+    // Builds: actual output at the spot with the base in brackets, then the cost (not bracketed) and builders.
     const rows = [
-      ...o.builds.map((b) => { const n = priv.building?.orders?.[b.id] || 0;
-        return [b.id, `Build ${content.structures[b.type]?.name || b.type} (🔨 ${content.structures[b.type]?.hammers || 1}, ${n ? `${resIcon("people")} −${n}` : "no idle people yet"})`, b.cost]; }),
-      ...o.recruits.map((r) => [r.id, `Recruit ${content.units[r.type]?.name || r.type} at ${content.structures[game.structures[r.at]?.type]?.name || "?"}`, r.cost]),
-      ...o.research.map((r) => [r.id, `Research ${content.advances[r.advance]?.name || r.advance}`, r.cost]),
+      ...o.builds.map((b) => { const n = priv.building?.orders?.[b.id] || 0, d = content.structures[b.type], out = priv.buildOutput?.[b.id];
+        return [b.id, [`Build ${d?.name || b.type} `, ...(d ? resListEl(d, out ? { ...out, terrain: game.cells[b.at] } : null) : [])],
+          `${costText(b.cost)} · 🔨 ${d?.hammers || 1} · ${n ? `${resIcon("people")} −${n} building` : "no idle people yet"}`]; }),
+      ...o.recruits.map((r) => [r.id, `Recruit ${content.units[r.type]?.name || r.type} at ${content.structures[game.structures[r.at]?.type]?.name || "?"}`, costText(r.cost)]),
+      ...o.research.map((r) => [r.id, `Research ${content.advances[r.advance]?.name || r.advance}`, costText(r.cost)]),
     ];
     const sites = Object.entries(game.sites || {}).filter(([, x]) => x.owner === ctx.you);
     fill(box, el("h3", {}, "Orders"), rows.length ? rows.map(([id, text, cost]) =>
-      el("div", { className: "row hr-order" }, el("span", { className: "small" }, text, el("span", { className: "muted" }, ` (${costText(cost)})`)),
+      el("div", { className: "row hr-order" }, el("span", { className: "small" }, text, el("span", { className: "muted" }, ` · ${cost}`)),
         el("span", { className: "spacer" }), btn("✕", () => act.send({ action: "cancel", order: id }), { cls: "small", title: HexText.hud.cancelOrder }))) : el("p", { className: "muted small" }, HexText.hud.noOrders),
       sites.length ? el("h3", {}, "Construction") : null,
       sites.map(([cid, x]) => el("div", { className: "row hr-order" },

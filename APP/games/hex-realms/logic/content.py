@@ -13,6 +13,8 @@ structures/<id>.json:
     tags [TAG ids], housing, storage (room for each stored good: wood, stone, metal), store {res: n}
     terrain [ids] (default: buildable), coast (touches water), requires (advance), recruits [unit ids]
     heals, shoots (dice) + range, trade (give n for 1), score, hammers (work to build, default 1)
+    boost [{"type"|"tag", "add"}] (while it works: +add to each resource an adjacent own structure of that
+    type / with that tag makes), freeNear (terrain id: needs no workers while touching that terrain)
     category (CATEGORIES id), vision (cells seen around each cell, default 3)
 units/<id>.json:
     name, icon, art (client/art/units/ file, drawn instead of icon), cost {res: n} (no food), people (default 1)
@@ -100,6 +102,16 @@ def parse_structure(sid, d):
         "score": whole(d, "score", 0, 99, default=0),
         "hammers": whole(d, "hammers", 1, 99, default=1),
     }
+    s["freeNear"] = d.get("freeNear")
+    if s["freeNear"] is not None and s["freeNear"] not in TERRAIN:
+        raise ValueError("freeNear must be a terrain id")
+    boosts = d.get("boost", [])
+    s["boost"] = []
+    for b in boosts if isinstance(boosts, list) else [boosts]:
+        if not isinstance(b, dict) or (b.get("tag") is None) == (b.get("type") is None) or \
+                (b.get("tag") is not None and b["tag"] not in TAGS):
+            raise ValueError(f"boost needs a type or a tag from {sorted(TAGS)}")
+        s["boost"].append({"type": b.get("type"), "tag": b.get("tag"), "add": whole(b, "add", 1, 9)})
     s["color"] = d.get("color", "#a0a0a0")
     if not isinstance(s["color"], str) or not re.fullmatch(r"#[0-9a-fA-F]{6}", s["color"]):
         raise ValueError("color must be like #a0b0c0")

@@ -18,9 +18,6 @@
   "stone": 2
  },
  "jobs": 1,
- "produce": {
-  "wood": 1
- },
  "perAdjacent": {
   "terrain": "forest",
   "gain": {

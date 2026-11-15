@@ -21,12 +21,14 @@
  "cost": {
   "wood": 4
  },
- "store": {
-  "wood": 40,
-  "stone": 40,
-  "metal": 40
- },
  "category": "industry",
  "hammers": 2,
- "color": "#a3845c"
+ "color": "#a3845c",
+ "storage": 5,
+ "boost": [
+  {
+   "tag": "industrial",
+   "add": 1
+  }
+ ]
 }
