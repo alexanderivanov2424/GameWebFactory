@@ -18,9 +18,9 @@
   AppSettings.addPageSettings("Hex Realms", [
     { key: SPEED_KEY, label: "Combat replay speed", type: "select", default: "1",
       options: [["0.5", "Slow"], ["1", "Normal"], ["2", "Fast"], ["4", "Very fast"]],
-      hint: "How fast the end-of-turn combat replay moves from fight to fight." },
+      hint: HexText.replay.speedHint },
     { key: SKIP_KEY, label: "Skip combat replays", type: "checkbox", default: false,
-      hint: "Don't play the replay; combat cells just flash and the Report tab lists the dice." },
+      hint: HexText.replay.skipHint },
   ]);
 
   const HIT = 4;  // structures are hit on 4+; units' need comes with each event

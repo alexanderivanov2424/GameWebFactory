@@ -58,7 +58,7 @@
     const nodes = ids.map((id) => {
       const a = A[id], [x, y] = pos(id);
       const missing = a.after.filter((x) => !owned.has(x));
-      const why = missing.length ? `Research ${missing.map((x) => A[x]?.name || x).join(", ")} first` : !canPay(ctx, a.cost) ? "Can't afford" : "";
+      const why = missing.length ? HexText.panels.needFirst(missing.map((x) => A[x]?.name || x).join(", ")) : !canPay(ctx, a.cost) ? HexText.panels.cantAfford : "";
       const status = owned.has(id) ? "owned" : queued.has(id) ? "queued" : missing.length ? "locked" : why ? "poor" : "ready";
       const other = a.after.filter((x) => !inTree.has(x));  // prerequisites from the other tree
       return el("div", { className: `hr-tnode ${status}`, style: `left:${x}px;top:${y}px;width:${NODE_W}px;height:${NODE_H}px` },
@@ -66,7 +66,7 @@
         el("div", { className: "small muted hr-ttext" }, HexText.advances[id]),
         other.length ? el("div", { className: "small muted" }, `After: ${other.map((x) => A[x]?.name || x).join(", ")}`) : null,
         el("div", { className: "hr-tfoot" }, owned.has(id) ? el("span", { className: "small pos" }, "Researched")
-          : queued.has(id) ? el("span", { className: "small pos" }, "Queued: learnt as the turn resolves")
+          : queued.has(id) ? el("span", { className: "small pos" }, HexText.panels.queued)
           : btn("Research", () => act.send({ action: "research", advance: id }), { disabled: !!why, title: why }),
           !owned.has(id) && !queued.has(id) && why ? el("span", { className: "small muted" }, ` ${why}`) : null));
     });

@@ -138,7 +138,7 @@
     fill($("tabs"), tabs.map(([id, label]) => el("button", {
       className: `hr-tab${ui.tab === id ? " on" : ""}`, onclick: () => { ui.tab = ui.tab === id ? "none" : id; refresh(); },
     }, label)), playing ? el("button", {
-      className: `hr-tab${ui.tech ? " on" : ""}`, title: "Open the tech tree (science and faith advances)",
+      className: `hr-tab${ui.tech ? " on" : ""}`, title: HexText.panels.techOpen,
       onclick: () => { ui.tech = ui.tech ? null : HexPanels.currencies(c.content)[0]; refresh(); },
     }, "Tech tree") : null);
     renderTech(c, playing);
@@ -173,11 +173,8 @@
     box.classList.toggle("hr-hintbuild", m?.type === "build");
     if (!m && ui.resView) {
       const { resIcon, resName, btn } = HexHud.fmt, r = ui.resView;
-      const text = r === "people" ? "where your people are this turn: green = idle at home, red = in a job, a unit or a recruit ordered there, blue = building"
-        : r === "population" ? "blue = people living there / the housing it gives (your people and the people in your units, filling the oldest homes first)"
-        : r === "housing" ? "green = the housing each structure gives (your people and the people in your units must fit in it)"
-        : "green = made there each turn, red = used each turn (units' upkeep; each person's food where they work, build or rest at home)";
-      fill(box, `${resIcon(r)} ${resName(r)} view: ${text}. Faded = not working this turn. Click the resource again or Esc to leave. `,
+      const text = ["people", "population", "housing"].includes(r) ? HexText.resView[r] : HexText.resView.flow;
+      fill(box, HexText.resView.bar(resIcon(r), resName(r), text),
         btn("Close (Esc)", () => act.resView(null)));
       return;
     }
@@ -188,13 +185,13 @@
       // Left: name, controls and terrains (and why the spot is refused); right: the card. Costs show in the top bar.
       const d = names.structures[m.kind];
       fill(box, el("div", { className: "hr-hintmain" },
-        el("div", {}, el("b", {}, `${d.icon || ""} ${d.name}`), ": click to place · R to turn · Esc to cancel"),
+        el("div", {}, el("b", {}, `${d.icon || ""} ${d.name}`), HexText.hint.build),
         el("div", {}, HexHud.fmt.structInfo(names, d).terrains),
         el("div", { className: "hr-here neg" })), HexHud.structCard(names, d));
     }
     else if (m.type === "claim") fill(box, HexText.claim.hint(HexHud.fmt.costText(names.claim.cost), names.claim), cancel);
-    else if (m.type === "shoot") fill(box, "Click an enemy unit or structure in range. ", cancel);
-    else fill(box, "Found a city here: R turns the footprint, click it (or Confirm) to place. ",
+    else if (m.type === "shoot") fill(box, HexText.hint.shoot, cancel);
+    else fill(box, HexText.hint.found,
       HexHud.fmt.btn("Confirm", confirmFound, { cls: "endturn" }), cancel);
   }
 
@@ -238,14 +235,14 @@
     const g = c.game;
     const enemyUnit = (k) => idx.unitAt[k] && g.units[idx.unitAt[k]].owner !== c.you;
     for (const k of cells) {
-      if (!(k in g.cells)) return "Part of it is off the map (or unexplored).";
-      if (g.territory[k] !== c.you) return "Part of it is outside your territory.";
-      if (!(def.terrain || []).includes(g.cells[k])) return `It can't go on ${(c.content.terrain[g.cells[k]]?.name || g.cells[k]).toLowerCase()}.`;
-      if (idx.structAt[k] || idx.siteAt[k]) return "Something is already built there.";
-      if (pending.has(k)) return "You already ordered a build there.";
-      if (enemyUnit(k)) return "An enemy unit stands there.";
+      if (!(k in g.cells)) return HexText.hint.problem.offMap;
+      if (g.territory[k] !== c.you) return HexText.hint.problem.outside;
+      if (!(def.terrain || []).includes(g.cells[k])) return HexText.hint.problem.terrain((c.content.terrain[g.cells[k]]?.name || g.cells[k]).toLowerCase());
+      if (idx.structAt[k] || idx.siteAt[k]) return HexText.hint.problem.built;
+      if (pending.has(k)) return HexText.hint.problem.ordered;
+      if (enemyUnit(k)) return HexText.hint.problem.enemy;
     }
-    if (def.coast && !cells.some((k) => U.neighbors(k).some((n) => g.cells[n] === "water"))) return "It must touch water.";
+    if (def.coast && !cells.some((k) => U.neighbors(k).some((n) => g.cells[n] === "water"))) return HexText.hint.problem.coast;
     return "";
   }
 

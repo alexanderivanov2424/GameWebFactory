@@ -78,7 +78,7 @@
     const t = content.tags?.[tag] || { name: tag, color: "#666" };
     return el("span", { className: "hr-pip", style: `background:${t.color}` }, t.name);
   };
-  const tagLine = (content, b) => el("li", { title: `${b.n > 0 ? "+" : "−"}${Math.abs(b.n)} ${resName(b.res).toLowerCase()} for each of your ${content.tags?.[b.tag]?.name || b.tag} structures next to it` },
+  const tagLine = (content, b) => el("li", { title: HexText.structure.tagTitle(b.n > 0 ? "+" : "−", Math.abs(b.n), resName(b.res).toLowerCase(), content.tags?.[b.tag]?.name || b.tag) },
     el("span", { className: b.n > 0 ? "pos" : "neg" }, `${b.n > 0 ? "+" : "−"}${Math.abs(b.n)} ${resIcon(b.res)}`), " for ", pip(content, b.tag));
 
   function structCard(content, d, hp, res = null) {
@@ -86,7 +86,7 @@
     return el("div", { className: "hr-scard" }, structPicture(d), el("div", { className: "hr-shp" }, hp || si.hp),
       si.tags.length ? el("div", { className: "hr-pips" }, si.tags.map((t) => pip(content, t))) : null,
       si.text ? el("div", { className: "hr-stext" }, si.text) : null,
-      si.res ? el("div", { className: "hr-sres", title: "What it makes (+) and uses (−) a turn while it works; 👥 = the people working in it." }, ...resListEl(d, res)) : null,
+      si.res ? el("div", { className: "hr-sres", title: HexText.structure.resTitle }, ...resListEl(d, res)) : null,
       el("ul", { className: "hr-sstats" }, si.byTag.map((b) => tagLine(content, b)), si.stats.map((t) => el("li", {}, t))));
   }
   const canPay = (ctx, cost) => Object.entries(cost || {}).every(([r, n]) => (ctx.priv.res[r] || 0) >= n);
@@ -99,7 +99,7 @@
     const b = el("button", { className: `hr-btn ${opts.cls || ""}`, onclick, disabled: !!opts.disabled, title: opts.title || "" }, text);
     return b;
   };
-  const VIEW_TIP = "Click: show on the map what makes and uses it each turn.\n";
+  const VIEW_TIP = HexText.hud.viewTip;
 
   // A chip with an empty delta line below it, filled by game.js while placing.
   const withDelta = (key, chip) => el("span", { className: "hr-dcol" }, chip, el("span", { className: `hr-delta hr-delta-${key}` }));
@@ -113,7 +113,7 @@
       const net = rep.net[r] || 0;
       const capped = rep.caps[r];
       const full = capped !== undefined && priv.res[r] >= capped;
-      return withDelta(r, el("span", { className: `hr-chip hr-res-${r}${full ? " full" : ""}${ctx.ui.resView === r ? " on" : ""}`, onclick: () => ctx.act.resView(r), title: `${VIEW_TIP}${resName(r)}: income ${rep.income[r] || 0}, upkeep ${rep.upkeep[r] || 0}${r === "gold" && rep.land ? ` (${rep.land} cells of bought land)` : ""}${capped !== undefined ? `, storage ${capped}` : ""}${r === "food" ? `.\nEveryone eats this turn's production first, then your stores. Production left over becomes new people while housing has room; only the rest goes into your stores. In brackets: how your stored food changes this turn` : ""}${(rep.wasted || {})[r] ? `, ${rep.wasted[r]} won't fit in your stores at the end of the turn (lost)` : ""}` },
+      return withDelta(r, el("span", { className: `hr-chip hr-res-${r}${full ? " full" : ""}${ctx.ui.resView === r ? " on" : ""}`, onclick: () => ctx.act.resView(r), title: `${VIEW_TIP}${resName(r)}: income ${rep.income[r] || 0}, upkeep ${rep.upkeep[r] || 0}${r === "gold" && rep.land ? HexText.hud.landNote(rep.land) : ""}${capped !== undefined ? `, storage ${capped}` : ""}${r === "food" ? `.\n${HexText.hud.foodNote}` : ""}${(rep.wasted || {})[r] ? HexText.hud.wasted(rep.wasted[r]) : ""}` },
         el("span", { className: "hr-ricon" }, resIcon(r)), " ", el("b", {}, String(priv.res[r])), capped !== undefined ? el("small", {}, `/${capped}`) : null,
         el("span", { className: net < 0 ? "neg" : net > 0 ? "pos" : "" }, ` (${signed(net)})`)));
     });
@@ -123,17 +123,17 @@
       el("span", { className: "hr-turn" }, `Turn ${game.turn} / ${game.turnLimit}`),
       game.turnSeconds > 0 ? el("span", { id: "hr-timer", className: "hr-timer" }) : null,
       el("span", { className: "hr-chips" }, chips),
-      withDelta("people", el("span", { className: `hr-people${ctx.ui.resView === "people" ? " on" : ""}`, onclick: () => ctx.act.resView("people"), title: `Click: show on the map where your people are (green idle, red in jobs / units, blue building).\n${rep.idle} idle. Population ${priv.pop + rep.soldiers}: ${rep.workers} in jobs, ${rep.builders} building, ${rep.soldiers} in units (and recruits), ${rep.idle} idle.` },
+      withDelta("people", el("span", { className: `hr-people${ctx.ui.resView === "people" ? " on" : ""}`, onclick: () => ctx.act.resView("people"), title: HexText.hud.people(rep.idle, priv.pop + rep.soldiers, rep.workers, rep.builders, rep.soldiers) },
         el("span", { className: "hr-ricon" }, resIcon("people")), " idle ", el("b", {}, String(rep.idle)),
-        starving ? el("span", { className: "neg", title: "This turn's food production plus your stored food can't feed everyone: whoever can't eat dies at the end of the turn, units first (newest first), then people." }, ` ⚠ starving: ${starving}`) : null)),
-      withDelta("population", el("span", { className: `hr-people${ctx.ui.resView === "population" ? " on" : ""}`, onclick: () => ctx.act.resView("population"), title: `Click: show on the map how many people live in each structure that gives housing (living / housing).\nPopulation ${priv.pop + rep.soldiers}: ${priv.pop} people and ${rep.soldiers} in units (and recruits).\nIt grows to match your food production: production left after everyone eats becomes new people at once while housing has room. When production falls short, your stored food feeds everyone; once that runs out, whoever can't eat dies, units first.${rep.popNet ? `\nEnd of this turn: ${signed(rep.popNet)}.` : ""}` },
+        starving ? el("span", { className: "neg", title: HexText.hud.starving }, ` ⚠ starving: ${starving}`) : null)),
+      withDelta("population", el("span", { className: `hr-people${ctx.ui.resView === "population" ? " on" : ""}`, onclick: () => ctx.act.resView("population"), title: HexText.hud.population(priv.pop + rep.soldiers, priv.pop, rep.soldiers, rep.popNet ? signed(rep.popNet) : "") },
         el("span", { className: "hr-ricon" }, resIcon("population")), " population ", el("b", {}, String(priv.pop + rep.soldiers)),
         el("span", { className: rep.popNet < 0 ? "neg" : rep.popNet > 0 ? "pos" : "" }, ` (${signed(rep.popNet || 0)})`))),
-      withDelta("housing", el("span", { className: `hr-people${priv.pop + rep.soldiers >= rep.housing ? " full" : ""}${ctx.ui.resView === "housing" ? " on" : ""}`, onclick: () => ctx.act.resView("housing"), title: `Click: show on the map which structures give housing.\nHousing ${rep.housing}: the population cap. Your people and the people in your units (${priv.pop + rep.soldiers}) must fit in it: no new people join once it's full.` },
+      withDelta("housing", el("span", { className: `hr-people${priv.pop + rep.soldiers >= rep.housing ? " full" : ""}${ctx.ui.resView === "housing" ? " on" : ""}`, onclick: () => ctx.act.resView("housing"), title: HexText.hud.housing(rep.housing, priv.pop + rep.soldiers) },
         el("span", { className: "hr-ricon" }, resIcon("housing")), " cap ", el("b", {}, String(rep.housing)))),
       withDelta("turns", null),
-      btn("Jobs off", () => ctx.act.send({ action: "staff", on: false }), { cls: "small", title: "Switch off every structure with workers: they become idle and build your construction sites." }),
-      btn("Jobs on", () => ctx.act.send({ action: "staff", on: true }), { cls: "small", title: "Switch every structure with workers back on." }),
+      btn("Jobs off", () => ctx.act.send({ action: "staff", on: false }), { cls: "small", title: HexText.hud.jobsOff }),
+      btn("Jobs on", () => ctx.act.send({ action: "staff", on: true }), { cls: "small", title: HexText.hud.jobsOn }),
       el("span", { className: "spacer" }), end);
   }
 
@@ -154,20 +154,18 @@
   }
 
   // A unit's stats as chips: attack, defence, move, hp, range and siege if any, then food eaten per turn.
-  const UNIT_STATS = [["attack", "⚔️", "Attack: dice it rolls when it attacks"], ["defense", "🛡️", "Defence: dice it rolls when attacked"],
-    ["move", "👣", "Movement: steps a turn"], ["hp", "❤️", "Health"], ["range", "🏹", "Range: shoots this far instead of moving"],
-    ["siege", "💥", "Siege: damage per hit on structures"]];
+  const UNIT_STATS = [["attack", "⚔️"], ["defense", "🛡️"], ["move", "👣"], ["hp", "❤️"], ["range", "🏹"], ["siege", "💥"]];
   function unitStats(def, hp) {
     return el("div", { className: "hr-ustats" }, UNIT_STATS.filter(([k]) => (k === "range" ? def.range : k === "siege" ? def.siege > 1 : true))
-      .map(([k, icon, title]) => el("span", { className: "hr-chip hr-ustat", title }, `${icon} `, el("b", {}, String(k === "hp" && hp ? hp : def[k])))),
-      ((food) => el("span", { className: "hr-chip hr-ustat", title: "Food it eats each turn (from this turn's food production)" },
+      .map(([k, icon]) => el("span", { className: "hr-chip hr-ustat", title: HexText.unit.stats[k] }, `${icon} `, el("b", {}, String(k === "hp" && hp ? hp : def[k])))),
+      ((food) => el("span", { className: "hr-chip hr-ustat", title: HexText.unit.stats.food },
         el("b", {}, food ? `−${food}` : "0"), ` ${resIcon("food")}`))(def.upkeep?.food || 0));
   }
 
   function selection(box, ctx) {
     const { game, priv, content, ui, act } = ctx;
     const sel = ui.sel;
-    if (!sel) return fill(box, el("h3", {}, "Selection"), el("p", { className: "muted small" }, "Click one of your units or structures to command it, or any enemy to inspect it."));
+    if (!sel) return fill(box, el("h3", {}, "Selection"), el("p", { className: "muted small" }, HexText.unit.empty));
     if (sel.kind === "unit") {
       const u = game.units[sel.id], def = u && content.units[u.type];
       if (!def) return fill(box);
@@ -175,34 +173,30 @@
       const kids = [el("h3", {}, `${def.name} `, nameSpan(game, u.owner)), unitStats(def, `${u.hp}/${u.maxHp}`)];
       if (own) {
         const auto = priv.auto?.[sel.id] || null, mode = auto?.mode;
-        const standing = { explore: "Exploring (walks on its own each turn)", fight: "Fighting (attacks the nearest enemy unit it sees; holds when none)",
-          pillage: "Pillaging (attacks the nearest enemy structure it sees, fighting enemy units that come close first; holds when none)",
-          travel: `Travelling to ${auto?.goal} over several turns` };
-        const pending = mode ? `${standing[mode]}; any other order stops it` : o.moves[sel.id] ? `Moving to ${o.moves[sel.id][o.moves[sel.id].length - 1]}` : o.shots[sel.id] ? `Shooting at ${o.shots[sel.id]}`
-          : sel.id in o.found ? "Founding a city" : o.holds.includes(sel.id) ? "Holding position" : "No orders";
+        const S = HexText.unit;
+        const standing = mode === "travel" ? S.standing.travel(auto.goal) : S.standing[mode];
+        const pending = mode ? S.standing.note(standing) : o.moves[sel.id] ? S.pending.moving(o.moves[sel.id][o.moves[sel.id].length - 1]) : o.shots[sel.id] ? S.pending.shooting(o.shots[sel.id])
+          : sel.id in o.found ? S.pending.founding : o.holds.includes(sel.id) ? S.pending.holding : S.idle;
         const hold = o.holds.includes(sel.id) && !mode;
         const found = priv.found[sel.id] || [];
         // A command deselects the unit; Clear orders keeps it selected.
         const command = (msg) => { act.send(msg); act.select(null); };
-        const autoBtn = (m, label, title) => btn(mode === m ? `${label} (on)` : label, () => command({ action: "auto", unit: sel.id, mode: m }), { cls: mode === m ? "on" : "", title });
+        const autoBtn = (m, label) => btn(mode === m ? `${label} (on)` : label, () => command({ action: "auto", unit: sel.id, mode: m }), { cls: mode === m ? "on" : "", title: S[m].title });
         // Each action has a short description beside it.
         const action = (b, text) => b && [b, el("span", { className: "small muted" }, text)];
         const row = el("div", { className: "hr-actions" },
-          action(btn(hold ? "Hold (on)" : "Hold", () => command({ action: "hold", unit: sel.id }), { cls: hold ? "on" : "", title: "Roll one extra defence die this turn instead of moving." }),
-            "Stay put this turn and defend with +1 die."),
-          game.fog && !def.settler ? action(autoBtn("explore", "Explore", "Walk around on its own every turn to clear the fog, until you give it another order."),
-            "Every turn: walk into the fog on its own.") : null,
-          !def.settler ? action(autoBtn("fight", "Fight", "Every turn, attack the nearest enemy unit you can see (hold when there's none), until you give it another order."),
-            "Every turn: attack the nearest enemy unit in sight.") : null,
-          !def.settler ? action(autoBtn("pillage", "Pillage", "Every turn, attack the nearest enemy structure you can see, but fight enemy units that come close first (hold when there's nothing), until you give it another order."),
-            "Every turn: attack the nearest enemy structure in sight.") : null,
-          def.range ? action(btn("Shoot", () => act.setMode({ type: "shoot", unit: sel.id }), { cls: ui.mode?.type === "shoot" ? "on" : "", title: `Shoot a unit or structure up to ${def.range} cells away.` }),
-            `Pick a target up to ${def.range} cells away instead of moving.`) : null,
-          def.settler ? action(btn("Found city", () => act.setMode({ type: "found", unit: sel.id, rot: found[0] }), { disabled: !found.length, cls: ui.mode?.type === "found" ? "on" : "", title: found.length ? "Found a Town Hall here." : "Can't found a city here." }),
-            found.length ? "Build a Town Hall where it stands." : "Can't found a city here.") : null,
-          action(btn("Clear orders", () => act.send({ action: "move", unit: sel.id, to: u.at })), "Cancel this unit's orders (it stays put)."),
-          action(btn("Disband", () => { if (confirm(`Disband this ${def.name}?`)) act.send({ action: "disband", unit: sel.id }); }, { cls: "danger" }),
-            "Remove the unit; its people come home."));
+          action(btn(hold ? "Hold (on)" : "Hold", () => command({ action: "hold", unit: sel.id }), { cls: hold ? "on" : "", title: S.hold.title }),
+            S.hold.desc),
+          game.fog && !def.settler ? action(autoBtn("explore", "Explore"), S.explore.desc) : null,
+          !def.settler ? action(autoBtn("fight", "Fight"), S.fight.desc) : null,
+          !def.settler ? action(autoBtn("pillage", "Pillage"), S.pillage.desc) : null,
+          def.range ? action(btn("Shoot", () => act.setMode({ type: "shoot", unit: sel.id }), { cls: ui.mode?.type === "shoot" ? "on" : "", title: S.shoot.title(def.range) }),
+            S.shoot.desc(def.range)) : null,
+          def.settler ? action(btn("Found city", () => act.setMode({ type: "found", unit: sel.id, rot: found[0] }), { disabled: !found.length, cls: ui.mode?.type === "found" ? "on" : "", title: found.length ? S.found.title : S.found.none }),
+            found.length ? S.found.desc : S.found.none) : null,
+          action(btn("Clear orders", () => act.send({ action: "move", unit: sel.id, to: u.at })), S.clear.desc),
+          action(btn("Disband", () => { if (confirm(S.disband.confirm(def.name))) act.send({ action: "disband", unit: sel.id }); }, { cls: "danger" }),
+            S.disband.desc));
         kids.push(el("p", { className: "hr-pending" }, pending), row);
       }
       return fill(box, ...kids);
@@ -214,7 +208,7 @@
     const kids = [el("h3", {}, `${def.name} `, nameSpan(game, s.owner)),
       structCard(content, def, s.maxHp ? `HP ${s.hp}/${s.maxHp}${def.defense ? ` · defense ${def.defense}` : ""}` : null, own ? output(ctx, sel.id) : null)];
     if (def.jobs || Object.keys(def.produce || {}).length) {
-      kids.push(el("p", { className: `small ${s.working ? "pos" : "neg"}` }, s.working ? "Working." : s.active === false ? "Switched off." : "Not working: no free workers."));
+      kids.push(el("p", { className: `small ${s.working ? "pos" : "neg"}` }, s.working ? HexText.structure.working : s.active === false ? HexText.structure.off : HexText.structure.noWorkers));
     }
     if (own) {
       const store = priv.stores[sel.id];
@@ -231,8 +225,8 @@
           unitStats(ud), why ? el("div", { className: "muted small" }, why) : null));
       }
       const row = el("div", { className: "hr-btnrow" },
-        def.jobs > 0 ? btn(s.active === false ? "Switch on" : "Switch off", () => act.send({ action: "toggle", structure: sel.id }), { title: "Switched-off structures don't use workers." }) : null,
-        s.type !== "town_hall" ? btn("Demolish", () => { if (confirm(`Demolish this ${def.name}? No refund, and goods stored in it are lost.`)) act.send({ action: "demolish", structure: sel.id }); }, { cls: "danger", title: "Remove it now (no refund)." }) : null);
+        def.jobs > 0 ? btn(s.active === false ? "Switch on" : "Switch off", () => act.send({ action: "toggle", structure: sel.id }), { title: HexText.structure.switchTitle }) : null,
+        s.type !== "town_hall" ? btn("Demolish", () => { if (confirm(HexText.structure.demolishConfirm(def.name))) act.send({ action: "demolish", structure: sel.id }); }, { cls: "danger", title: HexText.structure.demolishTitle }) : null);
       kids.push(row);
       if (def.trade) kids.push(tradePanel(ctx, sel.id, def));
       if (s.type === "town_hall") kids.push(el("div", { className: "hr-btnrow" }, claimButton(ctx)));
@@ -256,8 +250,8 @@
     const own = x.owner === ctx.you;
     fill(box, el("h3", {}, `${def.name} (under construction) `, nameSpan(game, x.owner)),
       el("p", { className: "small" }, own ? siteText(ctx, ui.sel.id, x) : `${x.done}/${x.hammers} 🔨 done.`),
-      own ? el("p", { className: "muted small" }, "Each idle person (no job) builds 1 🔨 a turn, oldest site first. Switch structures off to free people.") : null,
-      own ? btn("Demolish", () => act.send({ action: "demolish", structure: ui.sel.id }), { cls: "danger", title: "Take the site down and get its cost back." }) : null);
+      own ? el("p", { className: "muted small" }, HexText.structure.siteHelp) : null,
+      own ? btn("Demolish", () => act.send({ action: "demolish", structure: ui.sel.id }), { cls: "danger", title: HexText.structure.siteDemolish }) : null);
   }
 
   function orders(box, ctx) {
@@ -272,11 +266,11 @@
     const sites = Object.entries(game.sites || {}).filter(([, x]) => x.owner === ctx.you);
     fill(box, el("h3", {}, "Orders"), rows.length ? rows.map(([id, text, cost]) =>
       el("div", { className: "row hr-order" }, el("span", { className: "small" }, text, el("span", { className: "muted" }, ` (${costText(cost)})`)),
-        el("span", { className: "spacer" }), btn("✕", () => act.send({ action: "cancel", order: id }), { cls: "small", title: "Cancel and refund" }))) : el("p", { className: "muted small" }, "Nothing queued."),
+        el("span", { className: "spacer" }), btn("✕", () => act.send({ action: "cancel", order: id }), { cls: "small", title: HexText.hud.cancelOrder }))) : el("p", { className: "muted small" }, HexText.hud.noOrders),
       sites.length ? el("h3", {}, "Construction") : null,
       sites.map(([cid, x]) => el("div", { className: "row hr-order" },
         el("span", { className: "small", style: "cursor:pointer", onclick: () => act.select("site", cid) }, content.structures[x.type]?.name || x.type, el("span", { className: "muted" }, ` ${siteText(ctx, cid, x)}`)),
-        el("span", { className: "spacer" }), btn("✕", () => act.send({ action: "demolish", structure: cid }), { cls: "small", title: "Demolish the site and get its cost back" }))));
+        el("span", { className: "spacer" }), btn("✕", () => act.send({ action: "demolish", structure: cid }), { cls: "small", title: HexText.hud.cancelSite }))));
   }
 
   // A trade structure's standing trade: `def.trade` of one resource for 1 of another, every turn.
@@ -326,13 +320,13 @@
       const tags = si.tags.map((t) => content.tags?.[t]?.name || t).join(", ");
       const info = [tags ? `[${tags}]` : "", si.text, si.res, ...tagText, si.stats.join(". "), si.hp, `Build: ${si.build}`, `On: ${si.terrains}`].filter(Boolean).join("\n");
       const active = ui.mode?.type === "build" && ui.mode.kind === id;
-      return el("button", { className: `hr-build${active ? " on" : ""}`, disabled: poor, title: `${poor ? "Can't afford\n" : ""}${info}`,
+      return el("button", { className: `hr-build${active ? " on" : ""}`, disabled: poor, title: `${poor ? `${HexText.hud.cantAfford}\n` : ""}${info}`,
         onclick: () => (active ? act.setMode(null) : act.setMode({ type: "build", kind: id, rot: ui.lastRot || 0 })) },
         el("span", { className: "hr-bicon" }, d.icon || "▪"), el("span", { className: "hr-bname" }, d.name), el("span", { className: "hr-bcost small" }, costText(d.cost)));
     });
     fill(box, tabs,
-      ui.buildCat ? el("div", { className: "hr-buildgrid" }, items) : el("p", { className: "muted small" }, "Pick a category, then a structure."),
-      el("p", { className: "muted small" }, "Click the map to place it. R or right-click turns it, Esc cancels. It goes anywhere inside your territory and becomes a construction site that idle people build over a few turns. Goods go straight to your stores."));
+      ui.buildCat ? el("div", { className: "hr-buildgrid" }, items) : el("p", { className: "muted small" }, HexText.hud.pickCategory),
+      el("p", { className: "muted small" }, HexText.hud.buildHelp));
   }
 
 

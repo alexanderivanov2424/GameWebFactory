@@ -1,222 +1,63 @@
 # Hex Realms: developer notes
 
-Rules and the message list: the docstring at the top of `server.py`; resolution order and score
-in `logic/match.py`'s header. Content: `structures/`, `units/`, `advances/` (one JSON per item,
-fields in `logic/content.py`). Tests: `tests/` (`python3 -I tools/run_tests.py hex-realms`).
+Rules and messages: `server.py`'s docstring. Resolution order and score: `logic/match.py`'s header.
+Content: `structures/`, `units/`, `advances/` (one JSON per item; fields in `logic/content.py`).
+Player-facing text: `client/text.js`. Tests: `python3 -I tools/run_tests.py hex-realms`.
 
-## Read this game to learn
-- **Simultaneous secret orders resolved together.** Everyone plans at once; orders live in
-  `Match.orders[pid]` (private state only) and are paid for when given (refunded on cancel or
-  failure), so nobody can over-order. Public stock is a start-of-turn snapshot (`Match.shown`)
-  so spending doesn't leak plans. `done` flags + "all alive players done" resolve the turn;
-  any new order clears your `done`.
-- **Simultaneous movement with collisions** (`logic/movement.py`): paths are fixed at order
-  time; resolution moves every unit one cell per step, with swaps, shared targets, chains of
-  followers and blocked units handled in a fixed order. Fighting stops both units, which keeps
-  the rules short (no "winner moves in" special cases).
-- **Dice combat** (`logic/combat.py`): d6 pools, 4+ to hit, 5+ against cover, up to 3 rounds;
-  every roll is in the event so the client can show it. Tests use `tests/helpers.FixedDice`
-  (every die shows one face) to make outcomes certain.
-- **Multi-cell hex structures**: footprints are axial offsets; `gamekit.hexes.rotations`
-  precomputes the 6 turns, sent in the content so the client draws ghosts.
-- **Goods in stores** (`logic/logistics.py`): goods live in stores (per-structure `stock`), all
-  usable wherever they are. Production and upkeep happen at the same time (2026-11-15, the user's call:
-  upkeep comes out of the stores, then out of this turn's production, `economy.split_upkeep`); only what
-  is left at the end of the turn fills the stores (Town Halls first) and the rest is lost. Gold,
-  faith and science are realm-wide. Every structure works if staffed (`logic/economy.py`: jobs
-  filled food first, then oldest).
-- **Honest forecasts** (`economy.report`): `net` is income - upkeep, not capped by the stores (the
-  user's call: 21 of 25 food, +7, -3 shows +4, not +1), and `wasted` is what won't fit at the end
-  of the turn, `born` is the people you will really gain, `popNet` the population's change, and `idle` excludes
-  builders. **Population follows food** (2026-11-15, the user's rule; growth rates, the Growth off button and the
-  structures' `growth` field were removed): everyone eats this turn's food production first, then the stores (the
-  user's later rule: a drop in production doesn't shrink the population while the stores last); when both run out,
-  `starvation` kills units first (newest first), then people. Only a production surplus makes people, at once
-  (`economy.new_people`), as many as it feeds, while `pop` + `soldiers` (people in units, plus this turn's recruit
-  orders while planning) fit in `housing`; only the food left after that goes into the stores (`foodNet`, also
-  `net["food"]`: negative while the stores feed people). `flows` breaks the same numbers down per structure / unit / site
-  (`economy.flows`: production +, unit upkeep -, each person's food (`FOOD_PER_PERSON`, 2026-11-15: 1 each)
-  where they work / build / are idle at home, recruits' upkeep on their structure, bought land's gold on each
-  bought cell, flow id "land:<key>") for the client's **resource view** (click a top-bar chip: `map.setResView` greyscales the
-  `hr-base` group and draws outlines and +n / -n badges above it). Population is three chips (the user's
-  layout): "👥 idle n", "👥 population n" (pop + people in units), "🏠 cap n". The "people" view shows idle people at
-  home green +n (spread over the homes oldest first), people in jobs / units / recruits red -n, and
-  builders blue -n (tagged "build" in the flow, which the map draws blue); "population" (2026-11-15, the user's
-  request) shows blue "x/y" on each structure that houses people (flow tag "of", y = its housing, x = pop +
-  people in units filling the homes oldest first, the last home taking any overflow); "housing" shows
-  +n per structure that gives it.
-- **No roads; land is bought** (2026-11-11, the user's call): roads (first carrying goods, then laid
-  automatically) were removed. Structures go anywhere in your territory, with no "must touch"
-  rule. `orders.claim` buys one cell for gold (`CLAIM_COST`) at once (2026-11-15, the user's call: not an
-  order, no cancel; it goes into `m.claims` and `refresh` runs, so a hidden enemy unit takes it straight back).
-- **Strong and weak land** (`logic/territory.py`, 2026-11-14, the user's rules; 2026-11-15: structures no
-  longer spread land, bought land has upkeep): Town Halls' reach is strong, free land: every Town Hall
-  reaches `CITY_RADIUS` (2026-11-15: new cities too, not only the first). First come, first served (`m.territory` is kept between refreshes; a cell stays its
-  owner's while they still reach it, a free cell goes to the only player reaching it, nobody while
-  two or more do). Bought land is weak, per cell in `m.claims`, and lost for good when an enemy
-  unit stands on or next to it (`territory.unit_entered`, called by `Match.add_unit` / `move_unit`, so
-  passing through counts mid-move), when another player's Town Hall reaches it, or when it's
-  no longer connected to its owner's strong land (both in `territory.territory`, run by `refresh`);
-  your own Town Hall reaching it makes it strong (it leaves `m.claims`). Each weak cell costs
-  `LAND_UPKEEP` gold a turn (`economy.report`'s upkeep and `land`); gold short at the end of the
-  turn gives up that many weak cells, farthest from the owner's halls first (`territory.give_up`, a
-  `landLost` event), and only with none left does a paid unit desert. Claims need no enemy unit
-  on or next to the target (`claim_problem` checks what you see; `refresh` then drops a cell a hidden one threatens). The client
-  gets `claims` in the view and draws weak land with a dashed border (territory is never shaded inside).
-- **Standing orders** (`logic/standing.py`, 2026-11-11 feedback): `u["auto"]` (explore / fight /
-  pillage / travel, plus `u["goal"]` for travel) survives the per-turn order reset; `standing.plan_all`
-  gives each such unit this turn's ordinary order (move / shoot / hold) as planning starts, and any
-  other order for the unit (`orders.clear_unit`) ends it. Fight and Pillage pick targets the owner
-  sees and never end on their own (they hold when there's nothing); Pillage fights enemy units within
-  `ALERT` first. A move to a cell out of reach is a Travel order: `movement.route` (no budget, any
-  number of turns) cut to this turn by `movement.this_turn`. Explore's cell choice is
-  `explore.target` (bots scout with it too). Units with an order this turn or a standing order are
-  listed in `private.ordered` and greyed out on the map; the client deselects a unit once commanded.
-- **Own units pass through each other** (`movement.pass_friends` and the swap in step 5): a unit
-  blocked by its own side hops over it (and any friends behind) to the next free cell of its path,
-  paying for every cell crossed; two of your units moving into each other's cells swap. A path that
-  ends on a friend still stops.
-- **Fog of war as per-viewer private state** (`logic/vision.py`): the public state has no map;
-  each member's private state carries `view` (explored cells, dimmed cells, structures as last
-  seen, units in sight, filtered events). Planning uses only what the player knows (unexplored
-  cells cost 2, hidden enemies don't block); resolution uses the truth, with real movement
-  points, so hidden things are discovered by running into them. The client merges `view` into
-  `game` in `onState`, so the rest of the page reads `game.cells` / `game.units` as before.
-- **A free first city**: everyone starts with Settlers and a Scout (`START_ESCORT`, on the nearest free land cell; 2026-11-15, the user's
-  call: 1 hp, attack 0, defense 0, move 4, `people` 0 so it uses no housing; no upkeep and not recruitable); the starting goods wait in
-  `players[pid]["startGoods"]` until the first Town Hall. Players are out only with no Town
-  Hall *and* no Settlers; a realm without a hall skips eating and new people.
-- **Construction by idle people** (`logic/construction.py`): a resolved build order becomes a site
-  (`m.sites`, cells in `m.cell_site`), kept apart from `m.structures` so nothing else has to skip
-  unfinished buildings. A structure costs `hammers` (2026-11-15, the user's rule; was turns x
-  builders, converted as their product): every person without a job builds 1 hammer a turn, counted
-  before production and spent after it, oldest site first, each site taking as many people as it still
-  needs; a build order takes its builders as soon as it's placed (`construction.forecast` counts this
-  turn's orders after the sites, cancelling returns them; with nobody idle it just waits; at resolution
-  the order becomes the newest site, so it gets them first thing); jobs are filled first, so
-  players free builders with Switch off / Jobs off (`staff`) / Demolish. Sites show in `view.sites`
-  (own always, others' only while seen; not remembered under fog). An enemy unit on any cell of a
-  site stops its work (`construction.blocked`); building where a seen enemy unit stands is refused.
-- **A turn timer**: `server.py` schedules a timeout per turn (checked against the turn number).
-- **Bots in the seats** (the user asked for them): the `bots` setting adds seats `b1`... to the
-  `Match` (not lobby members). `logic/bots.py` plans each bot's turn as the turn starts
-  (`Match.plan_bots`, after setup and after each resolve) through `Match.act`, so they obey the
-  same checks and fog, and marks them done. The game ends once no person is left.
+## Patterns worth copying
+- **Secret simultaneous orders.** Orders live in `Match.orders[pid]` (private state), are paid when given
+  and refunded on cancel or failure. Public stock is a start-of-turn snapshot (`Match.shown`) so spending
+  doesn't leak plans. Any order clears your `done`.
+- **Simultaneous movement** (`movement.py`): paths fixed at order time, every unit steps one cell at a
+  time; swaps, shared targets, followers and blocks are handled in a fixed order. Fighting stops both units.
+  Own units hop over each other.
+- **Dice combat** (`combat.py`): every roll is in the event so the client can replay it. Tests use
+  `helpers.FixedDice`.
+- **Fog of war as private state** (`vision.py`): the public state has no map; each member's private `view`
+  holds what they see. Planning checks use only what the player knows; resolution uses the truth. The client
+  merges `view` into `game`, so the rest of the page reads `game.cells` / `game.units`.
+- **Forecast = resolution.** `economy.report` is both the planning forecast and what `end_of_turn` applies
+  (`resolving=True`), so the numbers players see are the numbers they get. `report.flows` breaks it down
+  per structure / unit / site / bought cell for the client's resource view (`map.setResView`).
+- **Data-driven content.** Structures' output (`produce`, `onTerrain`, `perCell`, `perAdjacent` by terrain /
+  type / tag), tags, housing, storage, trade rates; advances' dice `effect`s, per-type output `bonus` and
+  per-tag `housing`. A new structure, unit or advance is a JSON file plus its description in `text.js`; new
+  behaviour that isn't a field yet belongs in `content.py` as a field, not as a special case by id.
 
 ## Map
-- `server.py`: `SETTINGS`, `ACTIONS` (one thin method per message → `Match.act`), turn timer
-  (`start_timer` / `timeout` / `after_resolve`).
-- `logic/match.py`: `Match`: setup (map, halls, the starting Scout), state helpers used by the other modules
-  (`add_structure`, `add_unit` / `move_unit` (both unclaim weak land an enemy unit touches), `remove_unit`, `refresh` = territory cache), `act` / `set_done`,
-  `resolve` (+ `_found`, `_builds`, `_heal`, `_eliminate`, `_check_end`), `score`,
-  `remove`, `public`, `private` (orders, economy forecast, unit reach, recruit reasons, valid
-  founding rotations).
-- `logic/orders.py`: one function per order; `site_problem` / `recruit_problem` /
-  `found_problem` are shared with resolution (re-checked then) and the private state.
-- `logic/construction.py`: `start` / `progress` (resolution), `plan` / `forecast` (who builds what this
-  turn: `private.building`), `remove` (demolish).
-- `logic/standing.py`: `start` / `plan` / `plan_all` / `stop`, one helper per mode (`travel`, `attack`).
-- `logic/explore.py`: `target` (where an exploring unit goes).
-- `logic/bots.py`: `plan(m, pid)`: the bot strategy (header lists it; constants at the top).
-- `logic/vision.py`: `update` (after every change via `Match.refresh`), `known_at`, `view`.
-- `logic/recruiting.py`: `spawn_cell` (on the structure first), `resolve` (recruit orders appear). Automatic
-  recruiting with a default order for new units was removed (2026-11-15, the user's call).
-- `logic/territory.py`: `territory` (strong + weak land, returns both maps), `unit_entered`, `threatened`,
-  `bought` (weak cells paid for), `give_up` (unpaid land).
-- `logic/movement.py`, `logic/combat.py`, `logic/economy.py`, `logic/logistics.py`, `logic/mapgen.py`,
-  `logic/content.py`: see their headers.
-- `client/art/`: PNG art at 4x map size (sharp at the 3x max zoom). `terrain/<terrain>[_n].png` (e.g. plains.png, mountain_1.png) (208 x 240, one
-  pointy-top hex 207.85 wide; corners (103.9,0) (207.8,60) (207.8,180) (103.9,240) (0,180) (0,60)) is drawn over the
-  flat colour for the terrains listed in map.js's `TERRAIN_ART` (variants with weights, picked per cell by a hash of
-  the cell key, so every viewer sees the same map; add a new file there). Cells are drawn top row first, left
-  to right, so a tile's art can spill up over the tiles above it (only inside its own 208 x 240 box). `terrain/terrain_template.png` (hex outline)
-  and `units/unit_template.png` (the unit disc, radius SIZE * 0.42 = 12.6 on the map: 100 x 100) are blank
-  templates. Units with an `art` file (units/*.json, a name in `units/`) draw it over their owner-coloured disc
-  instead of the icon (map only; panels keep the emoji); units without one and structures still draw emoji.
-- `client/map.js`: `HexMap.create`: pan (drag) / zoom (wheel) SVG map; terrain layer rebuilt only
-  when `game.cells` changes, the rest per state;
-  structures are solid in their content `color`, drawn by `blob` (cells at 80% with the gaps
-  between a structure's own cells filled, so only its outside is inset); owner colours show on the
-  territory border (drawn just inside the cells, its outer edge on the cell edge (`BORDER`, `BORDER_W`, `outline`), so two realms' borders sit side by side; opaque lines in one group with the opacity, so overlaps don't darken) and as an outline on hover (`hoverG`, `shapeAt`), and the icon (emoji from the content, placeholder for art) at their middle; `setHighlights` / `setGhost` / `flash` only
-  touch overlays (a selection, "sel" cells, is outlined round its outside only, in `selG`). `HexMap.util` has the client's hex maths (dist, neighbors, add).
-- `client/hud.js`: `HexHud`: top bar (stock + net, people: jobs / building / units / idle, housing cap,
-  Jobs off / on, End turn), players, selection panel (unit / structure / site actions, Explore, recruit buttons with the server's reasons, automatic
-  recruiting selects), orders list, trade, build menu. `client/panels.js`: `HexPanels`: `techTree` (advances of one
-  currency laid out by prerequisite depth, absolutely placed nodes over an SVG of links), last-turn report (dice faces), log.
-  The tech tree opens in the `#tech` popup (`ui.tech` = the open currency tab), which covers row 2 of the `#hud` grid,
-  so `#col-left` / `#col-right` are placed explicitly (an auto-placed column would be pushed below it).
-- `client/replay.js`: `HexReplay`: the end-of-turn combat replay (glides with `map.focus`, dice per round
-  left = you / right = them, `map.mark` rings, back to the saved view). `steps(game, you)` turns battle /
-  shot / siege / tower events into steps; each unit side carries `need` (the roll that hits it, from
-  `combat.side`). Player settings (speed, skip) via `AppSettings.addPageSettings`. game.js starts it where
-  it used to only flash the cells (a new `game.step`); Esc or the Skip button stops it.
-- `client/game.js`: UI state (`ui.sel`, `ui.mode` build / shoot / found + rotation, tab, `ui.tech`, `ui.resView`), click
-  and key handling (`selectAt` cycles unit -> structure -> site on repeated clicks), highlights and the build ghost (its green/red and the hint bar's "Here:" reason
-  come from `buildProblem`, only a hint; the server decides). While placing (the user's layout, 2026-11-15) the
-  bottom hint shows the name + controls, the terrains it goes on and the refusal reason (left) and `HexHud.structCard`
-  (right: footprint picture, HP, every effect); the card's `.hr-sres` line lists what it makes and uses a turn
-  ("(+1 🪵, −1 👥)", 2026-11-15, the user's layout, replacing the "Makes" / "Needs n workers" bullets): `ghost()` fills
-  it with `outputAt` for the hovered spot, and a selected structure of yours shows its real output (its + flows); others'
-  and an unplaced one show the content's base output (per terrain for the Mine); the top bar's `.hr-delta-<key>` slots under each chip show
-  `deltas()`: cost, output per turn at the hovered spot (`outputAt`, a copy of `economy.output` fed by the private
-  `typeBonus` / `homeHousing`: keep the two in step), store room, "-n when working" on people, housing, and the
-  hammers last. The turn countdown (approximate: restarts on reload).
-- `tests/`: `test_rules.py` (Match on a blank all-plains map: `helpers.blank`, `hall` (with the
-  starting goods), `unit`, `rich`, `stock` = what a player can spend), `test_lobby.py` (Sim: secrecy, done, timer, leaving).
+- `server.py`: `SETTINGS`, `ORDERS` (message -> argument readers; every order is `Match.act`), turn timer.
+- `logic/match.py`: `Match`: setup, state helpers (`add_structure`, `add_unit` / `move_unit`, `remove_unit`,
+  `structures_of` / `units_of` / `has_hall`, `refresh`), `act` / `set_done`, `resolve`, `score`, `public`,
+  `private`.
+- `logic/orders.py`: one function per order; `site_problem` / `recruit_problem` / `found_problem` /
+  `claim_problem` are shared with resolution and the private state.
+- `logic/economy.py`: staffing, output, housing, `report` (income, upkeep, trades, food, waste, flows),
+  `end_of_turn`. `logic/logistics.py`: goods in stores. `logic/construction.py`: sites built with hammers.
+- `logic/territory.py`: free land around Town Halls (first come, first served) plus bought land
+  (`m.claims`: upkeep, lost to adjacent enemies or when cut off).
+- `logic/standing.py`, `logic/explore.py`: standing orders (Explore / Fight / Pillage / Travel).
+- `logic/recruiting.py`, `logic/combat.py`, `logic/movement.py`, `logic/vision.py`, `logic/mapgen.py`,
+  `logic/bots.py` (bot seats `b1`...; plan through `Match.act` like players).
+- `client/text.js` (`HexText`): rules, hints, tooltips, descriptions. `client/map.js` (`HexMap`): SVG map,
+  pan/zoom, overlays, resource view. `client/hud.js` (`HexHud`): top bar, panels, structure card, trade,
+  build menu. `client/panels.js`: tech tree, turn report, log. `client/replay.js`: combat replay.
+  `client/game.js`: UI state, input, render loop.
+- `client/art/`: terrain PNGs (`terrain/<terrain>[_n].png`, 208 x 240, listed in map.js `TERRAIN_ART`) and
+  unit PNGs (`units/<file>`, named by a unit's `art`). Blank templates are in each folder.
 
-## Balance notes
-- Map radius = 9 + 3 per realm (bots count) + map size (small -3, large +4, huge +8), 2 less solo.
-- Bot-only test games (scratch, 80 turns, before build times and the weaker Town Hall): bots reach 2-3 cities, ~12 units, fight and siege from
-  turn ~20 but rarely take a city; a turn with 5 bots takes under 0.2 s.
-- Start: 3 people, housing 4, and the goods in the Town Hall (10 of each at most); the hall makes
-  only 1 gold and 2 food (no wood, stone, science or faith: the early game is slow on purpose), so
-  you grow once, then need a Hut (2 wood) or House. Building takes hammers from idle people (Farm 2,
-  House 4, University 12, Monument 15), and every worker in a job is
-  one builder fewer, so the opening is a choice between producing and building. The hall's 10-cap
-  makes a Storage Yard or Granary the next limit. Free land is radius 2 around each Town Hall (~27 cells);
-  beyond it, land costs 2 gold per claim (up to 7 cells) and 1 gold a turn per cell, while the hall
-  makes 1 gold, so expanding needs a gold economy (Market, Chapel with its advance, trade).
-- Structure tags (2026-11-15, the user's call): `tags` in each structures/*.json (ids from `content.TAGS`, sent
-  as `content.tags` with name + pip colour), shown as pips on the structure card (`HexHud.structCard`: the
-  placing hint's right side and the top of a selected structure's panel). `perAdjacent` can count own
-  neighbours with a `tag` and gains may be negative (Farm: -1 food per Industrial next to it, shown as
-  "−1 🍞 for [Industrial]"); output never goes below 0. The `home` flag = the "home" tag.
-- Hunger (2026-11-15, the user's rule): every person eats `FOOD_PER_PERSON` (1); food short at the end of the turn kills everyone who can't eat,
-  units first (newest first, until the rest can be fed), then people (`economy.starvation`; the
-  forecast's `starve` warns on the people chip).
-- Farms (2026-11-15, the user's rules): plains only, 1 food, +1 per own Farm next to it, +1 if it touches
-  water, so farms want clusters by rivers and lakes (a lone dry farm makes 1 food, a ring of farms ~3-4
-  each). `perAdjacent` takes a list for several bonuses.
-- Sieges are slow on purpose: a Swordsman does ~2 damage a turn to a 15 hp Town Hall and takes
-  ~1 back, so taking a city needs 3+ units or Catapults (3 damage per hit, from range, no reply,
-  but towers shoot them).
-- Score: population + units + 3 per advance + structure scores + gold // 10, so a peaceful
-  builder can win on the turn limit; conquest ends it early.
+## Pitfalls
+- Under fog, a refusal must not reveal hidden things: planning checks pass the player's view
+  (`seen=`, `planning=True`); resolution re-checks the truth and reports a "failed" event.
+- Tests place pieces by hand: `helpers.blank` turns fog off unless asked; call `m.refresh()` after placing.
+- Goods aren't in `players[pid]["res"]` (gold/faith/science only): use `logistics.stock` / `take` / `give`.
+- Never use a `type` key in game messages (the lobby envelope owns it); build/recruit say `kind`.
+- Unit ids sort as strings ("u10" < "u9"); use the `n` field (or dict order) for age.
+- A new thing that takes cells must also be checked in `orders.site_problem`, the bots' free-cell checks and
+  the client's `buildProblem`.
+- `orders.clear_unit` ends a standing order; standing orders re-plan with `keep_auto=True`.
+- A player can be knocked out mid-resolution: loop over `self.alive()` again after each stage.
+- The client's placing preview (`game.js` `outputAt`) mirrors `economy.output`; keep the two in step.
+- SVG shapes without a fill are black: overlay cells get `hr-hlcell` (fill: none) until highlighted.
 
-## Pitfalls seen here
-- Under fog, a validation error must not reveal hidden things: order checks pass the player's
-  view (`site_problem(..., seen=)`, `found_problem(planning=True)`, `shoot` only at what you see),
-  and resolution re-checks the truth (a failed order becomes a "failed" event for its owner).
-- Rules tests place pieces by hand: `helpers.blank` turns fog off unless asked (`fog="on"`, then
-  `m.refresh()` after placing).
-- SVG shapes without a fill are black: the highlight overlay (one polygon per cell, above the
-  terrain) once painted the whole map black. Overlays get the `hr-hlcell` class (fill: none)
-  until highlighted.
-- A stray double quote inside a double-quoted string in `client/hud.js` stopped the file
-  loading: the map drew but every panel stayed empty. `tools/jscheck.py` now flags a string
-  followed by a word on the same line.
-- Goods aren't in `players[pid]["res"]` (that's gold/faith/science only): read them with
-  `logistics.stock`, spend with `logistics.take` / `orders.pay`, refund with `give`.
-- Never use a `type` key in game messages: the lobby envelope is `{"type": "game", ...}` and
-  yours overwrites it (the message silently does nothing). Build/recruit say `kind`.
-- Unit ids sort as strings in `movement.resolve` ("u10" < "u9"): deterministic, but not by age;
-  use the `n` field when age matters (desertion, tower targets).
-- A new kind of thing on the map that takes cells must also be checked in `orders.site_problem`
-  (sites are: `m.cell_site`), the bots' `taken` / `free_cells`, and the client's `buildOk`.
-- Standing orders re-plan through `orders.clear_unit(..., keep_auto=True)`; a plain `clear_unit` ends the
-  standing order, so call it only for a new order from the player.
-- A player can be knocked out mid-resolution; loops over players use `self.alive()` again after
-  each stage, and `remove_unit` also clears that unit's orders.
-
-## Not done yet (ideas)
-- Ships carrying land units, capturing (instead of destroying) cities, diplomacy.
+## Ideas
+- Ships carrying land units, capturing cities, diplomacy.

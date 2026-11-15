@@ -53,11 +53,11 @@ class Bot:
     def __init__(self, m, pid):
         self.m, self.pid = m, pid
         self.rng = random.Random(f"{m.settings.get('seed')}-{pid}-{m.turn}")
-        self.mine = [s for s in m.structures.values() if s["owner"] == pid]
+        self.mine = m.structures_of(pid)
         self.sites = [x for x in m.sites.values() if x["owner"] == pid]
         self.halls = [s for s in self.mine if s["type"] == TOWN_HALL]
         self.hall_cells = [c for s in self.halls for c in s["cells"]]
-        self.units = [u for u in m.units.values() if u["owner"] == pid]
+        self.units = m.units_of(pid)
         self.known = vision.known_at(m, pid)
 
     def near_hall(self, k):
