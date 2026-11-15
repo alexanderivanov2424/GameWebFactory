@@ -188,15 +188,24 @@
         // A command deselects the unit (Clear orders keeps it selected to give a new one).
         const command = (msg) => { act.send(msg); act.select(null); };
         const autoBtn = (m, label, title) => btn(mode === m ? `${label} (on)` : label, () => command({ action: "auto", unit: sel.id, mode: m }), { cls: mode === m ? "on" : "", title });
-        const row = el("div", { className: "hr-btnrow" },
-          btn(hold ? "Hold (on)" : "Hold", () => command({ action: "hold", unit: sel.id }), { cls: hold ? "on" : "", title: "Roll one extra defence die this turn instead of moving." }),
-          game.fog && !def.settler ? autoBtn("explore", "Explore", "Walk around on its own every turn to clear the fog, until you give it another order.") : null,
-          !def.settler ? autoBtn("fight", "Fight", "Every turn, attack the nearest enemy unit you can see (hold when there's none), until you give it another order.") : null,
-          !def.settler ? autoBtn("pillage", "Pillage", "Every turn, attack the nearest enemy structure you can see, but fight enemy units that come close first (hold when there's nothing), until you give it another order.") : null,
-          def.range ? btn("Shoot", () => act.setMode({ type: "shoot", unit: sel.id }), { cls: ui.mode?.type === "shoot" ? "on" : "", title: `Shoot a unit or structure up to ${def.range} cells away.` }) : null,
-          def.settler ? btn("Found city", () => act.setMode({ type: "found", unit: sel.id, rot: found[0] }), { disabled: !found.length, cls: ui.mode?.type === "found" ? "on" : "", title: found.length ? "Found a Town Hall here." : "Can't found a city here." }) : null,
-          btn("Clear orders", () => act.send({ action: "move", unit: sel.id, to: u.at })),
-          btn("Disband", () => { if (confirm(`Disband this ${def.name}?`)) act.send({ action: "disband", unit: sel.id }); }, { cls: "danger" }));
+        // Each action with a short description beside it (feedback: the bare buttons weren't clear).
+        const action = (b, text) => b && [b, el("span", { className: "small muted" }, text)];
+        const row = el("div", { className: "hr-actions" },
+          action(btn(hold ? "Hold (on)" : "Hold", () => command({ action: "hold", unit: sel.id }), { cls: hold ? "on" : "", title: "Roll one extra defence die this turn instead of moving." }),
+            "Stay put this turn and defend with +1 die."),
+          game.fog && !def.settler ? action(autoBtn("explore", "Explore", "Walk around on its own every turn to clear the fog, until you give it another order."),
+            "Every turn: walk into the fog on its own.") : null,
+          !def.settler ? action(autoBtn("fight", "Fight", "Every turn, attack the nearest enemy unit you can see (hold when there's none), until you give it another order."),
+            "Every turn: attack the nearest enemy unit in sight.") : null,
+          !def.settler ? action(autoBtn("pillage", "Pillage", "Every turn, attack the nearest enemy structure you can see, but fight enemy units that come close first (hold when there's nothing), until you give it another order."),
+            "Every turn: attack the nearest enemy structure in sight.") : null,
+          def.range ? action(btn("Shoot", () => act.setMode({ type: "shoot", unit: sel.id }), { cls: ui.mode?.type === "shoot" ? "on" : "", title: `Shoot a unit or structure up to ${def.range} cells away.` }),
+            `Pick a target up to ${def.range} cells away instead of moving.`) : null,
+          def.settler ? action(btn("Found city", () => act.setMode({ type: "found", unit: sel.id, rot: found[0] }), { disabled: !found.length, cls: ui.mode?.type === "found" ? "on" : "", title: found.length ? "Found a Town Hall here." : "Can't found a city here." }),
+            found.length ? "Build a Town Hall where it stands." : "Can't found a city here.") : null,
+          action(btn("Clear orders", () => act.send({ action: "move", unit: sel.id, to: u.at })), "Cancel this unit's orders (it stays put)."),
+          action(btn("Disband", () => { if (confirm(`Disband this ${def.name}?`)) act.send({ action: "disband", unit: sel.id }); }, { cls: "danger" }),
+            "Remove the unit; its people come home."));
         kids.push(el("p", { className: "hr-pending" }, pending), row,
           el("p", { className: "muted small" }, "Click a highlighted cell to move there (red = attack), or any cell further away to walk there over several turns. Click the unit again to clear its orders (when it stands on a structure, that selects the structure; use Clear orders)."));
       }
