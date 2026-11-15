@@ -58,6 +58,18 @@
     .hr-shot { stroke: #ff4a3a; stroke-width: 3; stroke-dasharray: 7 5; }
     .hr-shotmark { fill: none; stroke: #ff4a3a; stroke-width: 3; }
     .hr-hold { fill: #fff; stroke: #10131a; stroke-width: 1.5; }
+    /* Resource view (a resource chip clicked on the top bar): the map greyscale, makers and users coloured. */
+    .hr-resview .hr-base { filter: grayscale(1) brightness(0.75); }
+    .hr-resview-layer { pointer-events: none; }
+    .hr-res-line, .hr-res-ring { fill: none; stroke-width: 4; stroke-linecap: round; }
+    .hr-res-line.hr-res-pos, .hr-res-ring.hr-res-pos { stroke: #4fd16a; }
+    .hr-res-line.hr-res-neg, .hr-res-ring.hr-res-neg { stroke: #ff5a4a; }
+    .hr-res-line.hr-res-mix, .hr-res-ring.hr-res-mix { stroke: #ffc94a; }
+    .hr-res-line.hr-res-off, .hr-res-ring.hr-res-off { stroke: #a0a6b2; stroke-dasharray: 4 5; }
+    .hr-badge rect { stroke: #10131a; stroke-width: 1.5; }
+    .hr-badge.hr-res-pos rect { fill: #1f8a3a; } .hr-badge.hr-res-neg rect { fill: #c0281c; }
+    .hr-badge.hr-res-off { opacity: 0.55; } .hr-badge.hr-res-off rect { fill: #5a606c; }
+    .hr-badge text { fill: #fff; font: 700 12px sans-serif; text-anchor: middle; dominant-baseline: central; }
     .hr-hlcell { fill: none; stroke: none; }
     .hr-fog { fill: #0b0e14; stroke: #1a2030; stroke-width: 1; }
     .hr-dim { fill: rgba(6, 9, 14, 0.55); pointer-events: none; }
@@ -115,7 +127,10 @@
     .hr-chip { background: #2a3243; border-radius: 6px; padding: 2px 8px; font-size: 0.85rem; white-space: nowrap; }
     .hr-chip b { color: #fff; } .hr-chip small { color: #98a2b6; } .hr-chip.full b { color: #ffd36b; }
     .hr-chip.hr-res-gold b { color: #ffd84a; } .hr-chip.hr-res-faith b { color: #d9a8ff; } .hr-chip.hr-res-science b { color: #7fd0ff; }
-    .hr-people { font-size: 0.85rem; }
+    .hr-people { font-size: 0.85rem; border-radius: 6px; padding: 2px 6px; }
+    .hr-chip, .hr-people { cursor: pointer; }
+    .hr-chip:hover, .hr-people:hover { background: #36405a; }
+    .hr-chip.on, .hr-people.on { background: #4a5d86; box-shadow: 0 0 0 2px #9fb7ff; }
     #hud button, .hr-btn { font: inherit; font-size: 0.85rem; padding: 4px 10px; border-radius: 6px; border: 1px solid #4a566e; background: #2c3548; color: #e7eaf0; cursor: pointer; }
     #hud button:hover:not(:disabled) { background: #3a4660; }
     #hud button:disabled { opacity: 0.45; cursor: not-allowed; }
@@ -231,7 +246,8 @@
           Units appear on the structure that trains them. A military structure can <b>recruit every turn</b> on its own
           (when you can pay and have people without a job), and give each unit it trains a standing order.
           Click a cell again to cycle through what's on it (a unit, then the structure under it).
-          <b>Tech tree</b> (next to the Build tab) shows the science and faith advances. When a turn resolves, a replay
+          Click a resource on the top bar for its <b>resource view</b>: the map turns grey and shows what makes it
+          (green, +n a turn) and what uses it (red, −n). <b>Tech tree</b> (next to the Build tab) shows the science and faith advances. When a turn resolves, a replay
           visits each fight you saw with the dice (you on the left); Skip or Esc stops it, and Settings → Hex Realms sets its
           speed or turns it off.</p>
         <p>The last realm standing wins; if several survive to the turn limit, the highest score wins. The host can add

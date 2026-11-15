@@ -26,7 +26,10 @@ fields in `logic/content.py`). Tests: `tests/` (`python3 -I tools/run_tests.py h
 - **Honest forecasts** (`economy.report`): `net` is what you will really gain (goods capped by the
   room in your stores, `wasted` = the rest), `growth` is the people you will really gain (0 with a
   reason in `growthWhy`), and `idle` excludes builders. Growth needs more food made than eaten,
-  not food that fits in the stores.
+  not food that fits in the stores. `flows` breaks the same numbers down per structure / unit / site
+  (`economy.flows`: production +, unit upkeep -, the people's food on the first Town Hall, and for
+  "people" jobs / builders - and housing +) for the client's **resource view** (click a top-bar chip:
+  `map.setResView` greyscales the `hr-base` group and draws outlines and +n / -n badges above it).
 - **No roads; land is bought** (2026-11-11, the user's call): roads (first carrying goods, then laid
   automatically) were removed. Structures go anywhere in your territory, with no "must touch"
   rule. `orders.claim` is an order paid in gold (`CLAIM_COST`); at resolution (`Match._claims`,
@@ -123,7 +126,7 @@ fields in `logic/content.py`). Tests: `tests/` (`python3 -I tools/run_tests.py h
   shot / siege / tower events into steps; each unit side carries `need` (the roll that hits it, from
   `combat.side`). Player settings (speed, skip) via `AppSettings.addPageSettings`. game.js starts it where
   it used to only flash the cells (a new `game.step`); Esc or the Skip button stops it.
-- `client/game.js`: UI state (`ui.sel`, `ui.mode` build / shoot / found + rotation, tab, `ui.tech`), click
+- `client/game.js`: UI state (`ui.sel`, `ui.mode` build / shoot / found + rotation, tab, `ui.tech`, `ui.resView`), click
   and key handling (`selectAt` cycles unit -> structure -> site on repeated clicks), highlights and the build ghost (its green/red is only a hint; the server
   decides), the turn countdown (approximate: restarts on reload).
 - `tests/`: `test_rules.py` (Match on a blank all-plains map: `helpers.blank`, `hall` (with the

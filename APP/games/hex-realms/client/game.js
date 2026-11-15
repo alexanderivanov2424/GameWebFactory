@@ -4,6 +4,8 @@
  * panels.js) from the state. The server validates everything; the ghost colours here are only a hint.
  *
  * Clicking a cell selects what's on it; clicking it again cycles unit -> structure -> construction site.
+ * ui.resView: null | a resource (or "people") shown on the map: greyscale, with what makes it (green +n) and uses it
+ * (red -n) each turn, from the report's flows (click its chip on the top bar again or Esc to leave).
  * ui.tech: null | the open tech tree tab (a currency: "science" / "faith"), shown in the #tech popup.
  * ui.mode: null | {type: "build", kind, rot} | {type: "shoot", unit} | {type: "found", unit, rot}
  * (Escape cancels; R or right-click turns). ui.sel: null | {kind: "unit"|"structure", id}; giving a unit a
@@ -14,7 +16,7 @@
 (() => {
   const { $, el, fill } = AppDom;
   const U = HexMap.util;
-  const ui = { sel: null, mode: null, tab: "build", tech: null, buildCat: null, trade: { give: "gold", get: "food" }, lastRot: 0,
+  const ui = { sel: null, mode: null, tab: "build", tech: null, resView: null, buildCat: null, trade: { give: "gold", get: "food" }, lastRot: 0,
     key: null, flashSeen: null, turnStart: Date.now(), gameNumber: null };
   let state = null;
   let hover = null;
@@ -44,6 +46,7 @@
     select(kind, id) { ui.sel = kind ? { kind, id } : null; refresh(); },
     setMode(mode) { ui.mode = mode; refresh(); },
     centre: (k) => map.centre(k),
+    resView(r) { ui.resView = ui.resView === r ? null : r; refresh(); },
   };
 
   function ctx() {
@@ -68,7 +71,7 @@
     const game = state.game, priv = state.private;
     if (ui.gameNumber !== state.gameNumber) {
       replay.skip();
-      Object.assign(ui, { gameNumber: state.gameNumber, sel: null, mode: null, flashSeen: null });
+      Object.assign(ui, { gameNumber: state.gameNumber, sel: null, mode: null, flashSeen: null, resView: null });
       map.draw(game, state.you, priv);
       map.centre(home());
     }
@@ -132,6 +135,8 @@
       fill($("topbar"), el("span", { className: "hr-turn" }, `Turn ${c.game.turn} / ${c.game.turnLimit}`), el("span", { className: "muted" }, "Spectating"));
     }
     renderTabs(c, playing);
+    if (!playing) ui.resView = null;
+    map.setResView(c.game, ui.resView ? c.priv.report.flows.filter((f) => f[1] === ui.resView) : null);
     renderHint(c);
     highlights(c);
     ghost();
@@ -174,7 +179,15 @@
 
   function renderHint(c) {
     const m = ui.mode, box = $("hint");
-    box.hidden = !m;
+    box.hidden = !m && !ui.resView;
+    if (!m && ui.resView) {
+      const { resIcon, resName, btn } = HexHud.fmt, r = ui.resView;
+      const text = r === "people" ? "red = people working or building there this turn, green = housing it gives"
+        : "green = made there each turn, red = used each turn (units' upkeep; your people's food on your Town Hall)";
+      fill(box, `${resIcon(r)} ${resName(r)} view: ${text}. Faded = not working this turn. Click the resource again or Esc to leave. `,
+        btn("Close (Esc)", () => act.resView(null)));
+      return;
+    }
     if (!m) return;
     const cancel = HexHud.fmt.btn("Cancel (Esc)", () => act.setMode(null));
     const names = c.content;
@@ -302,7 +315,7 @@
 
   document.addEventListener("keydown", (e) => {
     if (!state || state.phase === "lobby" || /^(INPUT|SELECT|TEXTAREA)$/.test(e.target.tagName)) return;
-    if (e.key === "Escape") { if (replay.playing) replay.skip(); else if (ui.tech) { ui.tech = null; refresh(); } else if (ui.mode) act.setMode(null); else if (ui.sel) act.select(null); }
+    if (e.key === "Escape") { if (replay.playing) replay.skip(); else if (ui.tech) { ui.tech = null; refresh(); } else if (ui.mode) act.setMode(null); else if (ui.sel) act.select(null); else if (ui.resView) act.resView(null); }
     else if (e.key === "r" || e.key === "R") rotate();
   });
 

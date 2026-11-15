@@ -2,7 +2,8 @@
  * Hex Realms: the HUD panels around the map, all built from the state (no rules here).
  *
  *   HexHud.topbar(el, ctx)      turn, countdown (#hr-timer, ticked by game.js), resources (+net), people and
- *                               builders, Jobs off / Jobs on (every structure with workers), End turn
+ *                               builders, Jobs off / Jobs on (every structure with workers), End turn; clicking a
+ *                               resource (or people) toggles the map's resource view (act.resView, ui.resView)
  *   HexHud.players(el, ctx)     colour, name, score, done tick, out, public resource snapshot
  *   HexHud.selection(el, ctx)   the selected unit / structure / construction site: stats, orders,
  *                               Recruit/Hold/Shoot/Found/Disband/Switch off/Demolish, automatic recruiting
@@ -14,7 +15,7 @@
  *                               fmt.setResources(content.resourceInfo) first (game.js does, each render)
  *
  * ctx = { game, priv, you, me (public player entry), content, ui, act } where ui is the page's
- * persistent UI state ({sel, mode, trade}) and act = { send(msg), select(kind, id), setMode(mode), centre(key) }.
+ * persistent UI state ({sel, mode, trade, resView}) and act = { send(msg), select(kind, id), setMode(mode), centre(key), resView(res) }.
  * Every function replaces the children of its element, so call them on each render.
  */
 (() => {
@@ -35,6 +36,7 @@
     const b = el("button", { className: `hr-btn ${opts.cls || ""}`, onclick, disabled: !!opts.disabled, title: opts.title || "" }, text);
     return b;
   };
+  const VIEW_TIP = "Click: show on the map what makes and uses it each turn.\n";
   const stat = (label, value) => el("span", { className: "hr-stat" }, `${label} `, el("b", {}, String(value)));
 
   function topbar(box, ctx) {
@@ -44,7 +46,7 @@
       const net = rep.net[r] || 0;
       const capped = rep.caps[r];
       const full = capped !== undefined && priv.res[r] >= capped;
-      return el("span", { className: `hr-chip hr-res-${r}${full ? " full" : ""}`, title: `${resName(r)}: income ${rep.income[r] || 0}, upkeep ${rep.upkeep[r] || 0}${capped !== undefined ? `, storage ${capped}` : ""}${(rep.wasted || {})[r] ? `, ${rep.wasted[r]} won't fit in your stores (lost)` : ""}` },
+      return el("span", { className: `hr-chip hr-res-${r}${full ? " full" : ""}${ctx.ui.resView === r ? " on" : ""}`, onclick: () => ctx.act.resView(r), title: `${VIEW_TIP}${resName(r)}: income ${rep.income[r] || 0}, upkeep ${rep.upkeep[r] || 0}${capped !== undefined ? `, storage ${capped}` : ""}${(rep.wasted || {})[r] ? `, ${rep.wasted[r]} won't fit in your stores (lost)` : ""}` },
         el("span", { className: "hr-ricon" }, resIcon(r)), " ", el("b", {}, String(priv.res[r])), capped !== undefined ? el("small", {}, `/${capped}`) : null,
         el("span", { className: net < 0 ? "neg" : net > 0 ? "pos" : "" }, ` (${signed(net)})`));
     });
@@ -54,7 +56,7 @@
       el("span", { className: "hr-turn" }, `Turn ${game.turn} / ${game.turnLimit}`),
       game.turnSeconds > 0 ? el("span", { id: "hr-timer", className: "hr-timer" }) : null,
       el("span", { className: "hr-chips" }, chips),
-      el("span", { className: "hr-people", title: `Population ${priv.pop}, housing ${rep.housing}: ${rep.workers} in jobs, ${rep.builders} building, ${rep.idle} idle.${rep.growth ? "" : `\nNo growth this turn: ${rep.growthWhy}`}` },
+      el("span", { className: `hr-people${ctx.ui.resView === "people" ? " on" : ""}`, onclick: () => ctx.act.resView("people"), title: `${VIEW_TIP}Population ${priv.pop}, housing ${rep.housing}: ${rep.workers} in jobs, ${rep.builders} building, ${rep.idle} idle.${rep.growth ? "" : `\nNo growth this turn: ${rep.growthWhy}`}` },
         el("span", { className: "hr-ricon" }, resIcon("people")), " ", el("b", {}, String(priv.pop)), ` / ${rep.housing} (jobs ${rep.workers}`,
         rep.builders ? `, building ${rep.builders}` : "", `, idle ${rep.idle})`,
         rep.growth ? el("span", { className: "pos" }, ` growth +${rep.growth}`) : null),

@@ -7,7 +7,11 @@
                              gain: goods only up to the room in your stores), "wasted" {good: n that
                              won't fit}, "staffed": [sid], "workers" (in jobs), "builders" (on
                              construction sites), "idle" (neither), "housing", "caps", "growth"
-                             (people you will gain, 0 if none), "growthWhy" (why not), "tradeRate"}
+                             (people you will gain, 0 if none), "growthWhy" (why not), "tradeRate",
+                             "flows" (see flows())}
+    flows(m, pid, working, works)  what each of pid's things adds or takes this turn, for the client's
+                             resource view: [[id, res, n, on], ...], n > 0 made, n < 0 used, on = False
+                             for a structure that isn't working this turn (what it would make / need)
     end_of_turn(m, pid, events)  production, eating, wages, growth
 
 Rules: every structure works, wherever it is, as long as it has its crew: people (population)
@@ -116,7 +120,36 @@ def report(m, pid):
             "wasted": {r: income[r] - kept[r] for r in CAPPED if income[r] > kept[r]},
             "staffed": [s["id"] for s in working], "workers": p["pop"] - left, "builders": building["builders"],
             "idle": left - building["builders"], "housing": housing, "caps": caps, "growth": growth,
-            "growthWhy": why, "tradeRate": min(rates) if rates else 0}
+            "growthWhy": why, "tradeRate": min(rates) if rates else 0,
+            "flows": flows(m, pid, working, building["works"])}
+
+
+def flows(m, pid, working, works):
+    """Per structure / unit / site: production (+), unit upkeep and the people's food (-, on the first
+    Town Hall), and for "people": jobs and builders (-) and housing (+). See the module header."""
+    p, on = m.players[pid], {s["id"] for s in working}
+    home_bonus = effect(m, pid, "homeHousing")
+    out = []
+    own = sorted((s for s in m.structures.values() if s["owner"] == pid), key=lambda s: s["n"])
+    for s in own:
+        d = STRUCTURES[s["type"]]
+        for r, n in output(m, s).items():
+            out.append([s["id"], r, n, s["id"] in on])
+        if d["jobs"]:
+            out.append([s["id"], "people", -d["jobs"], s["id"] in on])
+        housing = d["housing"] + (home_bonus if d["home"] else 0)
+        if housing:
+            out.append([s["id"], "people", housing, True])
+    halls = [s for s in logistics.stores(m, pid) if s["type"] == TOWN_HALL]
+    if halls and p["pop"] // 2:
+        out.append([halls[0]["id"], "food", -(p["pop"] // 2), True])
+    for cid in works:
+        out.append([cid, "people", -STRUCTURES[m.sites[cid]["type"]]["builders"], True])
+    for u in sorted((u for u in m.units.values() if u["owner"] == pid), key=lambda u: u["n"]):
+        for r, n in UNITS[u["type"]]["upkeep"].items():
+            if n:
+                out.append([u["id"], r, -n, True])
+    return out
 
 
 def end_of_turn(m, pid, events):

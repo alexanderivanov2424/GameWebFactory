@@ -12,6 +12,9 @@
  *   map.focus(keys, zoom, ms)   glide (pan + zoom, eased) to centre `keys`; a Promise
  *   map.getView() / map.setView(view, ms)   save and glide back to a view ({x, y, k})
  *   map.mark(keys)              rings round cells (the combat replay.js is showing); [] clears
+ *   map.setResView(game, flows | null)   the resource view: every other layer greyscale, and each thing in
+ *                               flows ([[id, res, n, on]] from the report, one resource) outlined (green makes,
+ *                               red uses, amber both, grey dashed not working) with its +n / -n badges
  *   HexMap.util                 pointy-top axial helpers: parse, key, add, neighbors, dist, center, DIRS
  *
  * Pointy-top axial "q,r" keys: x = SIZE*sqrt(3)*(q + r/2), y = SIZE*1.5*r. Drag pans, the wheel zooms
@@ -160,11 +163,13 @@
 
   function create(element, handlers = {}) {
     const root = svg("svg", { class: "hr-svg" });
-    const world = svg("g");
-    const layer = (name) => { const g = svg("g", { class: `hr-${name}` }); put(world, g); return g; };
+    const world = svg("g"), base = svg("g", { class: "hr-base" });  // base: every layer but the resource view's
+    const layer = (name) => { const g = svg("g", { class: `hr-${name}` }); put(base, g); return g; };
     const terrainG = layer("terrain"), territoryG = layer("territory"), structG = layer("structs"), dimG = layer("dim"), hlG = layer("hl"), selG = layer("sel");
     const hoverG = layer("hover"), orderG = layer("orders"), unitG = layer("units"), ghostG = layer("ghost"), flashG = layer("flashes"), markG = layer("marks");
+    const resG = svg("g", { class: "hr-resview-layer" });
     hlG.style.pointerEvents = "none";
+    put(world, base, resG);
     put(root, world);
     fill(element, root);
 
@@ -469,8 +474,40 @@
       fill(markG, keys.filter((k) => all.has(k)).map((k) => hexAt(k, SIZE - 3, { class: "hr-mark" })));
     }
 
+    // The resource view (header). Badges sit in a row above the thing: a structure's or site's middle, a unit's disc.
+    function setResView(game, flows) {
+      root.classList.toggle("hr-resview", !!flows);
+      fill(resG);
+      if (!flows) return;
+      const byId = {};
+      for (const [id, , n, on] of flows) (byId[id] ||= []).push({ n, on });
+      for (const [id, items] of Object.entries(byId)) {
+        const s = game.structures[id] || game.sites?.[id], u = !s && game.units[id];
+        if (!s && !u) continue;
+        const cells = s ? s.cells : [u.at];
+        if (!cells.every((k) => all.has(k))) continue;
+        const live = items.filter((i) => i.on);
+        const plus = live.some((i) => i.n > 0), minus = live.some((i) => i.n < 0);
+        const tone = !live.length ? "off" : plus && minus ? "mix" : plus ? "pos" : "neg";
+        if (s) put(resG, blobLine(cells, { class: `hr-res-line hr-res-${tone}` }));
+        else put(resG, svg("circle", { cx: center(u.at)[0], cy: center(u.at)[1], r: UNIT_R + 3, class: `hr-res-ring hr-res-${tone}` }));
+        const [x, y0] = s ? middle(cells) : center(u.at);
+        const y = y0 - (s ? 22 : UNIT_R + 10);
+        const texts = items.map((i) => (i.n > 0 ? `+${i.n}` : `−${-i.n}`));
+        const widths = texts.map((t) => 8 + 7.5 * t.length);
+        let left = x - (widths.reduce((a, w) => a + w, 0) + 3 * (items.length - 1)) / 2;
+        items.forEach((i, j) => {
+          const cls = `hr-badge ${i.n > 0 ? "hr-res-pos" : "hr-res-neg"}${i.on ? "" : " hr-res-off"}`;
+          put(resG, svg("g", { class: cls },
+            svg("rect", { x: left.toFixed(1), y: (y - 9).toFixed(1), width: widths[j].toFixed(1), height: 18, rx: 6 }),
+            svg("text", { x: (left + widths[j] / 2).toFixed(1), y: y.toFixed(1) }, texts[j])));
+          left += widths[j] + 3;
+        });
+      }
+    }
+
     applyView();
-    return { draw, setHighlights, setGhost, flash, centre, fit, focus, mark, getView: () => ({ ...view }), setView: glide };
+    return { draw, setHighlights, setGhost, flash, centre, fit, focus, mark, setResView, getView: () => ({ ...view }), setView: glide };
   }
 
   window.HexMap = { create, util: { parse, key, add, neighbors, dist, center, DIRS } };
