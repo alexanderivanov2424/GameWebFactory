@@ -55,7 +55,7 @@
     if (d.score) stats.push(`+${d.score} score`);
     const hp = d.hp ? `HP ${d.hp}${d.defense ? ` · defense ${d.defense}` : ""}` : "Can't be attacked";
     const terrains = names(content, "terrain", d.terrain || []) + (d.coast ? " · touching water" : "");
-    const build = `${costText(d.cost)}, ${plural(d.buildTurns, "turn")} of work by ${plural(d.builders, "idle person")} each`;
+    const build = `${costText(d.cost)} · 🔨 ${d.hammers} (each idle person builds 1 🔨 a turn)`;
     const byTag = (d.perAdjacent || []).filter((a) => a.tag).flatMap((a) => Object.entries(a.gain || {}).map(([res, n]) => ({ n, res, tag: a.tag })));
     return { text: d.text || "", stats, hp, terrains, build, tags: d.tags || [], byTag };
   }
@@ -261,8 +261,8 @@
   }
 
   function siteText(ctx, cid, x) {
-    const works = (ctx.priv.building?.works || []).includes(cid);
-    return `${x.done}/${x.turns} turns, ${resIcon("people")} −${x.builders} — ${x.done >= x.turns ? "finishing (blocked by an enemy unit)" : works ? "building this turn" : "waiting for idle people"}`;
+    const n = ctx.priv.building?.works?.[cid] || 0;
+    return `${x.done}/${x.hammers} 🔨 — ${x.done >= x.hammers ? "finishing (blocked by an enemy unit)" : n ? `+${n} 🔨 this turn (${resIcon("people")} −${n})` : "waiting for idle people"}`;
   }
 
   function site(box, ctx) {
@@ -271,8 +271,8 @@
     if (!def) return fill(box);
     const own = x.owner === ctx.you;
     fill(box, el("h3", {}, `${def.name} (under construction) `, nameSpan(game, x.owner)),
-      el("p", { className: "small" }, own ? siteText(ctx, ui.sel.id, x) : `${x.done}/${x.turns} turns of work done.`),
-      own ? el("p", { className: "muted small" }, "Each turn of work needs its builders: people without a job, given to the oldest site first. Switch structures off to free them.") : null,
+      el("p", { className: "small" }, own ? siteText(ctx, ui.sel.id, x) : `${x.done}/${x.hammers} 🔨 done.`),
+      own ? el("p", { className: "muted small" }, "Each idle person (no job) builds 1 🔨 a turn, oldest site first. Switch structures off to free people.") : null,
       own ? btn("Demolish", () => act.send({ action: "demolish", structure: ui.sel.id }), { cls: "danger", title: "Take the site down and get its cost back." }) : null);
   }
 
@@ -280,8 +280,8 @@
     const { priv, content, game, act } = ctx;
     const o = priv.orders;
     const rows = [
-      ...o.builds.map((b) => { const n = content.structures[b.type]?.builders || 0;
-        return [b.id, `Build ${content.structures[b.type]?.name || b.type} (${resIcon("people")} −${n})`, b.cost]; }),
+      ...o.builds.map((b) => { const n = priv.building?.orders?.[b.id] || 0;
+        return [b.id, `Build ${content.structures[b.type]?.name || b.type} (🔨 ${content.structures[b.type]?.hammers || 1}, ${n ? `${resIcon("people")} −${n}` : "no idle people yet"})`, b.cost]; }),
       ...o.recruits.map((r) => [r.id, `${r.auto ? "Auto-recruit" : "Recruit"} ${content.units[r.type]?.name || r.type} at ${content.structures[game.structures[r.at]?.type]?.name || "?"}`, r.cost]),
       ...o.research.map((r) => [r.id, `Research ${content.advances[r.advance]?.name || r.advance}`, r.cost]),
     ];

@@ -84,10 +84,11 @@ fields in `logic/content.py`). Tests: `tests/` (`python3 -I tools/run_tests.py h
   Hall *and* no Settlers; a realm without a hall skips eating and growth.
 - **Construction by idle people** (`logic/construction.py`): a resolved build order becomes a site
   (`m.sites`, cells in `m.cell_site`), kept apart from `m.structures` so nothing else has to skip
-  unfinished buildings. Each turn of work (`buildTurns`) needs `builders` people without a job,
-  counted before production and spent after it, oldest site first; a build order takes its builders as
-  soon as it's placed (2026-11-15, the user's call: `construction.forecast` counts this turn's orders after
-  the sites, `orders.build` is refused beyond `construction.free`, cancelling returns them; at resolution
+  unfinished buildings. A structure costs `hammers` (2026-11-15, the user's rule; was turns x
+  builders, converted as their product): every person without a job builds 1 hammer a turn, counted
+  before production and spent after it, oldest site first, each site taking as many people as it still
+  needs; a build order takes its builders as soon as it's placed (`construction.forecast` counts this
+  turn's orders after the sites, cancelling returns them; with nobody idle it just waits; at resolution
   the order becomes the newest site, so it gets them first thing); jobs are filled first, so
   players free builders with Switch off / Jobs off (`staff`) / Demolish. Sites show in `view.sites`
   (own always, others' only while seen; not remembered under fog). An enemy unit on any cell of a
@@ -153,7 +154,7 @@ fields in `logic/content.py`). Tests: `tests/` (`python3 -I tools/run_tests.py h
   (right: footprint picture, HP, every effect); the top bar's `.hr-delta-<key>` slots under each chip show
   `deltas()`: cost, output per turn at the hovered spot (`outputAt`, a copy of `economy.output` fed by the private
   `typeBonus` / `homeHousing`: keep the two in step), store room, "-n when working" on people, housing, and the
-  build turns last. The turn countdown (approximate: restarts on reload).
+  hammers last. The turn countdown (approximate: restarts on reload).
 - `tests/`: `test_rules.py` (Match on a blank all-plains map: `helpers.blank`, `hall` (with the
   starting goods), `unit`, `rich`, `stock` = what a player can spend), `test_lobby.py` (Sim: secrecy, done, timer, leaving).
 
@@ -163,8 +164,8 @@ fields in `logic/content.py`). Tests: `tests/` (`python3 -I tools/run_tests.py h
   turn ~20 but rarely take a city; a turn with 5 bots takes under 0.2 s.
 - Start: 3 people, housing 4, and the goods in the Town Hall (10 of each at most); the hall makes
   only 1 gold and 2 food (no wood, stone, science or faith: the early game is slow on purpose), so
-  you grow once, then need a Hut (2 wood) or House. Building takes turns and idle people (Farm 2
-  turns x 1 builder, House 2 x 2, University 4 x 3, Monument 5 x 3), and every worker in a job is
+  you grow once, then need a Hut (2 wood) or House. Building takes hammers from idle people (Farm 2,
+  House 4, University 12, Monument 15), and every worker in a job is
   one builder fewer, so the opening is a choice between producing and building. The hall's 10-cap
   makes a Storage Yard or Granary the next limit. Free land is radius 2 around each Town Hall (~27 cells);
   beyond it, land costs 2 gold per claim (up to 7 cells) and 1 gold a turn per cell, while the hall

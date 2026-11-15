@@ -31,7 +31,6 @@
  "requires": "trade",
  "text": "Lets you trade 2:1.",
  "category": "trade",
- "buildTurns": 4,
- "builders": 2,
+ "hammers": 8,
  "color": "#b04a35"
 }

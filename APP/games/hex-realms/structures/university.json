@@ -34,7 +34,6 @@
  "requires": "academics",
  "score": 2,
  "category": "culture",
- "buildTurns": 4,
- "builders": 3,
+ "hammers": 12,
  "color": "#43509c"
 }

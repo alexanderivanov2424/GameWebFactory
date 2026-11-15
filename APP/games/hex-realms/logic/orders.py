@@ -113,10 +113,6 @@ def build(m, pid, stype, at, rot):
         raise LobbyError(problem)
     if any(m.territory.get(c) != pid for c in cells):
         raise LobbyError("Build inside your territory (claim more land with gold).")
-    free = construction.free(m, pid)
-    if d["builders"] > free:
-        raise LobbyError(f"{d['name']} needs {d['builders']} idle {'person' if d['builders'] == 1 else 'people'} to build "
-                         f"(you have {max(free, 0)}): switch structures off to free people.")
     pay(m, pid, d["cost"])
     o["builds"].append({"id": m.new_id("o"), "type": stype, "at": at, "rot": rot % 6, "cells": cells, "cost": dict(d["cost"])})
 

@@ -53,7 +53,6 @@
  ],
  "text": "+1 food per Farm next to it. +1 food if it touches water.",
  "category": "food",
- "buildTurns": 2,
- "builders": 1,
+ "hammers": 2,
  "color": "#e3c75a"
 }

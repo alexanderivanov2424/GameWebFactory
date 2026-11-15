@@ -29,7 +29,6 @@
  "text": "Shoots the nearest enemy unit within 2 after movement.",
  "category": "defense",
  "vision": 5,
- "buildTurns": 2,
- "builders": 2,
+ "hammers": 4,
  "color": "#7c8794"
 }

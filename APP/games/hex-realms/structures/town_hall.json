@@ -35,5 +35,6 @@
  "text": "Heart of a city: stores 10 of each good and is where you spend from. Founded by Settlers. Lose every Town Hall and you are out.",
  "category": "city",
  "vision": 4,
+ "hammers": 1,
  "color": "#c9a227"
 }

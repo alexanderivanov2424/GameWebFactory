@@ -11,10 +11,10 @@ structure works if it has its workers (people, who need food and housing; the pe
 still use housing). Every person eats 1 food a turn. Short of food, everyone who can't eat dies, units first, then people. Structures give
 growth (the Town Hall 1): each turn up to that many people are born, while housing has room and the
 food left at the end of the turn can feed them; players can turn growth off. Ordered structures
-become construction sites that take a few turns of work, each turn needing builders: people
-without a job (switch structures off, all at once, or demolish them to free people). Placing a
-structure takes its builders from your idle people at once (refused without enough; cancelling gives
-them back), so its first turn of work happens this turn. Gold, faith and
+become construction sites that cost hammers (🔨): every person without a job builds 1 hammer a turn
+(switch structures off, all at once, or demolish them to free people), oldest site first, each site
+taking as many as it still needs. Placing a structure takes its builders from your idle people at once
+(cancelling gives them back), so its work starts this turn. Gold, faith and
 science are realm-wide; goods (food, wood, stone, metal) go into the realm's stores (Town
 Hall, Storage Yard, Granary). Production and upkeep happen at the same time; only what is left at the
 end of the turn is capped by the stores' room (the rest is lost). Structures go anywhere inside your territory.

@@ -25,7 +25,6 @@
  ],
  "text": "Blocks enemy units until knocked down.",
  "category": "defense",
- "buildTurns": 1,
- "builders": 1,
+ "hammers": 1,
  "color": "#9a9ca2"
 }

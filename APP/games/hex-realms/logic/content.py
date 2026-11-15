@@ -19,8 +19,8 @@ structures/<id>.json:
     capped resources), store {res: n} (a structure with either is a store of goods: see
     logistics.py), growth (people the realm can gain a turn: economy.py), terrain [ids] (default every "build" terrain), coast (a cell must touch water),
     requires (advance id), recruits [unit ids], heals, shoots (dice) + range, trade (market
-    rate: give n for 1), score, buildTurns (turns of work to build it, default 1), builders (idle
-    people it needs for each of those turns, default 1; construction.py), category (a CATEGORIES id: the build menu's tabs), vision (fog of
+    rate: give n for 1), score, hammers (🔨 of work to build it, default 1: each idle person makes 1
+    a turn; construction.py), category (a CATEGORIES id: the build menu's tabs), vision (fog of
     war: cells seen around each of its cells, default 3), text.
 units/<id>.json:
     name, icon, art (a file in client/art/units/, drawn on the map instead of the icon), cost {res: n}, people (default 1), attack, defense, hp, move (steps), range
@@ -48,7 +48,7 @@ RESOURCES = ["gold", "food", "wood", "stone", "metal", "faith", "science"]
 RESOURCE_INFO = {"gold": ("Gold", "🪙"), "food": ("Food", "🍞"), "wood": ("Wood", "🪵"), "stone": ("Stone", "🪨"),
                  "metal": ("Metal", "🔩"), "faith": ("Faith", "🙏"), "science": ("Science", "🔬"),
                  "people": ("People", "👥"), "housing": ("Housing", "🏠"),
-                 "growth": ("Growth", "🌱")}
+                 "growth": ("Growth", "🌱"), "hammers": ("Hammers", "🔨")}
 CAPPED = ["food", "wood", "stone", "metal"]  # goods: kept in stores (logistics.py)
 GLOBAL = ["gold", "faith", "science"]  # realm-wide, uncapped
 TERRAIN = {
@@ -107,7 +107,7 @@ def parse_structure(sid, d):
         "heals": d.get("heals") is True, "shoots": whole(d, "shoots", 0, 9, default=0), "range": whole(d, "range", 0, 5, default=0),
         "trade": whole(d, "trade", 0, 9, default=0), "vision": whole(d, "vision", 0, 9, default=3),
         "score": whole(d, "score", 0, 99, default=0), "text": text(d, "text", 300),
-        "buildTurns": whole(d, "buildTurns", 1, 9, default=1), "builders": whole(d, "builders", 1, 9, default=1),
+        "hammers": whole(d, "hammers", 1, 99, default=1),
     }
     s["color"] = d.get("color", "#a0a0a0")
     if not isinstance(s["color"], str) or not re.fullmatch(r"#[0-9a-fA-F]{6}", s["color"]):

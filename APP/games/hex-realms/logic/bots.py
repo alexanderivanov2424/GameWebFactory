@@ -185,13 +185,13 @@ class Bot:
         if not self.halls:
             return
         wants, idle = self.wants()
-        idle -= sum(STRUCTURES[x["type"]]["builders"] for x in self.sites if not construction.finished(x))
+        idle -= sum(1 for x in self.sites if not construction.finished(x))  # at least one builder each
         built = claims = 0
         for stype in wants:
             d = STRUCTURES[stype]
             if built >= MAX_BUILDS or idle < 1:
                 break
-            if d["jobs"] + d["builders"] > idle:
+            if d["jobs"] + 1 > idle:
                 continue
             site = self.site(stype)
             if site is None:
@@ -200,7 +200,7 @@ class Bot:
                 continue
             if try_act(self.m, self.pid, "build", stype, site[0], site[1]):
                 built += 1
-                idle -= d["jobs"] + d["builders"]
+                idle -= d["jobs"] + 1
 
     def free_cells(self):
         m = self.m

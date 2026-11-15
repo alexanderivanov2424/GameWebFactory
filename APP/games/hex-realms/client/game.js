@@ -260,7 +260,6 @@
       if (enemyUnit(k)) return "An enemy unit stands there.";
     }
     if (def.coast && !cells.some((k) => U.neighbors(k).some((n) => g.cells[n] === "water"))) return "It must touch water.";
-    if (def.builders > c.priv.report.idle) return `It needs ${def.builders} idle ${def.builders === 1 ? "person" : "people"} (you have ${Math.max(0, c.priv.report.idle)}): switch structures off to free people.`;
     return "";
   }
 
@@ -279,7 +278,8 @@
     const housing = (def.housing || 0) + (def.home ? c.priv.homeHousing || 0 : 0);
     if (housing) add("housing", `+${housing}`, "pos");
     if (def.growth) add("growth", `+${def.growth}`, "pos");
-    add("turns", `⏳ ${def.buildTurns} turn${def.buildTurns === 1 ? "" : "s"} · ${def.builders} builder${def.builders === 1 ? "" : "s"}`, "");
+    const idle = Math.max(0, c.priv.report.idle), now = Math.min(idle, def.hammers);
+    add("turns", `🔨 ${def.hammers}${now ? ` · ${now} builder${now === 1 ? "" : "s"} now` : " · no idle people"}`, "");
     return out;
   }
 

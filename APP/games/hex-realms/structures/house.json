@@ -21,7 +21,6 @@
  "housing": 5,
  "text": "Housing for 5 people.",
  "category": "homes",
- "buildTurns": 2,
- "builders": 2,
+ "hammers": 4,
  "color": "#c08552"
 }

@@ -28,7 +28,6 @@
  },
  "text": "Holds 40 wood, stone and metal.",
  "category": "industry",
- "buildTurns": 2,
- "builders": 1,
+ "hammers": 2,
  "color": "#a3845c"
 }

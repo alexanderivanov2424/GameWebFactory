@@ -92,7 +92,7 @@ def event_cells(e):
 
 def _sites(m, keep):
     return {cid: {"type": x["type"], "owner": x["owner"], "at": x["at"], "cells": x["cells"], "done": x["done"],
-                  "turns": STRUCTURES[x["type"]]["buildTurns"], "builders": STRUCTURES[x["type"]]["builders"]}
+                  "hammers": STRUCTURES[x["type"]]["hammers"]}
             for cid, x in m.sites.items() if keep(x)}
 
 

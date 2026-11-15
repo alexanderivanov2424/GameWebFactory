@@ -9,7 +9,7 @@ Modules:
     territory.py strong land (structures' reach) and weak land (bought with gold, easily lost)
     economy.py   workers, production, upkeep, growth
     logistics.py goods in the realm's stores: stock, spending, refunds, filling
-    construction.py  construction sites: build turns and builders (idle people), finishing structures
+    construction.py  construction sites: hammers built by idle people, finishing structures
     standing.py  standing orders kept across turns: Explore, Fight, Pillage, Travel (multi-turn moves)
     explore.py   where an exploring unit walks to clear fog (bots scout with it)
     vision.py    fog of war: what each player sees, has explored and remembers; their map view

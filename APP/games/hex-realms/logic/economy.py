@@ -205,13 +205,8 @@ def flows(m, pid, working, building, land=0, idle=0):
     halls = [s for s in logistics.stores(m, pid) if s["type"] == TOWN_HALL]
     if halls and land:
         out.append([halls[0]["id"], "gold", -land * territory.LAND_UPKEEP, True])
-    for cid in building["works"]:
-        n = STRUCTURES[m.sites[cid]["type"]]["builders"]
+    for cid, n in [*building["works"].items(), *building["orders"].items()]:  # sites, then this turn's build orders
         out += [[cid, "people", -n, True, "build"], [cid, "food", -n * FOOD_PER_PERSON, True]]
-    for b in m.orders[pid]["builds"]:
-        if b["id"] in building["orders"]:
-            n = STRUCTURES[b["type"]]["builders"]
-            out += [[b["id"], "people", -n, True, "build"], [b["id"], "food", -n * FOOD_PER_PERSON, True]]
     training = {}
     for r in m.orders[pid]["recruits"]:
         if r["at"] in m.structures:

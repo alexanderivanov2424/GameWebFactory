@@ -314,19 +314,19 @@
         }
         put(structG, g);
       }
-      // Construction sites: the structure's colour, faded, with turns of work done.
-      const working = new Set((priv && priv.building?.works) || []);
+      // Construction sites: the structure's colour, faded, with the hammers done / needed.
+      const working = (priv && priv.building?.works) || {};
       for (const [cid, x] of Object.entries(game.sites || {})) {
         const def = content.structures[x.type];
         if (!def) continue;
         const [mx, my] = middle(x.cells);
         for (const k of x.cells) shapeAt[k] = { cells: x.cells, color: color(x.owner) };
-        let tip = `${def.name} under construction (${nameOf(x.owner)}): ${x.done}/${x.turns} turns, ${x.builders} builder${x.builders > 1 ? "s" : ""} a turn`;
-        if (x.owner === you) tip += working.has(cid) ? "\nBuilders at work this turn." : x.done < x.turns ? "\nWaiting: not enough idle people." : "";
+        let tip = `${def.name} under construction (${nameOf(x.owner)}): ${x.done}/${x.hammers} 🔨`;
+        if (x.owner === you) tip += working[cid] ? `\n${working[cid]} builder${working[cid] > 1 ? "s" : ""} this turn (+${working[cid]} 🔨).` : x.done < x.hammers ? "\nWaiting: no idle people." : "";
         put(structG, svg("g", { class: "hr-struct hr-site" }, svg("title", {}, tip),
           blob(x.cells, { class: "hr-site-cell", fill: def.color, stroke: def.color }),
           svg("text", { x: mx, y: my + 1, class: "hr-icon" }, def.icon || def.name.slice(0, 2)),
-          svg("text", { x: mx, y: my + 17, class: "hr-site-text" }, `${x.done}/${x.turns}`)));
+          svg("text", { x: mx, y: my + 17, class: "hr-site-text" }, `${x.done}/${x.hammers}`)));
       }
 
       // Units (yours that have an order this turn, or a standing order, greyed out).
