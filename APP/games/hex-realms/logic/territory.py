@@ -36,7 +36,7 @@ from gamekit.hexes import disk, dist, neighbors, parse
 from .content import TOWN_HALL
 
 CLAIM_RADIUS = 1  # a claim holds the cell and its free neighbours
-FIRST_CITY_RADIUS = 3  # free land around your first Town Hall
+FIRST_CITY_RADIUS = 2  # free land around your first Town Hall
 LAND_UPKEEP = 1  # gold a turn per weak (bought) cell
 
 

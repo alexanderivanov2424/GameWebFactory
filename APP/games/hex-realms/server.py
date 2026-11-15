@@ -13,7 +13,7 @@ without a job (switch structures off, all at once, or demolish them to free peop
 science are realm-wide; goods (food, wood, stone, metal) go into the realm's stores (Town
 Hall, Storage Yard, Granary). Production and upkeep happen at the same time; only what is left at the
 end of the turn is capped by the stores' room (the rest is lost). Structures go anywhere inside your territory.
-Structures don't spread land: your first city gives free land (3 cells around it), other Town Halls
+Structures don't spread land: your first city gives free land (2 cells around it), other Town Halls
 hold only their own cells. That land is strong: first come, first served, it stays yours while the
 hall stands, and cells two realms reach in the same turn go to no one. Gold buys weak land (claim an
 explored cell next to yours, with its free neighbours), which costs 1 gold a turn per cell (unpaid

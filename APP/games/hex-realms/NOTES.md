@@ -152,7 +152,7 @@ fields in `logic/content.py`). Tests: `tests/` (`python3 -I tools/run_tests.py h
   you grow once, then need a Hut (2 wood) or House. Building takes turns and idle people (Farm 2
   turns x 1 builder, House 2 x 2, University 4 x 3, Monument 5 x 3), and every worker in a job is
   one builder fewer, so the opening is a choice between producing and building. The hall's 25-cap
-  makes a Storage Yard or Granary the next limit. Free land is the first city's radius 3 (~48 cells);
+  makes a Storage Yard or Granary the next limit. Free land is the first city's radius 2 (~27 cells);
   beyond it, land costs 2 gold per claim (up to 7 cells) and 1 gold a turn per cell, while the hall
   makes 1 gold, so expanding needs a gold economy (Market, Chapel with its advance, trade).
 - Sieges are slow on purpose: a Swordsman does ~2 damage a turn to a 15 hp Town Hall and takes
