@@ -32,9 +32,12 @@ fields in `logic/content.py`). Tests: `tests/` (`python3 -I tools/run_tests.py h
   growth needs `pop` + `soldiers` (people in units, plus this turn's recruit orders while planning) under
   `housing`, so recruiting no longer frees room to regrow. Growth needs more food made than eaten,
   not food that fits in the stores. `flows` breaks the same numbers down per structure / unit / site
-  (`economy.flows`: production +, unit upkeep -, the people's food on the first Town Hall, and for
-  "people" jobs / builders - and housing +) for the client's **resource view** (click a top-bar chip:
-  `map.setResView` greyscales the `hr-base` group and draws outlines and +n / -n badges above it).
+  (`economy.flows`: production +, unit upkeep -, the people's food and bought land's gold on the first
+  Town Hall) for the client's **resource view** (click a top-bar chip: `map.setResView` greyscales the
+  `hr-base` group and draws outlines and +n / -n badges above it). Population has two chips and views
+  (the user's call): "people" (current = pop + people in units) shows where everyone is with tagged
+  items (`[id, "people", n, True, tag]`: work / build / train / unit / idle, idle spread over the homes
+  oldest first; blue "n tag" badges), and "housing" (the cap) shows +n per structure that houses people.
 - **No roads; land is bought** (2026-11-11, the user's call): roads (first carrying goods, then laid
   automatically) were removed. Structures go anywhere in your territory, with no "must touch"
   rule. `orders.claim` is an order paid in gold (`CLAIM_COST`); at resolution (`Match._claims`,

@@ -4,8 +4,9 @@
  * panels.js) from the state. The server validates everything; the ghost colours here are only a hint.
  *
  * Clicking a cell selects what's on it; clicking it again cycles unit -> structure -> construction site.
- * ui.resView: null | a resource (or "people") shown on the map: greyscale, with what makes it (green +n) and uses it
- * (red -n) each turn, from the report's flows (click its chip on the top bar again or Esc to leave).
+ * ui.resView: null | a resource, "people" or "housing" shown on the map: greyscale, with what makes it (green +n) and
+ * uses it (red -n) each turn, or for "people" where they are (blue "n work" badges), from the report's flows (click its
+ * chip on the top bar again or Esc to leave).
  * ui.tech: null | the open tech tree tab (a currency: "science" / "faith"), shown in the #tech popup.
  * ui.mode: null | {type: "build", kind, rot} | {type: "shoot", unit} | {type: "found", unit, rot}
  * (Escape cancels; R or right-click turns). ui.sel: null | {kind: "unit"|"structure", id}; giving a unit a
@@ -182,7 +183,8 @@
     box.hidden = !m && !ui.resView;
     if (!m && ui.resView) {
       const { resIcon, resName, btn } = HexHud.fmt, r = ui.resView;
-      const text = r === "people" ? "red = people working or building there this turn, or in a unit (units use housing), green = housing it gives"
+      const text = r === "people" ? "where your people are this turn: work = in a job, build = on a construction site, train = recruits ordered there, unit = in a unit (units use housing too), idle = at home"
+        : r === "housing" ? "green = the housing each structure gives (your people and the people in your units must fit in it)"
         : "green = made there each turn, red = used each turn (units' upkeep; your people's food on your Town Hall)";
       fill(box, `${resIcon(r)} ${resName(r)} view: ${text}. Faded = not working this turn. Click the resource again or Esc to leave. `,
         btn("Close (Esc)", () => act.resView(null)));

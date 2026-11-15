@@ -5,7 +5,7 @@
 TERRAIN      {id: {"name", "move" (cost in half steps, None = impassable for land units),
              "cover" (hitting a unit here needs 5+), "build" (ordinary structures allowed)}}
 RESOURCES    stock resources in display order; "people" is separate (population)
-RESOURCE_INFO  {res: (name, icon)} for the client, people included
+RESOURCE_INFO  {res: (name, icon)} for the client, people and housing (the population cap) included
 structures/<id>.json:
     name, icon (an emoji or short text drawn on the map; placeholder for art), color ("#rrggbb", its
     solid colour on the map; owners show on territory borders and hover), cells [[q, r], ...] (axial offsets, first = anchor),
@@ -45,7 +45,7 @@ RESOURCES = ["gold", "food", "wood", "stone", "metal", "faith", "science"]
 # Name and icon of each resource (plus people) for the client; icons are placeholders for art.
 RESOURCE_INFO = {"gold": ("Gold", "🪙"), "food": ("Food", "🍞"), "wood": ("Wood", "🪵"), "stone": ("Stone", "🪨"),
                  "metal": ("Metal", "🔩"), "faith": ("Faith", "🙏"), "science": ("Science", "🔬"),
-                 "people": ("People", "👥")}
+                 "people": ("People", "👥"), "housing": ("Housing", "🏠")}
 CAPPED = ["food", "wood", "stone", "metal"]  # goods: kept in stores (logistics.py)
 GLOBAL = ["gold", "faith", "science"]  # realm-wide, uncapped
 TERRAIN = {

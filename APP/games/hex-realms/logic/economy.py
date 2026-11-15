@@ -12,9 +12,13 @@ upkeep is counted here).
                              (people you will gain, 0 if none), "growthWhy" (why not), "tradeRate",
                              "land" (cells of bought land paid for, in upkeep gold; with this turn's
                              claims while planning), "flows" (see flows())}
-    flows(m, pid, working, works, land=0)  what each of pid's things adds or takes this turn, for the client's
-                             resource view: [[id, res, n, on], ...], n > 0 made, n < 0 used, on = False
-                             for a structure that isn't working this turn (what it would make / need)
+    flows(m, pid, working, works, land=0, idle=0)  what each of pid's things adds or takes this turn, for the
+                             client's resource view: [[id, res, n, on], ...], n > 0 made, n < 0 used, on = False
+                             for a structure that isn't working this turn (what it would make / need); plus
+                             "people" (where your population is: [id, "people", n, True, tag], tag "work" (jobs),
+                             "build" (on a site), "unit" (in a unit), "train" (recruits ordered at a structure),
+                             "idle" (at home: spread over the homes, oldest first, up to their housing)) and
+                             "housing" (the cap: [id, "housing", n, True] per structure that houses people)
     split_upkeep(have, made, need)  (from the stores, from production): where a good's upkeep comes from
     end_of_turn(m, pid, events)  production and upkeep together (then the stores' cap), eating, wages, growth
 
@@ -137,12 +141,13 @@ def report(m, pid, resolving=False):
             "staffed": [s["id"] for s in working], "workers": p["pop"] - left, "builders": building["builders"],
             "idle": left - building["builders"], "housing": housing, "soldiers": soldiers, "caps": caps, "growth": growth,
             "growthWhy": why, "tradeRate": min(rates) if rates else 0, "land": land,
-            "flows": flows(m, pid, working, building["works"], land)}
+            "flows": flows(m, pid, working, building["works"], land, left - building["builders"])}
 
 
-def flows(m, pid, working, works, land=0):
+def flows(m, pid, working, works, land=0, idle=0):
     """Per structure / unit / site: production (+), unit upkeep, and the people's food and the bought
-    land's gold (-, on the first Town Hall), and for "people": jobs, builders and units' housing (-) and housing (+). See the module header."""
+    land's gold (-, on the first Town Hall); "people" (where they are, tagged) and "housing" (the cap).
+    See the module header."""
     p, on = m.players[pid], {s["id"] for s in working}
     home_bonus = effect(m, pid, "homeHousing")
     out = []
@@ -151,24 +156,37 @@ def flows(m, pid, working, works, land=0):
         d = STRUCTURES[s["type"]]
         for r, n in output(m, s).items():
             out.append([s["id"], r, n, s["id"] in on])
-        if d["jobs"]:
-            out.append([s["id"], "people", -d["jobs"], s["id"] in on])
+        if d["jobs"] and s["id"] in on:
+            out.append([s["id"], "people", d["jobs"], True, "work"])
         housing = d["housing"] + (home_bonus if d["home"] else 0)
         if housing:
-            out.append([s["id"], "people", housing, True])
+            out.append([s["id"], "housing", housing, True])
     halls = [s for s in logistics.stores(m, pid) if s["type"] == TOWN_HALL]
     if halls and p["pop"] // 2:
         out.append([halls[0]["id"], "food", -(p["pop"] // 2), True])
     if halls and land:
         out.append([halls[0]["id"], "gold", -land * territory.LAND_UPKEEP, True])
     for cid in works:
-        out.append([cid, "people", -STRUCTURES[m.sites[cid]["type"]]["builders"], True])
+        out.append([cid, "people", STRUCTURES[m.sites[cid]["type"]]["builders"], True, "build"])
+    training = {}
+    for r in m.orders[pid]["recruits"]:
+        if r.get("people") and r["at"] in m.structures:
+            training[r["at"]] = training.get(r["at"], 0) + r["people"]
+    for sid, n in training.items():
+        out.append([sid, "people", n, True, "train"])
+    homes = [(s, h) for s, h in ((s, STRUCTURES[s["type"]]["housing"] + (home_bonus if STRUCTURES[s["type"]]["home"] else 0))
+                                 for s in own) if h > 0]
+    for i, (s, h) in enumerate(homes):  # idle people at home, the oldest homes first (the last takes any overflow)
+        n = idle if i == len(homes) - 1 else min(idle, h)
+        if n > 0:
+            out.append([s["id"], "people", n, True, "idle"])
+            idle -= n
     for u in sorted((u for u in m.units.values() if u["owner"] == pid), key=lambda u: u["n"]):
         for r, n in UNITS[u["type"]]["upkeep"].items():
             if n:
                 out.append([u["id"], r, -n, True])
         if UNITS[u["type"]]["people"]:
-            out.append([u["id"], "people", -UNITS[u["type"]]["people"], True])
+            out.append([u["id"], "people", UNITS[u["type"]]["people"], True, "unit"])
     return out
 
 
