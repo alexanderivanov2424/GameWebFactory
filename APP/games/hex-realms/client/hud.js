@@ -49,7 +49,6 @@
     if (d.heals) stats.push("Heals units on or next to it");
     if (d.shoots) stats.push(`Shoots ${plural(d.shoots, "die")} (range ${d.range})`);
     if (d.score) stats.push(`+${d.score} score`);
-    if (d.vision) stats.push(`Sees ${d.vision} cells`);
     const hp = d.hp ? `HP ${d.hp}${d.defense ? ` · defense ${d.defense}` : ""}` : "Can't be attacked";
     const terrains = names(content, "terrain", d.terrain || []) + (d.coast ? " · touching water" : "");
     const build = `${costText(d.cost)}, ${plural(d.buildTurns, "turn")} of work by ${plural(d.builders, "idle person")} each`;
