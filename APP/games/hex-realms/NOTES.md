@@ -101,7 +101,7 @@ fields in `logic/content.py`). Tests: `tests/` (`python3 -I tools/run_tests.py h
 - `client/art/`: PNG art (not used by the map yet; it still draws colours and emoji icons), at 4x map size so it
   stays sharp at the 3x max zoom. `terrain/_template.png` (one pointy-top hex: 208 x 240, the hex 207.85 wide;
   corners (103.9,0) (207.8,60) (207.8,180) (103.9,240) (0,180) (0,60)) and `units/_template.png` (the unit
-  disc, radius SIZE * 0.42 = 12.6 on the map: 100 x 100) are blank, fully transparent images.
+  disc, radius SIZE * 0.42 = 12.6 on the map: 100 x 100) are transparent; the terrain one has a 1px black outline on the hex's outermost pixels (paint over it).
 - `client/map.js`: `HexMap.create`: pan (drag) / zoom (wheel) SVG map; terrain layer rebuilt only
   when `game.cells` changes, the rest per state;
   structures are solid in their content `color`, drawn by `blob` (cells at 80% with the gaps
