@@ -120,8 +120,10 @@
     return outline(cells, (n) => own.has(n), attrs, scale);
   }
 
-  // Territory borders sit this far inside each cell, so two realms' borders show side by side.
-  const BORDER = (SIZE - 3) / SIZE;
+  // Territory borders: BORDER_W wide, inset (BORDER, a scale towards each cell's centre) by half their width so
+  // the line's outer edge lies on the cell's edge; two realms' borders then sit side by side, touching.
+  const BORDER_W = 3;
+  const BORDER = 1 - (BORDER_W / 2) / (SIZE * SQ3 / 2);
 
   function glyph(terrain, x, y) {
     const a = { class: "hr-glyph" };
@@ -263,16 +265,18 @@
       fill(dimG, (game.dim || []).map((k) => hexAt(k, SIZE, { class: "hr-dim" })));
 
       // Territory: faint tint plus a border in the owner's colour all round it (ownership shows here).
-      // Weak land (bought with gold, game.claims) is fainter with a dashed border.
+      // Weak land (bought with gold, game.claims) is fainter with a dashed border. The border lines are opaque
+      // inside one translucent group, so where segments overlap (round caps, joins) they don't get darker.
       const weak = game.claims || {};
       for (const pid of game.seats) {
         const mine = Object.keys(game.territory).filter((k) => game.territory[k] === pid);
-        const line = { stroke: color(pid), "stroke-width": 3, "stroke-opacity": 0.8, "stroke-linecap": "round" };
+        const line = { stroke: color(pid), "stroke-width": BORDER_W, "stroke-linecap": "round" };
         const same = (n) => game.territory[n] === pid;
         const strong = mine.filter((k) => weak[k] !== pid), bought = mine.filter((k) => weak[k] === pid);
         put(territoryG, strong.map((k) => hexAt(k, SIZE, { fill: color(pid), "fill-opacity": 0.16 })),
           bought.map((k) => hexAt(k, SIZE, { fill: color(pid), "fill-opacity": 0.07 })),
-          outline(strong, same, line, BORDER), outline(bought, same, { ...line, "stroke-dasharray": "6 5", "stroke-linecap": "butt" }, BORDER));
+          svg("g", { opacity: 0.8 }, ...outline(strong, same, line, BORDER),
+            ...outline(bought, same, { ...line, "stroke-dasharray": "6 5", "stroke-linecap": "butt" }, BORDER)));
       }
 
       // Structures: solid, in the structure's own colour (content "color"), fused into one shape each.

@@ -109,7 +109,7 @@ fields in `logic/content.py`). Tests: `tests/` (`python3 -I tools/run_tests.py h
   when `game.cells` changes, the rest per state;
   structures are solid in their content `color`, drawn by `blob` (cells at 80% with the gaps
   between a structure's own cells filled, so only its outside is inset); owner colours show on the
-  territory border (drawn slightly inside the cells, `BORDER` with `outline`, so two realms' borders sit side by side) and as an outline on hover (`hoverG`, `shapeAt`), and the icon (emoji from the content, placeholder for art) at their middle; `setHighlights` / `setGhost` / `flash` only
+  territory border (drawn just inside the cells, its outer edge on the cell edge (`BORDER`, `BORDER_W`, `outline`), so two realms' borders sit side by side; opaque lines in one group with the opacity, so overlaps don't darken) and as an outline on hover (`hoverG`, `shapeAt`), and the icon (emoji from the content, placeholder for art) at their middle; `setHighlights` / `setGhost` / `flash` only
   touch overlays (a selection, "sel" cells, is outlined round its outside only, in `selG`). `HexMap.util` has the client's hex maths (dist, neighbors, add).
 - `client/hud.js`: `HexHud`: top bar (stock + net, people: jobs / building / idle, growth only when
   it will happen, Jobs off / on, End turn), players, selection panel (unit / structure / site actions, Explore, recruit buttons with the server's reasons, automatic
