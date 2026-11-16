@@ -20,6 +20,7 @@ things are, and its pitfalls. Read only the one closest to your game:
 - `bastion2`: deck-building city-builder: play area with per-turn counters, upkeep cards, builds completed at end of turn, an unbounded pannable grid with a full-screen HUD layout.
 - `hex-realms`: simultaneous secret orders resolved together (step-by-step movement with collisions, dice combat), multi-cell hex structures, free territory around each Town Hall plus weak land bought with gold (1 gold upkeep per cell; lost to nearby enemy units or when cut off), workers and builders, turn timer.
 - `gilded-trail`: hex map from a seed as SVG, deck-building market, pending choices inside a turn.
+- `orbit-run`: co-op trick-taking (playable cards from the server), a task draft, a multi-game run saved with `save_data` and shown in the lobby (`lobby_game_state`).
 - `arena`: real-time (`RealtimeGame`); start from it for continuous movement.
 - `deep-colony`: real-time co-op sim without player units: shared orders/pause/speed, live cursors, big grid as row strings.
 
@@ -169,6 +170,8 @@ and `settings.py`. Hooks below are on `Game` in `server.py`; most delegate to `s
   (public id), **never** `member.client_id`.
 - `private_state(member)` → `match.private(pid)`: per-member secrets. It's called for
   spectators too (return None for them). It's sent as `state.private`.
+- `lobby_game_state()`: public info for the lobby phase, sent as `state.game` there (default None),
+  e.g. the host's saved progress to continue (`games/orbit-run`).
 - `reset_game()`: clear the state when going back to the lobby (`self.match = None`). Also
   called from `__init__`.
 - Real-time games (`RealtimeGame`, header of `APP/gamekit/realtime.py`): `tick(dt)` runs

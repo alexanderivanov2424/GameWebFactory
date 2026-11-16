@@ -1,0 +1,6 @@
+{
+  "name": "Load supplies",
+  "text": "Win the red 3 and the green 3.",
+  "goal": {"kind": "cards", "cards": ["r3", "g3"]},
+  "success": {"food": true}
+}

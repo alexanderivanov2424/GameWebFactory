@@ -177,7 +177,8 @@ Summary:
 3. `server.py` defines `class Game(LobbyGame)` (from `gamekit`), declares `SETTINGS` (host settings)
    and `ACTIONS` (game messages), and overrides only the hooks it needs:
    `default_options`, `clean_options`, `start_check`, `start_game`, `on_game_message`
-   (to add checks before `self.dispatch`), `on_player_removed`, `game_state`, `private_state`, `reset_game`.
+   (to add checks before `self.dispatch`), `on_player_removed`, `game_state`, `private_state`, `reset_game`,
+   `lobby_game_state` (info shown in the lobby as `state.game`, e.g. a saved run).
    Raise `LobbyError("...")` to reject a request; the message is shown to that player.
    To keep data per player across games, use `self.load_data(member)` / `self.save_data(member, value)`.
 4. In the client, include `/shared/theme.js` (not deferred), then `/shared/home.js`, `/shared/settings.js`,
@@ -233,6 +234,10 @@ Summary:
    bought with science or faith, an optional turn timer (`schedule`), bots in extra seats (a
    setting; the user asked for them) planning through the same orders, standing trades set per market,
    every sentence players read in one file (`client/text.js`); `PatchState`.
+   `games/orbit-run/` (`logic/` modules): a co-op trick-taking game for 3-5 played as a run of
+   missions: a task draft from the captain, follow-suit tricks with a timed pause on each full trick,
+   mission and task cards as JSON (3 mission decks), and a run (ship resources, missions played)
+   saved for the host with `save_data` and continued from a later game (`lobby_game_state` shows it).
 
 ## Lobby model (shared by all games)
 - Every connected tab is a **member**: a **spectator** until it joins, then a **player**. Players join and leave explicitly, and only in the lobby phase.

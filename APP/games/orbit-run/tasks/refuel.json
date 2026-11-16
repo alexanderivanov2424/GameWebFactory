@@ -1,0 +1,6 @@
+{
+  "name": "Refuel",
+  "text": "Win 3 or more tricks.",
+  "goal": {"kind": "tricks", "min": 3},
+  "success": {"fuel": true}
+}

@@ -1,0 +1,6 @@
+{
+  "name": "Safety checks",
+  "text": "Win 1 or more tricks. If not, the ship takes 1 damage.",
+  "goal": {"kind": "tricks", "min": 1},
+  "failure": {"damage": 1}
+}
