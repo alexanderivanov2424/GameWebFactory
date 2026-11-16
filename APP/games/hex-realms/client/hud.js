@@ -67,7 +67,14 @@
     const adjacent = (d.perAdjacent || []).flatMap((a) => Object.entries(a.gain || {}).map(([res, n]) =>
       ({ n, res, max: a.max, kind: a.tag ? "tag" : a.type ? "type" : "terrain", id: a.tag || a.type || a.terrain })));
     if (d.freeNear && d.jobs) adjacent.push({ n: -d.jobs, res: "people", kind: "free", id: d.freeNear });
-    return { text: HexText.structures[d.id] || "", res: resListText(d), stats, hp, terrains, build, tags: d.tags || [], adjacent };
+    // One bullet per chip: "+1 🌾 −1 👥 for [Water]" (a terrain bonus and freeNear on the same terrain share one).
+    const groups = new Map();
+    for (const b of adjacent) {
+      const k = `${b.kind === "free" ? "terrain" : b.kind}:${b.id}`;
+      if (!groups.has(k)) groups.set(k, []);
+      groups.get(k).push(b);
+    }
+    return { text: HexText.structures[d.id] || "", res: resListText(d), stats, hp, terrains, build, tags: d.tags || [], adjacent: [...groups.values()] };
   }
 
   // Footprint picture (unturned) in the structure's colour, with its icon.
@@ -93,15 +100,22 @@
   };
   // A chip naming a structure type (its colour) or a terrain (its map colour), like a tag's pip.
   const chip = (name, color) => el("span", { className: "hr-pip", style: `background:${color}` }, name);
-  function adjacentLine(content, b) {
-    const terrain = content.terrain?.[b.id]?.name || b.id, type = content.structures?.[b.id];
-    const label = b.kind === "tag" ? pip(content, b.id) : b.kind === "type" ? chip(type?.name || b.id, type?.color || "#666")
-      : chip(terrain, HexMap.util.colors[b.id] || "#666");
-    const t = HexText.structure.adjacent, amount = [b.n > 0 ? "+" : "−", Math.abs(b.n), resName(b.res).toLowerCase()];
-    const title = b.kind === "free" ? t.free(terrain.toLowerCase())
-      : b.kind === "tag" ? t.tag(...amount, content.tags?.[b.id]?.name || b.id, b.max)
-      : b.kind === "type" ? t.type(...amount, type?.name || b.id, b.max) : t.terrain(...amount, terrain.toLowerCase(), b.max);
-    return el("li", { title }, el("span", { className: b.n > 0 ? "pos" : "neg" }, `${b.n > 0 ? "+" : "−"}${Math.abs(b.n)} ${resIcon(b.res)}`), " for ", label);
+  // One bullet: every amount for the same chip (see structInfo's adjacent groups), with each rule in the hover title.
+  function adjacentLine(content, group) {
+    const { kind, id } = group[0];
+    const terrain = content.terrain?.[id]?.name || id, type = content.structures?.[id];
+    const label = kind === "tag" ? pip(content, id) : kind === "type" ? chip(type?.name || id, type?.color || "#666")
+      : chip(terrain, HexMap.util.colors[id] || "#666");
+    const t = HexText.structure.adjacent;
+    const title = (b) => {
+      const amount = [b.n > 0 ? "+" : "−", Math.abs(b.n), resName(b.res).toLowerCase()];
+      return b.kind === "free" ? t.free(terrain.toLowerCase())
+        : b.kind === "tag" ? t.tag(...amount, content.tags?.[id]?.name || id, b.max)
+        : b.kind === "type" ? t.type(...amount, type?.name || id, b.max) : t.terrain(...amount, terrain.toLowerCase(), b.max);
+    };
+    const amounts = group.flatMap((b, i) => [i ? " " : null,
+      el("span", { className: b.n > 0 ? "pos" : "neg" }, `${b.n > 0 ? "+" : "−"}${Math.abs(b.n)} ${resIcon(b.res)}`)]);
+    return el("li", { title: group.map(title).join("\n") }, ...amounts, " for ", label);
   }
 
   function structCard(content, d, hp, at = null) {
