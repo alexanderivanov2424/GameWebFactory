@@ -21,7 +21,7 @@ Player-facing text: `client/text.js`. Tests: `python3 -I tools/run_tests.py hex-
   per structure / unit / site / bought cell for the client's resource view (`map.setResView`).
 - **Data-driven content.** Structures' output (`produce`, `onTerrain`, `perCell`, `perAdjacent` by terrain / unique types /
   type / tag; terrain only counts unbuilt cells), `boost` (+n to what adjacent own structures of a type / tag
-  make, while the booster works), `freeNear` (no workers while touching a terrain: `economy.jobs`), tags,
+  make, while the booster works), `freeNear` (no workers while touching a terrain: `economy.jobs`), `blocks` (enemy units can't walk over it: `movement.stops_path` / `sieges`), `outside` (may go next to your territory: `orders.placeable`), tags,
   housing, storage, trade rates; advances' dice `effect`s, per-type output `bonus` and
   per-tag `housing`. A new structure, unit or advance is a JSON file plus its description in `text.js`; new
   behaviour that isn't a field yet belongs in `content.py` as a field, not as a special case by id.
