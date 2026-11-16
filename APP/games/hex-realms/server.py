@@ -16,7 +16,7 @@ setting) hides what your units and structures don't see. Standing orders (Explor
 Travel) carry over turns. Lose every Town Hall and you are out; the last realm standing wins,
 otherwise the highest score after the last turn.
 
-Settings: mapSize, turns, turnSeconds (0 = no timer), fog, bots, seed (0 = random).
+Settings: mapSize, turns (0 = no limit), turnSeconds (0 = no timer), fog, bots, seed (0 = random).
 State: the public part has no map; each member's private state has "view", their fog-limited map.
 Game messages ({"action": name, ...fields}; planning only, any order un-readies you):
     build      kind, at "q,r", rot 0-5
@@ -86,7 +86,7 @@ class Game(LobbyGame):
     SYNC = PatchState
     SETTINGS = {
         "mapSize": Choice("Map size", default="normal", options={"small": "Small", "normal": "Normal", "large": "Large", "huge": "Huge"}),
-        "turns": Int("Turn limit", default=40, low=10, high=150),
+        "turns": Int("Turn limit", default=40, low=0, high=150, hint="0 = no limit"),
         "turnSeconds": Int("Turn timer", default=0, low=0, high=600, suffix="s", hint="0 = no timer"),
         "fog": Choice("Fog of war", default="on", options={"on": "On", "off": "Off"}),
         "bots": Int("Bots", default=0, low=0, high=5, hint="computer players"),

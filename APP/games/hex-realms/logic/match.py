@@ -10,7 +10,7 @@ Resolution: research; ranged shots; movement and battles (movement.py); towers; 
 cities; builds (a cell two players order fails for both); recruits; production, eating, wages and
 new people (economy.py); construction; healing; realms with no Town Hall are knocked out. The game
 ends when one realm is left (2+ started) or after the last turn. Solo games end at the turn limit
-or when the last Town Hall falls.
+or when the last Town Hall falls. A turn limit of 0 means none.
 
 Score = population + units + 3 per advance + structure scores + gold // 10.
 
@@ -56,7 +56,7 @@ class Match:
         self.names = dict(names)
         self.seats = list(self.names)
         self.settings = dict(settings)
-        self.turn_limit = self.settings.get("turns", 40)
+        self.turn_limit = self.settings.get("turns", 40)  # 0 = no limit
         seed = self.settings.get("seed") or self.rng.randrange(1, 10 ** 9)
         self.radius = map_radius(len(self.seats), self.settings.get("mapSize", "normal"))
         self.cells, starts = generate(self.radius, len(self.seats), seed)
@@ -304,6 +304,8 @@ class Match:
                      else "Only bots are left.")
         elif self.multi and len(alive) == 1:
             self.end(alive[0], f"{self.names[alive[0]]} is the last realm standing.")
+        elif not self.turn_limit:  # no turn limit: only knock-outs (or the End game vote) end it
+            pass
         elif self.turn > self.turn_limit and not self.multi:
             pid = alive[0]
             self.end(pid, f"Turn limit reached: {self.names[pid]} finished with {self.score(pid)} points.")

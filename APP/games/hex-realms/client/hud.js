@@ -181,7 +181,7 @@
     const done = priv.done;
     const end = btn(done ? "Waiting for others… (undo)" : "End turn", () => ctx.act.send({ action: "done", done: !done }), { cls: done ? "waiting" : "endturn" });
     fill(box, 
-      el("span", { className: "hr-turn" }, `Turn ${game.turn} / ${game.turnLimit}`),
+      el("span", { className: "hr-turn" }, HexText.hud.turn(game)),
       game.turnSeconds > 0 ? el("span", { id: "hr-timer", className: "hr-timer" }) : null,
       el("span", { className: "hr-chips" }, chips),
       withDelta("people", el("span", { className: `hr-people${ctx.ui.resView === "people" ? " on" : ""}`, onclick: () => ctx.act.resView("people"), title: HexText.hud.people(rep.idle, priv.pop + rep.soldiers, rep.workers, rep.builders, rep.soldiers) },

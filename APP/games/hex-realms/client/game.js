@@ -124,7 +124,7 @@
         HexHud.orders($("p-orders"), c);
       });
     } else {
-      fill($("topbar"), el("span", { className: "hr-turn" }, `Turn ${c.game.turn} / ${c.game.turnLimit}`), el("span", { className: "muted" }, "Spectating"));
+      fill($("topbar"), el("span", { className: "hr-turn" }, HexText.hud.turn(c.game)), el("span", { className: "muted" }, "Spectating"));
     }
     renderTabs(c, playing);
     if (!playing) ui.resView = null;

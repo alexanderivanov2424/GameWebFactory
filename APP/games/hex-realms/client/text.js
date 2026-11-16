@@ -9,8 +9,8 @@ window.HexText = {
   rules: [
     ["Turns", `Everyone plans at the same time, in secret: place structures inside your territory, train units, order
       moves and attacks, research advances, then press <b>End turn</b>. When all players are done (or the timer runs
-      out) every order resolves together. The last realm standing wins; if several survive to the turn limit, the
-      highest score wins. Lose every Town Hall and you are out. The host can add bots in the settings.`],
+      out) every order resolves together. The last realm standing wins; if several survive to the turn limit (if the host set
+      one), the highest score wins. Lose every Town Hall and you are out. The host can add bots in the settings.`],
     ["People and food", `Structures work while they have their workers (people). Food can't be stored: each turn,
       everyone eats 1 food and every unit eats its upkeep from that turn's production. Food left over becomes new people
       at once, as many as it feeds, while there's housing (settlers use housing too); the rest is lost. When production
@@ -149,6 +149,7 @@ window.HexText = {
   // Orders panel and the build menu.
   hud: {
     noOrders: "Nothing queued.",
+    turn: (game) => (game.turnLimit ? `Turn ${game.turn} / ${game.turnLimit}` : `Turn ${game.turn}`),
     cancelOrder: "Cancel and refund",
     cancelSite: "Demolish the site and get its cost back",
     pickCategory: "Pick a category, then a structure.",
