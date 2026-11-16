@@ -7,8 +7,9 @@
   const U = HexMap.util;
   // mode: build, shoot, found or claim (Esc cancels); sel: unit, structure or site; resView and tech: map and popup state.
   const ui = { sel: null, mode: null, tab: "build", tech: null, resView: null, buildCat: null, trade: {}, lastRot: 0,
-    key: null, flashSeen: null, turnStart: Date.now(), gameNumber: null };
+    key: null, flashSeen: null, turnStart: Date.now(), gameNumber: null, hoverCells: null };
   let state = null;
+  const ZOOM_TO = 1.6;  // least zoom when an Orders row is clicked
   let hover = null;
   let idx = { unitAt: {}, structAt: {} };
 
@@ -36,6 +37,9 @@
     select(kind, id) { ui.sel = kind ? { kind, id } : null; refresh(); },
     setMode(mode) { ui.mode = mode; refresh(); },
     centre: (k) => map.centre(k),
+    // Orders panel: light up a thing's cells while its row is hovered (null clears); glide to it on click.
+    hoverCells(cells) { ui.hoverCells = cells; if (state?.game) highlights(ctx()); },
+    zoomTo: (cells) => map.focus(cells, Math.max(map.getView().k, ZOOM_TO), 500),
     resView(r) { ui.resView = ui.resView === r ? null : r; refresh(); },
   };
 
@@ -226,6 +230,7 @@
     } else if (sel?.kind === "structure" || sel?.kind === "site") {
       for (const k of (sel.kind === "site" ? c.game.sites : c.game.structures)[sel.id].cells) h[k] = "sel";
     } else if (sel?.kind === "unit") h[c.game.units[sel.id].at] = "sel";
+    for (const k of ui.hoverCells || []) h[k] = "focus";
     map.setHighlights(h);
   }
 

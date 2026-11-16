@@ -384,7 +384,6 @@ class Match:
             "building": construction.forecast(self, pid),
             "typeBonus": economy.type_bonus(self, pid), "housingBonus": economy.housing_bonus(self, pid),
             "jobs": {s["id"]: economy.jobs(self, s) for s in own},
-            "buildOutput": {b["id"]: economy.preview(self, pid, b["type"], b["cells"], b["at"]) for b in self.orders[pid]["builds"]},
             "reach": {u["id"]: sorted(movement.reach(self, u["id"])) for u in units},
             "recruit": {s["id"]: {ut: orders.recruit_problem(self, pid, s, ut) or "" for ut in STRUCTURES[s["type"]]["recruits"]}
                         for s in own if STRUCTURES[s["type"]]["recruits"]},

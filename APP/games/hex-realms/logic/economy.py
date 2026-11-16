@@ -15,7 +15,6 @@ units that eat (newest first), then people at work (jobs and building).
     output(m, s, on=None)             what structure s makes when it works (on: ids of working structures,
                                       for boosts from its neighbours; default: staffing now)
     jobs(m, s)                        workers s needs (0 while a freeNear structure touches its terrain)
-    preview(m, pid, stype, cells, at) {"res", "jobs"} a structure would have there (pending builds)
     housing(m, s)                     the housing structure s gives (with advance bonuses)
     staffing(m, pid)                  (working structures in job order, idle people)
     flat(m, pid)                      {faith, science, swords} that pid's working structures give now
@@ -74,11 +73,6 @@ def jobs(m, s):
     if d["jobs"] and d["freeNear"] and any(m.cells.get(n) == d["freeNear"] for c in s["cells"] for n in neighbors(c)):
         return 0
     return d["jobs"]
-
-
-def preview(m, pid, stype, cells, at):
-    s = {"id": None, "type": stype, "cells": cells, "at": at, "owner": pid}
-    return {"res": output(m, s), "jobs": jobs(m, s)}
 
 
 def output(m, s, on=None):

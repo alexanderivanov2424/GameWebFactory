@@ -313,25 +313,27 @@
       own ? btn("Demolish", () => act.send({ action: "demolish", structure: ui.sel.id }), { cls: "danger", title: HexText.structure.siteDemolish }) : null);
   }
 
+  // Names only. Hover a row: its cells light up on the map; click: zoom there (and select the site or recruiting structure).
   function orders(box, ctx) {
     const { priv, content, game, act } = ctx;
     const o = priv.orders;
-    // Builds: actual output at the spot with the base in brackets, then the cost (not bracketed) and builders.
+    const named = (d, id) => `${d?.icon ? `${d.icon} ` : ""}${d?.name || id}`;
+    // [label, cells on the map or null, [kind, id] to select on click or null, cancel, cancel's title]
     const rows = [
-      ...o.builds.map((b) => { const n = priv.building?.orders?.[b.id] || 0, d = content.structures[b.type], out = priv.buildOutput?.[b.id];
-        return [b.id, [`Build ${d?.name || b.type} `, ...(d ? resListEl(d, out ? { ...out, terrain: game.cells[b.at] } : null) : [])],
-          `${costText(b.cost)} · 🔨 ${d?.hammers || 1} · ${n ? `${resIcon("people")} −${n} building` : "no idle people yet"}`]; }),
-      ...o.recruits.map((r) => [r.id, `Recruit ${content.units[r.type]?.name || r.type} at ${content.structures[game.structures[r.at]?.type]?.name || "?"}${r.auto ? HexText.structure.autoOrder : ""}`, costText(r.cost)]),
-      ...o.research.map((r) => [r.id, `Research ${content.advances[r.advance]?.name || r.advance}`, costText(r.cost)]),
+      ...o.builds.map((b) => [named(content.structures[b.type], b.type), b.cells, null, () => act.send({ action: "cancel", order: b.id }), HexText.hud.cancelOrder]),
+      ...o.recruits.map((r) => [named(content.units[r.type], r.type) + (r.auto ? HexText.structure.autoOrder : ""), game.structures[r.at]?.cells,
+        game.structures[r.at] ? ["structure", r.at] : null, () => act.send({ action: "cancel", order: r.id }), HexText.hud.cancelOrder]),
+      ...o.research.map((r) => [content.advances[r.advance]?.name || r.advance, null, null, () => act.send({ action: "cancel", order: r.id }), HexText.hud.cancelOrder]),
     ];
-    const sites = Object.entries(game.sites || {}).filter(([, x]) => x.owner === ctx.you);
-    fill(box, el("h3", {}, "Orders"), rows.length ? rows.map(([id, text, cost]) =>
-      el("div", { className: "row hr-order" }, el("span", { className: "small" }, text, el("span", { className: "muted" }, ` · ${cost}`)),
-        el("span", { className: "spacer" }), btn("✕", () => act.send({ action: "cancel", order: id }), { cls: "small", title: HexText.hud.cancelOrder }))) : el("p", { className: "muted small" }, HexText.hud.noOrders),
-      sites.length ? el("h3", {}, "Construction") : null,
-      sites.map(([cid, x]) => el("div", { className: "row hr-order" },
-        el("span", { className: "small", style: "cursor:pointer", onclick: () => act.select("site", cid) }, content.structures[x.type]?.name || x.type, el("span", { className: "muted" }, ` ${siteText(ctx, cid, x)}`)),
-        el("span", { className: "spacer" }), btn("✕", () => act.send({ action: "demolish", structure: cid }), { cls: "small", title: HexText.hud.cancelSite }))));
+    const sites = Object.entries(game.sites || {}).filter(([, x]) => x.owner === ctx.you).map(([cid, x]) =>
+      [named(content.structures[x.type], x.type), x.cells, ["site", cid], () => act.send({ action: "demolish", structure: cid }), HexText.hud.cancelSite]);
+    const row = ([label, cells, select, cancel, title]) => el("div", {
+      className: `row hr-order${cells ? " hr-order-map" : ""}`,
+      onmouseenter: cells ? () => act.hoverCells(cells) : null, onmouseleave: cells ? () => act.hoverCells(null) : null,
+      onclick: cells ? (e) => { if (e.target.closest("button")) return; if (select) act.select(...select); act.zoomTo(cells); } : null,
+    }, el("span", { className: "small" }, label), el("span", { className: "spacer" }), btn("✕", () => { act.hoverCells(null); cancel(); }, { cls: "small", title }));
+    fill(box, el("h3", {}, "Orders"), rows.length ? rows.map(row) : el("p", { className: "muted small" }, HexText.hud.noOrders),
+      sites.length ? el("h3", {}, "Construction") : null, sites.map(row));
   }
 
   // A trade structure's standing trade: `def.trade` of one resource for 1 of another, every turn.
