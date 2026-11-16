@@ -248,7 +248,7 @@ class Bot:
             return
         archers = sum(1 for u in self.units if u["type"] == "archer")
         for s in sorted(self.mine, key=lambda s: s["type"] != "barracks"):
-            if army >= target or p["pop"] < 3:
+            if army >= target:  # troops cost swords, not people: a failed recruit just moves on
                 return
             for ut in self.unit_choices(s, archers, army):
                 if try_act(m, pid, "recruit", s["id"], ut):

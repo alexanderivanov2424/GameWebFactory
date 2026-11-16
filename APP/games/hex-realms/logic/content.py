@@ -3,7 +3,8 @@
     from .content import STRUCTURES, UNITS, ADVANCES, TERRAIN, RESOURCES, footprint
 
 TERRAIN      {id: {"name", "move" (half steps, None = impassable), "cover" (hits need 5+), "build"}}
-RESOURCES    stock resources in display order ("people" is separate)
+RESOURCES    stock resources in display order ("people" is separate); swords (HELD) are what military structures
+             give minus what living units and recruits hold: a unit that dies gives its swords back
 RESOURCE_INFO  {res: (name, icon)} for the client, incl. people, population, housing
 structures/<id>.json:
     name, icon, color ("#rrggbb" map colour), cells [[q, r], ...] (axial, first = anchor)
@@ -18,7 +19,7 @@ structures/<id>.json:
     type / with that tag makes), freeNear (terrain id: needs no workers while touching that terrain)
     category (CATEGORIES id), vision (cells seen around each cell, default 3)
 units/<id>.json:
-    name, icon, art (client/art/units/ file, drawn instead of icon), cost {res: n} (no food), people (default 1)
+    name, icon, art (client/art/units/ file, drawn instead of icon), cost {res: n} (no food; troops hold swords while they live), people (default 0; settlers take 1 from the population)
     attack, defense, hp, move (steps), range (shoots instead of moving), siege (damage per hit on structures)
     vsMounted (extra dice vs mounted), mounted, naval (water only), settler (founds a Town Hall)
     requires (advance), needs (structure type owned), upkeep {res: n}, vision (default 2)
@@ -38,15 +39,17 @@ from gamekit.hexes import rotations
 log = logging.getLogger(__name__)
 HERE = Path(__file__).resolve().parent.parent
 
-RESOURCES = ["gold", "food", "wood", "stone", "metal", "faith", "science"]
+RESOURCES = ["gold", "food", "wood", "stone", "metal", "faith", "science", "swords"]
 # For the client; icons are placeholders for art.
 RESOURCE_INFO = {"gold": ("Gold", "🪙"), "food": ("Food", "🍞"), "wood": ("Wood", "🪵"), "stone": ("Stone", "🪨"),
-                 "metal": ("Metal", "🔩"), "faith": ("Faith", "🙏"), "science": ("Science", "🔬"),
+                 "metal": ("Metal", "🔩"), "faith": ("Faith", "🙏"), "science": ("Science", "🔬"), "swords": ("Swords", "⚔️"),
                  "people": ("People", "👥"), "population": ("Population", "👥"), "housing": ("Housing", "🏠"), "hammers": ("Hammers", "🔨")}
 CAPPED = ["wood", "stone", "metal"]  # goods: kept in stores (logistics.py)
 GLOBAL = ["gold"]  # realm-wide, kept from turn to turn, uncapped
 FLAT = ["faith", "science"]  # what working structures give now, minus what advances spent (logistics.py)
-SPENDABLE = GLOBAL + FLAT + CAPPED  # what costs may ask for (food is never stored, so never spent)
+HELD = ["swords"]  # what working structures give now, minus what living units and recruit orders hold (logistics.py)
+SPENDABLE = GLOBAL + FLAT + CAPPED  # what structure costs may ask for (food is never stored, so never spent)
+UNIT_COSTS = SPENDABLE + HELD  # units also hold swords while they live
 TERRAIN = {
     "plains": {"name": "Plains", "move": 2, "cover": False, "build": True},
     "desert": {"name": "Desert", "move": 2, "cover": False, "build": True},
@@ -137,8 +140,8 @@ def parse_structure(sid, d):
 
 def parse_unit(uid, d):
     return {
-        "id": uid, "name": text(d, "name", 30, required=True), "icon": text(d, "icon", 3), "art": text(d, "art", 60), "cost": res_map(d, "cost", SPENDABLE),
-        "people": whole(d, "people", 0, 9, default=1), "attack": whole(d, "attack", 0, 9), "defense": whole(d, "defense", 0, 9),
+        "id": uid, "name": text(d, "name", 30, required=True), "icon": text(d, "icon", 3), "art": text(d, "art", 60), "cost": res_map(d, "cost", UNIT_COSTS),
+        "people": whole(d, "people", 0, 9, default=0), "attack": whole(d, "attack", 0, 9), "defense": whole(d, "defense", 0, 9),
         "hp": whole(d, "hp", 1, 20), "move": whole(d, "move", 0, 9), "range": whole(d, "range", 0, 5, default=0),
         "siege": whole(d, "siege", 1, 9, default=1), "vsMounted": whole(d, "vsMounted", 0, 9, default=0),
         "mounted": d.get("mounted") is True, "naval": d.get("naval") is True, "settler": d.get("settler") is True,

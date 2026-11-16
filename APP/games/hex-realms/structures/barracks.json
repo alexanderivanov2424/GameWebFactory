@@ -27,5 +27,8 @@
  "heals": true,
  "category": "military",
  "hammers": 4,
- "color": "#8f3232"
+ "color": "#8f3232",
+ "produce": {
+  "swords": 3
+ }
 }

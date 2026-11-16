@@ -3,7 +3,8 @@
  "icon": "Sw",
  "cost": {
   "metal": 3,
-  "gold": 5
+  "gold": 5,
+  "swords": 2
  },
  "attack": 4,
  "defense": 3,

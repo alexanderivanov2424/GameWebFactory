@@ -24,7 +24,7 @@ from gamekit import LobbyError
 from gamekit.hexes import disk, dist, neighbors, parse
 
 from . import bots, combat, construction, economy, logistics, movement, orders, recruiting, standing, territory, vision
-from .content import ADVANCES, CATEGORIES, FLAT, RESOURCE_INFO, TAGS, RESOURCES, STRUCTURES, TERRAIN, TOWN_HALL, UNITS, footprint
+from .content import ADVANCES, CATEGORIES, FLAT, HELD, RESOURCE_INFO, TAGS, RESOURCES, STRUCTURES, TERRAIN, TOWN_HALL, UNITS, footprint
 from .economy import end_of_turn, report, staffing
 from .mapgen import generate
 
@@ -37,7 +37,7 @@ START_POP = 0  # people come with cities: each new Town Hall brings FOUND_POP
 FOUND_POP = 2
 SIZES = {"small": -3, "normal": 0, "large": 4, "huge": 8}
 ACTS = {name: getattr(orders, name) for name in
-        ("build", "claim", "recruit", "move", "shoot", "hold", "auto", "found", "research", "cancel", "trade", "toggle",
+        ("build", "claim", "recruit", "train", "move", "shoot", "hold", "auto", "found", "research", "cancel", "trade", "toggle",
          "staff", "demolish", "disband")}
 
 
@@ -219,6 +219,8 @@ class Match:
             self.players[pid]["done"] = False
         self.snapshot()
         self._check_end()
+        for pid in self.alive():
+            orders.auto_train(self, pid)
         standing.plan_all(self)
         self.plan_bots()
 
@@ -347,7 +349,7 @@ class Match:
                         "resources": RESOURCES, "categories": CATEGORIES,
                         "tags": {t: {"name": n, "color": c} for t, (n, c) in TAGS.items()},
                         "claim": {"cost": orders.CLAIM_COST, "upkeep": territory.LAND_UPKEEP},
-                        "tradeGoods": economy.TRADE_GOODS, "goods": logistics.GOODS, "flat": FLAT,
+                        "tradeGoods": economy.TRADE_GOODS, "goods": logistics.GOODS, "flat": FLAT + HELD,
                         "resourceInfo": {r: {"name": n, "icon": i} for r, (n, i) in RESOURCE_INFO.items()}},
             "players": {pid: {"name": self.names[pid], "color": p["color"], "res": self.shown[pid]["res"],
                               "pop": self.shown[pid]["pop"], "advances": p["advances"], "done": p["done"],
@@ -373,6 +375,9 @@ class Match:
             "res": logistics.stock(self, pid), "pop": p["pop"], "done": p["done"],
             "stores": {s["id"]: {"stock": s["stock"], "cap": logistics.capacity(s)} for s in logistics.stores(self, pid)},
             "trades": {s["id"]: s["trade"] for s in own if s.get("trade")},
+            "train": {s["id"]: s["train"] for s in own if s.get("train")},
+            "trainable": {s["id"]: {ut: orders.train_problem(self, pid, s, ut) or "" for ut in STRUCTURES[s["type"]]["recruits"]}
+                          for s in own if STRUCTURES[s["type"]]["recruits"]},
             "orders": self.orders[pid], "report": report(self, pid),
             "auto": {u["id"]: {"mode": u["auto"], "goal": u.get("goal")} for u in units if u.get("auto")},
             "ordered": self.ordered(pid),

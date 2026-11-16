@@ -7,7 +7,9 @@ research, set up trade. When all have ended their turn (or the timer runs out), 
 units move step by step and fight with dice where they meet. Structures are built by idle people;
 production, eating and population are settled per realm (logic/economy.py). Gold is realm-wide, food
 is never stored, goods sit in stores, and faith and science are flat (what working structures give now,
-minus what advances cost; may go below 0). Only Town Halls spread land: free land around each city (first
+minus what advances cost; may go below 0). Swords ⚔️ come from military structures (Barracks 3, Stable and
+Shipyard 2); every troop holds 1-2 of them while it lives (instead of people) and gives them back when it dies,
+and a recruiting structure can auto-train a unit, recruited each turn it can be paid. Only Town Halls spread land: free land around each city (first
 come, first served) and weak land bought with gold (1 gold upkeep a turn per cell). Fog of war (a
 setting) hides what your units and structures don't see. Standing orders (Explore, Fight, Pillage,
 Travel) carry over turns. Lose every Town Hall and you are out; the last realm standing wins,
@@ -18,7 +20,8 @@ State: the public part has no map; each member's private state has "view", their
 Game messages ({"action": name, ...fields}; planning only, any order un-readies you):
     build      kind, at "q,r", rot 0-5
     claim      at "q,r"                    2 gold, weak land at once (no cancel)
-    recruit    structure, kind
+    recruit    structure, kind             costs swords (held until the unit dies), no people (but settlers)
+    train      structure, kind?            auto-train kind there every turn it can be paid; no kind = stop
     move       unit, to "q,r"              own cell clears orders; out of reach = Travel
     shoot      unit, at "q,r"
     hold       unit                        toggle
@@ -60,6 +63,7 @@ ORDERS = {
     "build": (field("kind"), field("at"), rotation),
     "claim": (field("at"),),
     "recruit": (field("structure"), field("kind")),
+    "train": (field("structure"), field("kind", optional=True)),
     "move": (field("unit"), field("to")),
     "shoot": (field("unit"), field("at")),
     "hold": (field("unit"),),

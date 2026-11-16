@@ -24,5 +24,8 @@
  "coast": true,
  "category": "military",
  "hammers": 6,
- "color": "#356489"
+ "color": "#356489",
+ "produce": {
+  "swords": 2
+ }
 }

@@ -18,7 +18,7 @@ units that eat (newest first), then people at work (jobs and building).
     preview(m, pid, stype, cells, at) {"res", "jobs"} a structure would have there (pending builds)
     housing(m, s)                     the housing structure s gives (with advance bonuses)
     staffing(m, pid)                  (working structures in job order, idle people)
-    flat(m, pid)                      {faith, science} that pid's working structures give now
+    flat(m, pid)                      {faith, science, swords} that pid's working structures give now
     report(m, pid, resolving=False)   the turn's forecast (see report())
     end_of_turn(m, pid, events)       apply the report: goods, gold, hunger, new people
     starvation(m, pid, short, idle)   ([unit ids], people) who die when food production is `short`
@@ -27,7 +27,7 @@ units that eat (newest first), then people at work (jobs and building).
 from gamekit.hexes import neighbors
 
 from . import construction, logistics, territory
-from .content import ADVANCES, CAPPED, FLAT, GLOBAL, RESOURCES, STRUCTURES, UNITS
+from .content import ADVANCES, CAPPED, FLAT, GLOBAL, HELD, RESOURCES, STRUCTURES, UNITS
 
 FOOD_PER_PERSON = 1
 TRADE_GOODS = ["gold", "food", "wood", "stone", "metal"]
@@ -136,7 +136,7 @@ def staffing(m, pid):
 
 
 def flat(m, pid):
-    out = dict.fromkeys(FLAT, 0)
+    out = dict.fromkeys(FLAT + HELD, 0)
     working = staffing(m, pid)[0]
     on = {s["id"] for s in working}
     for s in working:
@@ -181,7 +181,7 @@ def report(m, pid, resolving=False):
     idle = left - building["builders"]
     food = _food(m, pid, income["food"], upkeep["food"], room - p["pop"] - soldiers, idle) if m.has_hall(pid) \
         else {"starve": {"units": 0, "people": 0}, "born": 0, "popNet": 0}
-    net = {r: 0 if r in FLAT else income[r] - upkeep[r] for r in RESOURCES}
+    net = {r: 0 if r in FLAT or r in HELD else income[r] - upkeep[r] for r in RESOURCES}
     return {"income": income, "upkeep": upkeep, "net": net, "wasted": _wasted(m, pid, have, income, upkeep),
             "staffed": [s["id"] for s in working], "workers": p["pop"] - left, "builders": building["builders"],
             "idle": idle, "housing": room, "soldiers": soldiers,
@@ -243,7 +243,8 @@ def flows(m, pid, working, building, trades, hbonus, idle, living):
         out += [[cid, "people", -n, True, "build"], [cid, "food", -n * FOOD_PER_PERSON, True]]
     for r in m.orders[pid]["recruits"]:
         if r["at"] in m.structures:
-            out += [[r["at"], res, -n, True] for res, n in {"people": r["people"], **UNITS[r["type"]]["upkeep"]}.items() if n]
+            out += [[r["at"], res, -n, True] for res, n in {"people": r["people"], **UNITS[r["type"]]["upkeep"],
+                                                           **{h: r["cost"].get(h, 0) for h in HELD}}.items() if n]
     homes = [(s, housing(m, s, hbonus)) for s in own if housing(m, s, hbonus) > 0]
     for i, (s, h) in enumerate(homes):  # idle people rest at home, oldest homes first; the last takes any overflow
         n = idle if i == len(homes) - 1 else min(idle, h)
@@ -256,6 +257,7 @@ def flows(m, pid, working, building, trades, hbonus, idle, living):
         living -= n
     for u in m.units_of(pid):
         out += [[u["id"], r, -n, True] for r, n in UNITS[u["type"]]["upkeep"].items() if n]
+        out += [[u["id"], r, -UNITS[u["type"]]["cost"][r], True] for r in HELD if UNITS[u["type"]]["cost"].get(r)]
         if UNITS[u["type"]]["people"]:
             out.append([u["id"], "people", -UNITS[u["type"]]["people"], True])
     return out

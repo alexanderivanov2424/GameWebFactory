@@ -4,7 +4,8 @@
  "cost": {
   "wood": 6,
   "metal": 2,
-  "gold": 4
+  "gold": 4,
+  "swords": 2
  },
  "attack": 2,
  "defense": 0,

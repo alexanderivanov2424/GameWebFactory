@@ -208,7 +208,7 @@
   }
 
   // A unit's stats as chips: attack, defence, move, hp, range and siege if any, then food eaten per turn.
-  const UNIT_STATS = [["attack", "⚔️"], ["defense", "🛡️"], ["move", "👣"], ["hp", "❤️"], ["range", "🏹"], ["siege", "💥"]];
+  const UNIT_STATS = [["attack", "🗡️"], ["defense", "🛡️"], ["move", "👣"], ["hp", "❤️"], ["range", "🏹"], ["siege", "💥"]];
   function unitStats(def, hp) {
     return el("div", { className: "hr-ustats" }, UNIT_STATS.filter(([k]) => (k === "range" ? def.range : k === "siege" ? def.siege > 1 : true))
       .map(([k, icon]) => el("span", { className: "hr-chip hr-ustat", title: HexText.unit.stats[k] }, `${icon} `, el("b", {}, String(k === "hp" && hp ? hp : def[k])))),
@@ -270,8 +270,11 @@
       for (const [ut, why] of Object.entries(recruits)) {
         const ud = content.units[ut];
         if (!ud) continue;
+        const auto = priv.train?.[sel.id] === ut, noTrain = priv.trainable?.[sel.id]?.[ut] || "";
         kids.push(el("div", { className: "hr-recruit" },
           btn(`Recruit ${ud.name}`, () => act.send({ action: "recruit", structure: sel.id, kind: ut }), { disabled: !!why, title: why || HexText.units[ut] || "" }),
+          ud.settler ? null : btn(auto ? "Auto ✓" : "Auto", () => act.send({ action: "train", structure: sel.id, kind: auto ? null : ut }),
+            { cls: `small${auto ? " on" : ""}`, disabled: !auto && !!noTrain, title: noTrain || HexText.structure.autoTrain(ud.name) }),
           el("span", { className: "small" }, costText(ud.cost)),
           unitStats(ud), why ? el("div", { className: "muted small" }, why) : null));
       }
@@ -313,7 +316,7 @@
       ...o.builds.map((b) => { const n = priv.building?.orders?.[b.id] || 0, d = content.structures[b.type], out = priv.buildOutput?.[b.id];
         return [b.id, [`Build ${d?.name || b.type} `, ...(d ? resListEl(d, out ? { ...out, terrain: game.cells[b.at] } : null) : [])],
           `${costText(b.cost)} · 🔨 ${d?.hammers || 1} · ${n ? `${resIcon("people")} −${n} building` : "no idle people yet"}`]; }),
-      ...o.recruits.map((r) => [r.id, `Recruit ${content.units[r.type]?.name || r.type} at ${content.structures[game.structures[r.at]?.type]?.name || "?"}`, costText(r.cost)]),
+      ...o.recruits.map((r) => [r.id, `Recruit ${content.units[r.type]?.name || r.type} at ${content.structures[game.structures[r.at]?.type]?.name || "?"}${r.auto ? HexText.structure.autoOrder : ""}`, costText(r.cost)]),
       ...o.research.map((r) => [r.id, `Research ${content.advances[r.advance]?.name || r.advance}`, costText(r.cost)]),
     ];
     const sites = Object.entries(game.sites || {}).filter(([, x]) => x.owner === ctx.you);

@@ -4,7 +4,8 @@
  "art": "archer.png",
  "cost": {
   "wood": 3,
-  "gold": 4
+  "gold": 4,
+  "swords": 1
  },
  "attack": 2,
  "defense": 1,

@@ -3,7 +3,8 @@
  "icon": "Ga",
  "cost": {
   "wood": 8,
-  "gold": 4
+  "gold": 4,
+  "swords": 2
  },
  "attack": 3,
  "defense": 2,

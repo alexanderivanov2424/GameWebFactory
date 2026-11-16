@@ -4,7 +4,8 @@
  "art": "spearman.png",
  "cost": {
   "wood": 2,
-  "gold": 4
+  "gold": 4,
+  "swords": 1
  },
  "attack": 2,
  "defense": 3,

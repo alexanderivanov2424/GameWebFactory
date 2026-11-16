@@ -33,6 +33,10 @@ Player-facing text: `client/text.js`. Tests: `python3 -I tools/run_tests.py hex-
   `private`.
 - `logic/orders.py`: one function per order; `site_problem` / `recruit_problem` / `found_problem` /
   `claim_problem` are shared with resolution and the private state.
+  `auto_train` places each structure's auto-train recruit (`s["train"]`) at the start of planning.
+- Swords (`HELD` in content.py) aren't stored or spent: `logistics.stock` gives what working structures make
+  minus what living units and recruit orders hold (`logistics.held`), so any way a unit dies frees its swords
+  with no bookkeeping. `take` / `give` only check them.
 - `logic/economy.py`: staffing, jobs, output (with boosts), `preview` (pending builds), housing, `report` (income, upkeep, trades, food, waste, flows),
   `end_of_turn`. `logic/logistics.py`: goods in stores. `logic/construction.py`: sites built with hammers.
 - `logic/territory.py`: free land around Town Halls (first come, first served) plus bought land

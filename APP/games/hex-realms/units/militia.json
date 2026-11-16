@@ -3,7 +3,8 @@
  "icon": "m",
  "art": "militia.png",
  "cost": {
-  "gold": 2
+  "gold": 2,
+  "swords": 1
  },
  "attack": 1,
  "defense": 2,

@@ -27,5 +27,8 @@
  ],
  "category": "military",
  "hammers": 6,
- "color": "#86613f"
+ "color": "#86613f",
+ "produce": {
+  "swords": 2
+ }
 }

@@ -4,7 +4,8 @@
  "art": "knight.png",
  "cost": {
   "metal": 2,
-  "gold": 6
+  "gold": 6,
+  "swords": 2
  },
  "attack": 4,
  "defense": 2,

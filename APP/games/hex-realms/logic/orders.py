@@ -4,6 +4,8 @@ Costs are paid when given and refunded when cancelled or failed, so orders never
 
     build(m, pid, stype, at, rot)   structure footprint anchored at `at`
     recruit(m, pid, sid, utype)     train a unit at a working structure (1 per structure a turn)
+    train(m, pid, sid, utype)       auto-train: recruit utype there every turn it can be paid (None: stop)
+    auto_train(m, pid)              place this turn's auto-train recruit orders (start of planning)
     move(m, pid, uid, to)           cheapest path; onto an enemy attacks; out of reach = Travel
     shoot(m, pid, uid, at)          ranged unit shoots a cell instead of moving
     hold(m, pid, uid)               toggle: stay put, defend with 1 more die
@@ -96,7 +98,8 @@ def build(m, pid, stype, at, rot):
     o["builds"].append({"id": m.new_id("o"), "type": stype, "at": at, "rot": rot % 6, "cells": cells, "cost": dict(d["cost"])})
 
 
-def recruit_problem(m, pid, s, utype):
+def train_problem(m, pid, s, utype):
+    """Why structure s can't train utype at all (None if it can)."""
     sd, ud = STRUCTURES[s["type"]], UNITS.get(utype)
     if ud is None or utype not in sd["recruits"]:
         return f"{sd['name']} can't train that."
@@ -104,12 +107,19 @@ def recruit_problem(m, pid, s, utype):
         return f"Research {ADVANCES[ud['requires']]['name']} first."
     if ud["needs"] and not m.structures_of(pid, ud["needs"]):
         return f"{ud['name']} needs a {STRUCTURES[ud['needs']]['name']}."
+    return None
+
+
+def recruit_problem(m, pid, s, utype):
+    problem = train_problem(m, pid, s, utype)
+    if problem:
+        return problem
     if any(r["at"] == s["id"] for r in m.orders[pid]["recruits"]):
         return "One unit per structure per turn."
     return None
 
 
-def recruit(m, pid, sid, utype):
+def recruit(m, pid, sid, utype, auto=False):
     s = own_structure(m, pid, sid)
     problem = recruit_problem(m, pid, s, utype)
     if problem:
@@ -121,7 +131,33 @@ def recruit(m, pid, sid, utype):
     logistics.take(m, pid, ud["cost"])
     p["pop"] -= ud["people"]
     m.orders[pid]["recruits"].append({"id": m.new_id("o"), "type": utype, "at": sid, "cost": dict(ud["cost"]),
-                                      "people": ud["people"]})
+                                      "people": ud["people"], "auto": auto})
+
+
+def train(m, pid, sid, utype):
+    s = own_structure(m, pid, sid)
+    if utype is None:
+        s["train"] = None
+        return
+    problem = train_problem(m, pid, s, utype)
+    if problem:
+        raise LobbyError(problem)
+    if UNITS[utype]["settler"]:
+        raise LobbyError("Settlers can't be auto-trained.")
+    s["train"] = utype
+    auto_train(m, pid)
+
+
+def auto_train(m, pid):
+    """Each structure set to auto-train recruits its unit this turn if nothing is ordered there yet and it can be
+    paid (swords come back when a unit dies, so a lost unit is replaced the turn after)."""
+    for s in m.structures_of(pid):
+        utype = s.get("train")
+        if utype and not recruit_problem(m, pid, s, utype):
+            try:
+                recruit(m, pid, s["id"], utype, auto=True)
+            except LobbyError:
+                pass  # can't pay yet: try again next turn
 
 
 def move(m, pid, uid, to):

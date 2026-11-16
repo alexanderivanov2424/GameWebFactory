@@ -13,7 +13,7 @@ window.HexText = {
       highest score wins. Lose every Town Hall and you are out. The host can add bots in the settings.`],
     ["People and food", `Structures work while they have their workers (people). Food can't be stored: each turn,
       everyone eats 1 food and every unit eats its upkeep from that turn's production. Food left over becomes new people
-      at once, as many as it feeds, while there's housing (units use housing too); the rest is lost. When production
+      at once, as many as it feeds, while there's housing (settlers use housing too); the rest is lost. When production
       falls short, whoever can't be fed dies: idle people first, then units (newest first), then people at work. The food number at the top is what's left after everyone eats (below 0: someone starves).`],
     ["Goods", `Gold goes straight to your realm; wood, stone and metal go into your stores (Town
       Halls, Storage Yards). Faith and science aren't collected each turn: you have what your working structures give
@@ -32,6 +32,10 @@ window.HexText = {
       hills or mountains, or on its own structure). Your own units pass through each other. Standing orders last until
       you give another: <b>Explore</b>, <b>Fight</b>, <b>Pillage</b>, or click a cell beyond a unit's reach to walk there
       over several turns. Units with orders are greyed out. New units appear on the structure that trains them.`],
+    ["Swords", `Troops cost swords ⚔️ instead of people: Barracks give 3, Stables and Shipyards 2. Each troop holds its
+      swords for as long as it lives and gives them back when it dies or is disbanded. Select a structure that trains
+      troops and press <b>Auto</b> beside a unit to train one there every turn you can pay for it, so fallen troops are
+      replaced the turn after.`],
     ["Controls", `Click a cell again to cycle through what's on it. Click a resource on the top bar for its
       <b>resource view</b>: what makes it (green) and what uses it (red) each turn. <b>Tech tree</b> shows the science
       and faith advances. After each turn a replay shows the fights you saw, one at a time: <b>Next</b> (or Enter) moves on,
@@ -102,7 +106,7 @@ window.HexText = {
     shoot: { title: (range) => `Shoot a unit or structure up to ${range} cells away.`, desc: (range) => `Pick a target up to ${range} cells away instead of moving.` },
     found: { title: "Found a Town Hall here.", desc: "Build a Town Hall where it stands.", none: "Can't found a city here." },
     clear: { desc: "Cancel this unit's orders (it stays put)." },
-    disband: { desc: "Remove the unit; its people come home.", confirm: (name) => `Disband this ${name}?` },
+    disband: { desc: "Remove the unit; its swords come back (settlers' people come home).", confirm: (name) => `Disband this ${name}?` },
     standing: {
       explore: "Exploring (walks on its own each turn)",
       fight: "Fighting (attacks the nearest enemy unit it sees; holds when none)",
@@ -121,6 +125,8 @@ window.HexText = {
     off: "Switched off.",
     noWorkers: "Not working: no free workers.",
     switchTitle: "Switched-off structures don't use workers.",
+    autoTrain: (name) => `Auto-train: recruit a ${name} here every turn you can pay for it (swords come back when a unit dies). Click again to stop.`,
+    autoOrder: " (auto)",
     demolishTitle: "Remove it now (no refund).",
     demolishConfirm: (name) => `Demolish this ${name}? No refund, and goods stored in it are lost.`,
     siteHelp: "Each idle person (no job) builds 1 🔨 a turn, oldest site first. Switch structures off to free people.",
