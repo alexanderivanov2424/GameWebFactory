@@ -75,6 +75,7 @@ window.HexText = {
   },
   advances: {
     academics: "Universities.",
+    research: "Laboratories.",
     archery: "Archers.",
     bronze_working: "Smithy and swordsmen.",
     divine_right: "More housing in every Hut and House.",
@@ -136,6 +137,8 @@ window.HexText = {
     adjacent: {
       tag: (sign, n, res, tag, max) => `${sign}${n} ${res} for each of your ${tag} structures next to it (up to ${max})`,
       type: (sign, n, res, name, max) => `${sign}${n} ${res} for each of your ${name}s next to it (up to ${max})`,
+      unique: (sign, n, res, max) => `${sign}${n} ${res} for each different type of your structures next to it (up to ${max})`,
+      uniqueChip: "each structure type",
       terrain: (sign, n, res, terrain, max) => `${sign}${n} ${res} for each ${terrain} cell next to it with nothing built on it (up to ${max})`,
       free: (terrain) => `Needs no workers while it touches ${terrain}`,
       cell: (sign, n, res, terrain) => `${sign}${n} ${res} for each of its own cells on ${terrain}`,

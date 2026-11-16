@@ -19,7 +19,7 @@ Player-facing text: `client/text.js`. Tests: `python3 -I tools/run_tests.py hex-
 - **Forecast = resolution.** `economy.report` is both the planning forecast and what `end_of_turn` applies
   (`resolving=True`), so the numbers players see are the numbers they get. `report.flows` breaks it down
   per structure / unit / site / bought cell for the client's resource view (`map.setResView`).
-- **Data-driven content.** Structures' output (`produce`, `onTerrain`, `perCell`, `perAdjacent` by terrain /
+- **Data-driven content.** Structures' output (`produce`, `onTerrain`, `perCell`, `perAdjacent` by terrain / unique types /
   type / tag; terrain only counts unbuilt cells), `boost` (+n to what adjacent own structures of a type / tag
   make, while the booster works), `freeNear` (no workers while touching a terrain: `economy.jobs`), tags,
   housing, storage, trade rates; advances' dice `effect`s, per-type output `bonus` and

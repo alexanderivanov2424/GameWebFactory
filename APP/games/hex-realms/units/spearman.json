@@ -12,8 +12,7 @@
  "hp": 3,
  "move": 2,
  "upkeep": {
-  "food": 1,
-  "gold": 1
+  "food": 1
  },
  "vsMounted": 2
 }

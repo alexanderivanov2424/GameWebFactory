@@ -13,8 +13,7 @@
  "naval": true,
  "requires": "sailing",
  "upkeep": {
-  "food": 1,
-  "gold": 1
+  "food": 1
  },
  "vision": 3
 }

@@ -65,7 +65,7 @@
     const build = `${costText(d.cost)} · 🔨 ${d.hammers} (each idle person builds 1 🔨 a turn)`;
     // Neighbour bonuses as bullets "+2 🌾 for [Farm]": kind "tag" / "type" / "terrain" (perAdjacent), "free" (freeNear: no workers).
     const adjacent = (d.perAdjacent || []).flatMap((a) => Object.entries(a.gain || {}).map(([res, n]) =>
-      ({ n, res, max: a.max, needs: a.needs || 0, kind: a.tag ? "tag" : a.type ? "type" : "terrain", id: a.tag || a.type || a.terrain })));
+      ({ n, res, max: a.max, needs: a.needs || 0, kind: a.tag ? "tag" : a.type ? "type" : a.unique ? "unique" : "terrain", id: a.tag || a.type || a.terrain || "unique" })));
     if (d.freeNear && d.jobs) adjacent.push({ n: -d.jobs, res: "people", kind: "free", id: d.freeNear });
     for (const [t, gain] of Object.entries(d.perCell || {}))  // "+1 🪨 on each [Hills]": per own cell on that terrain
       for (const [res, n] of Object.entries(gain)) adjacent.push({ n, res, kind: "cell", id: t });
@@ -107,16 +107,18 @@
     const { kind, id } = group[0];
     const terrain = content.terrain?.[id]?.name || id, type = content.structures?.[id];
     const label = kind === "tag" ? pip(content, id) : kind === "type" ? chip(type?.name || id, type?.color || "#666")
-      : chip(terrain, HexMap.util.colors[id] || "#666");
+      : kind === "unique" ? chip(HexText.structure.adjacent.uniqueChip, "#666") : chip(terrain, HexMap.util.colors[id] || "#666");
     const t = HexText.structure.adjacent;
     const title = (b) => {
       const amount = [b.n > 0 ? "+" : "−", Math.abs(b.n), resName(b.res).toLowerCase()];
       if (b.needs) return t.needs(...amount, b.needs, b.kind === "tag" ? `of your ${content.tags?.[id]?.name || id} structures`
-        : b.kind === "type" ? `of your ${type?.name || id}s` : `${terrain.toLowerCase()} cells with nothing built on them`);
+        : b.kind === "type" ? `of your ${type?.name || id}s` : b.kind === "unique" ? "different types of your structures"
+        : `${terrain.toLowerCase()} cells with nothing built on them`);
       return b.kind === "cell" ? t.cell(...amount, terrain.toLowerCase())
         : b.kind === "free" ? t.free(terrain.toLowerCase())
         : b.kind === "tag" ? t.tag(...amount, content.tags?.[id]?.name || id, b.max)
-        : b.kind === "type" ? t.type(...amount, type?.name || id, b.max) : t.terrain(...amount, terrain.toLowerCase(), b.max);
+        : b.kind === "type" ? t.type(...amount, type?.name || id, b.max)
+        : b.kind === "unique" ? t.unique(...amount, b.max) : t.terrain(...amount, terrain.toLowerCase(), b.max);
     };
     const amounts = group.flatMap((b, i) => [i ? " " : null,
       el("span", { className: b.n > 0 ? "pos" : "neg" }, `${b.n > 0 ? "+" : "−"}${Math.abs(b.n)} ${resIcon(b.res)}`)]);

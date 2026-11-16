@@ -92,6 +92,8 @@ def output(m, s, on=None):
     for adj in d["perAdjacent"]:
         if adj["terrain"]:
             count = sum(1 for n in around if m.cells[n] == adj["terrain"] and n not in m.cell_structure and n not in m.cell_site)
+        elif adj["unique"]:
+            count = len({o["id"] for o in near})
         else:
             count = sum(1 for o in near if (o["id"] == adj["type"] if adj["type"] else adj["tag"] in o["tags"]))
         times = (1 if count >= adj["needs"] else 0) if adj["needs"] else min(count, adj["max"])

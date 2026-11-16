@@ -13,7 +13,6 @@
  "requires": "bronze_working",
  "needs": "smithy",
  "upkeep": {
-  "food": 1,
-  "gold": 1
+  "food": 1
  }
 }

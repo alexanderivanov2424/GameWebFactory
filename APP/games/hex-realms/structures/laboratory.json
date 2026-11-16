@@ -1,0 +1,38 @@
+{
+ "name": "Laboratory",
+ "icon": "🧪",
+ "cells": [
+  [
+   0,
+   0
+  ],
+  [
+   1,
+   0
+  ]
+ ],
+ "tags": [
+  "science"
+ ],
+ "cost": {
+  "wood": 3,
+  "stone": 4,
+  "metal": 2,
+  "gold": 6
+ },
+ "jobs": 1,
+ "produce": {
+  "science": 2
+ },
+ "perAdjacent": {
+  "tag": "science",
+  "gain": {
+   "science": 2
+  },
+  "max": 8
+ },
+ "requires": "research",
+ "category": "culture",
+ "hammers": 6,
+ "color": "#3f8fa8"
+}

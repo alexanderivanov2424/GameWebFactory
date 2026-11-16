@@ -14,8 +14,7 @@
  "mounted": true,
  "needs": "smithy",
  "upkeep": {
-  "food": 1,
-  "gold": 2
+  "food": 1
  },
  "vision": 3
 }

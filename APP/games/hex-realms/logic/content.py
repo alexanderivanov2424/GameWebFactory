@@ -10,7 +10,8 @@ structures/<id>.json:
     name, icon, color ("#rrggbb" map colour), cells [[q, r], ...] (axial, first = anchor)
     cost {res: n} (no food), hp (0 = unattackable), defense (dice it rolls back), jobs (people to work)
     produce {res: n} (output never below 0), onTerrain {terrain: {res: n}} (anchor's terrain, replaces produce)
-    perCell {terrain: {res: n}} (per own cell), perAdjacent {"terrain"|"type"|"tag", "gain", "max"} (or a list; terrain counts only cells with nothing built;
+    perCell {terrain: {res: n}} (per own cell), perAdjacent {"terrain"|"type"|"tag"|"unique": true, "gain", "max"} (or a list; terrain counts only cells with nothing built;
+        unique counts the different types of own structures next to it;
         "needs": n instead gives gain once while at least n of them are next to it)
     tags [TAG ids], housing, storage (room for each stored good: wood, stone, metal), store {res: n}
     terrain [ids] (default: buildable), coast (touches water), requires (advance), recruits [unit ids]
@@ -63,7 +64,7 @@ CATEGORIES = {"defense": "Defense", "homes": "Homes", "food": "Food", "industry"
 # {id: (name, pip colour)}; perAdjacent can count them.
 TAGS = {"industrial": ("Industrial", "#a0643c"), "food": ("Food", "#c9a93a"), "home": ("Home", "#c97b5b"),
         "storage": ("Storage", "#4f86c6"), "military": ("Military", "#b8433a"), "defense": ("Defense", "#7d8794"),
-        "trade": ("Trade", "#d9b13b"), "culture": ("Culture", "#8e5bb5"), "civic": ("Civic", "#5f9e8f")}
+        "trade": ("Trade", "#d9b13b"), "culture": ("Culture", "#8e5bb5"), "civic": ("Civic", "#5f9e8f"), "science": ("Science", "#3f8fa8")}
 EFFECTS = {"towerDice", "defendDice", "attackDice"}
 
 
@@ -131,7 +132,10 @@ def parse_structure(sid, d):
             raise ValueError("perAdjacent must be an object or a list of them")
         if adj.get("tag") is not None and adj["tag"] not in TAGS:
             raise ValueError(f"perAdjacent tag must be one of {sorted(TAGS)}")
+        if sum(adj.get(k) is not None for k in ("terrain", "type", "tag")) + (adj.get("unique") is True) != 1:
+            raise ValueError("perAdjacent needs one of terrain, type, tag or unique: true")
         s["perAdjacent"].append({"terrain": adj.get("terrain"), "type": adj.get("type"), "tag": adj.get("tag"),
+                                 "unique": adj.get("unique") is True,
                                  "gain": res_map(adj, "gain", low=-99),
                                  "max": whole(adj, "max", 1, 9, default=4), "needs": whole(adj, "needs", 0, 9, default=0)})
     s["rotations"] = [[[q, r] for q, r in rot] for rot in rotations(cells)]

@@ -15,7 +15,6 @@
  "siege": 3,
  "requires": "engineering",
  "upkeep": {
-  "food": 1,
-  "gold": 1
+  "food": 1
  }
 }
