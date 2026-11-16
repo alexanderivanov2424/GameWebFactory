@@ -7,9 +7,11 @@
     resolve(m, events)       moves every ordered unit, one cell per step, all at once
 
 Movement is in half steps (move 2 = 4 points). Land units stop at mountains and water; naval
-units move on water only. Own structures can be crossed. An enemy unit or structure can only be
-the last cell of a path; entering it is an attack (ATTACK_COST). Units with 0 attack (can_attack) never
-attack: their paths avoid enemies, they stop instead of sieging or attacking a blocker, and when they meet an
+units move on water only. Own structures can be crossed, and so can enemy ones (normal terrain cost) unless
+they block (Walls, Towers) or the unit can't stand there (a ship and a land structure). An enemy unit or
+blocking structure can only be the last cell of a path; entering it is an attack (ATTACK_COST). Ending a move on
+any enemy structure is a siege; a turn's part of a longer route never ends on one (this_turn). Units with 0 attack (can_attack) never
+attack: their paths avoid enemies (they may walk over enemy structures that don't block), they stop instead of sieging or attacking a blocker, and when they meet an
 enemy they only defend (two such units just stop).
 Planning assumes unexplored cells cost 2 and hides enemy units; resolution uses the real map.
 Per step: (1) sieges; (2) enemy units swapping cells fight; (3) enemy units entering the same
@@ -23,7 +25,7 @@ from gamekit.hexes import neighbors
 
 from . import vision
 from .combat import battle, siege
-from .content import TERRAIN, UNITS
+from .content import STRUCTURES, TERRAIN, UNITS
 
 ATTACK_COST = 2
 
@@ -35,6 +37,14 @@ def can_attack(u):
 def enemy_structure(m, pid, k):
     sid = m.cell_structure.get(k)
     return sid is not None and m.structures[sid]["owner"] != pid
+
+
+def sieges(m, u, k, last):
+    """Entering k is a siege of the enemy structure there: it blocks, the move ends there, or u can't stand on it."""
+    sid = m.cell_structure.get(k)
+    if sid is None or m.structures[sid]["owner"] == u["owner"]:
+        return False
+    return last or STRUCTURES[m.structures[sid]["type"]]["blocks"] or step_cost(m, u, k) is None
 
 
 def step_cost(m, u, k):
@@ -75,6 +85,17 @@ def is_target(m, u, k, known):
     return owner is not None and owner != u["owner"]
 
 
+def stops_path(m, u, k, known):
+    """A target the unit can only attack, not walk over: a visible enemy unit, a known blocking enemy
+    structure, or a known enemy structure on a cell it can't stand on."""
+    _, visible, structures = known
+    occ = m.unit_at.get(k)
+    if occ is not None and m.units[occ]["owner"] != u["owner"] and k in visible:
+        return True
+    owner, stype = structures.get(k, (None, None))
+    return owner is not None and owner != u["owner"] and (STRUCTURES[stype]["blocks"] or planned_cost(m, u, k, known) is None)
+
+
 def _search(m, u, limited, goals=None):
     """Cheapest paths over the owner's known map: ({key: previous key}, goal reached).
     limited: this turn's movement only. A step costing more than the unit's whole movement is never taken."""
@@ -88,12 +109,12 @@ def _search(m, u, limited, goals=None):
             continue
         if goals is not None and k in goals and k != u["at"]:
             return prev, k
-        if k != u["at"] and is_target(m, u, k, known):
+        if k != u["at"] and stops_path(m, u, k, known):
             continue
         for n in neighbors(k):
             if n not in m.cells:
                 continue
-            if is_target(m, u, n, known):
+            if stops_path(m, u, n, known):
                 if not can_attack(u):
                     continue
                 c = ATTACK_COST
@@ -111,7 +132,13 @@ def _search(m, u, limited, goals=None):
 
 
 def reach(m, uid):
-    return _search(m, m.units[uid], True)[0]
+    """Cells it can end on: without attack, enemy structures it could walk over are left out."""
+    u = m.units[uid]
+    prev = _search(m, u, True)[0]
+    if can_attack(u):
+        return prev
+    known = knowledge(m, u)
+    return {k: p for k, p in prev.items() if not is_target(m, u, k, known)}
 
 
 def _walk_back(prev, to):
@@ -122,10 +149,9 @@ def _walk_back(prev, to):
 
 
 def path(m, uid, to):
-    prev = reach(m, uid)
-    if to not in prev:
+    if to not in reach(m, uid):
         return None
-    return _walk_back(prev, to)
+    return _walk_back(_search(m, m.units[uid], True)[0], to)
 
 
 def route(m, uid, goals):
@@ -140,14 +166,16 @@ def this_turn(m, uid, keys):
     known = knowledge(m, u)
     budget, spent, out = UNITS[u["type"]]["move"] * 2, 0, []
     for k in keys:
-        target = is_target(m, u, k, known)
-        if target and not can_attack(u):
+        stop = stops_path(m, u, k, known)
+        if stop and not can_attack(u):
             break
-        c = ATTACK_COST if target else planned_cost(m, u, k, known)
+        c = ATTACK_COST if stop else planned_cost(m, u, k, known)
         if c is None or spent + c > budget:
             break
         spent += c
         out.append(k)
+    while len(out) < len(keys) and out and is_target(m, u, out[-1], known):  # don't stop on an enemy structure on the way
+        out.pop()
     return out
 
 
@@ -168,7 +196,7 @@ def pass_friends(m, uid, keys, left):
             return False
     else:
         return False
-    if occ is not None or cost > left[uid] or enemy_structure(m, u["owner"], k):
+    if occ is not None or cost > left[uid] or sieges(m, u, k, i == len(keys) - 1):
         return False
     left[uid] -= cost
     m.move_unit(uid, k)
@@ -190,7 +218,7 @@ def resolve(m, events):
 
         for uid, k in list(intents.items()):  # (1) sieges
             sid = m.cell_structure.get(k)
-            if k not in m.unit_at and enemy_structure(m, m.units[uid]["owner"], k):
+            if k not in m.unit_at and sieges(m, m.units[uid], k, len(paths[uid]) == 1):
                 if can_attack(m.units[uid]):
                     siege(m, uid, sid, events)
                 stop(uid)
@@ -232,7 +260,7 @@ def resolve(m, events):
         while moved:
             moved = False
             for uid, k in sorted(intents.items()):
-                if k not in m.unit_at and not enemy_structure(m, m.units[uid]["owner"], k):
+                if k not in m.unit_at and not sieges(m, m.units[uid], k, len(paths[uid]) == 1):
                     cost = step_cost(m, m.units[uid], k)
                     if cost is None or cost > left[uid]:  # the real terrain was worse than planned
                         stop(uid)

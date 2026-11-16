@@ -59,6 +59,8 @@
     if (d.heals) stats.push("Heals units on or next to it");
     if (d.shoots) stats.push(`Shoots ${plural(d.shoots, "die")} (range ${d.range})`);
     if (d.score) stats.push(`+${d.score} score`);
+    if (d.blocks) stats.push(HexText.structure.blocks);
+    if (d.outside) stats.push(HexText.structure.outside);
     for (const b of d.boost || []) stats.push(`+${b.add} to what each ${b.type ? content.structures[b.type]?.name || b.type : `${content.tags?.[b.tag]?.name || b.tag} structure`} next to it makes, while it works`);
     const hp = d.hp ? `HP ${d.hp}${d.defense ? ` · defense ${d.defense}` : ""}` : "Can't be attacked";
     const terrains = names(content, "terrain", d.terrain || []) + (d.coast ? " · touching water" : "");

@@ -2,7 +2,7 @@
 
 Costs are paid when given and refunded when cancelled or failed, so orders never exceed the stock.
 
-    build(m, pid, stype, at, rot)   structure footprint anchored at `at`
+    build(m, pid, stype, at, rot)   structure footprint anchored at `at`, inside your territory (placeable)
     recruit(m, pid, sid, utype)     train a unit at a working structure (1 per structure a turn)
     train(m, pid, sid, utype)       auto-train: recruit utype there every turn it can be paid (None: stop)
     auto_train(m, pid)              place this turn's auto-train recruit orders (start of planning)
@@ -78,6 +78,12 @@ def site_problem(m, pid, stype, cells, pending=(), seen=None):
     return None
 
 
+def placeable(m, pid, d, c):
+    """Cell c is yours, or (for an `outside` structure like a Wall) nobody's and next to yours."""
+    owner = m.territory.get(c)
+    return owner == pid or (d["outside"] and owner is None and any(m.territory.get(n) == pid for n in neighbors(c)))
+
+
 def build(m, pid, stype, at, rot):
     d = STRUCTURES.get(stype)
     if d is None or stype == TOWN_HALL:
@@ -92,8 +98,9 @@ def build(m, pid, stype, at, rot):
     problem = site_problem(m, pid, stype, cells, pending, m.visible[pid])
     if problem:
         raise LobbyError(problem)
-    if any(m.territory.get(c) != pid for c in cells):
-        raise LobbyError("Build inside your territory (claim more land with gold).")
+    if any(not placeable(m, pid, d, c) for c in cells):
+        raise LobbyError(f"Build {d['name']}s inside or next to your territory." if d["outside"]
+                         else "Build inside your territory (claim more land with gold).")
     logistics.take(m, pid, d["cost"])
     o["builds"].append({"id": m.new_id("o"), "type": stype, "at": at, "rot": rot % 6, "cells": cells, "cost": dict(d["cost"])})
 

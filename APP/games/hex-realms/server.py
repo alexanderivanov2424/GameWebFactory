@@ -2,9 +2,10 @@
 
 Each player starts with Settlers and a Scout (no people) and founds their first Town Hall anywhere;
 every Town Hall settlers found brings 2 people. Every turn
-everyone plans in secret at once: build inside their territory, train units, order moves and attacks,
+everyone plans in secret at once: build inside their territory (Walls and Towers also next to it), train units, order moves and attacks,
 research, set up trade. When all have ended their turn (or the timer runs out), orders resolve together:
-units move step by step and fight with dice where they meet. Structures are built by idle people;
+units move step by step (over enemy structures except Walls and Towers; ending a move on one attacks it)
+and fight with dice where they meet. Structures are built by idle people;
 production, eating and population are settled per realm (logic/economy.py). Gold is realm-wide, food
 is never stored, goods sit in stores, and faith and science are flat (what working structures give now,
 minus what advances cost; may go below 0). Swords ⚔️ come from military structures (Barracks 3, Stable and

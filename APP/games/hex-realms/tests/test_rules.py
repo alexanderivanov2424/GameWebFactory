@@ -138,13 +138,19 @@ class MovementTests(unittest.TestCase):
         end_turn(self.m)
         self.assertIn(b, self.m.units)
 
-    def test_no_moving_through_enemy_structures(self):
+    def test_no_moving_through_enemy_walls(self):
         a = unit(self.m, "p1", "militia", "0,0")
-        self.m.add_structure("p2", "hut", "1,0", 0)
-        self.m.add_structure("p2", "hut", "1,-1", 0)
-        self.m.add_structure("p2", "hut", "0,1", 0)
+        self.m.add_structure("p2", "wall", "1,0", 0)
+        self.m.add_structure("p2", "wall", "1,-1", 0)
+        self.m.add_structure("p2", "wall", "0,1", 0)
         self.assertNotIn("2,0", movement.reach(self.m, a))
         self.m.act("p1", "move", a, "1,0")  # attacking it is fine
+
+    def test_moving_over_enemy_structures(self):
+        a = unit(self.m, "p1", "militia", "0,0")
+        for at in ("1,0", "1,-1", "0,1"):
+            self.m.add_structure("p2", "hut", at, 0)
+        self.assertIn("2,0", movement.reach(self.m, a))
 
 
 class CombatTests(unittest.TestCase):

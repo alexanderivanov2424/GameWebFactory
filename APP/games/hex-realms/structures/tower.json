@@ -29,5 +29,7 @@
  "category": "defense",
  "vision": 5,
  "hammers": 4,
- "color": "#7c8794"
+ "color": "#7c8794",
+ "blocks": true,
+ "outside": true
 }

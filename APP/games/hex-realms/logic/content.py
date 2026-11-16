@@ -19,6 +19,8 @@ structures/<id>.json:
     boost [{"type"|"tag", "add"}] (while it works: +add to each resource an adjacent own structure of that
     type / with that tag makes), freeNear (terrain id: needs no workers while touching that terrain)
     category (CATEGORIES id), vision (cells seen around each cell, default 3)
+    blocks (enemy units can't walk over it; others can, and ending a move on one is still an attack)
+    outside (may also go on unowned cells next to your territory)
 units/<id>.json:
     name, icon, art (client/art/units/ file, drawn instead of icon), cost {res: n} (no food; troops hold swords while they live), people (default 0; settlers take 1 from the population)
     attack, defense, hp, move (steps), range (shoots instead of moving), siege (damage per hit on structures)
@@ -106,6 +108,7 @@ def parse_structure(sid, d):
         "trade": whole(d, "trade", 0, 9, default=0), "vision": whole(d, "vision", 0, 9, default=3),
         "score": whole(d, "score", 0, 99, default=0),
         "hammers": whole(d, "hammers", 1, 99, default=1),
+        "blocks": d.get("blocks") is True, "outside": d.get("outside") is True,
     }
     s["freeNear"] = d.get("freeNear")
     if s["freeNear"] is not None and s["freeNear"] not in TERRAIN:

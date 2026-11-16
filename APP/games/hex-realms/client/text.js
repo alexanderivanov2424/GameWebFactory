@@ -23,13 +23,13 @@ window.HexText = {
       Placing a structure takes builders from your idle people at once (cancel to get them back). Switch structures off
       (or all at once with <b>Jobs off</b>) or demolish them to free people. Nothing is built where an enemy unit stands,
       and a site with an enemy unit on it gets no work.`],
-    ["Land", `You build anywhere in your territory. Every Town Hall gives free land 2 cells around it: first come, first
+    ["Land", `You build anywhere in your territory (Walls and Towers also just outside it). Every Town Hall gives free land 2 cells around it: first come, first
       served, and cells two realms reach in the same turn go to nobody. To grow further, select a Town Hall and
       <b>Extend territory</b>: gold buys an explored cell next to your land, at once, for 1 gold a turn. Bought land is
       lost to an enemy unit on or next to it (once nothing is built on it), when it's cut off from your Town Halls' land, or to another realm's Town
       Hall; unpaid cells are given up, farthest first.`],
     ["Units", `Units fight with dice wherever they meet: each die of 4 or more hits (5 or more against a unit in forest,
-      hills or mountains, or on its own structure). Your own units pass through each other. Units with no attack (Scouts, Settlers) never attack: they can't
+      hills or mountains, or on its own structure). Your own units pass through each other. Units can walk over enemy structures except Walls and Towers; ending a move on one attacks it. Units with no attack (Scouts, Settlers) never attack: they can't
       move onto enemies and only defend when attacked. Standing orders last until
       you give another: <b>Explore</b>, <b>Fight</b>, <b>Pillage</b>, or click a cell beyond a unit's reach to walk there
       over several turns. Units with orders are greyed out. New units appear on the structure that trains them.`],
@@ -62,7 +62,6 @@ window.HexText = {
     tower: "Shoots the nearest enemy unit in range after movement.",
     town_hall: "Heart of a city: stores goods, gives free land around it, and is where you extend your territory. Lose every Town Hall and you are out.",
     trading_hall: "Trades at a better rate than a Market.",
-    wall: "Blocks enemy units until knocked down.",
     windmill: "Makes nothing itself: every Farm next to it makes 2 more food while the Windmill works.",
   },
   units: {
@@ -132,6 +131,8 @@ window.HexText = {
     demolishConfirm: (name) => `Demolish this ${name}? No refund, and goods stored in it are lost.`,
     siteHelp: "Each idle person (no job) builds 1 🔨 a turn, oldest site first. Switch structures off to free people.",
     siteDemolish: "Take the site down and get its cost back.",
+    blocks: "Enemy units can't walk over it",
+    outside: "Can be built next to your territory",
     resTitle: "What it makes (+) and uses (−) a turn while it works; 👥 = the people working in it. In brackets: the base amounts; green / red = more / less than the base here.",
     // Bullets for neighbour bonuses (hover titles); max = how many neighbours count at most.
     adjacent: {
@@ -168,6 +169,7 @@ window.HexText = {
     problem: {
       offMap: "Part of it is off the map (or unexplored).",
       outside: "Part of it is outside your territory.",
+      outsideNear: "It must be inside or next to your territory.",
       terrain: (name) => `It can't go on ${name}.`,
       built: "Something is already built there.",
       ordered: "You already ordered a build there.",

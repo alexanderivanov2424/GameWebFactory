@@ -241,7 +241,9 @@
     const enemyUnit = (k) => idx.unitAt[k] && g.units[idx.unitAt[k]].owner !== c.you;
     for (const k of cells) {
       if (!(k in g.cells)) return HexText.hint.problem.offMap;
-      if (g.territory[k] !== c.you) return HexText.hint.problem.outside;
+      // Mirrors orders.placeable: yours, or (def.outside: Walls, Towers) nobody's and next to yours.
+      if (g.territory[k] !== c.you && !(def.outside && !(k in g.territory) && U.neighbors(k).some((n) => g.territory[n] === c.you)))
+        return def.outside ? HexText.hint.problem.outsideNear : HexText.hint.problem.outside;
       if (!(def.terrain || []).includes(g.cells[k])) return HexText.hint.problem.terrain((c.content.terrain[g.cells[k]]?.name || g.cells[k]).toLowerCase());
       if (idx.structAt[k] || idx.siteAt[k]) return HexText.hint.problem.built;
       if (pending.has(k)) return HexText.hint.problem.ordered;

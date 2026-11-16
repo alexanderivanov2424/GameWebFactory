@@ -25,5 +25,7 @@
  ],
  "category": "defense",
  "hammers": 1,
- "color": "#9a9ca2"
+ "color": "#9a9ca2",
+ "blocks": true,
+ "outside": true
 }
