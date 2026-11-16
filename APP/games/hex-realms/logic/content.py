@@ -9,7 +9,8 @@ structures/<id>.json:
     name, icon, color ("#rrggbb" map colour), cells [[q, r], ...] (axial, first = anchor)
     cost {res: n} (no food), hp (0 = unattackable), defense (dice it rolls back), jobs (people to work)
     produce {res: n} (output never below 0), onTerrain {terrain: {res: n}} (anchor's terrain, replaces produce)
-    perCell {terrain: {res: n}} (per own cell), perAdjacent {"terrain"|"type"|"tag", "gain", "max"} (or a list; terrain counts only cells with nothing built)
+    perCell {terrain: {res: n}} (per own cell), perAdjacent {"terrain"|"type"|"tag", "gain", "max"} (or a list; terrain counts only cells with nothing built;
+        "needs": n instead gives gain once while at least n of them are next to it)
     tags [TAG ids], housing, storage (room for each stored good: wood, stone, metal), store {res: n}
     terrain [ids] (default: buildable), coast (touches water), requires (advance), recruits [unit ids]
     heals, shoots (dice) + range, trade (give n for 1), score, hammers (work to build, default 1)
@@ -129,7 +130,7 @@ def parse_structure(sid, d):
             raise ValueError(f"perAdjacent tag must be one of {sorted(TAGS)}")
         s["perAdjacent"].append({"terrain": adj.get("terrain"), "type": adj.get("type"), "tag": adj.get("tag"),
                                  "gain": res_map(adj, "gain", low=-99),
-                                 "max": whole(adj, "max", 1, 9, default=4)})
+                                 "max": whole(adj, "max", 1, 9, default=4), "needs": whole(adj, "needs", 0, 9, default=0)})
     s["rotations"] = [[[q, r] for q, r in rot] for rot in rotations(cells)]
     return s
 

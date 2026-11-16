@@ -65,12 +65,12 @@
     const build = `${costText(d.cost)} · 🔨 ${d.hammers} (each idle person builds 1 🔨 a turn)`;
     // Neighbour bonuses as bullets "+2 🌾 for [Farm]": kind "tag" / "type" / "terrain" (perAdjacent), "free" (freeNear: no workers).
     const adjacent = (d.perAdjacent || []).flatMap((a) => Object.entries(a.gain || {}).map(([res, n]) =>
-      ({ n, res, max: a.max, kind: a.tag ? "tag" : a.type ? "type" : "terrain", id: a.tag || a.type || a.terrain })));
+      ({ n, res, max: a.max, needs: a.needs || 0, kind: a.tag ? "tag" : a.type ? "type" : "terrain", id: a.tag || a.type || a.terrain })));
     if (d.freeNear && d.jobs) adjacent.push({ n: -d.jobs, res: "people", kind: "free", id: d.freeNear });
     // One bullet per chip: "+1 🌾 −1 👥 for [Water]" (a terrain bonus and freeNear on the same terrain share one).
     const groups = new Map();
     for (const b of adjacent) {
-      const k = `${b.kind === "free" ? "terrain" : b.kind}:${b.id}`;
+      const k = `${b.kind === "free" ? "terrain" : b.kind}:${b.id}:${b.needs || 0}`;
       if (!groups.has(k)) groups.set(k, []);
       groups.get(k).push(b);
     }
@@ -109,13 +109,16 @@
     const t = HexText.structure.adjacent;
     const title = (b) => {
       const amount = [b.n > 0 ? "+" : "−", Math.abs(b.n), resName(b.res).toLowerCase()];
+      if (b.needs) return t.needs(...amount, b.needs, b.kind === "tag" ? `of your ${content.tags?.[id]?.name || id} structures`
+        : b.kind === "type" ? `of your ${type?.name || id}s` : `${terrain.toLowerCase()} cells with nothing built on them`);
       return b.kind === "free" ? t.free(terrain.toLowerCase())
         : b.kind === "tag" ? t.tag(...amount, content.tags?.[id]?.name || id, b.max)
         : b.kind === "type" ? t.type(...amount, type?.name || id, b.max) : t.terrain(...amount, terrain.toLowerCase(), b.max);
     };
     const amounts = group.flatMap((b, i) => [i ? " " : null,
       el("span", { className: b.n > 0 ? "pos" : "neg" }, `${b.n > 0 ? "+" : "−"}${Math.abs(b.n)} ${resIcon(b.res)}`)]);
-    return el("li", { title: group.map(title).join("\n") }, ...amounts, " for ", label);
+    const needs = group.find((b) => b.needs)?.needs;
+    return el("li", { title: group.map(title).join("\n") }, ...amounts, ` for ${needs ? `${needs} ` : ""}`, label);
   }
 
   function structCard(content, d, hp, at = null) {

@@ -132,6 +132,7 @@ window.HexText = {
       type: (sign, n, res, name, max) => `${sign}${n} ${res} for each of your ${name}s next to it (up to ${max})`,
       terrain: (sign, n, res, terrain, max) => `${sign}${n} ${res} for each ${terrain} cell next to it with nothing built on it (up to ${max})`,
       free: (terrain) => `Needs no workers while it touches ${terrain}`,
+      needs: (sign, n, res, needs, what) => `${sign}${n} ${res} while at least ${needs} ${what} are next to it`,
     },
   },
   // Orders panel and the build menu.

@@ -277,7 +277,8 @@
     for (const adj of def.perAdjacent || []) {
       const count = adj.terrain ? around.filter((n) => g.cells[n] === adj.terrain && !idx.structAt[n] && !idx.siteAt[n]).length
         : near.filter((s) => (adj.type ? s.type === adj.type : (c.content.structures[s.type]?.tags || []).includes(adj.tag))).length;
-      for (const [r, n] of Object.entries(adj.gain || {})) plus(r, n * Math.min(count, adj.max));
+      const times = adj.needs ? (count >= adj.needs ? 1 : 0) : Math.min(count, adj.max);
+      for (const [r, n] of Object.entries(adj.gain || {})) plus(r, n * times);
     }
     for (const [r, n] of Object.entries((c.priv.typeBonus || {})[kind] || {})) plus(r, n);
     for (const r of Object.keys(out)) if (out[r] <= 0) delete out[r];  // penalties never make it negative

@@ -94,7 +94,8 @@ def output(m, s, on=None):
             count = sum(1 for n in around if m.cells[n] == adj["terrain"] and n not in m.cell_structure and n not in m.cell_site)
         else:
             count = sum(1 for o in near if (o["id"] == adj["type"] if adj["type"] else adj["tag"] in o["tags"]))
-        _add(out, {r: n * min(count, adj["max"]) for r, n in adj["gain"].items()})
+        times = (1 if count >= adj["needs"] else 0) if adj["needs"] else min(count, adj["max"])
+        _add(out, {r: n * times for r, n in adj["gain"].items()})
     _add(out, type_bonus(m, s["owner"]).get(s["type"], {}))
     out = {r: n for r, n in out.items() if n > 0}  # penalties never make it negative
     boosters = [m.structures[sid] for sid in {m.cell_structure[n] for n in around if n in m.cell_structure}]

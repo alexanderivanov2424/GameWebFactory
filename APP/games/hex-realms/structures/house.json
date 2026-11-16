@@ -21,5 +21,12 @@
  "housing": 3,
  "category": "homes",
  "hammers": 4,
- "color": "#c08552"
+ "color": "#c08552",
+ "perAdjacent": {
+  "tag": "home",
+  "gain": {
+   "gold": 1
+  },
+  "needs": 2
+ }
 }
