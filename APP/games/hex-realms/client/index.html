@@ -44,6 +44,10 @@
     .hr-site .hr-icon { opacity: 0.45; }
     .hr-site-cell { fill-opacity: 0.4; stroke-opacity: 0.4; stroke-width: 1; }
     .hr-site-text { fill: #fff; font: 700 11px sans-serif; text-anchor: middle; paint-order: stroke; stroke: #10131a; stroke-width: 3; pointer-events: none; }
+    .hr-site-plus { fill: #6dff8a; } .hr-site-wait { fill: #c9ced9; font-weight: 400; }
+    .hr-building .hr-site-cell { fill-opacity: 0.55; stroke: #6dff8a; stroke-opacity: 1; stroke-width: 2.5; animation: hr-build-pulse 1.2s ease-in-out infinite alternate; }
+    .hr-building .hr-icon { opacity: 0.8; }
+    @keyframes hr-build-pulse { from { stroke-opacity: 0.35; } to { stroke-opacity: 1; } }
     .hr-strike { stroke: #ff6a5a; stroke-width: 3; stroke-linecap: round; }
     .hr-hpback { fill: #20242d; stroke: #000; stroke-width: 0.5; }
     .hr-hpbar { fill: #5ccf6a; }

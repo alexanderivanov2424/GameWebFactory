@@ -294,7 +294,8 @@
         }
         put(structG, g);
       }
-      // Construction sites: faded structure colour, with hammers done and needed.
+      // Construction sites: faded structure colour, with hammers done and needed. Your sites that get hammers
+      // this turn (idle people building them) have a pulsing green outline and "+n 🔨"; the rest wait.
       const working = (priv && priv.building?.works) || {};
       for (const [cid, x] of Object.entries(game.sites || {})) {
         const def = content.structures[x.type];
@@ -303,10 +304,12 @@
         for (const k of x.cells) shapeAt[k] = { cells: x.cells, color: color(x.owner) };
         let tip = `${def.name} under construction (${nameOf(x.owner)}): ${x.done}/${x.hammers} 🔨`;
         if (x.owner === you) tip += working[cid] ? `\n${working[cid]} builder${working[cid] > 1 ? "s" : ""} this turn (+${working[cid]} 🔨).` : x.done < x.hammers ? "\nWaiting: no idle people." : "";
-        put(structG, svg("g", { class: "hr-struct hr-site" }, svg("title", {}, tip),
+        const n = x.owner === you ? working[cid] || 0 : 0;
+        put(structG, svg("g", { class: `hr-struct hr-site${n ? " hr-building" : ""}` }, svg("title", {}, tip),
           blob(x.cells, { class: "hr-site-cell", fill: def.color, stroke: def.color }),
           svg("text", { x: mx, y: my + 1, class: "hr-icon" }, def.icon || def.name.slice(0, 2)),
-          svg("text", { x: mx, y: my + 17, class: "hr-site-text" }, `${x.done}/${x.hammers}`)));
+          svg("text", { x: mx, y: my + 17, class: "hr-site-text" }, `${x.done}/${x.hammers}`,
+            n ? svg("tspan", { class: "hr-site-plus" }, ` +${n}🔨`) : null)));
       }
 
       // Units; yours with an order this turn or a standing order are greyed out.
@@ -334,11 +337,12 @@
       // Your pending orders.
       if (!priv) return;
       const o = priv.orders, mine = color(you);
-      for (const b of o.builds) {
-        const def = content.structures[b.type];
-        put(orderG, b.cells.map((k) => hexAt(k, SIZE * 0.9, { fill: def?.color || mine, "fill-opacity": 0.35, stroke: mine, "stroke-width": 2.5, "stroke-dasharray": "5 4" })));
+      for (const b of o.builds) {  // planned builds; "+n 🔨" (green) when idle people start on it this turn
+        const def = content.structures[b.type], n = priv.building?.orders?.[b.id] || 0;
+        put(orderG, b.cells.map((k) => hexAt(k, SIZE * 0.9, { fill: def?.color || mine, "fill-opacity": 0.35, stroke: n ? "#6dff8a" : mine, "stroke-width": 2.5, "stroke-dasharray": "5 4" })));
         const [x, y] = middle(b.cells);
-        put(orderG, svg("text", { x, y: y + 1, class: "hr-icon hr-ghosttext" }, def?.icon || ""));
+        put(orderG, svg("text", { x, y: y + 1, class: "hr-icon hr-ghosttext" }, def?.icon || ""),
+          svg("text", { x, y: y + 17, class: `hr-site-text${n ? " hr-site-plus" : " hr-site-wait"}` }, n ? `+${n}🔨` : "no builders"));
       }
       for (const [uid, path] of Object.entries(o.moves)) {
         const u = game.units[uid];
