@@ -43,7 +43,6 @@ window.HexText = {
     butcher: "Makes more food for each Hut or House next to it.",
     chapel: "Makes faith for each Hut or House next to it.",
     docks: "Built on water.",
-    farm: "Grows more with other Farms next to it, and by water. Needs no worker while it touches water.",
     granary: "Every food structure next to it makes 2 more of what it makes.",
     house: "Housing.",
     hut: "Cheap housing.",
@@ -127,7 +126,13 @@ window.HexText = {
     siteHelp: "Each idle person (no job) builds 1 🔨 a turn, oldest site first. Switch structures off to free people.",
     siteDemolish: "Take the site down and get its cost back.",
     resTitle: "What it makes (+) and uses (−) a turn while it works; 👥 = the people working in it. In brackets: the base amounts; green / red = more / less than the base here.",
-    tagTitle: (sign, n, res, tag) => `${sign}${n} ${res} for each of your ${tag} structures next to it`,
+    // Bullets for neighbour bonuses (hover titles); max = how many neighbours count at most.
+    adjacent: {
+      tag: (sign, n, res, tag, max) => `${sign}${n} ${res} for each of your ${tag} structures next to it (up to ${max})`,
+      type: (sign, n, res, name, max) => `${sign}${n} ${res} for each of your ${name}s next to it (up to ${max})`,
+      terrain: (sign, n, res, terrain, max) => `${sign}${n} ${res} for each ${terrain} cell next to it with nothing built on it (up to ${max})`,
+      free: (terrain) => `Needs no workers while it touches ${terrain}`,
+    },
   },
   // Orders panel and the build menu.
   hud: {

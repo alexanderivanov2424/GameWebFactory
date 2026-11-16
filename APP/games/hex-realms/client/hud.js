@@ -60,12 +60,14 @@
     if (d.shoots) stats.push(`Shoots ${plural(d.shoots, "die")} (range ${d.range})`);
     if (d.score) stats.push(`+${d.score} score`);
     for (const b of d.boost || []) stats.push(`+${b.add} to what each ${b.type ? content.structures[b.type]?.name || b.type : `${content.tags?.[b.tag]?.name || b.tag} structure`} next to it makes, while it works`);
-    if (d.freeNear && d.jobs) stats.push(`Needs no workers while touching ${(content.terrain[d.freeNear]?.name || d.freeNear).toLowerCase()}`);
     const hp = d.hp ? `HP ${d.hp}${d.defense ? ` · defense ${d.defense}` : ""}` : "Can't be attacked";
     const terrains = names(content, "terrain", d.terrain || []) + (d.coast ? " · touching water" : "");
     const build = `${costText(d.cost)} · 🔨 ${d.hammers} (each idle person builds 1 🔨 a turn)`;
-    const byTag = (d.perAdjacent || []).filter((a) => a.tag).flatMap((a) => Object.entries(a.gain || {}).map(([res, n]) => ({ n, res, tag: a.tag })));
-    return { text: HexText.structures[d.id] || "", res: resListText(d), stats, hp, terrains, build, tags: d.tags || [], byTag };
+    // Neighbour bonuses as bullets "+2 🌾 for [Farm]": kind "tag" / "type" / "terrain" (perAdjacent), "free" (freeNear: no workers).
+    const adjacent = (d.perAdjacent || []).flatMap((a) => Object.entries(a.gain || {}).map(([res, n]) =>
+      ({ n, res, max: a.max, kind: a.tag ? "tag" : a.type ? "type" : "terrain", id: a.tag || a.type || a.terrain })));
+    if (d.freeNear && d.jobs) adjacent.push({ n: -d.jobs, res: "people", kind: "free", id: d.freeNear });
+    return { text: HexText.structures[d.id] || "", res: resListText(d), stats, hp, terrains, build, tags: d.tags || [], adjacent };
   }
 
   // Footprint picture (unturned) in the structure's colour, with its icon.
@@ -89,8 +91,18 @@
     const t = content.tags?.[tag] || { name: tag, color: "#666" };
     return el("span", { className: "hr-pip", style: `background:${t.color}` }, t.name);
   };
-  const tagLine = (content, b) => el("li", { title: HexText.structure.tagTitle(b.n > 0 ? "+" : "−", Math.abs(b.n), resName(b.res).toLowerCase(), content.tags?.[b.tag]?.name || b.tag) },
-    el("span", { className: b.n > 0 ? "pos" : "neg" }, `${b.n > 0 ? "+" : "−"}${Math.abs(b.n)} ${resIcon(b.res)}`), " for ", pip(content, b.tag));
+  // A chip naming a structure type (its colour) or a terrain (its map colour), like a tag's pip.
+  const chip = (name, color) => el("span", { className: "hr-pip", style: `background:${color}` }, name);
+  function adjacentLine(content, b) {
+    const terrain = content.terrain?.[b.id]?.name || b.id, type = content.structures?.[b.id];
+    const label = b.kind === "tag" ? pip(content, b.id) : b.kind === "type" ? chip(type?.name || b.id, type?.color || "#666")
+      : chip(terrain, HexMap.util.colors[b.id] || "#666");
+    const t = HexText.structure.adjacent, amount = [b.n > 0 ? "+" : "−", Math.abs(b.n), resName(b.res).toLowerCase()];
+    const title = b.kind === "free" ? t.free(terrain.toLowerCase())
+      : b.kind === "tag" ? t.tag(...amount, content.tags?.[b.id]?.name || b.id, b.max)
+      : b.kind === "type" ? t.type(...amount, type?.name || b.id, b.max) : t.terrain(...amount, terrain.toLowerCase(), b.max);
+    return el("li", { title }, el("span", { className: b.n > 0 ? "pos" : "neg" }, `${b.n > 0 ? "+" : "−"}${Math.abs(b.n)} ${resIcon(b.res)}`), " for ", label);
+  }
 
   function structCard(content, d, hp, at = null) {
     const si = structInfo(content, d);
@@ -98,7 +110,7 @@
       si.tags.length ? el("div", { className: "hr-pips" }, si.tags.map((t) => pip(content, t))) : null,
       si.text ? el("div", { className: "hr-stext" }, si.text) : null,
       si.res || at ? el("div", { className: "hr-sres", title: HexText.structure.resTitle }, ...resListEl(d, at)) : null,
-      el("ul", { className: "hr-sstats" }, si.byTag.map((b) => tagLine(content, b)), si.stats.map((t) => el("li", {}, t))));
+      el("ul", { className: "hr-sstats" }, si.adjacent.map((b) => adjacentLine(content, b)), si.stats.map((t) => el("li", {}, t))));
   }
   const canPay = (ctx, cost) => Object.entries(cost || {}).every(([r, n]) => (ctx.priv.res[r] || 0) >= n);
   const nameSpan = (game, pid) => {

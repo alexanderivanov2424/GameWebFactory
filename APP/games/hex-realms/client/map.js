@@ -489,5 +489,5 @@
     return { draw, setHighlights, setGhost, flash, centre, fit, focus, mark, setResView, getView: () => ({ ...view }), setView: glide };
   }
 
-  window.HexMap = { create, util: { parse, key, add, neighbors, dist, center, DIRS } };
+  window.HexMap = { create, util: { parse, key, add, neighbors, dist, center, DIRS, colors: COLORS } };
 })();
