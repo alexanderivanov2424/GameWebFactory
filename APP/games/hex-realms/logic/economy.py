@@ -169,10 +169,11 @@ def report(m, pid, resolving=False):
     for s in working:
         _add(income, output(m, s, on))
     upkeep = dict.fromkeys(RESOURCES, 0)
-    upkeep["food"] = p["pop"] * FOOD_PER_PERSON
-    upkeep["gold"] = land * territory.LAND_UPKEEP
-    for utype in [u["type"] for u in m.units_of(pid)] + [r["type"] for r in recruits]:
-        _add(upkeep, UNITS[utype]["upkeep"])
+    if m.has_hall(pid):  # no Town Hall (before founding): nobody eats or pays anything, as in end_of_turn
+        upkeep["food"] = p["pop"] * FOOD_PER_PERSON
+        upkeep["gold"] = land * territory.LAND_UPKEEP
+        for utype in [u["type"] for u in m.units_of(pid)] + [r["type"] for r in recruits]:
+            _add(upkeep, UNITS[utype]["upkeep"])
     have = logistics.stock(m, pid)
     trades = _trades(working, have, income, upkeep)
 

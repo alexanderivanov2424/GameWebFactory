@@ -134,12 +134,13 @@
     const chips = ctx.content.resources.map((r) => {
       const net = rep.net[r] || 0;
       const capped = rep.caps[r];
-      const shown = r === "food" ? rep.income.food || 0 : priv.res[r] || 0;  // food isn't stored: show its production
+      const food = r === "food";  // food isn't stored: show what's left after everyone eats (no brackets)
+      const shown = food ? net : priv.res[r] || 0;
       const full = capped !== undefined && shown >= capped;
       const flat = (ctx.content.flat || []).includes(r);  // what working structures give now, minus advances bought
       return withDelta(r, el("span", { className: `hr-chip hr-res-${r}${full ? " full" : ""}${ctx.ui.resView === r ? " on" : ""}`, onclick: () => ctx.act.resView(r) },
-        el("span", { className: "hr-ricon" }, resIcon(r)), " ", el("b", {}, String(shown)), capped !== undefined ? el("small", {}, `/${capped}`) : null,
-        flat ? null : el("span", { className: net < 0 ? "neg" : net > 0 ? "pos" : "" }, ` (${signed(net)})`)));
+        el("span", { className: "hr-ricon" }, resIcon(r)), " ", el("b", { className: food && net < 0 ? "neg" : "" }, String(shown)), capped !== undefined ? el("small", {}, `/${capped}`) : null,
+        flat || food ? null : el("span", { className: net < 0 ? "neg" : net > 0 ? "pos" : "" }, ` (${signed(net)})`)));
     });
     const done = priv.done;
     const end = btn(done ? "Waiting for others… (undo)" : "End turn", () => ctx.act.send({ action: "done", done: !done }), { cls: done ? "waiting" : "endturn" });

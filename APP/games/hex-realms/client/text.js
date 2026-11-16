@@ -14,7 +14,7 @@ window.HexText = {
     ["People and food", `Structures work while they have their workers (people). Food can't be stored: each turn,
       everyone eats 1 food and every unit eats its upkeep from that turn's production. Food left over becomes new people
       at once, as many as it feeds, while there's housing (units use housing too); the rest is lost. When production
-      falls short, whoever can't be fed dies: idle people first, then units (newest first), then people at work.`],
+      falls short, whoever can't be fed dies: idle people first, then units (newest first), then people at work. The food number at the top is what's left after everyone eats (below 0: someone starves).`],
     ["Goods", `Gold goes straight to your realm; wood, stone and metal go into your stores (Town
       Halls, Storage Yards). Faith and science aren't collected each turn: you have what your working structures give
       right now, minus what you've spent on advances (it can drop below 0 if structures stop; nothing else happens). What doesn't fit at the end of the turn is lost. A Market or Trading Hall can
