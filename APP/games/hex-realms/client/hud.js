@@ -245,8 +245,8 @@
           action(btn(hold ? "Hold (on)" : "Hold", () => command({ action: "hold", unit: sel.id }), { cls: hold ? "on" : "", title: S.hold.title }),
             S.hold.desc),
           game.fog && !def.settler ? action(autoBtn("explore", "Explore"), S.explore.desc) : null,
-          !def.settler ? action(autoBtn("fight", "Fight"), S.fight.desc) : null,
-          !def.settler ? action(autoBtn("pillage", "Pillage"), S.pillage.desc) : null,
+          def.attack > 0 ? action(autoBtn("fight", "Fight"), S.fight.desc) : null,  // units with no attack never attack
+          def.attack > 0 ? action(autoBtn("pillage", "Pillage"), S.pillage.desc) : null,
           def.range ? action(btn("Shoot", () => act.setMode({ type: "shoot", unit: sel.id }), { cls: ui.mode?.type === "shoot" ? "on" : "", title: S.shoot.title(def.range) }),
             S.shoot.desc(def.range)) : null,
           def.settler ? action(btn("Found city", () => act.setMode({ type: "found", unit: sel.id, rot: found[0] }), { disabled: !found.length, cls: ui.mode?.type === "found" ? "on" : "", title: found.length ? S.found.title : S.found.none }),

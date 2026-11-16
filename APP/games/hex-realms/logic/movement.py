@@ -8,7 +8,9 @@
 
 Movement is in half steps (move 2 = 4 points). Land units stop at mountains and water; naval
 units move on water only. Own structures can be crossed. An enemy unit or structure can only be
-the last cell of a path; entering it is an attack (ATTACK_COST).
+the last cell of a path; entering it is an attack (ATTACK_COST). Units with 0 attack (can_attack) never
+attack: their paths avoid enemies, they stop instead of sieging or attacking a blocker, and when they meet an
+enemy they only defend (two such units just stop).
 Planning assumes unexplored cells cost 2 and hides enemy units; resolution uses the real map.
 Per step: (1) sieges; (2) enemy units swapping cells fight; (3) enemy units entering the same
 cell fight there; (4) free cells are entered; (5) a blocked unit attacks an enemy blocker, or swaps
@@ -24,6 +26,10 @@ from .combat import battle, siege
 from .content import TERRAIN, UNITS
 
 ATTACK_COST = 2
+
+
+def can_attack(u):
+    return UNITS[u["type"]]["attack"] > 0
 
 
 def enemy_structure(m, pid, k):
@@ -88,6 +94,8 @@ def _search(m, u, limited, goals=None):
             if n not in m.cells:
                 continue
             if is_target(m, u, n, known):
+                if not can_attack(u):
+                    continue
                 c = ATTACK_COST
                 if not UNITS[u["type"]]["naval"] and n in known[0] and m.cells[n] == "water":
                     continue
@@ -132,7 +140,10 @@ def this_turn(m, uid, keys):
     known = knowledge(m, u)
     budget, spent, out = UNITS[u["type"]]["move"] * 2, 0, []
     for k in keys:
-        c = ATTACK_COST if is_target(m, u, k, known) else planned_cost(m, u, k, known)
+        target = is_target(m, u, k, known)
+        if target and not can_attack(u):
+            break
+        c = ATTACK_COST if target else planned_cost(m, u, k, known)
         if c is None or spent + c > budget:
             break
         spent += c
@@ -180,7 +191,8 @@ def resolve(m, events):
         for uid, k in list(intents.items()):  # (1) sieges
             sid = m.cell_structure.get(k)
             if k not in m.unit_at and enemy_structure(m, m.units[uid]["owner"], k):
-                siege(m, uid, sid, events)
+                if can_attack(m.units[uid]):
+                    siege(m, uid, sid, events)
                 stop(uid)
         for uid, k in list(intents.items()):  # (2) moving through each other
             other = m.unit_at.get(k)
@@ -188,7 +200,9 @@ def resolve(m, events):
                     and m.units[other]["owner"] != m.units[uid]["owner"]:
                 stop(uid)
                 stop(other)
-                battle(m, uid, other, True, True, events)
+                a, b = can_attack(m.units[uid]), can_attack(m.units[other])
+                if a or b:
+                    battle(m, uid, other, a, b, events)
         groups = {}
         for uid, k in intents.items():
             groups.setdefault(k, []).append(uid)
@@ -208,7 +222,10 @@ def resolve(m, events):
                     champion = x
                     continue
                 if x in m.units and m.units[x]["owner"] != m.units[champion]["owner"]:
-                    battle(m, champion, x, True, True, events)
+                    a, b = can_attack(m.units[champion]), can_attack(m.units[x])
+                    if not (a or b):
+                        continue
+                    battle(m, champion, x, a, b, events)
                     if champion not in m.units:
                         champion = x
         moved = True  # (4) free cells
@@ -248,6 +265,6 @@ def resolve(m, events):
                     intents.pop(uid)
                     continue
             stop(uid)
-            if occ is not None and m.units[occ]["owner"] != u["owner"]:  # (a target that left: just stop)
+            if occ is not None and m.units[occ]["owner"] != u["owner"] and can_attack(u):  # (a target that left: just stop)
                 stop(occ)
                 battle(m, uid, occ, True, False, events)

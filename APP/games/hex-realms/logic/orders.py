@@ -27,7 +27,7 @@ from gamekit.hexes import dist, neighbors
 from .content import ADVANCES, STRUCTURES, TERRAIN, TOWN_HALL, UNITS, footprint
 from . import construction, logistics, standing, territory, vision
 from .economy import TRADE_GOODS, jobs
-from .movement import path
+from .movement import can_attack, is_target, knowledge, path
 
 CITY_SPACING = 5
 CLAIM_COST = {"gold": 2}
@@ -165,6 +165,8 @@ def move(m, pid, uid, to):
     if to == u["at"]:
         clear_unit(m, pid, uid)
         return
+    if to in m.cells and not can_attack(u) and is_target(m, u, to, knowledge(m, u)):
+        raise LobbyError(f"{UNITS[u['type']]['name']} can't attack.")
     p = path(m, uid, to)
     if p is None:
         if to not in m.cells:
@@ -235,6 +237,8 @@ def auto(m, pid, uid, mode):
         raise LobbyError("There's no fog of war to clear.")
     if UNITS[u["type"]]["settler"]:
         raise LobbyError("Settlers don't explore or fight." if mode != "explore" else "Settlers don't explore.")
+    if mode != "explore" and not UNITS[u["type"]]["attack"]:
+        raise LobbyError(f"{UNITS[u['type']]['name']} can't attack.")
     clear_unit(m, pid, uid)
     if not standing.start(m, uid, mode):
         raise LobbyError("Nothing left to explore from here.")

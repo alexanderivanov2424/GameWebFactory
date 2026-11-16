@@ -29,7 +29,8 @@ window.HexText = {
       lost to an enemy unit on or next to it, when it's cut off from your Town Halls' land, or to another realm's Town
       Hall; unpaid cells are given up, farthest first.`],
     ["Units", `Units fight with dice wherever they meet: each die of 4 or more hits (5 or more against a unit in forest,
-      hills or mountains, or on its own structure). Your own units pass through each other. Standing orders last until
+      hills or mountains, or on its own structure). Your own units pass through each other. Units with no attack (Scouts, Settlers) never attack: they can't
+      move onto enemies and only defend when attacked. Standing orders last until
       you give another: <b>Explore</b>, <b>Fight</b>, <b>Pillage</b>, or click a cell beyond a unit's reach to walk there
       over several turns. Units with orders are greyed out. New units appear on the structure that trains them.`],
     ["Swords", `Troops cost swords ⚔️ instead of people: Barracks give 3, Stables and Shipyards 2. Each troop holds its
