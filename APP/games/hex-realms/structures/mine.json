@@ -26,17 +26,15 @@
   "hills",
   "mountain"
  ],
- "onTerrain": {
-  "hills": {
-   "stone": 2,
-   "metal": 1
-  },
-  "mountain": {
-   "stone": 1,
-   "metal": 2
-  }
- },
  "category": "industry",
  "hammers": 2,
- "color": "#6e6e78"
+ "color": "#6e6e78",
+ "perCell": {
+  "hills": {
+   "stone": 1
+  },
+  "mountain": {
+   "metal": 1
+  }
+ }
 }

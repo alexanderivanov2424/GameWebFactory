@@ -67,6 +67,8 @@
     const adjacent = (d.perAdjacent || []).flatMap((a) => Object.entries(a.gain || {}).map(([res, n]) =>
       ({ n, res, max: a.max, needs: a.needs || 0, kind: a.tag ? "tag" : a.type ? "type" : "terrain", id: a.tag || a.type || a.terrain })));
     if (d.freeNear && d.jobs) adjacent.push({ n: -d.jobs, res: "people", kind: "free", id: d.freeNear });
+    for (const [t, gain] of Object.entries(d.perCell || {}))  // "+1 🪨 on each [Hills]": per own cell on that terrain
+      for (const [res, n] of Object.entries(gain)) adjacent.push({ n, res, kind: "cell", id: t });
     // One bullet per chip: "+1 🌾 −1 👥 for [Water]" (a terrain bonus and freeNear on the same terrain share one).
     const groups = new Map();
     for (const b of adjacent) {
@@ -111,14 +113,15 @@
       const amount = [b.n > 0 ? "+" : "−", Math.abs(b.n), resName(b.res).toLowerCase()];
       if (b.needs) return t.needs(...amount, b.needs, b.kind === "tag" ? `of your ${content.tags?.[id]?.name || id} structures`
         : b.kind === "type" ? `of your ${type?.name || id}s` : `${terrain.toLowerCase()} cells with nothing built on them`);
-      return b.kind === "free" ? t.free(terrain.toLowerCase())
+      return b.kind === "cell" ? t.cell(...amount, terrain.toLowerCase())
+        : b.kind === "free" ? t.free(terrain.toLowerCase())
         : b.kind === "tag" ? t.tag(...amount, content.tags?.[id]?.name || id, b.max)
         : b.kind === "type" ? t.type(...amount, type?.name || id, b.max) : t.terrain(...amount, terrain.toLowerCase(), b.max);
     };
     const amounts = group.flatMap((b, i) => [i ? " " : null,
       el("span", { className: b.n > 0 ? "pos" : "neg" }, `${b.n > 0 ? "+" : "−"}${Math.abs(b.n)} ${resIcon(b.res)}`)]);
     const needs = group.find((b) => b.needs)?.needs;
-    return el("li", { title: group.map(title).join("\n") }, ...amounts, ` for ${needs ? `${needs} ` : ""}`, label);
+    return el("li", { title: group.map(title).join("\n") }, ...amounts, kind === "cell" ? " on each " : ` for ${needs ? `${needs} ` : ""}`, label);
   }
 
   function structCard(content, d, hp, at = null) {
