@@ -1,6 +1,7 @@
 """Hex Realms: the lobby side (settings, messages, turn timer). The rules live in logic/.
 
-Each player starts with Settlers and a Scout and founds their first Town Hall anywhere. Every turn
+Each player starts with Settlers and a Scout (no people) and founds their first Town Hall anywhere;
+every Town Hall settlers found brings 2 people. Every turn
 everyone plans in secret at once: build inside their territory, train units, order moves and attacks,
 research, set up trade. When all have ended their turn (or the timer runs out), orders resolve together:
 units move step by step and fight with dice where they meet. Structures are built by idle people;

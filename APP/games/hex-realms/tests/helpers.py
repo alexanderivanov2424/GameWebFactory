@@ -40,8 +40,10 @@ def blank(players=2, face=6, radius=10, fog="off", **settings):
 
 
 def hall(m, pid, at="0,0"):
-    """A Town Hall (cells at, at+(1,0), at+(0,1)) holding the starting goods."""
+    """A Town Hall (cells at, at+(1,0), at+(0,1)) holding the starting goods, with the people a founded
+    city brings."""
     s = m.add_structure(pid, "town_hall", at, 0)
+    m.players[pid]["pop"] += match_mod.FOUND_POP
     s["stock"] = dict(match_mod.START_GOODS)
     m.refresh()
     return s["id"]

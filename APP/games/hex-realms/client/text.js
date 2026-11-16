@@ -67,7 +67,7 @@ window.HexText = {
     catapult: "Hits structures hard.",
     galley: "Moves on water. Attacks units and structures on the shore.",
     scout: "Your starting explorer: fast, but it can't fight. Uses no people and eats nothing.",
-    settlers: "Founds a new Town Hall where it stands, away from other cities.",
+    settlers: "Founds a new Town Hall where it stands, away from other cities. The new city starts with 2 people.",
     spearman: "Extra dice against mounted units.",
   },
   advances: {

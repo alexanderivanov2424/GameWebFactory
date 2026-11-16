@@ -33,7 +33,8 @@ START_RES = {"gold": 10}  # realm-wide
 START_GOODS = {"wood": 10, "stone": 5}  # put into the first Town Hall when it's founded
 START_UNIT = "settlers"
 START_ESCORT = "scout"  # starts on a free land cell next to the settlers
-START_POP = 3
+START_POP = 0  # people come with cities: each new Town Hall brings FOUND_POP
+FOUND_POP = 2
 SIZES = {"small": -3, "normal": 0, "large": 4, "huge": 8}
 ACTS = {name: getattr(orders, name) for name in
         ("build", "claim", "recruit", "move", "shoot", "hold", "auto", "found", "research", "cancel", "trade", "toggle",
@@ -234,6 +235,7 @@ class Match:
                 at = u["at"]
                 self.remove_unit(uid)
                 hall = self.add_structure(pid, TOWN_HALL, at, rot)
+                self.players[pid]["pop"] += FOUND_POP
                 if "startGoods" in self.players[pid]:  # the first city gets the starting goods
                     hall["stock"] = self.players[pid].pop("startGoods")
                 ev.append({"t": "founded", "owner": pid, "at": at})
