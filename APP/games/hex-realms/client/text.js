@@ -26,7 +26,7 @@ window.HexText = {
     ["Land", `You build anywhere in your territory. Every Town Hall gives free land 2 cells around it: first come, first
       served, and cells two realms reach in the same turn go to nobody. To grow further, select a Town Hall and
       <b>Extend territory</b>: gold buys an explored cell next to your land, at once, for 1 gold a turn. Bought land is
-      lost to an enemy unit on or next to it, when it's cut off from your Town Halls' land, or to another realm's Town
+      lost to an enemy unit on or next to it (once nothing is built on it), when it's cut off from your Town Halls' land, or to another realm's Town
       Hall; unpaid cells are given up, farthest first.`],
     ["Units", `Units fight with dice wherever they meet: each die of 4 or more hits (5 or more against a unit in forest,
       hills or mountains, or on its own structure). Your own units pass through each other. Units with no attack (Scouts, Settlers) never attack: they can't
@@ -196,7 +196,7 @@ window.HexText = {
     skipHint: "Don't play the replay; combat cells just flash and the Report tab lists the dice.",
   },
   claim: {
-    help: (claim) => `Buy an explored cell next to your land, one at a time; it's yours at once. Each bought cell costs ${claim.upkeep} gold a turn (unpaid cells are given up, farthest first), and it's lost to an enemy unit on or next to it, when it's cut off from your Town Halls' land, or to another realm's Town Hall.`,
+    help: (claim) => `Buy an explored cell next to your land, one at a time; it's yours at once. Each bought cell costs ${claim.upkeep} gold a turn (unpaid cells are given up, farthest first), and it's lost to an enemy unit on or next to it (once nothing is built on it), when it's cut off from your Town Halls' land, or to another realm's Town Hall.`,
     hint: (cost, claim) => `Extending territory: click a green cell to make it yours at once (${cost} each, no refund, ${claim.upkeep} gold a turn). Esc to stop. `,
   },
 };
