@@ -9,7 +9,7 @@
  "attack": 0,
  "defense": 0,
  "hp": 1,
- "move": 2,
+ "move": 3,
  "settler": true,
  "upkeep": {
   "food": 1

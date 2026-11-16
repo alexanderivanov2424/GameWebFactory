@@ -48,7 +48,7 @@ window.HexText = {
     butcher: "Makes more food for each Hut or House next to it.",
     chapel: "Makes faith for each Hut or House next to it.",
     docks: "Built on water.",
-    granary: "Every food structure next to it makes 2 more of what it makes.",
+    granary: "Every adjacent food structure gets +2 production.",
     house: "Housing.",
     hut: "Cheap housing.",
     lumbermill: "Makes 1 wood for each forest cell next to it with nothing built on it.",
