@@ -1,15 +1,20 @@
 /*
- * Orbit Run: game page script. Renders everything from the server state (no rules here).
+ * Planet Jumpers: game page script. Renders everything from the server state (no rules here).
  *   renderLobby()   players, the "run" setting, the host's saved run (state.game.save)
- *   renderGame()    renderMission() + renderShip() (left), renderTable() (seats around the round
- *                   table, cards played this trick), renderStatus() (draft choices, whose turn,
- *                   debrief, result), renderPlayers() + log (right), renderHand() (bottom bar)
- * Messages: take / pass (draft), play (a card), next (host, after a mission). See server.py.
+ *   renderGame()    renderMission() (left: task names only) + renderShip() (left), renderTable()
+ *                   (seats around the round table with their taken tasks below them, the tasks
+ *                   being drafted in the middle, cards played this trick), renderStatus() (draft
+ *                   pass, whose turn, end early, debrief, result), renderPlayers() + log (right),
+ *                   renderHand() (bottom bar)
+ * Messages: take / pass (draft), play (a card), end (host: end the mission early), next (host,
+ * after a mission). See server.py.
  */
 (() => {
   const { $, el, fill } = AppDom;
   const SUIT_NAMES = { r: "Red", b: "Blue", y: "Yellow", g: "Green", k: "Black" };
   const STATUS = { done: "Done", failed: "Failed", open: "Open" };
+  // A done task that can still fail (can_fail_when_done, cards left) shows "Done so far".
+  const statusText = (t) => (t.status === "done" && !t.secured ? "Done so far" : STATUS[t.status]);
   let state = null;
 
   const lobby = AppLobby.connect("orbit-run", {
@@ -103,12 +108,7 @@
       el("h2", {}, m.name),
       el("div", { className: "yields" }, el("span", {}, `⛽ Refuel ${m.fuel}`), el("span", {}, `🍞 Food ${m.food}`)),
       el("div", { className: "label" }, "Tasks"),
-      m.tasks.map((t) => el("div", { className: `task ${t.status}` },
-        el("div", { className: "task-head" },
-          el("span", {}, t.name),
-          t.owner ? el("span", { className: `pill ${t.status}` }, STATUS[t.status]) : null,
-          el("span", { className: "owner" }, t.owner ? name(t.owner) : "untaken")),
-        el("div", { className: "task-text" }, t.text))),
+      m.tasks.map((t) => el("div", { className: `task-name ${t.owner ? t.status : "open"}`, title: t.text }, t.name)),
       el("div", { className: "label", style: "margin-top: 8px" }, "Setup"),
       m.setup.length ? m.setup.map((line) => el("div", { className: "small" }, line))
         : el("div", { className: "small muted" }, "No special setup."));
@@ -135,11 +135,22 @@
       el("div", { className: "small muted" }, `Mission decks left: ${[1, 2, 3].map((d) => game.decks[String(d)]).join(" / ")}`));
   }
 
-  // Seats around the circle, you at the bottom (spectators: the first seat), clockwise.
+  // A task card: name, its text, and its status once someone holds it.
+  function taskCard(t, onclick) {
+    return el(onclick ? "button" : "div", { className: `task ${t.owner ? t.status : "open"}`, onclick },
+      el("div", { className: "task-head" },
+        el("span", {}, t.name),
+        t.owner ? el("span", { className: `pill ${t.status}` }, statusText(t)) : null),
+      el("div", { className: "task-text" }, t.text));
+  }
+
+  // Seats around the circle, you at the bottom (spectators: the first seat), clockwise; each
+  // seat's taken tasks hang below it. While drafting, the tasks left sit in the middle.
   function renderTable(game) {
     const wrap = $("table-wrap");
     wrap.querySelectorAll(".seat, .played").forEach((node) => node.remove());
-    if (!game.mission) return;
+    wrap.style.height = "";
+    if (!game.mission) return fill($("table-center"));
     const seats = game.seats;
     const mine = Math.max(0, seats.indexOf(state.you));
     const cx = 300, cy = 260;
@@ -147,12 +158,13 @@
     const tasksOf = (pid) => game.mission.tasks.filter((t) => t.owner === pid);
     seats.forEach((pid, i) => {
       const a = angleOf(i);
-      const seat = el("div", { className: `seat${game.turn === pid ? " turn" : ""}` },
-        el("div", { className: "who" },
-          pid === game.captain ? el("span", { className: "captain", title: "Captain (holds the black 4)" }, "★ CPT") : null,
-          el("span", {}, name(pid) + (pid === state.you ? " (you)" : ""))),
-        el("div", { className: "stats" }, `${game.handSizes[pid]} cards · ${game.tricksWon[pid]} tricks`),
-        el("div", { className: "chips" }, tasksOf(pid).map((t) => el("span", { className: `chip ${t.status}`, title: t.text }, t.name))));
+      const seat = el("div", { className: "seat" },
+        el("div", { className: `seat-box${game.turn === pid ? " turn" : ""}` },
+          el("div", { className: "who" },
+            pid === game.captain ? el("span", { className: "captain", title: "Captain (holds the black 4)" }, "★ CPT") : null,
+            el("span", {}, name(pid) + (pid === state.you ? " (you)" : ""))),
+          el("div", { className: "stats" }, `${game.handSizes[pid]} cards · ${game.tricksWon[pid]} tricks`)),
+        el("div", { className: "seat-tasks" }, tasksOf(pid).map((t) => taskCard(t))));
       seat.style.left = `${cx + Math.cos(a) * 228}px`;
       seat.style.top = `${cy + Math.sin(a) * 222}px`;
       wrap.append(seat);
@@ -165,10 +177,21 @@
       node.style.top = `${cy + Math.sin(a) * 105}px`;
       wrap.append(node);
     });
-    const center = game.stage === "collect" ? `${name(trick.winner)} wins the trick`
-      : game.stage === "play" ? `Trick ${trick.number}${trick.plays.length ? ` · ${SUIT_NAMES[trick.plays[0].card[0]]} led` : ""}`
-      : game.stage === "draft" ? "Task draft" : game.stage === "debrief" ? "Mission over" : "";
-    fill($("table-center"), center);
+    if (game.stage === "draft") {
+      const myPick = state.phase !== "finished" && game.turn === state.you;
+      const byId = Object.fromEntries(game.mission.tasks.map((t) => [t.id, t]));
+      fill($("table-center"), el("div", { className: "draft-label" }, myPick ? "Your pick: click a task" : "Task draft"),
+        game.draft.left.map((id) => taskCard(byId[id], myPick ? () => send({ action: "take", task: id }) : undefined)));
+    } else {
+      fill($("table-center"), game.stage === "collect" ? `${name(trick.winner)} wins the trick`
+        : game.stage === "play" ? `Trick ${trick.number}${trick.plays.length ? ` · ${SUIT_NAMES[trick.plays[0].card[0]]} led` : ""}`
+        : game.stage === "debrief" ? "Mission over" : "");
+    }
+    // Grow the table area so the bottom seat's tasks don't run into the status panel.
+    const top = wrap.getBoundingClientRect().top;
+    let bottom = 0;
+    wrap.querySelectorAll(".seat").forEach((node) => { bottom = Math.max(bottom, node.getBoundingClientRect().bottom - top); });
+    if (bottom + 8 > wrap.offsetHeight) wrap.style.height = `${Math.ceil(bottom + 8)}px`;
   }
 
   function renderStatus(game, myTurn, finished) {
@@ -177,18 +200,18 @@
     if (game.stage === "draft") {
       const draft = game.draft;
       if (!myTurn) return fill(box, el("p", {}, `Task draft: ${name(draft.turn)} is choosing.`));
-      const byId = Object.fromEntries(game.mission.tasks.map((t) => [t.id, t]));
       return fill(box,
-        el("p", {}, el("b", {}, "Your pick: "), "take a task", draft.canPass ? " or pass." : " (you can't pass)."),
-        el("div", { className: "choices" },
-          draft.left.map((id) => el("button", { className: "task-btn", onclick: () => send({ action: "take", task: id }) },
-            el("span", {}, byId[id].name), el("small", {}, byId[id].text))),
-          draft.canPass ? el("button", { className: "plain", onclick: () => send({ action: "pass" }) }, "Pass") : null));
+        el("p", {}, el("b", {}, "Your pick: "), "take a task from the middle of the table",
+          draft.canPass ? " or pass." : " (you can't pass)."),
+        draft.canPass ? el("div", { className: "choices" },
+          el("button", { className: "plain", onclick: () => send({ action: "pass" }) }, "Pass")) : null);
     }
-    if (game.stage === "play") {
-      return fill(box, el("p", {}, myTurn ? el("b", {}, "Your turn: play a card.") : `${name(game.turn)} is playing.`));
+    if (game.stage === "play" || game.stage === "collect") {
+      return fill(box,
+        el("p", {}, game.stage === "collect" ? `${name(game.trick.winner)} wins the trick.`
+          : myTurn ? el("b", {}, "Your turn: play a card.") : `${name(game.turn)} is playing.`),
+        game.canEndEarly && !finished ? endEarly() : null);
     }
-    if (game.stage === "collect") return fill(box, el("p", {}, `${name(game.trick.winner)} wins the trick.`));
     if (game.stage === "debrief") {
       const byId = Object.fromEntries(game.mission.tasks.map((t) => [t.id, t]));
       const isHost = lobby.isHost();
@@ -202,6 +225,15 @@
           : el("p", { className: "muted" }, "Waiting for the host to start the next mission."));
     }
     return fill(box);
+  }
+
+  // Every task is done and none can fail any more: the host may end the mission now.
+  function endEarly() {
+    return el("div", { className: "end-early" },
+      el("p", {}, "Every task is done and can't fail any more."),
+      lobby.isHost()
+        ? el("button", { className: "green", onclick: () => send({ action: "end" }) }, "End mission")
+        : el("p", { className: "muted" }, "The host can end the mission now."));
   }
 
   function renderPlayers(game) {

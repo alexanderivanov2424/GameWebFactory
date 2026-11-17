@@ -1,4 +1,4 @@
-"""Orbit Run: the card deck and trick rules (no game state here).
+"""Planet Jumpers: the card deck and trick rules (no game state here).
 
 Cards are ids: a suit letter and a value, e.g. "r3" (red 3) or "k4" (black 4).
     SUITS            {"r": "Red", ...}: four colour suits 1-9 and black trumps 1-4

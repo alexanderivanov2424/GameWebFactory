@@ -1,4 +1,4 @@
-"""Orbit Run: mission cards, loaded from missions/<id>.json next to server.py, and the 3 mission decks.
+"""Planet Jumpers: mission cards, loaded from missions/<id>.json next to server.py, and the 3 mission decks.
 
 A mission file:
     {"name": "Moon Pit Stop", "deck": 1, "fuel": 3, "food": 3,

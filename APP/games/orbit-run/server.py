@@ -1,4 +1,4 @@
-"""Orbit Run: a co-op trick-taking game for 3-5 players, played as a run of missions.
+"""Planet Jumpers: a co-op trick-taking game for 3-5 players, played as a run of missions.
 
 Cards: four colour suits (red, blue, yellow, green) 1-9 and black trumps 1-4 (40 cards).
 Each mission deals every card out (some players may get 1 more). The player holding the black 4
@@ -14,7 +14,9 @@ tasks (tasks/<id>.json) and any special setup. Tasks are drafted before the firs
 starting with the captain and going clockwise in laps from the captain: take one of the tasks
 left, or pass if more players are left in this lap (you included) than tasks (logic/draft.py).
 Once every card is played, done tasks give their success effects and the rest their failure
-effects, then the host starts the next mission. The run ends when the hull reaches 0
+effects, then the host starts the next mission. A task's "done" is final unless its file sets
+"can_fail_when_done" (e.g. win 0 tricks): once every task is done and none can fail any more, the
+host may end the mission early (the cards left aren't played). The run ends when the hull reaches 0
 ("destroyed") or every mission deck is empty ("complete").
 
 Saved run: one per player (the host's is used). It's saved when a new run starts and after every mission
@@ -27,6 +29,8 @@ Settings:        {"run": "new" | "continue"}
 Game messages:   {"action": "take", "task": task id}     draft: take a task on your turn
                  {"action": "pass"}                      draft: pass (only when allowed)
                  {"action": "play", "card": "r3"}        play a card on your turn
+                 {"action": "end"}                       host: end the mission early (every task
+                                                         done and none can fail any more)
                  {"action": "next"}                      host, after a mission: start the next one
 State (lobby):   state.game = {"save": saved run summary of the host, or None}
 State (playing): logic/match.py public(); state.private = {"hand", "playable"}
@@ -49,7 +53,8 @@ class Game(LobbyGame):
     SETTINGS = {
         "run": Choice("Run", default="new", options={"new": "Start a new run", "continue": "Continue the host's saved run"}),
     }
-    ACTIONS = {"take": "take", "pass": "pass_turn", "play": "play", "next": "next_mission"}
+    ACTIONS = {"take": "take", "pass": "pass_turn", "play": "play", "end": "end_early",
+               "next": "next_mission"}
 
     def __init__(self, room):
         super().__init__(room)
@@ -116,11 +121,19 @@ class Game(LobbyGame):
             self.schedule(TRICK_PAUSE, self.collect)
 
     def collect(self):
-        if self.phase != PLAYING or self.match is None:
+        if self.phase != PLAYING or self.match is None or self.match.stage != "collect":
             return
         self.match.collect()
         if self.match.mission_over:
             self.save_run()
+        self.check_over()
+
+    def end_early(self, member, data):
+        if member.id != self.host_id:
+            raise LobbyError("Only the host can end the mission early.")
+        self.match.end_early()
+        self.cancel_timers()  # a full trick waiting to be collected
+        self.save_run()
         self.check_over()
 
     def next_mission(self, member, data):

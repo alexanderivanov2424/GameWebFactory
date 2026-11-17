@@ -1,4 +1,4 @@
-"""Orbit Run: drafting a mission's tasks around the table, starting with the captain.
+"""Planet Jumpers: drafting a mission's tasks around the table, starting with the captain.
 
 Players take turns in seat order from the captain, in laps that always restart at the captain.
 On your turn you take one of the tasks left, or pass if there are more players left in this lap

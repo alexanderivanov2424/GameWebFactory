@@ -1,4 +1,4 @@
-"""Orbit Run: tests. Run: python3 -I tools/run_tests.py orbit-run
+"""Planet Jumpers: tests. Run: python3 -I tools/run_tests.py orbit-run
 
 Two layers:
 - Rules tests drive logic.Match directly (fast, no lobby): set up a position, act, check.

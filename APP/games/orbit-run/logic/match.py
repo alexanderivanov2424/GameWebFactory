@@ -1,4 +1,4 @@
-"""Orbit Run: Match, one run of missions played in one game (no lobby, network or members).
+"""Planet Jumpers: Match, one run of missions played in one game (no lobby, network or members).
 
     match = Match(names, run, rng)   names: {pid: name} in seat order (clockwise); run: ship.Run
     match.start_mission()           draw the next mission, upkeep, deal, find the captain, draft
@@ -9,6 +9,8 @@
     match.play(pid, card)           play a card to the trick; a full trick goes to its winner and
                                     the stage becomes "collect" (server.py pauses, then collect())
     match.collect()                 clear the trick: the winner leads the next, or the mission ends
+    match.can_end_early()           every task is done and none can fail any more, cards are left
+    match.end_early()               end the mission now (the cards left are put away unplayed)
     match.mission_over              True once a mission ended (server.py saves the run)
     match.result                    None while the run goes on; then {"outcome": "destroyed" |
                                     "complete", "reason": ...} (server.py finishes the game)
@@ -146,14 +148,34 @@ class Match:
 
     # --- Tasks and the end of a mission ------------------------------------------------
 
+    def _chances(self, owner):
+        in_trick = self.stage == "play" and any(pid == owner for pid, _ in self.trick)
+        return len(self.hands[owner]) + (1 if in_trick else 0)
+
     def task_status(self, task_id):
         owner = self.draft.owners.get(task_id)
         if owner is None:
             return "open"
         theirs = {c for pid, tricks in self.won.items() if pid != owner for t in tricks for c in t}
-        in_trick = self.stage == "play" and any(pid == owner for pid, _ in self.trick)
-        chances = len(self.hands[owner]) + (1 if in_trick else 0)
-        return tasks.status(tasks.TASKS[task_id], self.won[owner], theirs, chances)
+        return tasks.status(tasks.TASKS[task_id], self.won[owner], theirs, self._chances(owner))
+
+    def task_secured(self, task_id):
+        owner = self.draft.owners.get(task_id)
+        if owner is None:
+            return False
+        return tasks.secured(tasks.TASKS[task_id], self.task_status(task_id), self._chances(owner))
+
+    def can_end_early(self):
+        return (self.result is None and self.stage in ("play", "collect") and any(self.hands.values())
+                and all(self.task_status(t) == "done" and self.task_secured(t) for t in self.mission["tasks"]))
+
+    def end_early(self):
+        if not self.can_end_early():
+            raise LobbyError("The mission can only end early once every task is done and can't fail any more.")
+        self.say("Every task is done and can't fail any more: the mission ends early.")
+        for hand in self.hands.values():
+            hand.clear()
+        self.end_mission()
 
     def end_mission(self):
         self.stage = "debrief"
@@ -205,8 +227,10 @@ class Match:
                 "fuel": mission["fuel"], "food": mission["food"], "setup": mission["setup"],
                 "number": self.run.missions + (0 if self.mission_over else 1),
                 "tasks": [{**tasks.public(tasks.TASKS[t]), "owner": self.draft.owners.get(t),
-                           "status": self.task_status(t)} for t in mission["tasks"]],
+                           "status": self.task_status(t), "secured": self.task_secured(t)}
+                          for t in mission["tasks"]],
             },
+            "canEndEarly": self.can_end_early(),
             "captain": self.captain,
             "draft": self.draft.public() if self.stage == "draft" else None,
             "handSizes": {pid: len(hand) for pid, hand in self.hands.items()},

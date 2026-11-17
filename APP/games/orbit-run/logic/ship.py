@@ -1,4 +1,4 @@
-"""Orbit Run: the ship and the saved run (the host's progress, kept between games).
+"""Planet Jumpers: the ship and the saved run (the host's progress, kept between games).
 
     Run.new()                 a fresh run: mission 0, START ship, nothing completed
     Run.load(saved)           a Run from saved data, or None if it's missing or unreadable

@@ -1,12 +1,13 @@
 <!DOCTYPE html>
-<!-- Orbit Run: game page. Lobby (players, run choice + the host's saved run), then the mission
-     screen: mission card and ship on the left, the round table with seats in the middle, the
-     player list and log top right, your hand fixed at the bottom. Rendering is in game.js. -->
+<!-- Planet Jumpers: game page. Lobby (players, run choice + the host's saved run), then the mission
+     screen: mission card (task names) and ship on the left, the round table in the middle (seats
+     with their tasks below them, the tasks being drafted in its centre), the player list and log
+     top right, your hand fixed at the bottom. Rendering is in game.js. -->
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Orbit Run</title>
+  <title>Planet Jumpers</title>
 
   <script src="/shared/theme.js"></script>
   <script src="/shared/home.js" defer></script>
@@ -39,11 +40,20 @@
     /* Mission card */
     #mission h2 { font-size: 1.25rem; margin: 2px 0 6px; }
     .yields { display: flex; gap: 10px; margin-bottom: 10px; font-size: 0.9rem; }
-    .task { border: 1px solid var(--gwf-line); border-left: 4px solid var(--open); border-radius: 8px; padding: 6px 8px; margin-bottom: 6px; }
+    .task-name { border-left: 4px solid var(--open); padding: 2px 8px; margin-bottom: 4px; font-weight: 600; cursor: default; }
+    .task-name.done { border-left-color: var(--done); }
+    .task-name.failed { border-left-color: var(--failed); }
+
+    /* Task cards (middle of the table while drafting, below their holder's seat after) */
+    .task { display: block; width: 100%; text-align: left; background: var(--gwf-surface); color: var(--gwf-text);
+      border: 1px solid var(--gwf-line); border-left: 4px solid var(--open); border-radius: 8px; padding: 4px 7px;
+      margin: 0 0 4px; font: inherit; font-size: 0.8rem; }
     .task.done { border-left-color: var(--done); }
     .task.failed { border-left-color: var(--failed); }
-    .task-head { display: flex; gap: 6px; align-items: baseline; font-weight: 600; }
-    .task-text { font-size: 0.85rem; color: var(--gwf-muted); }
+    button.task { cursor: pointer; }
+    button.task:hover { background: var(--gwf-soft-hover); border-color: #f2c94c; }
+    .task-head { display: flex; gap: 6px; align-items: baseline; justify-content: space-between; font-weight: 600; }
+    .task-text { font-size: 0.75rem; color: var(--gwf-muted); }
     .pill { font-size: 0.7rem; padding: 1px 7px; border-radius: 999px; background: var(--open); color: #fff; font-weight: 600; }
     .pill.done { background: var(--done); }
     .pill.failed { background: var(--failed); }
@@ -60,20 +70,20 @@
     #table { position: absolute; left: 110px; top: 70px; width: 380px; height: 380px; border-radius: 50%;
       background: radial-gradient(circle at 50% 40%, #234a3a, #142a22 70%); border: 6px solid #3a2f22;
       box-shadow: 0 10px 40px rgba(0,0,0,0.5) inset; }
-    .seat { position: absolute; width: 150px; transform: translate(-50%, -50%); background: var(--gwf-surface);
-      border: 2px solid var(--gwf-line); border-radius: 10px; padding: 6px 8px; font-size: 0.85rem; z-index: 2; }
-    .seat.turn { border-color: #f2c94c; box-shadow: 0 0 0 3px rgba(242,201,76,0.35); }
+    /* A seat's box is centred on its point on the circle; its tasks hang below it */
+    .seat { position: absolute; width: 160px; transform: translate(-50%, -27px); z-index: 2; }
+    .seat-box { height: 54px; box-sizing: border-box; background: var(--gwf-surface); border: 2px solid var(--gwf-line);
+      border-radius: 10px; padding: 6px 8px; font-size: 0.85rem; margin-bottom: 4px; }
+    .seat-box.turn { border-color: #f2c94c; box-shadow: 0 0 0 3px rgba(242,201,76,0.35); }
     .seat .who { font-weight: 700; display: flex; gap: 6px; align-items: center; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
     .seat .stats { color: var(--gwf-muted); font-size: 0.8rem; }
-    .seat .chips { display: flex; flex-wrap: wrap; gap: 3px; margin-top: 3px; }
-    .chip { font-size: 0.7rem; padding: 1px 6px; border-radius: 999px; background: var(--open); color: #fff; }
-    .chip.done { background: var(--done); } .chip.failed { background: var(--failed); }
     .captain { display: inline-block; font-size: 0.7rem; font-weight: 800; color: #1b1b1b; background: #f2c94c;
       border-radius: 999px; padding: 1px 6px; flex: none; }
     .played { position: absolute; transform: translate(-50%, -50%); z-index: 1; transition: transform 0.2s; }
     .played.winner .pcard { box-shadow: 0 0 0 3px #f2c94c, 0 0 18px #f2c94c; }
     #table-center { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); text-align: center;
-      color: #cfe3d6; font-size: 0.85rem; pointer-events: none; }
+      color: #cfe3d6; font-size: 0.85rem; width: 230px; z-index: 1; }
+    .draft-label { margin-bottom: 6px; }
 
     /* Cards */
     .pcard { width: 54px; height: 78px; border-radius: 7px; border: 2px solid rgba(255,255,255,0.85); color: #fff;
@@ -88,8 +98,7 @@
     /* Status panel under the table */
     #status { max-width: 600px; margin: 0 auto; text-align: center; }
     #status .choices { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin-top: 8px; }
-    .task-btn { display: flex; flex-direction: column; align-items: flex-start; text-align: left; max-width: 220px; }
-    .task-btn small { font-weight: 400; opacity: 0.85; }
+    .end-early { margin-top: 6px; }
     #result { font-weight: 700; font-size: 1.1rem; margin-bottom: 8px; }
     .debrief { text-align: left; display: inline-block; margin: 6px 0; }
 
@@ -114,7 +123,7 @@
 </head>
 <body>
   <main>
-    <h1>Orbit Run</h1>
+    <h1>Planet Jumpers</h1>
     <p id="connection" class="muted">Connecting…</p>
     <div id="error" hidden></div>
 
@@ -142,7 +151,8 @@
           Whoever holds the black 4 is the captain and leads the first trick. Follow the suit led if you can;
           the highest black wins a trick, otherwise the highest card of the suit led. The winner leads next.</p>
         <p>Each mission's tasks are drafted first, starting with the captain. Complete them to fuel and supply
-          the ship; fail them and the ship may take damage. Each mission costs 1 fuel and 1 food. The run ends
+          the ship; fail them and the ship may take damage. Once every task is done and none can fail any more,
+          the host may end the mission early. Each mission costs 1 fuel and 1 food. The run ends
           when the hull is gone or every mission deck is empty.</p>
       </div>
     </section>

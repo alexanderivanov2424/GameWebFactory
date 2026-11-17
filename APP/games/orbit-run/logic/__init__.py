@@ -1,11 +1,11 @@
-"""Orbit Run: the game's rules, kept apart from the lobby (server.py).
+"""Planet Jumpers: the game's rules, kept apart from the lobby (server.py).
 
 Modules (keep this list and NOTES.md's map up to date as you add more):
     match.py     Match: one run in one game: mission flow (draw, upkeep, deal, captain), tricks,
                  task status, end of mission (effects on the ship, run over)
     cards.py     the 40-card deck, dealing, follow-suit rule, trick winner
     draft.py     Draft: drafting a mission's tasks from the captain, in laps, with the pass rule
-    tasks.py     task cards from tasks/*.json: goal kinds (tricks, cards) and their status
+    tasks.py     task cards from tasks/*.json: goal kinds (tricks, cards), status, secured
     missions.py  mission cards from missions/*.json and the 3 mission decks
     ship.py      Run: the ship's resources, caps, upkeep, effects, and the saved-run format
 

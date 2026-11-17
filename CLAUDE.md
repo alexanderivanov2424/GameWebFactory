@@ -234,8 +234,9 @@ Summary:
    bought with science or faith, an optional turn timer (`schedule`), bots in extra seats (a
    setting; the user asked for them) planning through the same orders, standing trades set per market,
    every sentence players read in one file (`client/text.js`); `PatchState`.
-   `games/orbit-run/` (`logic/` modules): a co-op trick-taking game for 3-5 played as a run of
+   `games/orbit-run/` ("Planet Jumpers", `logic/` modules): a co-op trick-taking game for 3-5 played as a run of
    missions: a task draft from the captain, follow-suit tricks with a timed pause on each full trick,
+   ending a mission early once every task is secured (tasks flag `can_fail_when_done` by hand),
    mission and task cards as JSON (3 mission decks), and a run (ship resources, missions played)
    saved for the host with `save_data` and continued from a later game (`lobby_game_state` shows it).
 
