@@ -159,7 +159,7 @@ Accounts/               Account files (created by deploy.sh; git-ignored, never 
 Feedback/               Player feedback, Feedback/<game id, "site" or "new_game">/<uuid>_<name>.txt (created
                         by deploy.sh; git-ignored, never deployed; the feedback skill deletes what it uses)
 stop.sh                 Stops app-server, nginx and any hand-started game server; ./deploy.sh restarts
-deploy-external.sh      Deploys only ExternalSites/ (pages, app-site-<id> units, nginx locations); runs the checks first
+deploy-external.sh      Deploys only ExternalSites/ (pages, app-site-<id> units, nginx locations); checks only the ExternalSites layout
 stop-external.sh        Stops only ExternalSites/ (units, hand-started site servers, their nginx locations); keeps data
 accounts.sh             Host account manager: find, select, show and delete accounts; deleting
                         restarts app-server (it keeps accounts in memory); no backup is kept
