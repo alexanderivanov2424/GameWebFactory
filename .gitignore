@@ -6,3 +6,5 @@ Feedback/
 __pycache__/
 # External sites keep their saved data (lists, uploaded pictures) here.
 ExternalSites/*/data/
+deploy-external.sh
+stop-external.sh

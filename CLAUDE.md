@@ -51,12 +51,13 @@ a Python standard-library WebSocket server plus plain HTML/JS pages behind nginx
 - **Desktop PC browsers only** (mouse and keyboard), except ExternalSites/ pages, which are for phones too. Don't spend effort on phone or touch
   support. Hover interactions are fine, and existing responsive CSS can stay.
 
-## Host scripts (deploy.sh, stop.sh, accounts.sh, tools/)
+## Host scripts (deploy.sh, stop.sh, deploy-external.sh, stop-external.sh, accounts.sh, tools/)
 - **Keep work inside the project folder** (`/home/sasha/Desktop/Dev`) as much as possible: data, state,
   backups, generated files and helper scripts go in folders under it (git-ignored if they hold data, like
   `Accounts/`), not in `/var`, `/opt`, `/etc`, `/usr/local` or elsewhere in the user's home.
 - Reach outside it only where the system requires it. Today that's nginx's site config, the systemd units
-  (including one `app-site-<id>` per external site with a server), the deployed copies (`/var/www/app`, `/opt/app`), `/usr/local/sbin/app-turtle` and `/var/lib/app-server`
+  (including one `app-site-<id>` per external site with a server), the deployed copies (`/var/www/app`, `/opt/app`;
+  external sites: `/var/www/app-external`, `/opt/app-external`, `/etc/nginx/app-external/`, `/etc/nginx/conf.d/app-external.conf`), `/usr/local/sbin/app-turtle` and `/var/lib/app-server`
   (the TURTLE marker). Don't add a new outside path unless the project folder can't do the job; list every
   outside path a script touches, and why, in its header.
 - When changing a script, mention in your final message any outside path it uses that could move into
@@ -145,16 +146,21 @@ ExternalSites/          Extra standalone pages, not part of the games site and n
                         server.py + site.json (its own stdlib HTTP server for /<id>/api/, unit app-site-<id>,
                         sandboxed to write only <id>/data/, which is git-ignored and never deployed).
                         They don't use theme/settings/chat or gamekit. Phone support is wanted here.
+                        Deployed only by deploy-external.sh / stopped by stop-external.sh; they share the
+                        games site's nginx (its server block includes /etc/nginx/app-external/*.conf), so
+                        ./deploy.sh must have run once, and stop.sh takes their pages down too.
   food-list/            Secret shared shopping list (/food-list): items with checkbox, name, notes, photos.
                         Photos are decoded in the browser and sent as raw RGB; images.py writes a fresh PNG from them.
-deploy.sh               Runs the checks, then deploys everything (games site + ExternalSites); safe to re-run (--skip-tests to force);
+deploy.sh               Runs the checks, then deploys the games site; safe to re-run (--skip-tests to force);
                         installs the turtle units; refuses while turtled (--unturtle clears it);
                         creates Accounts/ and Feedback/ and runs app-server as the folder's owner
 Accounts/               Account files (created by deploy.sh; git-ignored, never deployed or edited by hand
                         while app-server runs)
 Feedback/               Player feedback, Feedback/<game id, "site" or "new_game">/<uuid>_<name>.txt (created
                         by deploy.sh; git-ignored, never deployed; the feedback skill deletes what it uses)
-stop.sh                 Stops app-server, the app-site-* units, nginx and any hand-started game server; ./deploy.sh restarts
+stop.sh                 Stops app-server, nginx and any hand-started game server; ./deploy.sh restarts
+deploy-external.sh      Deploys only ExternalSites/ (pages, app-site-<id> units, nginx locations); runs the checks first
+stop-external.sh        Stops only ExternalSites/ (units, hand-started site servers, their nginx locations); keeps data
 accounts.sh             Host account manager: find, select, show and delete accounts; deleting
                         restarts app-server (it keeps accounts in memory); no backup is kept
 .claude/skills/

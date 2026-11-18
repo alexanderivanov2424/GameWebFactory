@@ -1,5 +1,5 @@
 """Find and check the sites in ExternalSites/ (extra pages deployed next to the games site).
-deploy.sh uses it to know what to deploy, and tools/run_tests.py runs the same checks.
+deploy-external.sh uses it to know what to deploy, and tools/run_tests.py runs the same checks.
 
     python3 -I tools/external_sites.py list [ExternalSites folder]
 

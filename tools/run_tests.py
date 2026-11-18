@@ -7,7 +7,7 @@
 
 Steps (stops with exit code 1 if any fails):
 1. Compile every .py file under APP and ExternalSites, and check the external sites
-   (tools/external_sites.py: folder names, web/index.html, site.json).
+   (tools/external_sites.py: folder names, web/index.html, site.json; deploy-external.sh runs this too).
 2. Import every game exactly as the server does (games.<id>.server) and check it has Game.
 3. Run unit tests: every tests/test_*.py under APP/server, APP/gamekit, APP/games/<id> and tools
    (standard-library unittest; APP is on sys.path, so tests import gamekit, gamekit.sim, ...).
