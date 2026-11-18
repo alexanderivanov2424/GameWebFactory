@@ -1,0 +1,152 @@
+<!doctype html>
+<!-- Food list (/food-list/): a shared shopping list for phones. Not linked from anywhere.
+     Logic in app.js; data and pictures are kept by ../server.py (API at /food-list/api/).
+     nginx sends a strict Content-Security-Policy for this folder, so no inline scripts. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<meta name="referrer" content="no-referrer">
+<title>Food list</title>
+<style>
+  :root {
+    --bg: #f6f5f2; --card: #fff; --text: #1d1d1b; --muted: #6b6a66; --line: #e2e0da;
+    --accent: #2f7d4f; --accent-text: #fff; --danger: #b3372f; --done: #9a9892;
+    color-scheme: light dark;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #161615; --card: #22221f; --text: #ecebe6; --muted: #a3a29c; --line: #36352f;
+      --accent: #4caf73; --accent-text: #0d1a12; --danger: #e0685f; --done: #75746e;
+    }
+  }
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font: 16px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    padding-bottom: calc(24px + env(safe-area-inset-bottom));
+  }
+  button, input, textarea { font: inherit; color: inherit; }
+  button, .btn {
+    display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+    min-height: 44px; padding: 0 14px; border-radius: 10px; border: 1px solid var(--line);
+    background: var(--card); cursor: pointer; white-space: nowrap; user-select: none;
+  }
+  button:disabled { opacity: .5; cursor: default; }
+  .primary { background: var(--accent); color: var(--accent-text); border-color: var(--accent); }
+  .danger { color: var(--danger); }
+  header {
+    position: sticky; top: 0; z-index: 5; background: var(--bg);
+    border-bottom: 1px solid var(--line);
+    padding: calc(8px + env(safe-area-inset-top)) 12px 10px;
+  }
+  .bar { display: flex; align-items: center; gap: 8px; }
+  .bar h1 { font-size: 20px; margin: 0; flex: 1; min-width: 0; }
+  .bar button { padding: 0 10px; font-size: 14px; }
+  #add { display: flex; gap: 8px; margin-top: 10px; }
+  #add input { flex: 1; min-width: 0; }
+  input[type=text], textarea {
+    width: 100%; min-height: 44px; padding: 10px 12px; border-radius: 10px;
+    border: 1px solid var(--line); background: var(--card);
+  }
+  textarea { resize: vertical; min-height: 90px; }
+  main { max-width: 640px; margin: 0 auto; padding: 12px; }
+  #list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+  .item {
+    display: flex; align-items: flex-start; gap: 10px; padding: 10px;
+    background: var(--card); border: 1px solid var(--line); border-radius: 12px;
+  }
+  .check { display: flex; align-items: center; justify-content: center; width: 44px; height: 44px; flex: none; margin: -6px -4px -6px -6px; }
+  .check input { width: 26px; height: 26px; accent-color: var(--accent); margin: 0; }
+  .info { flex: 1; min-width: 0; cursor: pointer; padding-top: 2px; }
+  .name { font-weight: 600; overflow-wrap: anywhere; }
+  .notes { color: var(--muted); font-size: 14px; white-space: pre-wrap; overflow-wrap: anywhere; margin-top: 2px; }
+  .thumbs { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+  .thumbs img { width: 64px; height: 64px; object-fit: cover; border-radius: 8px; border: 1px solid var(--line); cursor: zoom-in; display: block; }
+  .item.done .name { text-decoration: line-through; color: var(--done); }
+  .item.done .notes, .item.done .thumbs { opacity: .55; }
+  .edit { flex: none; min-height: 36px; padding: 0 10px; font-size: 14px; }
+  .empty { text-align: center; color: var(--muted); padding: 40px 0; }
+  #msg {
+    position: fixed; left: 12px; right: 12px; bottom: calc(12px + env(safe-area-inset-bottom)); z-index: 20;
+    max-width: 616px; margin: 0 auto; padding: 12px 14px; border-radius: 10px;
+    background: var(--danger); color: #fff; display: none;
+  }
+  #msg.show { display: block; }
+  dialog {
+    width: min(560px, calc(100vw - 24px)); max-height: calc(100dvh - 24px); padding: 16px;
+    border: 1px solid var(--line); border-radius: 14px; background: var(--card); color: var(--text);
+  }
+  dialog::backdrop { background: rgba(0, 0, 0, .5); }
+  dialog h2 { margin: 0 0 12px; font-size: 18px; }
+  dialog label.field { display: block; font-size: 14px; color: var(--muted); margin: 10px 0 4px; }
+  .pics { display: grid; grid-template-columns: repeat(auto-fill, minmax(88px, 1fr)); gap: 8px; margin-top: 8px; }
+  .pic { position: relative; }
+  .pic img { width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 8px; border: 1px solid var(--line); display: block; cursor: zoom-in; }
+  .pic button {
+    position: absolute; top: 4px; right: 4px; min-height: 32px; width: 32px; padding: 0;
+    border-radius: 50%; background: rgba(0, 0, 0, .65); color: #fff; border: 0;
+  }
+  .upload { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+  .upload .btn { flex: 1; }
+  .upload input { display: none; }
+  #busy { font-size: 14px; color: var(--muted); margin-top: 6px; min-height: 20px; }
+  .actions { display: flex; gap: 8px; margin-top: 16px; }
+  .actions .grow { flex: 1; }
+  #viewer { padding: 8px; width: auto; max-width: calc(100vw - 16px); }
+  #viewer img { display: block; max-width: calc(100vw - 34px); max-height: calc(100dvh - 90px); margin: 0 auto 8px; border-radius: 8px; }
+  #viewer button { width: 100%; }
+</style>
+<script src="/food-list/app.js" defer></script>
+</head>
+<body>
+<header>
+  <div class="bar">
+    <h1>Food list</h1>
+    <button type="button" id="clearChecked">Clear checked</button>
+    <button type="button" id="clearAll" class="danger">Clear all</button>
+  </div>
+  <form id="add" autocomplete="off">
+    <input type="text" id="addName" maxlength="80" placeholder="Add an item…" enterkeyhint="done" aria-label="New item">
+    <button type="submit" class="primary">Add</button>
+  </form>
+</header>
+
+<main>
+  <ul id="list"></ul>
+  <p class="empty" id="empty" hidden>The list is empty.</p>
+</main>
+
+<dialog id="editor">
+  <form method="dialog" id="editForm" autocomplete="off">
+    <h2>Edit item</h2>
+    <label class="field" for="editName">Name</label>
+    <input type="text" id="editName" maxlength="80" required>
+    <label class="field" for="editNotes">Notes</label>
+    <textarea id="editNotes" maxlength="500" placeholder="Brand, size, how many…"></textarea>
+    <label class="field">Pictures</label>
+    <div class="pics" id="editPics"></div>
+    <div class="upload">
+      <label class="btn">📷 Take photo<input type="file" id="takePhoto" accept="image/*" capture="environment"></label>
+      <label class="btn">🖼️ Choose image<input type="file" id="choosePhoto" accept="image/*" multiple></label>
+    </div>
+    <div id="busy"></div>
+    <div class="actions">
+      <button type="button" id="deleteItem" class="danger">Delete</button>
+      <span class="grow"></span>
+      <button type="button" id="cancelEdit">Close</button>
+      <button type="submit" id="saveEdit" class="primary">Save</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="viewer">
+  <img id="viewerImg" alt="">
+  <button type="button" id="closeViewer">Close</button>
+</dialog>
+
+<div id="msg" role="alert"></div>
+</body>
+</html>

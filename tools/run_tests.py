@@ -6,11 +6,12 @@
     python3 -I tools/run_tests.py tools      # the tools' tests (accounts.sh, new_game.py + templates)
 
 Steps (stops with exit code 1 if any fails):
-1. Compile every .py file under APP.
+1. Compile every .py file under APP and ExternalSites, and check the external sites
+   (tools/external_sites.py: folder names, web/index.html, site.json).
 2. Import every game exactly as the server does (games.<id>.server) and check it has Game.
 3. Run unit tests: every tests/test_*.py under APP/server, APP/gamekit, APP/games/<id> and tools
    (standard-library unittest; APP is on sys.path, so tests import gamekit, gamekit.sim, ...).
-4. Syntax-check every .js file under APP/web and APP/games/*/client (tools/jscheck.py).
+4. Syntax-check every .js file under APP/web, APP/games/*/client and ExternalSites/*/web (tools/jscheck.py).
 
 Safety: tests run with server/turtle.py in test mode (turtle() raises Turtled instead of shutting
 the site down), with the state folder ($STATE_DIRECTORY) pointed at a temporary folder and
@@ -31,15 +32,17 @@ sys.dont_write_bytecode = True  # keep __pycache__ folders out of APP (deploy co
 
 ROOT = Path(__file__).resolve().parent.parent
 APP = ROOT / "APP"
+EXTERNAL = ROOT / "ExternalSites"
 sys.path.insert(0, str(APP))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
+import external_sites  # noqa: E402
 import jscheck  # noqa: E402
 
 
 def compile_all():
     failures = []
-    for path in sorted(APP.rglob("*.py")):
+    for path in sorted(APP.rglob("*.py")) + sorted(EXTERNAL.glob("*/*.py")):
         try:
             compile(path.read_text(encoding="utf-8"), str(path), "exec")
         except SyntaxError as error:
@@ -88,6 +91,7 @@ def load_tests(dirs):
 def js_files():
     files = sorted((APP / "web").rglob("*.js"))
     files += sorted((APP / "games").glob("*/client/**/*.js"))
+    files += sorted(EXTERNAL.glob("*/web/**/*.js"))
     return files
 
 
@@ -111,6 +115,11 @@ def run(argv):
 
     print("== Compiling Python")
     for failure in compile_all():
+        print(" ", failure)
+        ok = False
+
+    print("== Checking external sites")
+    for failure in external_sites.load_sites(EXTERNAL)[1]:
         print(" ", failure)
         ok = False
 
