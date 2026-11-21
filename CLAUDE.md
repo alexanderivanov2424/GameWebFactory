@@ -159,7 +159,9 @@ AdditionalPages/        Extra standalone pages served with the games site but ne
                         run in gwf-app next to the game server; its data goes in $SITE_DATA =
                         ExternalWrite/AdditionalPages/<id>/). They don't use theme/settings/chat or gamekit.
                         Phone support is wanted here. startup.sh and shutdown.sh start and stop them with the site.
-  food-list/            Secret shared shopping list (/food-list): items with checkbox, name, notes, photos.
+  food-list/            Secret shared shopping lists (/food-list): several lists (the title opens the lists screen),
+                        items with checkbox, name, notes, photos; every item name ever added is kept (lowercase,
+                        unique) and suggested when adding, and renaming an item renames that saved name.
                         Photos are decoded in the browser and sent as raw RGB; images.py writes a fresh PNG from them.
 ExternalWrite/          Everything the running site writes; the only writable mount (git-ignored, owner gwf):
   Accounts/             Account files (never edited by hand while the site runs)

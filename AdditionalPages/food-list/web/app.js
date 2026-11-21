@@ -1,8 +1,12 @@
-// Food list page (/food-list/): shows the shared list, adds/edits/checks items, uploads pictures.
+// Food list page (/food-list/): shows one shared list (adds/edits/checks items, uploads pictures)
+// and the lists screen (the title button: open, add, rename, delete lists; the phone's Back button
+// closes it). The open list is remembered in localStorage. While typing a new item, names added
+// before (the server keeps them all, see ../store.py) that aren't on this list are suggested.
+// Item names are lowercase: the server lowercases them too.
 // Pictures are decoded and scaled down here, then sent as raw RGB pixels only (4-byte size header
 // + width*height*3 bytes, see ../images.py); the server writes its own PNG from them.
 // Everything shown comes from the server and is put on the page as text (textContent), never HTML.
-// The list reloads every 15 s while the page is visible and no dialog is open.
+// The page reloads every 15 s while it's visible and no dialog is open.
 "use strict";
 
 (() => {
@@ -10,12 +14,30 @@
   const MAX_SIDE = 800;           // must match images.MAX_SIDE on the server
   const MAX_FILE = 40e6;          // don't even try to decode files bigger than this
   const REFRESH_MS = 15000;
+  const MAX_SUGGESTIONS = 8;
+  const CURRENT_KEY = "food-list.current";
+  const HEX_ID = /^[0-9a-f]{16}$/;
 
   const $ = (id) => document.getElementById(id);
   const list = $("list"), editor = $("editor"), viewer = $("viewer");
+  let lists = [];      // [{id, name, count, left}]
+  let foods = [];      // every item name ever added (sorted)
+  let listId = remembered();
+  let listName = "";
   let items = [];
   let editingId = null;
   let msgTimer = 0;
+
+  function remembered() {
+    try {
+      const id = localStorage.getItem(CURRENT_KEY);
+      return id && HEX_ID.test(id) ? id : null;
+    } catch (e) { return null; }
+  }
+
+  function remember(id) {
+    try { localStorage.setItem(CURRENT_KEY, id); } catch (e) { /* private mode: fine */ }
+  }
 
   // ---- talking to the server ----
 
@@ -30,7 +52,9 @@
     try { data = await response.json(); } catch (e) { /* not JSON */ }
     if (!response.ok) {
       const text = data && typeof data.error === "string" ? data.error : "Request failed (" + response.status + ").";
-      throw new Error(text.slice(0, 200));
+      const error = new Error(text.slice(0, 200));
+      error.status = response.status;
+      throw error;
     }
     return data;
   }
@@ -47,10 +71,27 @@
     return API + "/images/" + encodeURIComponent(id) + ".png";
   }
 
+  // Loads the open list (or the first one, when none is open or it was deleted) and the summary.
   async function reload() {
-    const data = await request("/items");
-    items = Array.isArray(data && data.items) ? data.items : [];
+    let data = null;
+    if (listId) {
+      try { data = await request("/lists/" + listId); } catch (e) { if (e.status !== 404) throw e; }
+    }
+    if (!data) {
+      const summary = await request("/lists");
+      const first = summary && Array.isArray(summary.lists) && summary.lists[0];
+      if (!first) throw new Error("There are no lists.");
+      data = await request("/lists/" + first.id);
+    }
+    const open = data.list || {};
+    lists = Array.isArray(data.lists) ? data.lists : [];
+    foods = Array.isArray(data.foods) ? data.foods : [];
+    items = Array.isArray(open.items) ? open.items : [];
+    listName = String(open.name || "");
+    if (open.id !== listId) { listId = open.id; remember(listId); }
     render();
+    renderLists();
+    renderSuggestions();
     if (editingId) renderEditorPics();
   }
 
@@ -87,6 +128,8 @@
   }
 
   function render() {
+    $("listName").textContent = listName;
+    document.title = listName || "Food list";
     const sorted = items.filter((i) => !i.checked).concat(items.filter((i) => i.checked));
     list.replaceChildren(...sorted.map(row));
     $("empty").hidden = items.length > 0;
@@ -127,28 +170,158 @@
     return li;
   }
 
+  function plural(n, word) {
+    return n + " " + word + (n === 1 ? "" : "s");
+  }
+
+  // ---- adding items, with suggestions from every name added before ----
+
+  function addItem(name) {
+    const input = $("addName");
+    input.value = "";
+    renderSuggestions();
+    const id = listId;
+    act(() => post("/lists/" + id + "/items", { name: name.toLowerCase() }));
+  }
+
+  // Names starting with what's typed come first, then names containing it.
+  function renderSuggestions() {
+    const box = $("suggest");
+    const typed = $("addName").value.trim().replace(/\s+/g, " ").toLowerCase();
+    const onList = new Set(items.map((i) => i.name));
+    const starts = [], contains = [];
+    if (typed) {
+      for (const name of foods) {
+        if (name === typed || onList.has(name)) continue;
+        const at = name.indexOf(typed);
+        if (at === 0) starts.push(name);
+        else if (at > 0) contains.push(name);
+      }
+    }
+    const shown = starts.concat(contains).slice(0, MAX_SUGGESTIONS);
+    box.replaceChildren(...shown.map((name) => {
+      const li = el("li");
+      const pick = el("button", "", name);
+      pick.type = "button";
+      pick.addEventListener("click", () => addItem(name));
+      li.append(pick);
+      return li;
+    }));
+    box.hidden = shown.length === 0;
+  }
+
+  $("suggest").addEventListener("mousedown", (e) => e.preventDefault());  // keep the keyboard up
+  $("addName").addEventListener("input", renderSuggestions);
+  $("addName").addEventListener("keydown", (e) => {
+    if (e.key === "Escape") { e.target.value = ""; renderSuggestions(); }
+  });
+
   $("add").addEventListener("submit", (e) => {
     e.preventDefault();
-    const input = $("addName");
-    const name = input.value.trim();
-    if (!name) return;
-    input.value = "";
-    act(() => post("/items", { name }));
+    const name = $("addName").value.trim();
+    if (name) addItem(name);
   });
 
   $("clearChecked").addEventListener("click", () => {
     const count = items.filter((i) => i.checked).length;
     if (!count) return;
-    if (confirm("Remove " + count + " checked item" + (count === 1 ? "" : "s") + "?")) {
-      act(() => post("/clear", { which: "checked" }));
+    if (confirm("Remove " + plural(count, "checked item") + "?")) {
+      const id = listId;
+      act(() => post("/lists/" + id + "/clear", { which: "checked" }));
     }
   });
 
   $("clearAll").addEventListener("click", () => {
     if (!items.length) return;
-    if (confirm("Remove ALL " + items.length + " item" + (items.length === 1 ? "" : "s") + " from the list? This can't be undone.")) {
-      act(() => post("/clear", { which: "all" }));
+    if (confirm("Remove ALL " + plural(items.length, "item") + " from “" + listName + "”? This can't be undone.")) {
+      const id = listId;
+      act(() => post("/lists/" + id + "/clear", { which: "all" }));
     }
+  });
+
+  // ---- the lists screen ----
+
+  function showScreen(screen) {
+    const showLists = screen === "lists";
+    if ($("listsView").hidden !== showLists) return;
+    $("listView").hidden = showLists;
+    $("listsView").hidden = !showLists;
+    window.scrollTo(0, 0);
+  }
+
+  function onListsScreen() {
+    return !!(history.state && history.state.screen === "lists");
+  }
+
+  function openLists() {
+    if (!onListsScreen()) history.pushState({ screen: "lists" }, "");
+    showScreen("lists");
+    reload().catch(showError);
+  }
+
+  function closeLists() {
+    if (onListsScreen()) history.back();  // popstate shows the list
+    else showScreen("list");
+  }
+
+  function openList(id) {
+    if (id !== listId) {
+      listId = id;
+      remember(id);
+      items = [];
+      listName = (lists.find((l) => l.id === id) || {}).name || "";
+      render();
+      renderSuggestions();
+    }
+    closeLists();
+    reload().catch(showError);
+  }
+
+  function renderLists() {
+    $("lists").replaceChildren(...lists.map((l) => {
+      const li = el("li", "item" + (l.id === listId ? " current" : ""));
+      const info = el("div", "info");
+      info.append(el("div", "name", l.name),
+        el("div", "notes", l.count ? l.left + " to get · " + plural(l.count, "item") : "Empty"));
+      info.addEventListener("click", () => openList(l.id));
+
+      const rename = el("button", "edit", "Rename");
+      rename.type = "button";
+      rename.addEventListener("click", () => {
+        const name = prompt("New name for “" + l.name + "”:", l.name);
+        if (name === null || !name.trim() || name.trim() === l.name) return;
+        act(() => post("/lists/" + l.id + "/update", { name: name.trim() }));
+      });
+
+      const remove = el("button", "edit danger", "Delete");
+      remove.type = "button";
+      remove.disabled = lists.length < 2;
+      remove.title = remove.disabled ? "The only list can't be deleted" : "";
+      remove.addEventListener("click", () => {
+        const what = l.count ? " and its " + plural(l.count, "item") : "";
+        if (confirm("Delete the list “" + l.name + "”" + what + "? This can't be undone.")) {
+          act(() => post("/lists/" + l.id + "/delete"));
+        }
+      });
+
+      li.append(info, rename, remove);
+      return li;
+    }));
+  }
+
+  $("listButton").addEventListener("click", openLists);
+  $("closeLists").addEventListener("click", closeLists);
+  window.addEventListener("popstate", () => showScreen(onListsScreen() ? "lists" : "list"));
+
+  $("newList").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const input = $("newListName");
+    const name = input.value.trim();
+    if (!name) return;
+    let made;
+    try { made = await post("/lists", { name }); } catch (err) { showError(err); return; }
+    input.value = "";
+    openList(made.id);
   });
 
   // ---- editing one item ----
@@ -196,7 +369,7 @@
     e.preventDefault();
     const item = current();
     if (!item) return editor.close();
-    const name = $("editName").value.trim();
+    const name = $("editName").value.trim().toLowerCase();
     if (!name) { showError(new Error("Give the item a name.")); return; }
     const id = item.id;
     editor.close();
@@ -290,5 +463,6 @@
   setInterval(refresh, REFRESH_MS);
   document.addEventListener("visibilitychange", refresh);
 
+  showScreen(onListsScreen() ? "lists" : "list");
   reload().catch(showError);
 })();

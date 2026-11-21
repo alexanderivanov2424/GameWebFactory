@@ -1,4 +1,17 @@
-"""Food list: the shopping list, kept in <data>/list.json, with its pictures in <data>/images/<id>.png.
+"""Food list: several shopping lists plus every item name ever added, kept in <data>/lists.json,
+with the pictures in <data>/images/<id>.png.
+
+The data:
+- foods: every item name ever added ({id, name}), kept forever (removing an item from a list
+  keeps its food) so the page can suggest them when adding. Food names are lowercase (whatever
+  is typed is lowercased; symbols, spaces and digits are fine) and unique.
+- lists: {id, name, items}; list names are unique ignoring case and there is always at least one.
+  An item is {id, food (a food id), notes, checked, images}; a food is on a list at most once.
+  Adding a name that's already a food reuses it; renaming an item renames its food (so the new
+  name is what's suggested, and it shows on every list holding it); a rename to another food's
+  name is refused.
+An older list.json (one list: {"items": [{id, name, notes, checked, images}]}) becomes the list
+"Food list" when lists.json doesn't exist yet; list.json itself is left as it was.
 
 Nothing from the browser is trusted. Every value is checked here before it's kept:
 - text: must be a string, normalised (NFC), control/format/private/unassigned characters dropped
@@ -7,9 +20,9 @@ Nothing from the browser is trusted. Every value is checked here before it's kep
 - ids are made here (random hex) and the browser can only name existing ones; file names are
   only ever built from those ids, never from anything the browser sends;
 - images come in as raw RGB and go out as a PNG written by images.py.
-Limits (items, pictures per item and in all, total data size, uploads per hour) keep a stranger
-who finds the page from filling the disk. list.json is checked the same way when it's loaded,
-and image files nobody refers to are removed then.
+Limits (lists, items per list, foods, pictures per item and in all, total data size, uploads per
+hour) keep a stranger who finds the page from filling the disk. lists.json is checked the same way
+when it's loaded, and image files nobody refers to are removed then.
 
 Files are written to a temporary name and renamed, so a crash never leaves a half-written file.
 """
@@ -26,12 +39,16 @@ from pathlib import Path
 import images
 
 NAME_MAX = 80
+LIST_NAME_MAX = 40
 NOTES_MAX = 500
-MAX_ITEMS = 300
+MAX_LISTS = 30
+MAX_ITEMS = 300  # per list
+MAX_FOODS = 3000
 MAX_IMAGES_PER_ITEM = 4
 MAX_IMAGES = 300
 MAX_DATA_BYTES = 200 * 1024 * 1024
 UPLOADS_PER_HOUR = 120
+DEFAULT_LIST = "Food list"
 
 ID = re.compile(r"^[0-9a-f]{16}$")
 KEEP_FORMAT = {"‍"}  # zero-width joiner: needed by combined emoji
@@ -78,6 +95,22 @@ def clean_text(value, limit, multiline=False, label="Text"):
     return text
 
 
+def food_name(value):
+    """An item name as it's kept: cleaned text, lowercase."""
+    return clean_text(value, NAME_MAX, label="The name").lower()[:NAME_MAX]
+
+
+def free_name(name, taken, limit=NAME_MAX):
+    """name, or name with " 2", " 3"... added so its lowercase isn't in taken (when loading bad data)."""
+    n = 1
+    candidate = name
+    while candidate.lower() in taken:
+        n += 1
+        suffix = f" {n}"
+        candidate = name[:limit - len(suffix)] + suffix
+    return candidate
+
+
 def write_atomic(path, data):
     tmp = path.with_name(f".{path.name}.tmp")
     with open(os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600), "wb") as f:
@@ -87,12 +120,26 @@ def write_atomic(path, data):
     os.replace(tmp, path)
 
 
+def read_json(path):
+    """The JSON object in path, or None when it's missing or unreadable."""
+    if not path.is_file():
+        return None
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    return data if isinstance(data, dict) else None
+
+
 class Store:
     def __init__(self, folder):
         self.folder = Path(folder)
         self.images_dir = self.folder / "images"
-        self.list_file = self.folder / "list.json"
-        self.items = []
+        self.data_file = self.folder / "lists.json"
+        self.old_file = self.folder / "list.json"  # before there were several lists
+        self.lists = []
+        self.foods = {}     # food id -> name
+        self.food_ids = {}  # name -> food id
         self.uploads = deque()  # times of recent uploads (all users)
         self.images_dir.mkdir(mode=0o700, parents=True, exist_ok=True)
         self.load()
@@ -100,34 +147,87 @@ class Store:
     # ---- loading and saving ----
 
     def load(self):
-        raw = []
-        if self.list_file.is_file():
-            try:
-                raw = json.loads(self.list_file.read_text(encoding="utf-8")).get("items", [])
-            except (OSError, ValueError, AttributeError):
-                raw = []
-        self.items = []
+        fresh = not self.data_file.exists()
+        raw = read_json(self.data_file)
+        if raw is None and fresh:
+            old = read_json(self.old_file) or {}
+            raw = {"lists": [{"id": new_id(), "name": DEFAULT_LIST, "items": old.get("items", [])}]}
+        raw = raw or {}
+        self.lists, self.foods, self.food_ids = [], {}, {}
         seen = set()
-        for entry in raw if isinstance(raw, list) else []:
+        for entry in raw.get("foods", []) if isinstance(raw.get("foods"), list) else []:
+            if len(self.foods) >= MAX_FOODS:
+                break
             try:
-                item = self._clean_saved(entry, seen)
+                self._load_food(entry, seen)
             except Rejected:
                 continue
-            self.items.append(item)
-            if len(self.items) >= MAX_ITEMS:
+        for entry in raw.get("lists", []) if isinstance(raw.get("lists"), list) else []:
+            if len(self.lists) >= MAX_LISTS:
                 break
-        referenced = {image for item in self.items for image in item["images"]}
+            try:
+                self._load_list(entry, seen)
+            except Rejected:
+                continue
+        if not self.lists:
+            self.lists.append({"id": new_id(), "name": DEFAULT_LIST, "items": []})
+        referenced = {image for item in self.all_items() for image in item["images"]}
         for path in self.images_dir.iterdir():
             if path.is_file() and (path.stem not in referenced or path.suffix != ".png"):
                 path.unlink(missing_ok=True)
         self.data_bytes = sum(p.stat().st_size for p in self.images_dir.iterdir() if p.is_file())
+        if fresh:
+            self.save()
 
-    def _clean_saved(self, entry, seen):
+    def _load_food(self, entry, seen):
+        if not isinstance(entry, dict) or not isinstance(entry.get("id"), str) or not ID.match(entry["id"]):
+            raise Rejected("bad food")
+        if entry["id"] in seen:
+            raise Rejected("duplicate id")
+        name = free_name(food_name(entry.get("name")) or "?", self.food_ids)
+        seen.add(entry["id"])
+        self._set_food(entry["id"], name)
+
+    def _load_list(self, entry, seen):
+        if not isinstance(entry, dict) or not isinstance(entry.get("id"), str) or not ID.match(entry["id"]):
+            raise Rejected("bad list")
+        if entry["id"] in seen:
+            raise Rejected("duplicate id")
+        seen.add(entry["id"])
+        taken = {lst["name"].lower() for lst in self.lists}
+        name = free_name(clean_text(entry.get("name"), LIST_NAME_MAX) or "List", taken, LIST_NAME_MAX)
+        lst = {"id": entry["id"], "name": name, "items": []}
+        on_list = set()
+        for raw in entry.get("items", []) if isinstance(entry.get("items"), list) else []:
+            if len(lst["items"]) >= MAX_ITEMS:
+                break
+            try:
+                lst["items"].append(self._load_item(raw, seen, on_list))
+            except Rejected:
+                continue
+        self.lists.append(lst)
+
+    def _load_item(self, entry, seen, on_list):
         if not isinstance(entry, dict) or not isinstance(entry.get("id"), str) or not ID.match(entry["id"]):
             raise Rejected("bad item")
         if entry["id"] in seen:
-            raise Rejected("duplicate item")
+            raise Rejected("duplicate id")
+        if "food" in entry:
+            food = entry["food"]
+            if not isinstance(food, str) or food not in self.foods or food in on_list:
+                raise Rejected("bad food")
+        else:  # from the old list.json: the item has its own name
+            name = food_name(entry.get("name")) or "?"
+            food = self.food_ids.get(name)
+            if food in on_list:
+                name, food = free_name(name, self.food_ids), None
+            if food is None:
+                if len(self.foods) >= MAX_FOODS:
+                    raise Rejected("too many foods")
+                food = new_id()
+                self._set_food(food, name)
         seen.add(entry["id"])
+        on_list.add(food)
         pictures = []
         for image in entry.get("images", []) if isinstance(entry.get("images"), list) else []:
             if (isinstance(image, str) and ID.match(image) and image not in seen
@@ -137,86 +237,172 @@ class Store:
                 pictures.append(image)
         return {
             "id": entry["id"],
-            "name": clean_text(entry.get("name"), NAME_MAX) or "?",
+            "food": food,
             "notes": clean_text(entry.get("notes"), NOTES_MAX, multiline=True),
             "checked": entry.get("checked") is True,
             "images": pictures,
         }
 
     def save(self):
-        data = json.dumps({"items": self.items}, ensure_ascii=False, indent=1)
-        write_atomic(self.list_file, data.encode("utf-8"))
+        data = json.dumps({
+            "foods": [{"id": food, "name": name} for food, name in self.foods.items()],
+            "lists": self.lists,
+        }, ensure_ascii=False, indent=1)
+        write_atomic(self.data_file, data.encode("utf-8"))
+
+    def _set_food(self, food, name):
+        old = self.foods.get(food)
+        if old is not None:
+            del self.food_ids[old]
+        self.foods[food] = name
+        self.food_ids[name] = food
 
     # ---- reading ----
 
-    def public(self):
-        return {"items": [dict(item, images=list(item["images"])) for item in self.items]}
+    def all_items(self):
+        return [item for lst in self.lists for item in lst["items"]]
+
+    def summary(self):
+        """Every list (without items) and every food name, for the lists screen and suggestions."""
+        return {
+            "lists": [{"id": lst["id"], "name": lst["name"], "count": len(lst["items"]),
+                       "left": sum(not item["checked"] for item in lst["items"])} for lst in self.lists],
+            "foods": sorted(self.foods.values()),
+        }
+
+    def public_item(self, item):
+        return {"id": item["id"], "name": self.foods[item["food"]], "notes": item["notes"],
+                "checked": item["checked"], "images": list(item["images"])}
+
+    def public_list(self, list_id):
+        """One list with its items, plus the summary."""
+        lst = self.find_list(list_id)
+        items = [self.public_item(item) for item in lst["items"]]
+        return dict(self.summary(), list={"id": lst["id"], "name": lst["name"], "items": items})
+
+    def find_list(self, list_id):
+        for lst in self.lists:
+            if lst["id"] == list_id:
+                return lst
+        raise Rejected("That list is gone (someone may have deleted it).", 404)
 
     def find(self, item_id):
-        for item in self.items:
-            if item["id"] == item_id:
-                return item
+        """(list, item) for an item on any list."""
+        for lst in self.lists:
+            for item in lst["items"]:
+                if item["id"] == item_id:
+                    return lst, item
         raise Rejected("That item is gone (someone may have removed it).", 404)
 
     def image_path(self, image_id):
-        """The file for a picture that's on the list, else None."""
-        if not ID.match(image_id) or not any(image_id in item["images"] for item in self.items):
+        """The file for a picture that's on a list, else None."""
+        if not ID.match(image_id) or not any(image_id in item["images"] for item in self.all_items()):
             return None
         return self.images_dir / f"{image_id}.png"
 
-    # ---- changes ----
+    # ---- lists ----
 
-    def add(self, data):
-        if len(self.items) >= MAX_ITEMS:
+    def _list_name(self, value, other_than=None):
+        name = clean_text(value, LIST_NAME_MAX, label="The list name")
+        if not name:
+            raise Rejected("Give the list a name.")
+        if any(lst["name"].lower() == name.lower() for lst in self.lists if lst is not other_than):
+            raise Rejected(f"There's already a list called “{name}”.")
+        return name
+
+    def add_list(self, data):
+        if len(self.lists) >= MAX_LISTS:
+            raise Rejected(f"There are already {MAX_LISTS} lists.", 507)
+        lst = {"id": new_id(), "name": self._list_name(data.get("name")), "items": []}
+        self.lists.append(lst)
+        self.save()
+        return {"id": lst["id"], "name": lst["name"]}
+
+    def rename_list(self, list_id, data):
+        lst = self.find_list(list_id)
+        lst["name"] = self._list_name(data.get("name"), other_than=lst)
+        self.save()
+        return {"id": lst["id"], "name": lst["name"]}
+
+    def delete_list(self, list_id):
+        lst = self.find_list(list_id)
+        if len(self.lists) == 1:
+            raise Rejected("That's the only list; add another one before deleting it.")
+        self.lists.remove(lst)
+        self.save()
+        self._remove_files([image for item in lst["items"] for image in item["images"]])
+
+    # ---- items ----
+
+    def add(self, list_id, data):
+        lst = self.find_list(list_id)
+        if len(lst["items"]) >= MAX_ITEMS:
             raise Rejected(f"The list is full ({MAX_ITEMS} items).", 507)
-        name = clean_text(data.get("name"), NAME_MAX, label="The name")
+        name = food_name(data.get("name"))
         if not name:
             raise Rejected("Give the item a name.")
-        item = {"id": new_id(), "name": name,
+        food = self.food_ids.get(name)
+        if food is not None and any(item["food"] == food for item in lst["items"]):
+            raise Rejected(f"“{name}” is already on this list.", 409)
+        if food is None:
+            if len(self.foods) >= MAX_FOODS:
+                raise Rejected(f"There are already {MAX_FOODS} saved names.", 507)
+            food = new_id()
+            self._set_food(food, name)
+        item = {"id": new_id(), "food": food,
                 "notes": clean_text(data.get("notes"), NOTES_MAX, multiline=True, label="The notes"),
                 "checked": False, "images": []}
-        self.items.append(item)
+        lst["items"].append(item)
         self.save()
-        return item
+        return self.public_item(item)
 
     def update(self, item_id, data):
-        item = self.find(item_id)
-        changes = {}
+        _, item = self.find(item_id)
+        name = notes = checked = None
         if "name" in data:
-            changes["name"] = clean_text(data["name"], NAME_MAX, label="The name")
-            if not changes["name"]:
+            name = food_name(data["name"])
+            if not name:
                 raise Rejected("Give the item a name.")
+            other = self.food_ids.get(name)
+            if other is not None and other != item["food"]:
+                raise Rejected(f"There's already an item called “{name}”.", 409)
         if "notes" in data:
-            changes["notes"] = clean_text(data["notes"], NOTES_MAX, multiline=True, label="The notes")
+            notes = clean_text(data["notes"], NOTES_MAX, multiline=True, label="The notes")
         if "checked" in data:
             if not isinstance(data["checked"], bool):
                 raise Rejected("Bad checked value.")
-            changes["checked"] = data["checked"]
-        item.update(changes)
+            checked = data["checked"]
+        if name is not None:
+            self._set_food(item["food"], name)
+        if notes is not None:
+            item["notes"] = notes
+        if checked is not None:
+            item["checked"] = checked
         self.save()
-        return item
+        return self.public_item(item)
 
     def delete(self, item_id):
-        item = self.find(item_id)
-        self.items.remove(item)
+        lst, item = self.find(item_id)
+        lst["items"].remove(item)
         self.save()
         self._remove_files(item["images"])
 
-    def clear(self, which):
+    def clear(self, list_id, which):
+        lst = self.find_list(list_id)
         if which not in ("checked", "all"):
             raise Rejected("Bad clear request.")
-        gone = [item for item in self.items if which == "all" or item["checked"]]
-        self.items = [item for item in self.items if item not in gone]
+        gone = [item for item in lst["items"] if which == "all" or item["checked"]]
+        lst["items"] = [item for item in lst["items"] if item not in gone]
         self.save()
         self._remove_files([image for item in gone for image in item["images"]])
         return len(gone)
 
     def add_image(self, item_id, body, now=None):
-        item = self.find(item_id)
+        _, item = self.find(item_id)
         if len(item["images"]) >= MAX_IMAGES_PER_ITEM:
             raise Rejected(f"An item can have at most {MAX_IMAGES_PER_ITEM} pictures.", 507)
-        if sum(len(i["images"]) for i in self.items) >= MAX_IMAGES:
-            raise Rejected(f"The list already has {MAX_IMAGES} pictures; remove some first.", 507)
+        if sum(len(i["images"]) for i in self.all_items()) >= MAX_IMAGES:
+            raise Rejected(f"The lists already have {MAX_IMAGES} pictures; remove some first.", 507)
         now = time.monotonic() if now is None else now
         while self.uploads and now - self.uploads[0] > 3600:
             self.uploads.popleft()
@@ -237,7 +423,7 @@ class Store:
         return image_id
 
     def delete_image(self, item_id, image_id):
-        item = self.find(item_id)
+        _, item = self.find(item_id)
         if image_id not in item["images"]:
             raise Rejected("That picture is gone.", 404)
         item["images"].remove(image_id)

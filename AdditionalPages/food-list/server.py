@@ -5,15 +5,20 @@ code; it writes only $SITE_DATA = ExternalWrite/AdditionalPages/food-list/ on th
 forwards /food-list/api/ here; it listens on 127.0.0.1:$PORT only.
 By hand: `PORT=8771 SITE_DATA=/some/folder python3 server.py` (default data: ./data next to this file).
 
-Routes (all JSON unless noted; errors are {"error": message} with a 4xx status):
-    GET  /food-list/api/items                          {"items": [{id, name, notes, checked, images: [id]}]}
-    POST /food-list/api/items                          {name, notes?} -> the new item
+Routes (all JSON unless noted; errors are {"error": message} with a 4xx status). The data model
+(lists, items, the saved item names called foods) is described in store.py.
+    GET  /food-list/api/lists                          summary: {"lists": [{id, name, count, left}], "foods": [name]}
+    GET  /food-list/api/lists/<list>                   summary + {"list": {id, name, items: [{id, name, notes, checked, images: [id]}]}}
+    POST /food-list/api/lists                          {name} -> {id, name}
+    POST /food-list/api/lists/<list>/update            {name} -> {id, name}
+    POST /food-list/api/lists/<list>/delete            (refused for the last list)
+    POST /food-list/api/lists/<list>/items             {name, notes?} -> the new item
+    POST /food-list/api/lists/<list>/clear             {"which": "checked" | "all"} -> {"removed": n}
     POST /food-list/api/items/<id>/update              {name?, notes?, checked?} -> the item
     POST /food-list/api/items/<id>/delete
     POST /food-list/api/items/<id>/images              raw RGB (application/octet-stream, see images.py) -> {"image": id}
     POST /food-list/api/items/<id>/images/<img>/delete
-    POST /food-list/api/clear                          {"which": "checked" | "all"} -> {"removed": n}
-    GET  /food-list/api/images/<img>.png               the PNG (only pictures that are on the list)
+    GET  /food-list/api/images/<img>.png               the PNG (only pictures that are on a list)
 
 Safety: one request at a time (nginx buffers whole bodies first, so a slow client can't stall
 it); every body needs an exact Content-Length within its limit and the right Content-Type (which
@@ -37,17 +42,21 @@ PREFIX = "/food-list/api"
 MAX_JSON = 8 * 1024
 JSON_TYPE = "application/json"
 IMAGE_TYPE = "application/octet-stream"
-ITEM = r"([0-9a-f]{16})"
+ID = r"([0-9a-f]{16})"
 
 POST_ROUTES = [
-    (re.compile(r"^/items$"), "add", JSON_TYPE),
-    (re.compile(rf"^/items/{ITEM}/update$"), "update", JSON_TYPE),
-    (re.compile(rf"^/items/{ITEM}/delete$"), "delete", JSON_TYPE),
-    (re.compile(rf"^/items/{ITEM}/images$"), "add_image", IMAGE_TYPE),
-    (re.compile(rf"^/items/{ITEM}/images/{ITEM}/delete$"), "delete_image", JSON_TYPE),
-    (re.compile(r"^/clear$"), "clear", JSON_TYPE),
+    (re.compile(r"^/lists$"), "add_list", JSON_TYPE),
+    (re.compile(rf"^/lists/{ID}/update$"), "rename_list", JSON_TYPE),
+    (re.compile(rf"^/lists/{ID}/delete$"), "delete_list", JSON_TYPE),
+    (re.compile(rf"^/lists/{ID}/items$"), "add", JSON_TYPE),
+    (re.compile(rf"^/lists/{ID}/clear$"), "clear", JSON_TYPE),
+    (re.compile(rf"^/items/{ID}/update$"), "update", JSON_TYPE),
+    (re.compile(rf"^/items/{ID}/delete$"), "delete", JSON_TYPE),
+    (re.compile(rf"^/items/{ID}/images$"), "add_image", IMAGE_TYPE),
+    (re.compile(rf"^/items/{ID}/images/{ID}/delete$"), "delete_image", JSON_TYPE),
 ]
-IMAGE_ROUTE = re.compile(rf"^/images/{ITEM}\.png$")
+LIST_ROUTE = re.compile(rf"^/lists/{ID}$")
+IMAGE_ROUTE = re.compile(rf"^/images/{ID}\.png$")
 
 log = logging.getLogger("food-list")
 
@@ -106,8 +115,11 @@ class Handler(BaseHTTPRequestHandler):
 
     def get(self):
         path = self.path_only()
-        if path == "/items":
-            return self.send_json(200, self.store.public())
+        if path == "/lists":
+            return self.send_json(200, self.store.summary())
+        match = LIST_ROUTE.match(path)
+        if match:
+            return self.send_json(200, self.store.public_list(match.group(1)))
         match = IMAGE_ROUTE.match(path)
         file = self.store.image_path(match.group(1)) if match else None
         if file is None or not file.is_file():
@@ -130,8 +142,15 @@ class Handler(BaseHTTPRequestHandler):
             return self.send_json(200, {"image": self.store.add_image(ids[0], body)})
         data = self.parse_json(body)
         store = self.store
-        if action == "add":
-            result = store.add(data)
+        if action == "add_list":
+            result = store.add_list(data)
+        elif action == "rename_list":
+            result = store.rename_list(ids[0], data)
+        elif action == "delete_list":
+            store.delete_list(ids[0])
+            result = {"ok": True}
+        elif action == "add":
+            result = store.add(ids[0], data)
         elif action == "update":
             result = store.update(ids[0], data)
         elif action == "delete":
@@ -141,7 +160,7 @@ class Handler(BaseHTTPRequestHandler):
             store.delete_image(ids[0], ids[1])
             result = {"ok": True}
         else:
-            result = {"removed": store.clear(data.get("which"))}
+            result = {"removed": store.clear(ids[0], data.get("which"))}
         self.send_json(200, result)
 
     def check_origin(self):
@@ -187,7 +206,7 @@ def main():
     data = Path(os.environ.get("SITE_DATA") or here / "data")
     Handler.store = Store(data)
     server = HTTPServer(("127.0.0.1", port), Handler)
-    log.info("Food list on 127.0.0.1:%d, data in %s (%d items)", port, data, len(Handler.store.items))
+    log.info("Food list on 127.0.0.1:%d, data in %s (%d lists)", port, data, len(Handler.store.lists))
     try:
         server.serve_forever()
     except KeyboardInterrupt:

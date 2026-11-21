@@ -1,5 +1,6 @@
 <!doctype html>
-<!-- Food list (/food-list/): a shared shopping list for phones. Not linked from anywhere.
+<!-- Food list (/food-list/): shared shopping lists for phones. Not linked from anywhere.
+     Two screens: one list (the title button opens the other) and all lists (open, add, rename, delete).
      Logic in app.js; data and pictures are kept by ../server.py (API at /food-list/api/).
      nginx sends a strict Content-Security-Policy for this folder, so no inline scripts. -->
 <html lang="en">
@@ -45,15 +46,32 @@
   .bar { display: flex; align-items: center; gap: 8px; }
   .bar h1 { font-size: 20px; margin: 0; flex: 1; min-width: 0; }
   .bar button { padding: 0 10px; font-size: 14px; }
-  #add { display: flex; gap: 8px; margin-top: 10px; }
-  #add input { flex: 1; min-width: 0; }
+  .bar .title {
+    flex: 1; min-width: 0; justify-content: flex-start; padding: 0 4px; margin-left: -4px;
+    border: 0; background: none; font-size: 20px; font-weight: 700;
+  }
+  .title #listName { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+  .title .chevron { color: var(--muted); font-size: 14px; }
+  .add { display: flex; gap: 8px; margin-top: 10px; }
+  .add input { flex: 1; min-width: 0; }
+  .lower { text-transform: lowercase; }
+  #suggest {
+    list-style: none; margin: 6px 0 0; padding: 0; overflow: hidden;
+    border: 1px solid var(--line); border-radius: 10px; background: var(--card);
+  }
+  #suggest button {
+    width: 100%; justify-content: flex-start; border: 0; border-radius: 0; background: none;
+    border-top: 1px solid var(--line); overflow: hidden; text-overflow: ellipsis;
+  }
+  #suggest li:first-child button { border-top: 0; }
+  .hint { font-size: 13px; color: var(--muted); margin-top: 4px; }
   input[type=text], textarea {
     width: 100%; min-height: 44px; padding: 10px 12px; border-radius: 10px;
     border: 1px solid var(--line); background: var(--card);
   }
   textarea { resize: vertical; min-height: 90px; }
   main { max-width: 640px; margin: 0 auto; padding: 12px; }
-  #list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+  #list, #lists { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
   .item {
     display: flex; align-items: flex-start; gap: 10px; padding: 10px;
     background: var(--card); border: 1px solid var(--line); border-radius: 12px;
@@ -67,6 +85,7 @@
   .thumbs img { width: 64px; height: 64px; object-fit: cover; border-radius: 8px; border: 1px solid var(--line); cursor: zoom-in; display: block; }
   .item.done .name { text-decoration: line-through; color: var(--done); }
   .item.done .notes, .item.done .thumbs { opacity: .55; }
+  .item.current { border-color: var(--accent); box-shadow: inset 3px 0 0 var(--accent); }
   .edit { flex: none; min-height: 36px; padding: 0 10px; font-size: 14px; }
   .empty { text-align: center; color: var(--muted); padding: 40px 0; }
   #msg {
@@ -102,28 +121,49 @@
 <script src="/food-list/app.js" defer></script>
 </head>
 <body>
+<div id="listView">
 <header>
   <div class="bar">
-    <h1>Food list</h1>
+    <button type="button" id="listButton" class="title" aria-label="All lists"><span id="listName">Food list</span><span class="chevron" aria-hidden="true">▾</span></button>
     <button type="button" id="clearChecked">Clear checked</button>
     <button type="button" id="clearAll" class="danger">Clear all</button>
   </div>
-  <form id="add" autocomplete="off">
-    <input type="text" id="addName" maxlength="80" placeholder="Add an item…" enterkeyhint="done" aria-label="New item">
+  <form id="add" class="add" autocomplete="off">
+    <input type="text" id="addName" class="lower" maxlength="80" placeholder="Add an item…" enterkeyhint="done" autocapitalize="none" aria-label="New item">
     <button type="submit" class="primary">Add</button>
   </form>
+  <ul id="suggest" hidden></ul>
 </header>
 
 <main>
   <ul id="list"></ul>
   <p class="empty" id="empty" hidden>The list is empty.</p>
 </main>
+</div>
+
+<div id="listsView" hidden>
+<header>
+  <div class="bar">
+    <h1>Lists</h1>
+    <button type="button" id="closeLists">Done</button>
+  </div>
+  <form id="newList" class="add" autocomplete="off">
+    <input type="text" id="newListName" maxlength="40" placeholder="New list…" enterkeyhint="done" aria-label="New list name">
+    <button type="submit" class="primary">Add</button>
+  </form>
+</header>
+
+<main>
+  <ul id="lists"></ul>
+</main>
+</div>
 
 <dialog id="editor">
   <form method="dialog" id="editForm" autocomplete="off">
     <h2>Edit item</h2>
     <label class="field" for="editName">Name</label>
-    <input type="text" id="editName" maxlength="80" required>
+    <input type="text" id="editName" class="lower" maxlength="80" autocapitalize="none" required>
+    <div class="hint">Renames it on every list and in the suggestions.</div>
     <label class="field" for="editNotes">Notes</label>
     <textarea id="editNotes" maxlength="500" placeholder="Brand, size, how many…"></textarea>
     <label class="field">Pictures</label>
