@@ -7,12 +7,16 @@ By hand: `PORT=8771 SITE_DATA=/some/folder python3 server.py` (default data: ./d
 
 Routes (all JSON unless noted; errors are {"error": message} with a 4xx status). The data model
 (lists, items, the saved item names called foods) is described in store.py.
-    GET  /food-list/api/lists                          summary: {"lists": [{id, name, count, left}], "foods": [name],
-                                                                 "tags": [{id, name, hue}]}
+    GET  /food-list/api/lists                          summary: {"lists": [{id, name, count, left}], "foods": [{name, tags}],
+                                                                 "tags": [{id, name, hue}]} (lists also have template)
     GET  /food-list/api/lists/<list>                   summary + {"list": {id, name, items: [{id, name, tags: [tag id],
                                                                  notes, checked, images: [id]}]}}
+    GET  /food-list/api/foods                          summary + {"list": {id: "global", name, global: true,
+                                                                 items: [{id (food id), name, tags, lists: [name]}]}}
+    POST /food-list/api/foods/<food>/update            {name?, tags?: [tag name]} -> {id, name, tags}
     POST /food-list/api/lists                          {name} -> {id, name}
-    POST /food-list/api/lists/<list>/update            {name} -> {id, name}
+    POST /food-list/api/lists/<list>/update            {name?, template?} -> {id, name, template}
+    POST /food-list/api/lists/<list>/copy              {name} -> {id, name} (template lists only)
     POST /food-list/api/lists/<list>/delete            (refused for the last list)
     POST /food-list/api/lists/<list>/items             {name, notes?} -> the new item
     POST /food-list/api/lists/<list>/clear             {"which": "checked" | "all"} -> {"removed": n}
@@ -48,7 +52,9 @@ ID = r"([0-9a-f]{16})"
 
 POST_ROUTES = [
     (re.compile(r"^/lists$"), "add_list", JSON_TYPE),
-    (re.compile(rf"^/lists/{ID}/update$"), "rename_list", JSON_TYPE),
+    (re.compile(rf"^/lists/{ID}/update$"), "update_list", JSON_TYPE),
+    (re.compile(rf"^/lists/{ID}/copy$"), "copy_list", JSON_TYPE),
+    (re.compile(rf"^/foods/{ID}/update$"), "update_food", JSON_TYPE),
     (re.compile(rf"^/lists/{ID}/delete$"), "delete_list", JSON_TYPE),
     (re.compile(rf"^/lists/{ID}/items$"), "add", JSON_TYPE),
     (re.compile(rf"^/lists/{ID}/clear$"), "clear", JSON_TYPE),
@@ -119,6 +125,8 @@ class Handler(BaseHTTPRequestHandler):
         path = self.path_only()
         if path == "/lists":
             return self.send_json(200, self.store.summary())
+        if path == "/foods":
+            return self.send_json(200, self.store.public_foods())
         match = LIST_ROUTE.match(path)
         if match:
             return self.send_json(200, self.store.public_list(match.group(1)))
@@ -146,8 +154,12 @@ class Handler(BaseHTTPRequestHandler):
         store = self.store
         if action == "add_list":
             result = store.add_list(data)
-        elif action == "rename_list":
-            result = store.rename_list(ids[0], data)
+        elif action == "update_list":
+            result = store.update_list(ids[0], data)
+        elif action == "copy_list":
+            result = store.copy_list(ids[0], data)
+        elif action == "update_food":
+            result = store.update_food(ids[0], data)
         elif action == "delete_list":
             store.delete_list(ids[0])
             result = {"ok": True}

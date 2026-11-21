@@ -1,6 +1,9 @@
 <!doctype html>
 <!-- Food list (/food-list/): shared shopping lists for phones. Not linked from anywhere.
-     Two screens: one list (the title button opens the other) and all lists (open, add, rename, delete).
+     Two screens: one list (the title button opens the other) and the lists screen: a stack of lists
+     (New list on top, then Global = every saved item, then each list with Edit and, on templates, Copy).
+     body.global = the Global list is open: no checking off, clearing or adding; the item editor shows
+     only name and tags (.item-only parts hidden).
      The list has two modes (the small button next to the title; body.viewing = view mode):
      edit shows the add row and each item's Edit button; view shows the tag filter row instead.
      Logic in app.js; data and pictures are kept by ../server.py (API at /food-list/api/).
@@ -66,12 +69,22 @@
     border-top: 1px solid var(--line); overflow: hidden; text-overflow: ellipsis;
   }
   #suggest li:first-child button { border-top: 0; }
+  #suggest .suggest-name { min-width: 0; flex: 0 1 auto; overflow: hidden; text-overflow: ellipsis; margin-right: 4px; }
   .hint { font-size: 13px; color: var(--muted); margin-top: 4px; }
   .hint.bad { color: var(--danger); }
   .bar .mode { min-height: 34px; padding: 0 10px; font-size: 13px; }
   body.viewing .bar .mode { border-color: var(--accent); }
   body.viewing #add, body.viewing #suggest, body.viewing .item .edit, body.viewing #clearAll { display: none; }
   body:not(.viewing) #filters { display: none; }
+  body.global .check, body.global #clearChecked, body.global #clearAll, body.global #add,
+  body.global #suggest, body.global .item-only { display: none; }
+  .wide { width: 100%; margin-bottom: 10px; }
+  .badge {
+    display: inline-block; margin-left: 6px; padding: 0 7px; border-radius: 999px; vertical-align: 2px;
+    font-size: 12px; font-weight: 500; color: var(--muted); border: 1px solid var(--line);
+  }
+  .checkline { display: flex; align-items: center; gap: 10px; margin-top: 14px; cursor: pointer; }
+  .checkline input { width: 22px; height: 22px; margin: 0; accent-color: var(--accent); flex: none; }
   /* Tags: --h is the tag's hue, set from the page script. */
   .chips { display: flex; flex-wrap: wrap; gap: 6px; }
   .chips:empty { display: none; }
@@ -177,13 +190,10 @@
     <h1>Lists</h1>
     <button type="button" id="closeLists">Done</button>
   </div>
-  <form id="newList" class="add" autocomplete="off">
-    <input type="text" id="newListName" maxlength="40" placeholder="New list…" enterkeyhint="done" aria-label="New list name">
-    <button type="submit" class="primary">Add</button>
-  </form>
 </header>
 
 <main>
+  <button type="button" id="newListButton" class="primary wide">+ New list</button>
   <ul id="lists"></ul>
 </main>
 </div>
@@ -194,8 +204,10 @@
     <label class="field" for="editName">Name</label>
     <input type="text" id="editName" class="lower" maxlength="80" autocapitalize="none" required>
     <div class="hint">Renames it on every list and in the suggestions.</div>
-    <label class="field" for="editNotes">Notes</label>
-    <textarea id="editNotes" maxlength="500" placeholder="Brand, size, how many…"></textarea>
+    <div class="item-only">
+      <label class="field" for="editNotes">Notes</label>
+      <textarea id="editNotes" maxlength="500" placeholder="Brand, size, how many…"></textarea>
+    </div>
     <label class="field" for="tagInput">Tags</label>
     <div class="chips" id="editTags"></div>
     <div class="add">
@@ -204,18 +216,50 @@
     </div>
     <div class="hint" id="tagHint">Letters and spaces only. Tags stay with the item on every list.</div>
     <div class="chips" id="tagChoices"></div>
-    <label class="field">Pictures</label>
-    <div class="pics" id="editPics"></div>
-    <div class="upload">
-      <label class="btn">📷 Take photo<input type="file" id="takePhoto" accept="image/*" capture="environment"></label>
-      <label class="btn">🖼️ Choose image<input type="file" id="choosePhoto" accept="image/*" multiple></label>
+    <div class="item-only">
+      <label class="field">Pictures</label>
+      <div class="pics" id="editPics"></div>
+      <div class="upload">
+        <label class="btn">📷 Take photo<input type="file" id="takePhoto" accept="image/*" capture="environment"></label>
+        <label class="btn">🖼️ Choose image<input type="file" id="choosePhoto" accept="image/*" multiple></label>
+      </div>
+      <div id="busy"></div>
     </div>
-    <div id="busy"></div>
     <div class="actions">
-      <button type="button" id="deleteItem" class="danger">Delete</button>
+      <button type="button" id="deleteItem" class="danger item-only">Delete</button>
       <span class="grow"></span>
       <button type="button" id="cancelEdit">Close</button>
       <button type="submit" id="saveEdit" class="primary">Save</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="listEditor">
+  <form method="dialog" id="listForm" autocomplete="off">
+    <h2>Edit list</h2>
+    <label class="field" for="listNameInput">Name</label>
+    <input type="text" id="listNameInput" maxlength="40" required>
+    <label class="checkline"><input type="checkbox" id="listTemplate"> Template (gets a Copy button on the lists screen)</label>
+    <div class="hint bad" id="listError"></div>
+    <div class="actions">
+      <button type="button" id="deleteList" class="danger">Delete</button>
+      <span class="grow"></span>
+      <button type="button" id="cancelList">Close</button>
+      <button type="submit" class="primary">Save</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="nameDialog">
+  <form method="dialog" id="nameForm" autocomplete="off">
+    <h2 id="nameTitle">New list</h2>
+    <label class="field" for="nameInput">Name</label>
+    <input type="text" id="nameInput" maxlength="40" required>
+    <div class="hint bad" id="nameError"></div>
+    <div class="actions">
+      <span class="grow"></span>
+      <button type="button" id="cancelName">Cancel</button>
+      <button type="submit" class="primary" id="nameOk">Create</button>
     </div>
   </form>
 </dialog>

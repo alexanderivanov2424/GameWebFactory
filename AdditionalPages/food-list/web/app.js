@@ -1,7 +1,10 @@
 // Food list page (/food-list/): shows one shared list (adds/edits/checks items, uploads pictures)
-// and the lists screen (the title button: open, add, rename, delete lists; the phone's Back button
-// closes it). The open list is remembered in localStorage. While typing a new item, names added
-// before (the server keeps them all, see ../store.py) that aren't on this list are suggested.
+// and the lists screen (the title button; the phone's Back button closes it): New list, the Global
+// list, then every list with Edit (name, template, delete) and, on templates, Copy (named in a
+// popup, "<name>-<month>/<day>" by default). The Global list ("global") is every saved item: only
+// names and tags can be changed there, nothing is checked off or cleared. The open list is
+// remembered in localStorage. While typing a new item, names added before (the server keeps them
+// all, see ../store.py) that aren't on this list are suggested, with their tags.
 // Item names are lowercase: the server lowercases them too.
 // Tags (coloured by their hue) are set in the item editor, by name: new names make new tags on Save.
 // Two modes, remembered in localStorage: edit (add row, Edit buttons) and view (a row of the list's
@@ -21,14 +24,17 @@
   const CURRENT_KEY = "food-list.current";
   const MODE_KEY = "food-list.mode";
   const HEX_ID = /^[0-9a-f]{16}$/;
+  const GLOBAL = "global";        // the Global list's id (all saved items)
+  const LIST_NAME_MAX = 40;
   const TAG_NAME = /^[\p{L} ]+$/u;  // the server checks the same: letters and spaces
   const TAG_NAME_MAX = 24;
   const MAX_TAGS_PER_ITEM = 10;
 
   const $ = (id) => document.getElementById(id);
   const list = $("list"), editor = $("editor"), viewer = $("viewer");
-  let lists = [];      // [{id, name, count, left}]
-  let foods = [];      // every item name ever added (sorted)
+  const listEditor = $("listEditor"), nameDialog = $("nameDialog");
+  let lists = [];      // [{id, name, template, count, left}]
+  let foods = [];      // every item ever added: [{name, tags}] (sorted by name)
   let tags = [];       // every tag: [{id, name, hue}] (sorted by name)
   let tagsById = new Map();
   let viewing = stored(MODE_KEY) === "view";
@@ -36,6 +42,7 @@
   let editTagNames = []; // the open editor's tags, saved on Save
   let listId = remembered();
   let listName = "";
+  let isGlobal = false;
   let items = [];
   let editingId = null;
   let msgTimer = 0;
@@ -50,7 +57,7 @@
 
   function remembered() {
     const id = stored(CURRENT_KEY);
-    return id && HEX_ID.test(id) ? id : null;
+    return id && (id === GLOBAL || HEX_ID.test(id)) ? id : null;
   }
 
   function remember(id) {
@@ -89,11 +96,15 @@
     return API + "/images/" + encodeURIComponent(id) + ".png";
   }
 
+  function listPath(id) {
+    return id === GLOBAL ? "/foods" : "/lists/" + id;
+  }
+
   // Loads the open list (or the first one, when none is open or it was deleted) and the summary.
   async function reload() {
     let data = null;
     if (listId) {
-      try { data = await request("/lists/" + listId); } catch (e) { if (e.status !== 404) throw e; }
+      try { data = await request(listPath(listId)); } catch (e) { if (e.status !== 404) throw e; }
     }
     if (!data) {
       const summary = await request("/lists");
@@ -108,6 +119,7 @@
     tagsById = new Map(tags.map((t) => [t.id, t]));
     items = Array.isArray(open.items) ? open.items : [];
     listName = String(open.name || "");
+    isGlobal = open.global === true;
     if (open.id !== listId) { listId = open.id; remember(listId); }
     render();
     renderLists();
@@ -163,6 +175,7 @@
     $("listName").textContent = listName;
     document.title = listName || "Food list";
     document.body.classList.toggle("viewing", viewing);
+    document.body.classList.toggle("global", isGlobal);
     $("modeButton").textContent = viewing ? "👁️ View" : "✏️ Edit";
     $("modeButton").title = viewing ? "View mode: tap to edit" : "Edit mode: tap to view";
     const used = renderFilters();
@@ -171,12 +184,13 @@
     const sorted = shown.filter((i) => !i.checked).concat(shown.filter((i) => i.checked));
     list.replaceChildren(...sorted.map(row));
     $("empty").hidden = items.length > 0;
+    $("empty").textContent = isGlobal ? "Nothing has been added to a list yet." : "The list is empty.";
     $("clearChecked").disabled = !items.some((i) => i.checked);
     $("clearAll").disabled = items.length === 0;
   }
 
   function row(item) {
-    const li = el("li", "item" + (item.checked ? " done" : ""));
+    const li = el("li", "item" + (item.checked && !isGlobal ? " done" : ""));
 
     const check = el("label", "check");
     const box = el("input");
@@ -198,6 +212,7 @@
       line.append(...chips.map((t) => tagChip(t)));
       info.append(line);
     }
+    if (isGlobal) info.append(el("div", "notes", item.lists && item.lists.length ? "On " + item.lists.join(", ") : "Not on a list"));
     if (item.notes) info.append(el("div", "notes", item.notes));
     if (item.images && item.images.length) {
       const thumbs = el("div", "thumbs");
@@ -210,7 +225,8 @@
     edit.type = "button";
     edit.addEventListener("click", () => openEditor(item.id));
 
-    li.append(check, info, edit);
+    if (isGlobal) li.append(info, edit);
+    else li.append(check, info, edit);
     return li;
   }
 
@@ -259,20 +275,21 @@
     const typed = $("addName").value.trim().replace(/\s+/g, " ").toLowerCase();
     const onList = new Set(items.map((i) => i.name));
     const starts = [], contains = [];
-    if (typed) {
-      for (const name of foods) {
-        if (name === typed || onList.has(name)) continue;
-        const at = name.indexOf(typed);
-        if (at === 0) starts.push(name);
-        else if (at > 0) contains.push(name);
+    if (typed && !isGlobal) {
+      for (const food of foods) {
+        if (food.name === typed || onList.has(food.name)) continue;
+        const at = food.name.indexOf(typed);
+        if (at === 0) starts.push(food);
+        else if (at > 0) contains.push(food);
       }
     }
     const shown = starts.concat(contains).slice(0, MAX_SUGGESTIONS);
-    box.replaceChildren(...shown.map((name) => {
+    box.replaceChildren(...shown.map((food) => {
       const li = el("li");
-      const pick = el("button", "", name);
+      const pick = el("button");
       pick.type = "button";
-      pick.addEventListener("click", () => addItem(name));
+      pick.append(el("span", "suggest-name", food.name), ...itemTags(food).map((t) => tagChip(t)));
+      pick.addEventListener("click", () => addItem(food.name));
       li.append(pick);
       return li;
     }));
@@ -338,7 +355,8 @@
       listId = id;
       remember(id);
       items = [];
-      listName = (lists.find((l) => l.id === id) || {}).name || "";
+      isGlobal = id === GLOBAL;
+      listName = isGlobal ? "Global" : (lists.find((l) => l.id === id) || {}).name || "";
       render();
       renderSuggestions();
     }
@@ -346,35 +364,33 @@
     reload().catch(showError);
   }
 
+  function listRow(name, detail, isCurrent, onOpen, buttons) {
+    const li = el("li", "item" + (isCurrent ? " current" : ""));
+    const info = el("div", "info");
+    info.append(name, el("div", "notes", detail));
+    info.addEventListener("click", onOpen);
+    li.append(info, ...buttons);
+    return li;
+  }
+
+  function button(text, cls, onClick) {
+    const b = el("button", cls, text);
+    b.type = "button";
+    b.addEventListener("click", onClick);
+    return b;
+  }
+
   function renderLists() {
-    $("lists").replaceChildren(...lists.map((l) => {
-      const li = el("li", "item" + (l.id === listId ? " current" : ""));
-      const info = el("div", "info");
-      info.append(el("div", "name", l.name),
-        el("div", "notes", l.count ? l.left + " to get · " + plural(l.count, "item") : "Empty"));
-      info.addEventListener("click", () => openList(l.id));
-
-      const rename = el("button", "edit", "Rename");
-      rename.type = "button";
-      rename.addEventListener("click", () => {
-        const name = prompt("New name for “" + l.name + "”:", l.name);
-        if (name === null || !name.trim() || name.trim() === l.name) return;
-        act(() => post("/lists/" + l.id + "/update", { name: name.trim() }));
-      });
-
-      const remove = el("button", "edit danger", "Delete");
-      remove.type = "button";
-      remove.disabled = lists.length < 2;
-      remove.title = remove.disabled ? "The only list can't be deleted" : "";
-      remove.addEventListener("click", () => {
-        const what = l.count ? " and its " + plural(l.count, "item") : "";
-        if (confirm("Delete the list “" + l.name + "”" + what + "? This can't be undone.")) {
-          act(() => post("/lists/" + l.id + "/delete"));
-        }
-      });
-
-      li.append(info, rename, remove);
-      return li;
+    const global = listRow(el("div", "name", "Global"),
+      plural(foods.length, "saved item") + " · names and tags", listId === GLOBAL, () => openList(GLOBAL), []);
+    $("lists").replaceChildren(global, ...lists.map((l) => {
+      const name = el("div", "name", l.name);
+      if (l.template) name.append(el("span", "badge", "Template"));
+      const buttons = [];
+      if (l.template) buttons.push(button("Copy", "edit", () => openNameDialog(l)));
+      buttons.push(button("Edit", "edit", () => openListEditor(l)));
+      return listRow(name, l.count ? l.left + " to get · " + plural(l.count, "item") : "Empty",
+        l.id === listId, () => openList(l.id), buttons);
     }));
   }
 
@@ -382,14 +398,75 @@
   $("closeLists").addEventListener("click", closeLists);
   window.addEventListener("popstate", () => showScreen(onListsScreen() ? "lists" : "list"));
 
-  $("newList").addEventListener("submit", async (e) => {
+  // ---- editing a list (name, template, delete) ----
+
+  let editingList = null;
+
+  function openListEditor(l) {
+    editingList = l;
+    $("listNameInput").value = l.name;
+    $("listTemplate").checked = !!l.template;
+    $("listError").textContent = "";
+    $("deleteList").disabled = lists.length < 2;
+    $("deleteList").title = lists.length < 2 ? "The only list can't be deleted" : "";
+    listEditor.showModal();
+  }
+
+  $("cancelList").addEventListener("click", () => listEditor.close());
+
+  $("listForm").addEventListener("submit", async (e) => {
     e.preventDefault();
-    const input = $("newListName");
-    const name = input.value.trim();
-    if (!name) return;
+    const l = editingList;
+    const name = $("listNameInput").value.trim();
+    if (!l) return listEditor.close();
+    if (!name) { $("listError").textContent = "Give the list a name."; return; }
+    try {
+      await post("/lists/" + l.id + "/update", { name, template: $("listTemplate").checked });
+    } catch (err) { $("listError").textContent = err.message; return; }
+    listEditor.close();
+    reload().catch(showError);
+  });
+
+  $("deleteList").addEventListener("click", () => {
+    const l = editingList;
+    if (!l) return;
+    const what = l.count ? " and its " + plural(l.count, "item") : "";
+    if (!confirm("Delete the list “" + l.name + "”" + what + "? This can't be undone.")) return;
+    listEditor.close();
+    act(() => post("/lists/" + l.id + "/delete"));
+  });
+
+  // ---- naming a new list or a copy of a template ----
+
+  let copyFrom = null;  // the template being copied, or null for a new empty list
+
+  function copyName(name) {
+    const now = new Date();
+    const suffix = "-" + (now.getMonth() + 1) + "/" + now.getDate();
+    return name.slice(0, LIST_NAME_MAX - suffix.length) + suffix;
+  }
+
+  function openNameDialog(template) {
+    copyFrom = template || null;
+    $("nameTitle").textContent = copyFrom ? "Copy “" + copyFrom.name + "”" : "New list";
+    $("nameOk").textContent = copyFrom ? "Copy" : "Create";
+    $("nameInput").value = copyFrom ? copyName(copyFrom.name) : "";
+    $("nameError").textContent = "";
+    nameDialog.showModal();
+  }
+
+  $("newListButton").addEventListener("click", () => openNameDialog(null));
+  $("cancelName").addEventListener("click", () => nameDialog.close());
+
+  $("nameForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const name = $("nameInput").value.trim();
+    if (!name) { $("nameError").textContent = "Give the list a name."; return; }
     let made;
-    try { made = await post("/lists", { name }); } catch (err) { showError(err); return; }
-    input.value = "";
+    try {
+      made = await post(copyFrom ? "/lists/" + copyFrom.id + "/copy" : "/lists", { name });
+    } catch (err) { $("nameError").textContent = err.message; return; }
+    nameDialog.close();
     openList(made.id);
   });
 
@@ -508,7 +585,8 @@
     const id = item.id;
     const itemTagNames = editTagNames.slice();
     editor.close();
-    act(() => post("/items/" + id + "/update", { name, notes: $("editNotes").value, tags: itemTagNames }));
+    if (isGlobal) act(() => post("/foods/" + id + "/update", { name, tags: itemTagNames }));
+    else act(() => post("/items/" + id + "/update", { name, notes: $("editNotes").value, tags: itemTagNames }));
   });
 
   $("deleteItem").addEventListener("click", () => {
@@ -592,7 +670,7 @@
   // ---- keeping in sync with other phones ----
 
   function refresh() {
-    if (document.hidden || editor.open || viewer.open) return;
+    if (document.hidden || editor.open || viewer.open || listEditor.open || nameDialog.open) return;
     reload().catch(() => { /* quiet: try again next time */ });
   }
   setInterval(refresh, REFRESH_MS);
