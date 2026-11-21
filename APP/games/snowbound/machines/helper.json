@@ -1,0 +1,16 @@
+{
+  "order": 1,
+  "name": "Neighbour Kid",
+  "cost": 15,
+  "rate": 0.3,
+  "speed": 1.0,
+  "reach": 1.0,
+  "diesel": 0,
+  "text": "Will shovel for hot cocoa.",
+  "upgrades": [
+    "Bigger Mittens",
+    "Cocoa Breaks",
+    "Shovel Lessons"
+  ],
+  "icon": "🧒"
+}

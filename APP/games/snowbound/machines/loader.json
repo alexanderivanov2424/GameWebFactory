@@ -1,0 +1,16 @@
+{
+  "order": 4,
+  "name": "Skid Loader",
+  "cost": 12000,
+  "rate": 50,
+  "speed": 2.5,
+  "reach": 1.5,
+  "diesel": 0.7,
+  "text": "Scoops snow into neat piles.",
+  "upgrades": [
+    "Bigger Bucket",
+    "Quick Coupler",
+    "Tracks"
+  ],
+  "icon": "🚜"
+}

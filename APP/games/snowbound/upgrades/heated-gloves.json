@@ -1,0 +1,9 @@
+{
+  "name": "Heated Gloves",
+  "cost": 50000,
+  "text": "Clicks also clear 1% of your machines' snow per second.",
+  "effect": {
+    "kind": "click_pct",
+    "value": 1
+  }
+}

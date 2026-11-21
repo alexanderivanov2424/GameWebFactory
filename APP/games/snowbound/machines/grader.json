@@ -1,0 +1,16 @@
+{
+  "order": 5,
+  "name": "Road Grader",
+  "cost": 130000,
+  "rate": 280,
+  "speed": 3.0,
+  "reach": 2.0,
+  "diesel": 4,
+  "text": "Long blade, longer roads.",
+  "upgrades": [
+    "Wing Blade",
+    "Turbo",
+    "GPS Grade"
+  ],
+  "icon": "🚧"
+}

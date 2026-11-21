@@ -1,0 +1,16 @@
+{
+  "order": 8,
+  "name": "Jet Blower",
+  "cost": 330000000,
+  "rate": 50000,
+  "speed": 6.0,
+  "reach": 4.0,
+  "diesel": 650,
+  "text": "A jet engine on a flatbed.",
+  "upgrades": [
+    "Afterburner",
+    "Twin Turbines",
+    "Sonic Boom"
+  ],
+  "icon": "✈️"
+}

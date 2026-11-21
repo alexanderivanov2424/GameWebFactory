@@ -1,0 +1,9 @@
+{
+  "name": "Power Shovel",
+  "cost": 10000,
+  "text": "Clicks clear 2x snow.",
+  "effect": {
+    "kind": "click_mult",
+    "value": 2
+  }
+}

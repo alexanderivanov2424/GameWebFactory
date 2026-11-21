@@ -1,0 +1,10 @@
+{
+  "name": "Cast-Iron Stove",
+  "cost": 20000,
+  "text": "Everyone: the stove burns 40% fewer logs.",
+  "effect": {
+    "kind": "stove",
+    "value": 0.6
+  },
+  "shared": true
+}

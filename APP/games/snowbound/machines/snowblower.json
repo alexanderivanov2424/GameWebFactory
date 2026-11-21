@@ -1,0 +1,16 @@
+{
+  "order": 2,
+  "name": "Snowblower",
+  "cost": 100,
+  "rate": 1.5,
+  "speed": 1.5,
+  "reach": 1.2,
+  "diesel": 0.02,
+  "text": "A noisy two-stage blower.",
+  "upgrades": [
+    "Wider Auger",
+    "Heated Chute",
+    "Third Stage"
+  ],
+  "icon": "🌀"
+}
