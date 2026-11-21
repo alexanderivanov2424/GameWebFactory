@@ -263,6 +263,11 @@ Summary:
    lots as dirty row strings): you walk a character (client-side prediction mirroring the server's
    collision), full-screen canvas with a HUD, every machine its own unit with its own behaviour
    (`logic/machines.py`), behaviour-flag upgrades, per-player area-of-interest unit sync, survival near heat.
+   `games/motorways/` ("Metro Lanes", `RealtimeGame`, `logic/` modules): co-op Mini Motorways in one shared
+   city: players draw road tiles they own (8-direction links, bridges/tunnels, motorways, roundabouts,
+   lights) from their own stock, cars route over the graph with lanes and junction capacity, each trip's
+   points split by who built the road, the same weekly offers for everyone during a shared pick pause,
+   and a shared loss when any shop overflows.
 
 ## Lobby model (shared by all games)
 - Every connected tab is a **member**: a **spectator** until it joins, then a **player**. Players join and leave explicitly, and only in the lobby phase.
