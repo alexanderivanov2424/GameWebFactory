@@ -7,14 +7,16 @@ By hand: `PORT=8771 SITE_DATA=/some/folder python3 server.py` (default data: ./d
 
 Routes (all JSON unless noted; errors are {"error": message} with a 4xx status). The data model
 (lists, items, the saved item names called foods) is described in store.py.
-    GET  /food-list/api/lists                          summary: {"lists": [{id, name, count, left}], "foods": [name]}
-    GET  /food-list/api/lists/<list>                   summary + {"list": {id, name, items: [{id, name, notes, checked, images: [id]}]}}
+    GET  /food-list/api/lists                          summary: {"lists": [{id, name, count, left}], "foods": [name],
+                                                                 "tags": [{id, name, hue}]}
+    GET  /food-list/api/lists/<list>                   summary + {"list": {id, name, items: [{id, name, tags: [tag id],
+                                                                 notes, checked, images: [id]}]}}
     POST /food-list/api/lists                          {name} -> {id, name}
     POST /food-list/api/lists/<list>/update            {name} -> {id, name}
     POST /food-list/api/lists/<list>/delete            (refused for the last list)
     POST /food-list/api/lists/<list>/items             {name, notes?} -> the new item
     POST /food-list/api/lists/<list>/clear             {"which": "checked" | "all"} -> {"removed": n}
-    POST /food-list/api/items/<id>/update              {name?, notes?, checked?} -> the item
+    POST /food-list/api/items/<id>/update              {name?, notes?, checked?, tags?: [tag name]} -> the item
     POST /food-list/api/items/<id>/delete
     POST /food-list/api/items/<id>/images              raw RGB (application/octet-stream, see images.py) -> {"image": id}
     POST /food-list/api/items/<id>/images/<img>/delete

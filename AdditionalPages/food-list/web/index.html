@@ -1,6 +1,8 @@
 <!doctype html>
 <!-- Food list (/food-list/): shared shopping lists for phones. Not linked from anywhere.
      Two screens: one list (the title button opens the other) and all lists (open, add, rename, delete).
+     The list has two modes (the small button next to the title; body.viewing = view mode):
+     edit shows the add row and each item's Edit button; view shows the tag filter row instead.
      Logic in app.js; data and pictures are kept by ../server.py (API at /food-list/api/).
      nginx sends a strict Content-Security-Policy for this folder, so no inline scripts. -->
 <html lang="en">
@@ -65,6 +67,32 @@
   }
   #suggest li:first-child button { border-top: 0; }
   .hint { font-size: 13px; color: var(--muted); margin-top: 4px; }
+  .hint.bad { color: var(--danger); }
+  .bar .mode { min-height: 34px; padding: 0 10px; font-size: 13px; }
+  body.viewing .bar .mode { border-color: var(--accent); }
+  body.viewing #add, body.viewing #suggest, body.viewing .item .edit, body.viewing #clearAll { display: none; }
+  body:not(.viewing) #filters { display: none; }
+  /* Tags: --h is the tag's hue, set from the page script. */
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .chips:empty { display: none; }
+  .tag {
+    --h: 0; display: inline-flex; align-items: center; gap: 4px; padding: 1px 9px; border-radius: 999px;
+    font-size: 13px; line-height: 20px; white-space: nowrap;
+    background: hsl(var(--h) 75% 91%); color: hsl(var(--h) 60% 27%); border: 1px solid hsl(var(--h) 50% 78%);
+  }
+  button.tag { min-height: 36px; padding: 0 12px; border-radius: 999px; font-size: 14px; }
+  .tag.plain { background: var(--card); color: var(--text); border-color: var(--line); }
+  .tag.new { border-style: dashed; }
+  .tag[aria-pressed="true"] { background: hsl(var(--h) 55% 38%); color: #fff; border-color: hsl(var(--h) 55% 38%); }
+  .tag.plain[aria-pressed="true"] { background: var(--text); color: var(--bg); border-color: var(--text); }
+  @media (prefers-color-scheme: dark) {
+    .tag { background: hsl(var(--h) 35% 23%); color: hsl(var(--h) 75% 82%); border-color: hsl(var(--h) 30% 34%); }
+    .tag[aria-pressed="true"] { background: hsl(var(--h) 60% 62%); color: #111; border-color: hsl(var(--h) 60% 62%); }
+  }
+  #filters { margin-top: 10px; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; padding-bottom: 2px; }
+  .info .chips { margin-top: 5px; }
+  #editTags { margin-bottom: 8px; }
+  #tagChoices { margin-top: 8px; }
   input[type=text], textarea {
     width: 100%; min-height: 44px; padding: 10px 12px; border-radius: 10px;
     border: 1px solid var(--line); background: var(--card);
@@ -125,6 +153,7 @@
 <header>
   <div class="bar">
     <button type="button" id="listButton" class="title" aria-label="All lists"><span id="listName">Food list</span><span class="chevron" aria-hidden="true">▾</span></button>
+    <button type="button" id="modeButton" class="mode">✏️ Edit</button>
     <button type="button" id="clearChecked">Clear checked</button>
     <button type="button" id="clearAll" class="danger">Clear all</button>
   </div>
@@ -133,6 +162,7 @@
     <button type="submit" class="primary">Add</button>
   </form>
   <ul id="suggest" hidden></ul>
+  <div id="filters" class="chips" role="group" aria-label="Show only items with a tag"></div>
 </header>
 
 <main>
@@ -166,6 +196,14 @@
     <div class="hint">Renames it on every list and in the suggestions.</div>
     <label class="field" for="editNotes">Notes</label>
     <textarea id="editNotes" maxlength="500" placeholder="Brand, size, how many…"></textarea>
+    <label class="field" for="tagInput">Tags</label>
+    <div class="chips" id="editTags"></div>
+    <div class="add">
+      <input type="text" id="tagInput" class="lower" maxlength="24" placeholder="Add or make a tag…" autocapitalize="none" enterkeyhint="done">
+      <button type="button" id="addTag">Add</button>
+    </div>
+    <div class="hint" id="tagHint">Letters and spaces only. Tags stay with the item on every list.</div>
+    <div class="chips" id="tagChoices"></div>
     <label class="field">Pictures</label>
     <div class="pics" id="editPics"></div>
     <div class="upload">

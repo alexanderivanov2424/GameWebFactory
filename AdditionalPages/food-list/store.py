@@ -2,9 +2,13 @@
 with the pictures in <data>/images/<id>.png.
 
 The data:
-- foods: every item name ever added ({id, name}), kept forever (removing an item from a list
-  keeps its food) so the page can suggest them when adding. Food names are lowercase (whatever
-  is typed is lowercased; symbols, spaces and digits are fine) and unique.
+- foods: every item name ever added ({id, name, tags: [tag id]}), kept forever (removing an item
+  from a list keeps its food) so the page can suggest them when adding. Food names are lowercase
+  (whatever is typed is lowercased; symbols, spaces and digits are fine) and unique. Tags belong
+  to the food, so they come back when it's added again and show on every list holding it.
+- tags: every tag ever made ({id, name, hue}), kept forever. Names are lowercase letters and
+  single spaces only, and unique; hue (0-359) is the tag's colour, picked at random when it's made
+  among the hues used least so far. Setting an item's tags by name makes any new ones.
 - lists: {id, name, items}; list names are unique ignoring case and there is always at least one.
   An item is {id, food (a food id), notes, checked, images}; a food is on a list at most once.
   Adding a name that's already a food reuses it; renaming an item renames its food (so the new
@@ -40,10 +44,14 @@ import images
 
 NAME_MAX = 80
 LIST_NAME_MAX = 40
+TAG_NAME_MAX = 24
 NOTES_MAX = 500
 MAX_LISTS = 30
 MAX_ITEMS = 300  # per list
 MAX_FOODS = 3000
+MAX_TAGS = 200
+MAX_TAGS_PER_ITEM = 10
+HUES = range(0, 360, 30)  # colours a new tag picks from
 MAX_IMAGES_PER_ITEM = 4
 MAX_IMAGES = 300
 MAX_DATA_BYTES = 200 * 1024 * 1024
@@ -100,6 +108,16 @@ def food_name(value):
     return clean_text(value, NAME_MAX, label="The name").lower()[:NAME_MAX]
 
 
+def tag_name(value):
+    """A tag name as it's kept: lowercase letters and single spaces, or Rejected."""
+    name = clean_text(value, TAG_NAME_MAX, label="A tag").lower()[:TAG_NAME_MAX]
+    if not name:
+        raise Rejected("Give the tag a name.")
+    if not all(ch.isalpha() or ch == " " for ch in name):
+        raise Rejected("Tags can only have letters and spaces.")
+    return name
+
+
 def free_name(name, taken, limit=NAME_MAX):
     """name, or name with " 2", " 3"... added so its lowercase isn't in taken (when loading bad data)."""
     n = 1
@@ -138,8 +156,10 @@ class Store:
         self.data_file = self.folder / "lists.json"
         self.old_file = self.folder / "list.json"  # before there were several lists
         self.lists = []
-        self.foods = {}     # food id -> name
+        self.foods = {}     # food id -> {"name", "tags": [tag id]}
         self.food_ids = {}  # name -> food id
+        self.tags = {}      # tag id -> {"name", "hue"}
+        self.tag_ids = {}   # name -> tag id
         self.uploads = deque()  # times of recent uploads (all users)
         self.images_dir.mkdir(mode=0o700, parents=True, exist_ok=True)
         self.load()
@@ -153,8 +173,15 @@ class Store:
             old = read_json(self.old_file) or {}
             raw = {"lists": [{"id": new_id(), "name": DEFAULT_LIST, "items": old.get("items", [])}]}
         raw = raw or {}
-        self.lists, self.foods, self.food_ids = [], {}, {}
+        self.lists, self.foods, self.food_ids, self.tags, self.tag_ids = [], {}, {}, {}, {}
         seen = set()
+        for entry in raw.get("tags", []) if isinstance(raw.get("tags"), list) else []:
+            if len(self.tags) >= MAX_TAGS:
+                break
+            try:
+                self._load_tag(entry, seen)
+            except Rejected:
+                continue
         for entry in raw.get("foods", []) if isinstance(raw.get("foods"), list) else []:
             if len(self.foods) >= MAX_FOODS:
                 break
@@ -185,8 +212,28 @@ class Store:
         if entry["id"] in seen:
             raise Rejected("duplicate id")
         name = free_name(food_name(entry.get("name")) or "?", self.food_ids)
+        tags = []
+        for tag in entry.get("tags", []) if isinstance(entry.get("tags"), list) else []:
+            if isinstance(tag, str) and tag in self.tags and tag not in tags and len(tags) < MAX_TAGS_PER_ITEM:
+                tags.append(tag)
         seen.add(entry["id"])
         self._set_food(entry["id"], name)
+        self.foods[entry["id"]]["tags"] = tags
+
+    def _load_tag(self, entry, seen):
+        if not isinstance(entry, dict) or not isinstance(entry.get("id"), str) or not ID.match(entry["id"]):
+            raise Rejected("bad tag")
+        if entry["id"] in seen:
+            raise Rejected("duplicate id")
+        name = tag_name(entry.get("name"))
+        if name in self.tag_ids:
+            raise Rejected("duplicate tag")
+        hue = entry.get("hue")
+        if not isinstance(hue, int) or isinstance(hue, bool) or not 0 <= hue < 360:
+            hue = self._new_hue()
+        seen.add(entry["id"])
+        self.tags[entry["id"]] = {"name": name, "hue": hue}
+        self.tag_ids[name] = entry["id"]
 
     def _load_list(self, entry, seen):
         if not isinstance(entry, dict) or not isinstance(entry.get("id"), str) or not ID.match(entry["id"]):
@@ -245,17 +292,24 @@ class Store:
 
     def save(self):
         data = json.dumps({
-            "foods": [{"id": food, "name": name} for food, name in self.foods.items()],
+            "tags": [dict(tag, id=tag_id) for tag_id, tag in self.tags.items()],
+            "foods": [{"id": food, "name": entry["name"], "tags": entry["tags"]} for food, entry in self.foods.items()],
             "lists": self.lists,
         }, ensure_ascii=False, indent=1)
         write_atomic(self.data_file, data.encode("utf-8"))
 
     def _set_food(self, food, name):
-        old = self.foods.get(food)
-        if old is not None:
-            del self.food_ids[old]
-        self.foods[food] = name
+        """Make a food or rename one."""
+        entry = self.foods.setdefault(food, {"name": name, "tags": []})
+        self.food_ids.pop(entry["name"], None)
+        entry["name"] = name
         self.food_ids[name] = food
+
+    def _new_hue(self):
+        used = [tag["hue"] for tag in self.tags.values()]
+        counts = {hue: sum(abs((h - hue + 180) % 360 - 180) < 15 for h in used) for hue in HUES}
+        least = min(counts.values())
+        return secrets.choice([hue for hue, n in counts.items() if n == least])
 
     # ---- reading ----
 
@@ -267,11 +321,14 @@ class Store:
         return {
             "lists": [{"id": lst["id"], "name": lst["name"], "count": len(lst["items"]),
                        "left": sum(not item["checked"] for item in lst["items"])} for lst in self.lists],
-            "foods": sorted(self.foods.values()),
+            "foods": sorted(entry["name"] for entry in self.foods.values()),
+            "tags": sorted(({"id": tag_id, "name": tag["name"], "hue": tag["hue"]}
+                            for tag_id, tag in self.tags.items()), key=lambda tag: tag["name"]),
         }
 
     def public_item(self, item):
-        return {"id": item["id"], "name": self.foods[item["food"]], "notes": item["notes"],
+        food = self.foods[item["food"]]
+        return {"id": item["id"], "name": food["name"], "tags": list(food["tags"]), "notes": item["notes"],
                 "checked": item["checked"], "images": list(item["images"])}
 
     def public_list(self, list_id):
@@ -358,7 +415,9 @@ class Store:
 
     def update(self, item_id, data):
         _, item = self.find(item_id)
-        name = notes = checked = None
+        name = notes = checked = tags = None
+        if "tags" in data:
+            tags = self._tag_names(data["tags"])
         if "name" in data:
             name = food_name(data["name"])
             if not name:
@@ -374,12 +433,37 @@ class Store:
             checked = data["checked"]
         if name is not None:
             self._set_food(item["food"], name)
+        if tags is not None:
+            self.foods[item["food"]]["tags"] = [self._tag(tag) for tag in tags]
         if notes is not None:
             item["notes"] = notes
         if checked is not None:
             item["checked"] = checked
         self.save()
         return self.public_item(item)
+
+    def _tag_names(self, value):
+        """Checked tag names for an item (nothing is made yet)."""
+        if not isinstance(value, list) or len(value) > MAX_TAGS_PER_ITEM * 2:
+            raise Rejected("Bad tags.")
+        names = []
+        for raw in value:
+            name = tag_name(raw)
+            if name not in names:
+                names.append(name)
+        if len(names) > MAX_TAGS_PER_ITEM:
+            raise Rejected(f"An item can have at most {MAX_TAGS_PER_ITEM} tags.")
+        if len(self.tags) + sum(name not in self.tag_ids for name in names) > MAX_TAGS:
+            raise Rejected(f"There are already {MAX_TAGS} tags.", 507)
+        return names
+
+    def _tag(self, name):
+        """The id of the tag called name, made if it's new."""
+        if name not in self.tag_ids:
+            tag_id = new_id()
+            self.tags[tag_id] = {"name": name, "hue": self._new_hue()}
+            self.tag_ids[name] = tag_id
+        return self.tag_ids[name]
 
     def delete(self, item_id):
         lst, item = self.find(item_id)

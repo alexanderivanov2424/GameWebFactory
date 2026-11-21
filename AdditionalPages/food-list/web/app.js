@@ -3,6 +3,9 @@
 // closes it). The open list is remembered in localStorage. While typing a new item, names added
 // before (the server keeps them all, see ../store.py) that aren't on this list are suggested.
 // Item names are lowercase: the server lowercases them too.
+// Tags (coloured by their hue) are set in the item editor, by name: new names make new tags on Save.
+// Two modes, remembered in localStorage: edit (add row, Edit buttons) and view (a row of the list's
+// tags that filters the items; the filter only applies in view mode).
 // Pictures are decoded and scaled down here, then sent as raw RGB pixels only (4-byte size header
 // + width*height*3 bytes, see ../images.py); the server writes its own PNG from them.
 // Everything shown comes from the server and is put on the page as text (textContent), never HTML.
@@ -16,27 +19,42 @@
   const REFRESH_MS = 15000;
   const MAX_SUGGESTIONS = 8;
   const CURRENT_KEY = "food-list.current";
+  const MODE_KEY = "food-list.mode";
   const HEX_ID = /^[0-9a-f]{16}$/;
+  const TAG_NAME = /^[\p{L} ]+$/u;  // the server checks the same: letters and spaces
+  const TAG_NAME_MAX = 24;
+  const MAX_TAGS_PER_ITEM = 10;
 
   const $ = (id) => document.getElementById(id);
   const list = $("list"), editor = $("editor"), viewer = $("viewer");
   let lists = [];      // [{id, name, count, left}]
   let foods = [];      // every item name ever added (sorted)
+  let tags = [];       // every tag: [{id, name, hue}] (sorted by name)
+  let tagsById = new Map();
+  let viewing = stored(MODE_KEY) === "view";
+  let filterTag = null;  // tag id shown in view mode, or null for everything
+  let editTagNames = []; // the open editor's tags, saved on Save
   let listId = remembered();
   let listName = "";
   let items = [];
   let editingId = null;
   let msgTimer = 0;
 
+  function stored(key) {
+    try { return localStorage.getItem(key); } catch (e) { return null; }
+  }
+
+  function store(key, value) {
+    try { localStorage.setItem(key, value); } catch (e) { /* private mode: fine */ }
+  }
+
   function remembered() {
-    try {
-      const id = localStorage.getItem(CURRENT_KEY);
-      return id && HEX_ID.test(id) ? id : null;
-    } catch (e) { return null; }
+    const id = stored(CURRENT_KEY);
+    return id && HEX_ID.test(id) ? id : null;
   }
 
   function remember(id) {
-    try { localStorage.setItem(CURRENT_KEY, id); } catch (e) { /* private mode: fine */ }
+    store(CURRENT_KEY, id);
   }
 
   // ---- talking to the server ----
@@ -86,6 +104,8 @@
     const open = data.list || {};
     lists = Array.isArray(data.lists) ? data.lists : [];
     foods = Array.isArray(data.foods) ? data.foods : [];
+    tags = Array.isArray(data.tags) ? data.tags : [];
+    tagsById = new Map(tags.map((t) => [t.id, t]));
     items = Array.isArray(open.items) ? open.items : [];
     listName = String(open.name || "");
     if (open.id !== listId) { listId = open.id; remember(listId); }
@@ -127,10 +147,28 @@
     return img;
   }
 
+  // A coloured tag chip: a span, or a button when tag is used as a control.
+  function tagChip(tag, tagName, text) {
+    const chip = el(tagName || "span", "tag", text === undefined ? tag.name : text);
+    if (tagName === "button") chip.type = "button";
+    chip.style.setProperty("--h", String(Number(tag.hue) || 0));
+    return chip;
+  }
+
+  function itemTags(item) {
+    return (item.tags || []).map((id) => tagsById.get(id)).filter(Boolean);
+  }
+
   function render() {
     $("listName").textContent = listName;
     document.title = listName || "Food list";
-    const sorted = items.filter((i) => !i.checked).concat(items.filter((i) => i.checked));
+    document.body.classList.toggle("viewing", viewing);
+    $("modeButton").textContent = viewing ? "👁️ View" : "✏️ Edit";
+    $("modeButton").title = viewing ? "View mode: tap to edit" : "Edit mode: tap to view";
+    const used = renderFilters();
+    const shown = viewing && filterTag && used.has(filterTag)
+      ? items.filter((i) => (i.tags || []).includes(filterTag)) : items;
+    const sorted = shown.filter((i) => !i.checked).concat(shown.filter((i) => i.checked));
     list.replaceChildren(...sorted.map(row));
     $("empty").hidden = items.length > 0;
     $("clearChecked").disabled = !items.some((i) => i.checked);
@@ -154,13 +192,19 @@
 
     const info = el("div", "info");
     info.append(el("div", "name", item.name));
+    const chips = itemTags(item);
+    if (chips.length) {
+      const line = el("div", "chips");
+      line.append(...chips.map((t) => tagChip(t)));
+      info.append(line);
+    }
     if (item.notes) info.append(el("div", "notes", item.notes));
     if (item.images && item.images.length) {
       const thumbs = el("div", "thumbs");
       thumbs.append(...item.images.map(thumb));
       info.append(thumbs);
     }
-    info.addEventListener("click", () => openEditor(item.id));
+    info.addEventListener("click", () => { if (!viewing) openEditor(item.id); });
 
     const edit = el("button", "edit", "Edit");
     edit.type = "button";
@@ -169,6 +213,31 @@
     li.append(check, info, edit);
     return li;
   }
+
+  // The view mode's filter row: "All" plus every tag on this list. Returns the set of those tag ids.
+  function renderFilters() {
+    const used = new Set(items.flatMap((i) => i.tags || []));
+    const onList = tags.filter((t) => used.has(t.id));
+    if (!onList.length) { $("filters").replaceChildren(); return used; }
+    const pick = (id) => { filterTag = id; render(); window.scrollTo(0, 0); };
+    const all = el("button", "tag plain", "All");
+    all.type = "button";
+    all.setAttribute("aria-pressed", String(!filterTag || !used.has(filterTag)));
+    all.addEventListener("click", () => pick(null));
+    $("filters").replaceChildren(all, ...onList.map((t) => {
+      const chip = tagChip(t, "button");
+      chip.setAttribute("aria-pressed", String(filterTag === t.id));
+      chip.addEventListener("click", () => pick(filterTag === t.id ? null : t.id));
+      return chip;
+    }));
+    return used;
+  }
+
+  $("modeButton").addEventListener("click", () => {
+    viewing = !viewing;
+    store(MODE_KEY, viewing ? "view" : "edit");
+    render();
+  });
 
   function plural(n, word) {
     return n + " " + word + (n === 1 ? "" : "s");
@@ -337,6 +406,10 @@
     $("editName").value = item.name;
     $("editNotes").value = item.notes || "";
     $("busy").textContent = "";
+    editTagNames = itemTags(item).map((t) => t.name);
+    $("tagInput").value = "";
+    tagHint("");
+    renderEditorTags();
     renderEditorPics();
     editor.showModal();
   }
@@ -362,6 +435,66 @@
     $("editPics").replaceChildren(...pics);
   }
 
+  // ---- the editor's tags (sent by name with Save; the server makes new ones) ----
+
+  function tagHint(problem) {
+    const hint = $("tagHint");
+    hint.textContent = problem || "Letters and spaces only. Tags stay with the item on every list.";
+    hint.classList.toggle("bad", !!problem);
+  }
+
+  function typedTag() {
+    return $("tagInput").value.normalize("NFC").trim().replace(/\s+/g, " ").toLowerCase();
+  }
+
+  // Adds the typed tag to the item; returns false (and says why) when it can't.
+  function addTypedTag() {
+    const name = typedTag();
+    if (!name) return true;
+    if (!TAG_NAME.test(name)) { tagHint("Tags can only have letters and spaces."); return false; }
+    if (name.length > TAG_NAME_MAX) { tagHint("Tags can have at most " + TAG_NAME_MAX + " letters."); return false; }
+    if (!editTagNames.includes(name)) {
+      if (editTagNames.length >= MAX_TAGS_PER_ITEM) { tagHint("An item can have at most " + MAX_TAGS_PER_ITEM + " tags."); return false; }
+      editTagNames.push(name);
+    }
+    $("tagInput").value = "";
+    tagHint("");
+    renderEditorTags();
+    return true;
+  }
+
+  function renderEditorTags() {
+    const byName = new Map(tags.map((t) => [t.name, t]));
+    $("editTags").replaceChildren(...editTagNames.map((name) => {
+      const tag = byName.get(name);
+      const chip = tag ? tagChip(tag, "button", name + " ✕") : el("button", "tag plain new", name + " ✕");
+      chip.type = "button";
+      chip.title = tag ? "Remove this tag" : "New tag (made on Save); tap to remove";
+      chip.setAttribute("aria-label", "Remove tag " + name);
+      chip.addEventListener("click", () => {
+        editTagNames = editTagNames.filter((n) => n !== name);
+        renderEditorTags();
+      });
+      return chip;
+    }));
+    const typed = typedTag();
+    const choices = tags.filter((t) => !editTagNames.includes(t.name) && t.name.includes(typed));
+    $("tagChoices").replaceChildren(...choices.slice(0, 30).map((t) => {
+      const chip = tagChip(t, "button", "+ " + t.name);
+      chip.addEventListener("click", () => {
+        $("tagInput").value = t.name;
+        addTypedTag();
+      });
+      return chip;
+    }));
+  }
+
+  $("tagInput").addEventListener("input", () => { tagHint(""); renderEditorTags(); });
+  $("tagInput").addEventListener("keydown", (e) => {
+    if (e.key === "Enter") { e.preventDefault(); addTypedTag(); }
+  });
+  $("addTag").addEventListener("click", addTypedTag);
+
   editor.addEventListener("close", () => { editingId = null; });
   $("cancelEdit").addEventListener("click", () => editor.close());
 
@@ -371,9 +504,11 @@
     if (!item) return editor.close();
     const name = $("editName").value.trim().toLowerCase();
     if (!name) { showError(new Error("Give the item a name.")); return; }
+    if (!addTypedTag()) return;  // a tag typed but not added yet counts
     const id = item.id;
+    const itemTagNames = editTagNames.slice();
     editor.close();
-    act(() => post("/items/" + id + "/update", { name, notes: $("editNotes").value }));
+    act(() => post("/items/" + id + "/update", { name, notes: $("editNotes").value, tags: itemTagNames }));
   });
 
   $("deleteItem").addEventListener("click", () => {
