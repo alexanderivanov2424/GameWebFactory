@@ -1,0 +1,16 @@
+{
+  "order": 7,
+  "name": "Deep Auger",
+  "icon": "🪱",
+  "kind": "auger",
+  "cost": 50000,
+  "rate": 600,
+  "speed": 1.0,
+  "reach": 1.0,
+  "diesel": 6,
+  "text": "Only drills deep snow (200+): finds the deepest drift near your rally point.",
+  "params": {
+    "min": 200,
+    "range": 15
+  }
+}

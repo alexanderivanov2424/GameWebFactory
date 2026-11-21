@@ -106,7 +106,7 @@ class RulesTests(unittest.TestCase):
         match = new_match()
         p = match.players["p1"]
         p.cash = 1000
-        match.buy("p1", "helper", 5)
+        match.buy("p1", "kid", 5)
         self.assertEqual(sum(u.pid == "p1" for u in match.units.values()), 5)
         p.cash = 0
         for _ in range(50):
@@ -118,7 +118,7 @@ class RulesTests(unittest.TestCase):
         match = new_match()
         p = match.players["p1"]
         p.cash = 10_000
-        match.buy("p1", "snowblower", 1)
+        match.buy("p1", "dozer", 1)
         p.diesel = 0
         match.step(0.1)
         self.assertEqual(next(iter(match.units.values())).state, "stalled")
@@ -160,15 +160,58 @@ class RulesTests(unittest.TestCase):
         self.assertEqual(match.shared_upgrades, {"road-salt": "p1"})
         self.assertFalse(b.upgrade_visible("road-salt", match.shared_upgrades))
 
+    def test_dog_tunnels_and_leaves_road(self):
+        match = new_match()
+        p = match.players["p1"]
+        p.cash = 1000
+        match.buy("p1", "dog", 1)
+        for _ in range(300):
+            match.step(0.1)
+        self.assertGreater(match.world.road_count, 0)
+
+    def test_dozer_shoves_snow_outward(self):
+        match = new_match()
+        world, p = match.world, match.players["p1"]
+        p.cash, p.diesel = 10 ** 6, 1000
+        match.buy("p1", "dozer", 1)
+        total_before = sum(world.snow)
+        for _ in range(50):
+            match.step(0.1)
+        removed = total_before - sum(world.snow)
+        self.assertGreater(p.cleared, 0)
+        self.assertLess(removed, p.cleared * 2)  # 60% of what it dug is still out there
+        self.assertLess(p.cleared, removed + 1e-6)
+
+    def test_brazier_melts_around_it_and_keeps_you_warm(self):
+        match = new_match()
+        world, p = match.world, match.players["p1"]
+        far = max((i for i in world.reached_list if world.kind[i] != "cabin"),
+                  key=lambda i: abs(world.xy(i)[0] - world.cx))
+        x, y = world.xy(far)
+        p.x, p.y, p.cash = x + 0.5, y + 0.5, 10 ** 6
+        with self.assertRaises(LobbyError):
+            match.buy("p1", "brazier", 10)
+        match.buy("p1", "brazier", 1)
+        with self.assertRaises(LobbyError):
+            match.buy("p1", "brazier", 1)  # one per spot
+        p.x += 20
+        p.cash = 0
+        match.step(1)
+        self.assertGreater(p.cash, 0)
+        p.x -= 20
+        p.warmth = 50
+        match.step(1)
+        self.assertGreater(p.warmth, 50)
+
     def test_machine_prices_grow(self):
         match = new_match()
         p = match.players["p1"]
         p.cash = 10 ** 6
         cash = p.cash
-        match.buy("p1", "helper", 1)
+        match.buy("p1", "kid", 1)
         first = cash - p.cash
         cash = p.cash
-        match.buy("p1", "helper", 1)
+        match.buy("p1", "kid", 1)
         self.assertGreater(cash - p.cash, first)
 
 
@@ -184,7 +227,7 @@ class LobbyTests(unittest.TestCase):
     def test_bad_messages_rejected(self):
         sim = Sim(GAME, players=1, settings={"mapSize": "small"})
         sim.fails(0, {"action": "buy", "machine": ["x"], "count": 1}, "Unknown machine")
-        sim.fails(0, {"action": "buy", "machine": "helper", "count": 3}, "Buy 1 or 10")
+        sim.fails(0, {"action": "buy", "machine": "kid", "count": 3}, "Buy 1 or 10")
         sim.fails(0, {"action": "dig", "x": "1", "y": 2}, "Bad lot")
         self.assertIn("Bad keys", sim.input(0, {"keys": ["jump"]}))
         sim.fails(0, {"action": "supply", "item": "logs", "qty": 1.5}, "whole number")

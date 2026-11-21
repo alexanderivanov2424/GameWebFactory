@@ -1,9 +1,0 @@
-{
-  "name": "Ergonomic Handle",
-  "cost": 500,
-  "text": "Clicks clear 2x snow.",
-  "effect": {
-    "kind": "click_mult",
-    "value": 2
-  }
-}

@@ -1,0 +1,9 @@
+{
+  "name": "Sled Harness",
+  "cost": 1000,
+  "text": "Drift Dogs dig 2x faster and tunnel through snow 3x deeper.",
+  "effect": {
+    "kind": "flag"
+  },
+  "machine": "dog"
+}

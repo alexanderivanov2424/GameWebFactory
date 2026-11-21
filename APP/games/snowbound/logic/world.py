@@ -13,7 +13,9 @@ its centre is (x + 0.5, y + 0.5). The cabin is in the middle; lots near it start
 Rows sent to clients (rows()): {"snow": {"<y>": str}, "feat": {"<y>": str}}, one char per lot.
 snow char: SNOW_CHARS[level], level 0 = no snow, else 1 + floor(log(snow) / log(LEVEL_BASE))
 (clamped 1-61; the client shows about LEVEL_BASE ** (level - 1)).
-feat char: lowercase = not reached yet, uppercase = reached (see FEATURES; "." and "," plain).
+feat char: lowercase = not reached yet, uppercase = reached (see FEATURES; "." and "," plain,
+"=" a plain reached lot that is road).
+- road[i]: 1 for road lots (made by Drift Dogs, Road Graders, Jet Blower beams).
 """
 
 import math
@@ -60,6 +62,8 @@ class World:
             self.depth[i] = round(depth, 1)
         self.snow = list(self.depth)
         self.reached = bytearray(n)
+        self.road = bytearray(n)
+        self.road_count = 0
         self.reached_list = []
         self.dusted = set()
         self.targets = set()
@@ -97,9 +101,9 @@ class World:
             if j is not None:
                 yield j
 
-    def passable(self, i):
-        """Can a person walk on lot i? (reached, or shallow enough to wade through)"""
-        return bool(self.reached[i]) or self.level(self.snow[i]) <= WADE_LEVEL
+    def passable(self, i, wade=WADE_LEVEL):
+        """Can a person walk on lot i? (reached, or snow at most level `wade`)"""
+        return bool(self.reached[i]) or self.level(self.snow[i]) <= wade
 
     def cleared(self):
         """Lots clear of snow right now (reached and not dusted)."""
@@ -140,6 +144,41 @@ class World:
         self._reach(i)
         return snow, self.kind[i]
 
+    def melt(self, i, amount):
+        """Remove up to `amount` snow from any lot, workable or not (braziers, beams, shafts).
+        Returns (removed, found) like dig()."""
+        snow = self.snow[i]
+        if snow <= 0 or amount <= 0:
+            return 0.0, None
+        if i in self.targets:
+            return self.dig(i, amount)
+        if amount < snow - 1e-6:
+            before = self.level(snow)
+            self.snow[i] = snow - amount
+            if self.level(self.snow[i]) != before:
+                self.dirty.add(i // self.w)
+            return amount, None
+        self.snow[i] = 0.0
+        self.dirty.add(i // self.w)
+        if self.reached[i]:
+            self.dusted.discard(i)
+            return snow, None
+        self._reach(i)
+        return snow, self.kind[i]
+
+    def add_snow(self, i, amount):
+        """Pile snow onto an unreached lot (a dozer shoving snow outward)."""
+        before = self.level(self.snow[i])
+        self.snow[i] += amount
+        if self.level(self.snow[i]) != before:
+            self.dirty.add(i // self.w)
+
+    def make_road(self, i):
+        if not self.road[i]:
+            self.road[i] = 1
+            self.road_count += 1
+            self.dirty.add(i // self.w)
+
     def dust(self, i, fraction):
         """A blizzard drops snow back on reached lot i (not the cabin)."""
         if not self.reached[i] or self.kind[i] == "cabin":
@@ -149,26 +188,26 @@ class World:
         self.targets.add(i)
         self.dirty.add(i // self.w)
 
-    def nearest_target(self, x, y, skip=(), limit=None):
+    def nearest_target(self, x, y, skip=(), limit=None, ok=None):
         """The workable lot nearest to lot coordinates (x, y) (a lot's own x, y, not its centre),
-        not in skip; None if there is none.
+        not in skip and passing ok(i) if given; None if there is none.
         With limit, only looks at lots within that many lots (fast local search)."""
+        best, best_d = None, None
         if limit is not None:
-            best, best_d = None, None
             r = int(limit) + 1
             ix, iy = round(x), round(y)
             for yy in range(max(0, iy - r), min(self.h, iy + r + 1)):
                 row = yy * self.w
                 for xx in range(max(0, ix - r), min(self.w, ix + r + 1)):
                     i = row + xx
-                    if i in self.targets and i not in skip:
+                    if i in self.targets and i not in skip and (ok is None or ok(i)):
                         d = (xx - x) ** 2 + (yy - y) ** 2
                         if d <= limit * limit and (best_d is None or d < best_d):
                             best, best_d = i, d
             return best
-        best, best_d, w = None, None, self.w
+        w = self.w
         for i in self.targets:
-            if i in skip:
+            if i in skip or (ok is not None and not ok(i)):
                 continue
             d = (i % w - x) ** 2 + (i // w - y) ** 2
             if best_d is None or d < best_d:
@@ -193,8 +232,9 @@ class World:
             for y in self.dirty:
                 lo = y * w
                 snow_rows[str(y)] = "".join(SNOW_CHARS[self.level(self.snow[i])] for i in range(lo, lo + w))
-                feat_rows[str(y)] = "".join(FEATURES[self.kind[i]][1 if self.reached[i] else 0]
-                                            for i in range(lo, lo + w))
+                feat_rows[str(y)] = "".join(
+                    "=" if self.road[i] and self.reached[i] and self.kind[i] == "plain"
+                    else FEATURES[self.kind[i]][1 if self.reached[i] else 0] for i in range(lo, lo + w))
             self._rows = {"snow": snow_rows, "feat": feat_rows}
             self.dirty = set()
         return self._rows

@@ -1,0 +1,9 @@
+{
+  "name": "Long Throw",
+  "cost": 30000000,
+  "text": "Jet Blower beams reach twice as far and recharge in 12 s.",
+  "effect": {
+    "kind": "flag"
+  },
+  "machine": "jet"
+}

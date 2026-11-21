@@ -1,0 +1,9 @@
+{
+  "name": "Ration Kettle",
+  "cost": 500000,
+  "text": "Snow Stills also make a ration per 3,000 snow and a log per 2,000.",
+  "effect": {
+    "kind": "flag"
+  },
+  "machine": "still"
+}

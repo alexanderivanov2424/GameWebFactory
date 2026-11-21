@@ -1,0 +1,9 @@
+{
+  "name": "Windrow Pay",
+  "cost": 60000,
+  "text": "Blade Dozers are paid for all the snow they shove, not just 40%.",
+  "effect": {
+    "kind": "flag"
+  },
+  "machine": "dozer"
+}

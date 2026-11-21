@@ -1,0 +1,10 @@
+{
+  "name": "Hot Cocoa",
+  "cost": 500,
+  "text": "Neighbour Kids shovel twice as fast.",
+  "effect": {
+    "kind": "machine_mult",
+    "value": 2
+  },
+  "machine": "kid"
+}

@@ -3,11 +3,12 @@
 Weather cycles clear -> warning (WARNING s) -> blizzard -> clear. During a blizzard: machines
 work at 75%, the stove burns BLIZZARD_BURN x logs, warmth drops faster with the stove out,
 deliveries stop, and every second snow falls back on some reached lots (DUST_SHARE of them,
-DUST_FRACTION of their starting depth, x the team's dust upgrades).
+DUST_FRACTION of their starting depth, x the team's dust upgrades; never roads with Road Salt).
 
 Heat: the cabin stove and every warming hut burn logs from the shared woodpile (STOVE_BURN logs/s,
 +50% per extra player, +HUT_BURN per hut). While the woodpile has logs, a character within
-CABIN_HEAT lots of the cabin's centre or HUT_HEAT of a hut warms WARM_UP/s. Anywhere else (or with
+CABIN_HEAT lots of the cabin's centre, HUT_HEAT of a hut or BRAZIER_HEAT of a brazier (which also
+burn logs: machines.py) warms WARM_UP/s. Anywhere else (or with
 no logs) they lose COLD/s (BLIZZARD_COLD in a blizzard; x the survival setting and Thermal Suit),
 STARVING_COLD more while starving.
 Food: drops FOOD_DRAIN/s and CLICK_FOOD per click (x setting, x Big Thermos). At or below
@@ -22,7 +23,7 @@ import math
 
 from gamekit import LobbyError
 
-from .content import UPGRADES
+from .content import MACHINES, UPGRADES
 from .economy import DELIVERY_FEE
 
 WARNING = 20
@@ -37,6 +38,7 @@ HUT_BURN = 0.25
 START_LOGS = 30
 CABIN_HEAT = 4.0
 HUT_HEAT = 3.0
+BRAZIER_HEAT = 2.0
 WARM_UP = 6.0
 COLD = 0.35
 BLIZZARD_COLD = 1.0
@@ -87,6 +89,10 @@ def shared_mult(match, kind):
 
 def stove_burn(match):
     burn = STOVE_BURN * (1 + 0.5 * (len(match.players) - 1)) * (1 + HUT_BURN * len(match.huts))
+    for u in match.units.values():
+        m = MACHINES[u.mid]
+        if m["kind"] == "brazier" and u.pid in match.players:
+            burn += m["params"].get("logs", 0) * (0.5 if match.players[u.pid].has("bellows") else 1)
     burn *= shared_mult(match, "stove")
     return burn * (BLIZZARD_BURN if match.weather.blizzard else 1)
 
@@ -122,7 +128,10 @@ def near_heat(match, x, y):
     w = match.world
     if math.hypot(x - w.cx - 0.5, y - w.cy - 0.5) <= CABIN_HEAT:
         return True
-    return any(math.hypot(x - hx - 0.5, y - hy - 0.5) <= HUT_HEAT for hx, hy in match.huts)
+    if any(math.hypot(x - hx - 0.5, y - hy - 0.5) <= HUT_HEAT for hx, hy in match.huts):
+        return True
+    return any(MACHINES[u.mid]["kind"] == "brazier" and math.hypot(x - u.x, y - u.y) <= BRAZIER_HEAT
+               for u in match.units.values())
 
 
 def clicked(match, player):
@@ -136,8 +145,11 @@ def dust(match):
     if not lots:
         return
     fraction = DUST_FRACTION * shared_mult(match, "dust")
+    salted = match.team_has("road-salt")
     for _ in range(max(2, int(len(lots) * DUST_SHARE * match.harshness))):
-        world.dust(match.rng.choice(lots), fraction)
+        i = match.rng.choice(lots)
+        if not (salted and world.road[i]):
+            world.dust(i, fraction)
 
 
 def deliveries(match):

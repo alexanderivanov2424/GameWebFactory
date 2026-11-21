@@ -1,0 +1,15 @@
+{
+  "order": 2,
+  "name": "Drift Dog",
+  "icon": "🐕",
+  "kind": "dog",
+  "cost": 100,
+  "rate": 2.5,
+  "speed": 3.0,
+  "reach": 1.0,
+  "diesel": 0,
+  "text": "Tunnels straight out into the drifts, leaving a road. Turns at snow too deep to dig.",
+  "params": {
+    "limit": 150
+  }
+}

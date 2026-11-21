@@ -60,6 +60,8 @@ class Match:
         self.units = {}             # uid -> units.Unit
         self.unit_counter = 0
         self.huts = []              # [(x, y)] lots
+        self.beams = {}             # n -> {"x0", "y0", "x1", "y1", "c", "left"}: Jet Blower shots to draw
+        self.beam_count = 0
         self.flake = None           # {"i": lot, "left": seconds}
         self.flake_timer = self.rng.uniform(*FLAKE_EVERY)
         self.time = 0.0
@@ -84,6 +86,28 @@ class Match:
 
     def progress(self):
         return self.world.cleared() / (self.world.w * self.world.h)
+
+    def team_has(self, uid):
+        """Has anyone bought shared upgrade uid?"""
+        return uid in self.shared_upgrades
+
+    def beam(self, x0, y0, x1, y1, color):
+        self.beam_count += 1
+        self.beams[str(self.beam_count)] = {"x0": round(x0, 2), "y0": round(y0, 2), "x1": round(x1, 2),
+                                            "y1": round(y1, 2), "c": color, "left": 1.5}
+
+    def buddies_near(self, p):
+        """How many of p's Shovel Buddies are close enough to help."""
+        near = [u for u in self.units.values() if u.pid == p.id and MACHINES[u.mid]["kind"] == "buddy"
+                and math.hypot(u.x - p.x, u.y - p.y) <= MACHINES[u.mid]["params"].get("near", 2)]
+        return len(near), (MACHINES[near[0].mid]["params"].get("boost", 0.5) if near else 0)
+
+    def shovel(self, p):
+        """(power per swing, reach, splash share) for p right now, Shovel Buddies included."""
+        n, boost = self.buddies_near(p)
+        grip = p.has("heated-grip")
+        power = p.click_power() * (1 + n * (1.0 if grip else boost))
+        return power, avatars.REACH + (1 if n else 0), (1.0 if grip else 0.5) if n else 0
 
     def hut_cost(self):
         return round(HUT_COST * HUT_GROWTH ** len(self.huts))
@@ -112,6 +136,10 @@ class Match:
         survival.step(self, dt)
         avatars.step(self, dt)
         units.step(self, dt)
+        for key in [k for k, b in self.beams.items() if b["left"] <= dt]:
+            del self.beams[key]
+        for b in self.beams.values():
+            b["left"] -= dt
         for p in self.players.values():
             p.clicks = min(CLICKS_PER_SECOND, p.clicks + CLICKS_PER_SECOND * dt)
         if self.progress() >= self.goal - 1e-9:
@@ -177,10 +205,10 @@ class Match:
             p.rations += 3
             p.diesel += 30
             self.say(f"{p.name} found a supply cache: +3 rations, +30 L diesel.")
-        elif kind == "skier" and "helper" in MACHINES and p.owned["helper"] + 2 <= MAX_OWNED:
-            p.owned["helper"] += 2
+        elif kind == "skier" and "kid" in MACHINES and p.owned["kid"] + 2 <= MAX_OWNED:
+            p.owned["kid"] += 2
             x, y = self.world.xy(i)
-            units.add(self, pid, "helper", 2, x + 0.5, y + 0.5)
+            units.add(self, pid, "kid", 2, x + 0.5, y + 0.5)
             self.say(f"{p.name} rescued two lost skiers. They join the crew as Neighbour Kids!")
 
     # --- actions ---------------------------------------------------------------------
@@ -193,18 +221,23 @@ class Match:
         """One swing of pid's shovel at lot (x, y). Returns the snow removed (0 if nothing)."""
         p = self.player(pid)
         i = self.world.index(x, y)
-        if i is None or not self.world.workable(i) or not avatars.in_reach(p, x, y) or p.clicks < 1:
+        power, reach, splash = self.shovel(p)
+        if i is None or not self.world.workable(i) or not avatars.in_reach(p, x, y, reach) or p.clicks < 1:
             return 0.0
         if p.frostbite:
             return 0.0
         p.clicks -= 1
         p.swinging = 0.3
         survival.clicked(self, p)
-        removed, found = self.world.dig(i, p.click_power())
-        p.earn(removed)
-        if found:
-            self.found(pid, found, i)
-        return removed
+        hits = [(i, power)] + [(j, power * splash) for j in self.world.neighbours(i)] if splash else [(i, power)]
+        total = 0.0
+        for j, amount in hits:
+            removed, found = self.world.dig(j, amount)
+            p.earn(removed)
+            total += removed
+            if found:
+                self.found(pid, found, j)
+        return total
 
     def dig(self, pid, x, y):
         """A click: one swing now (refused with a message only for frostbite)."""
@@ -214,8 +247,22 @@ class Match:
 
     def buy(self, pid, mid, count):
         p = self.player(pid)
+        if mid in MACHINES and MACHINES[mid]["placed"]:
+            w = self.world
+            x, y = math.floor(p.x), math.floor(p.y)
+            i = w.index(x, y)
+            if count != 1:
+                raise LobbyError("Placed machines are built one at a time, where you stand.")
+            if i is None or not w.reached[i] or w.kind[i] == "cabin":
+                raise LobbyError("Stand on cleared ground (not the cabin) to place it.")
+            if units.placed_at(self, i):
+                raise LobbyError("Something is already built on this spot.")
+            p.buy_machine(mid, 1)
+            units.add(self, pid, mid, 1, x + 0.5, y + 0.5, home=i)
+            return
         p.buy_machine(mid, count)
-        units.add(self, pid, mid, count)
+        units.add(self, pid, mid, count, p.x if MACHINES.get(mid, {}).get("kind") == "buddy" else None,
+                  p.y if MACHINES.get(mid, {}).get("kind") == "buddy" else None)
 
     def upgrade(self, pid, uid):
         p = self.player(pid)

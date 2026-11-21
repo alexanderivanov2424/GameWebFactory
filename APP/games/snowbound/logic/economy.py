@@ -15,7 +15,8 @@ animation), rally (None, a lot index, or "follow": where your units look for wor
 
 from gamekit import LobbyError
 
-from .content import MACHINES, UPGRADES, machine_cost
+from .content import MACHINES, UNLOCK_SHARE, UPGRADES, machine_cost
+from .world import WADE_LEVEL
 
 PRICES = {"rations": 12, "diesel": 1.5, "logs": 8}
 DELIVERY_FEE = 1.25
@@ -63,17 +64,29 @@ class Player:
                 value *= u["value"]
         return value
 
+    def has(self, uid):
+        """Does this player own upgrade uid (flags: rule changes checked by id)?"""
+        return uid in self.upgrades
+
+    def wade_level(self):
+        """Deepest snow level this player can walk on (Snowshoes raise it)."""
+        return max([WADE_LEVEL] + [UPGRADES[u]["value"] for u in self.upgrades if UPGRADES[u]["kind"] == "wade"])
+
     def has_auto(self, item):
         return any(UPGRADES[u]["kind"] == "auto" and UPGRADES[u]["value"] == item for u in self.upgrades)
 
-    def unit_rate(self, mid):
-        """Snow per second of one of this player's machines of a kind (before weather)."""
-        rate = MACHINES[mid]["rate"]
+    def machine_mult(self, mid):
+        """Product of this player's machine_mult upgrades for one machine kind."""
+        mult = 1.0
         for uid in self.upgrades:
             u = UPGRADES[uid]
-            if u["kind"] == "machine" and u["machine"] == mid:
-                rate *= u["value"]
-        return rate
+            if u["kind"] == "machine_mult" and u["machine"] == mid:
+                mult *= u["value"]
+        return mult
+
+    def unit_rate(self, mid):
+        """About how much snow per second one of this player's machines clears (before weather)."""
+        return MACHINES[mid]["nominal"] * self.machine_mult(mid)
 
     def machine_rate(self, mid):
         """Snow per second of all this player's machines of one kind (before weather)."""
@@ -129,8 +142,8 @@ class Player:
         if uid in self.upgrades or uid in shared_owned:
             return False
         if u["machine"]:
-            return self.owned[u["machine"]] >= u["owned"]
-        return self.earned >= u["cost"] * 0.25
+            return self.owned[u["machine"]] >= 1
+        return self.earned >= u["cost"] * UNLOCK_SHARE
 
     def buy_supply(self, item, qty, fee=1.0):
         """Buy qty of rations/diesel/logs; returns qty (logs go to the shared woodpile)."""

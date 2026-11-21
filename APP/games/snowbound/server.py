@@ -3,10 +3,15 @@
 1-8 players each walk a character around one snowed-in valley (a grid of lots, up to 384 x 384)
 with a cabin in the middle; the camera follows you. Deep snow is a wall: stand next to it and hold
 the mouse on it (or click fast) to shovel; every unit of snow you clear pays you $1. Spend it on
-machines (Neighbour Kid, Snowblower, Pickup Plow ... Jet Blower: each kind costs 15% more per
-copy). Every machine you buy is its own unit that heads out from the cabin and clears snow on its
-own, near your rally point if you set one (a spot, or "follow me"). Upgrades: x2 machine tiers,
-stronger shoveling, deliveries, shared team upgrades. Snow gets deeper the further you get from
+machines (each kind costs 15% more per copy). Every machine is its own unit and each kind clears
+snow its own way (logic/machines.py): Neighbour Kids shovel, Drift Dogs tunnel straight lines that
+become roads, Dust Sweepers clean up blizzard snow, Braziers (placed where you stand) melt a ring
+and keep you warm, Shovel Buddies follow you and boost your shovel, Blade Dozers shove drifts
+outward, Deep Augers drill the deepest snow, Snow Stills (placed) turn snow into diesel, Road
+Graders widen roads, Jet Blowers fire beams. Mobile ones work near your rally point if you set one
+(a spot, or "follow me"). Upgrades mostly change how one machine works (Snow Angels, Sled
+Harness, Corkscrew, Long Throw...), plus shovel, survival, delivery and shared team upgrades;
+Snowshoes let you walk over deeper snow. Snow gets deeper the further you get from
 the cabin. Each player has their own wallet, machines and upgrades.
 Lots hide things: forests (logs for the stove), buried cabins (cash), gas stations (diesel),
 supply caches and lost skiers (free helpers). Golden snowflakes appear near players now and then:
@@ -27,7 +32,8 @@ Input messages:  {"type": "input", "keys": [up/down/left/right held], "aim": [x,
                   (lot under the mouse), "dig": bool (dig button held: swings at the aimed lot)}
 Game messages (players only):
                  {"action": "dig", "x": int, "y": int}         one swing now (a click)
-                 {"action": "buy", "machine": id, "count": 1 | 10}
+                 {"action": "buy", "machine": id, "count": 1 | 10}   (placed machines: 1, built on the
+                     cleared lot you stand on, one per lot)
                  {"action": "upgrade", "upgrade": id}
                  {"action": "supply", "item": "rations" | "diesel" | "logs", "qty": number > 0}
                      (logs go to the shared woodpile; diesel and logs can't be bought in a blizzard)

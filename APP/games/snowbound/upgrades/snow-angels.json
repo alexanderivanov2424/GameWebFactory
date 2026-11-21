@@ -1,0 +1,9 @@
+{
+  "name": "Snow Angels",
+  "cost": 150,
+  "text": "When a Kid finishes a lot, the lots around it with 20 snow or less are cleared too.",
+  "effect": {
+    "kind": "flag"
+  },
+  "machine": "kid"
+}

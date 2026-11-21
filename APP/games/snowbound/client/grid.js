@@ -5,9 +5,10 @@
  *   SB.grid.w, .h, .image     size and the offscreen canvas (one pixel per lot)
  *   SB.grid.level(x, y)       snow level 0-61 (0 = none); feat(x, y) feature char; reached(x, y)
  *   SB.grid.snowAt(x, y)      approximate snow on a lot
- *   SB.grid.passable(x, y)    can a person stand there (reached, or level <= move.wade)
+ *   SB.grid.passable(x, y, wade?)  can a person stand there (reached, or level <= wade, default move.wade)
+ *   SB.grid.road(x, y)        a road lot (feat "=")
  *   SB.grid.workable(x, y)    has snow and is reached or next to a reached lot
- *   SB.grid.move(x, y, dx, dy, rules)  same as logic/avatars.py move(): keep them in sync
+ *   SB.grid.move(x, y, dx, dy, rules, wade)  same as logic/avatars.py move(): keep them in sync
  *   SB.grid.speed(p, rules)   walking speed for a public player entry at its position
  * rules = state.game.move ({radius, speed, dusted, frostbite, starving, wade, reach}).
  */
@@ -15,8 +16,8 @@
   const SB = (window.SB = window.SB || {});
   const SNOW_CHARS = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
   const LEVEL_BASE = 1.2;
-  const REACHED = new Set([",", "X", "T", "H", "G", "C", "K"]);
-  const GROUND = { ",": [92, 101, 112], X: [123, 74, 42], T: [62, 98, 70], H: [120, 92, 70], G: [110, 96, 96], C: [120, 104, 70], K: [104, 100, 112] };
+  const REACHED = new Set([",", "=", "X", "T", "H", "G", "C", "K"]);
+  const GROUND = { ",": [92, 101, 112], "=": [128, 112, 92], X: [123, 74, 42], T: [62, 98, 70], H: [120, 92, 70], G: [110, 96, 96], C: [120, 104, 70], K: [104, 100, 112] };
   const HINT = { t: [70, 110, 82], h: [170, 140, 120], g: [200, 120, 110] };
 
   const grid = (SB.grid = { w: 0, h: 0, image: null });
@@ -75,21 +76,22 @@
   grid.feat = (x, y) => (inside(x, y) ? feats[y * grid.w + x] : ".");
   grid.reached = (x, y) => inside(x, y) && REACHED.has(feats[y * grid.w + x]);
   grid.snowAt = (x, y) => { const l = grid.level(x, y); return l ? Math.pow(LEVEL_BASE, l - 1) : 0; };
-  grid.passable = (x, y) => inside(x, y) && (grid.reached(x, y) || levels[y * grid.w + x] <= wade);
+  grid.passable = (x, y, myWade = wade) => inside(x, y) && (grid.reached(x, y) || levels[y * grid.w + x] <= myWade);
+  grid.road = (x, y) => grid.feat(x, y) === "=";
   grid.workable = (x, y) => inside(x, y) && levels[y * grid.w + x] > 0 &&
     (grid.reached(x, y) || grid.reached(x + 1, y) || grid.reached(x - 1, y) || grid.reached(x, y + 1) || grid.reached(x, y - 1));
 
-  function blocked(x, y, r) {
+  function blocked(x, y, r, myWade) {
     for (const cx of [x - r, x + r]) for (const cy of [y - r, y + r]) {
-      if (!grid.passable(Math.floor(cx), Math.floor(cy))) return true;
+      if (!grid.passable(Math.floor(cx), Math.floor(cy), myWade)) return true;
     }
     return false;
   }
 
-  grid.move = (x, y, dx, dy, rules) => {
+  grid.move = (x, y, dx, dy, rules, myWade = wade) => {
     const r = rules.radius;
-    for (const part of [1, 0.5, 0.25]) if (dx && !blocked(x + dx * part, y, r)) { x += dx * part; break; }
-    for (const part of [1, 0.5, 0.25]) if (dy && !blocked(x, y + dy * part, r)) { y += dy * part; break; }
+    for (const part of [1, 0.5, 0.25]) if (dx && !blocked(x + dx * part, y, r, myWade)) { x += dx * part; break; }
+    for (const part of [1, 0.5, 0.25]) if (dy && !blocked(x, y + dy * part, r, myWade)) { y += dy * part; break; }
     return [x, y];
   };
 
@@ -97,6 +99,7 @@
     const lx = Math.floor(p.x), ly = Math.floor(p.y);
     let s = rules.speed;
     if (grid.reached(lx, ly) && grid.level(lx, ly) > 0) s *= rules.dusted;
+    else if (grid.road(lx, ly)) s *= rules.road;
     if (p.status === "frostbite") s *= rules.frostbite;
     if (p.status === "starving") s *= rules.starving;
     return s;

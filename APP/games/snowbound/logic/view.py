@@ -11,13 +11,15 @@ public(match):
      "stove": {"lit": bool, "burn": logs per minute}, "flake"?: {"x", "y", "left"},
      "progress": {"reached" (clear now), "dusted" (reached, snowed on again), "total", "goal": %},
      "shared": {upgrade id: pid}, "log": {"<n>": text}, "logCount": n, "prices": {item: $},
-     "move": {"radius", "speed", "dusted", "frostbite", "starving", "wade", "reach"}}
+     "move": {"radius", "speed", "dusted", "road", "frostbite", "starving", "wade", "reach"},
+     "beams": {"<n>": {"x0", "y0", "x1", "y1", "c"}} (Jet Blower shots, kept 1.5 s)}
      (move: the character rules client/grid.js needs to predict your walking)
 private(match, pid): your shop, supplies and the units near you
-    {"click": snow per swing, "rations", "diesel", "dieselUse": L/s, "frenzy": s,
+    {"click": snow per swing, "reach": lots, "splash": share hitting the 4 lots around (Shovel
+     Buddy), "wade": deepest snow level you can walk on, "rations", "diesel", "dieselUse": L/s, "frenzy": s,
      "machines": {id: {"owned", "cost1", "cost10", "rate"}}, "upgrades": [visible ids by cost],
      "owned": [your upgrade ids], "auto": [delivered items],
-     "units": {uid: {"x", "y", "m", "p", "s": idle|moving|working|stalled}}}
+     "units": {uid: {"x", "y", "m", "p", "s": idle|moving|working|stalled|unlit|charging}}}
 spectator(match): {"units": ...} near any character (spectators follow a player).
 """
 
@@ -29,7 +31,7 @@ from .world import WADE_LEVEL
 VIEW = 36  # units within this many lots (square) of your character are sent to you
 
 _DEFS = defs()
-_MOVE = {"radius": avatars.RADIUS, "speed": avatars.WALK_SPEED, "dusted": avatars.DUSTED_SLOW,
+_MOVE = {"radius": avatars.RADIUS, "speed": avatars.WALK_SPEED, "dusted": avatars.DUSTED_SLOW, "road": avatars.ROAD_FAST,
          "frostbite": avatars.FROSTBITE_SLOW, "starving": avatars.STARVING_SLOW,
          "wade": WADE_LEVEL, "reach": avatars.REACH}
 
@@ -69,6 +71,7 @@ def public(match):
         "shared": dict(match.shared_upgrades),
         "log": {str(n): text for n, text in match.log}, "logCount": match.log_count,
         "prices": PRICES, "move": _MOVE,
+        "beams": {k: {key: v for key, v in b.items() if key != "left"} for k, b in match.beams.items()},
     }
     if match.flake is not None:
         x, y = world.xy(match.flake["i"])
@@ -82,8 +85,10 @@ def private(match, pid):
         return None
     visible = sorted((uid for uid in UPGRADES if p.upgrade_visible(uid, match.shared_upgrades)),
                      key=lambda uid: UPGRADES[uid]["cost"])
+    power, reach, splash = match.shovel(p)
     return {
-        "click": round(p.click_power(), 2), "rations": p.rations, "diesel": round(p.diesel, 1),
+        "click": round(power, 2), "reach": reach, "splash": splash, "wade": p.wade_level(),
+        "rations": p.rations, "diesel": round(p.diesel, 1),
         "dieselUse": round(p.diesel_use(), 2), "frenzy": int(p.frenzy),
         "machines": {mid: {"owned": p.owned[mid], "cost1": machine_cost(mid, p.owned[mid]),
                            "cost10": machine_cost(mid, p.owned[mid], 10),

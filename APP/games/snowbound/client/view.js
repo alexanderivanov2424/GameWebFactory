@@ -8,7 +8,7 @@
  *   SB.view.zoomBy(factor), SB.view.puff(x, y, amount)   zoom; a snow puff (+amount) at world x, y
  *   SB.view.drawMinimap(canvas)   the minimap (called by hud.js)
  * Draw order: lots (SB.grid.image scaled up) -> snow bank edges, sparkles, features -> heat glow,
- * cabin, huts -> rally flag, golden snowflake -> units -> characters -> aim box -> particles ->
+ * cabin, huts -> rally flag, golden snowflake -> units (placed ones glow) -> jet beams -> characters -> aim box -> particles ->
  * weather -> off-screen arrows (snowflake, cabin) -> frost vignette when you're cold.
  */
 (() => {
@@ -128,13 +128,45 @@
     }
   }
 
+  function drawPlaced(u, d, owner, now) {
+    // Braziers glow over the ring they melt; stills bubble. Drawn under the icon.
+    const z = Z(), x = sx(u.x), y = sy(u.y);
+    if (d.kind === "brazier" && u.s !== "unlit") {
+      const r = z * (2.3 + 0.1 * Math.sin(now / 200 + u.x));
+      const g = ctx.createRadialGradient(x, y, 0, x, y, r);
+      g.addColorStop(0, "rgba(255,140,40,0.45)"); g.addColorStop(1, "rgba(255,140,40,0)");
+      ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
+      if (Math.random() < 0.15) particles.push({ kind: "spark", x: u.x + (Math.random() - 0.5) * 0.4, y: u.y, vx: (Math.random() - 0.5) * 0.4, vy: -1.5, t: now });
+    }
+    if (d.kind === "still" && u.s === "working" && Math.random() < 0.1) {
+      particles.push({ kind: "puff", x: u.x, y: u.y - 0.4, vx: 0, vy: -0.8, t: now });
+    }
+    ctx.fillStyle = owner.color; ctx.globalAlpha = 0.6;
+    ctx.fillRect(x - z * 0.45, y + z * 0.3, z * 0.9, z * 0.12);
+    ctx.globalAlpha = 1;
+    emoji(u.s === "unlit" ? "🪵" : d.icon, x, y, z * 0.9);
+  }
+
+  function drawBeams(game) {
+    const z = Z();
+    for (const b of Object.values(game.beams || {})) {
+      ctx.lineCap = "round";
+      ctx.strokeStyle = "rgba(255,255,255,0.6)"; ctx.lineWidth = z * 0.9;
+      ctx.beginPath(); ctx.moveTo(sx(b.x0), sy(b.y0)); ctx.lineTo(sx(b.x1), sy(b.y1)); ctx.stroke();
+      ctx.strokeStyle = b.c; ctx.lineWidth = z * 0.3;
+      ctx.beginPath(); ctx.moveTo(sx(b.x0), sy(b.y0)); ctx.lineTo(sx(b.x1), sy(b.y1)); ctx.stroke();
+      ctx.lineCap = "butt";
+    }
+  }
+
   function drawUnits(game, now) {
     const z = Z(), defs = game.defs.machines;
     for (const u of unitPositions(now)) {
       const owner = game.players[u.p];
       const d = defs[u.m];
       if (!owner || !d) continue;
-      const big = u.m === "helper" ? 0.75 : 1.05;
+      if (d.placed) { drawPlaced(u, d, owner, now); continue; }
+      const big = d.kind === "worker" || d.kind === "dog" || d.kind === "buddy" ? 0.75 : 1.05;
       const bob = u.s === "moving" ? Math.abs(Math.sin(now / 90 + u.x * 3)) * z * 0.08 : 0;
       const x = sx(u.x), y = sy(u.y);
       ctx.fillStyle = "rgba(0,0,0,0.18)";
@@ -143,6 +175,8 @@
       ctx.beginPath(); ctx.arc(x, y + z * 0.3 * big, z * 0.3 * big, 0, Math.PI * 2); ctx.stroke();
       emoji(d.icon, x, y - bob, z * 0.8 * big);
       if (u.s === "stalled") emoji("⛽", x + z * 0.4, y - z * 0.5, z * 0.4);
+      if (u.s === "charging") emoji("⚡", x + z * 0.4, y - z * 0.5, z * 0.35);
+      if (u.s === "idle") emoji("💤", x + z * 0.4, y - z * 0.5, z * 0.35);
       if (u.s === "working" && Math.random() < 0.08) {
         particles.push({ kind: "puff", x: u.x + (Math.random() - 0.5), y: u.y + (Math.random() - 0.5), vx: (Math.random() - 0.5), vy: -Math.random(), t: now });
       }
@@ -195,7 +229,11 @@
       const p = particles[k], age = (now - p.t) / (p.kind === "text" ? 900 : 600);
       if (age >= 1) { particles.splice(k, 1); continue; }
       ctx.globalAlpha = 1 - age;
-      if (p.kind === "puff") {
+      if (p.kind === "spark") {
+        p.x += p.vx * dt; p.y += p.vy * dt;
+        ctx.fillStyle = "#ffb347";
+        ctx.fillRect(sx(p.x), sy(p.y), 2 * dpr(), 2 * dpr());
+      } else if (p.kind === "puff") {
         p.x += p.vx * dt; p.y += p.vy * dt; p.vy += 2 * dt;
         ctx.fillStyle = "#ffffff";
         ctx.beginPath(); ctx.arc(sx(p.x), sy(p.y), z * 0.08 * (1 + age), 0, Math.PI * 2); ctx.fill();
@@ -285,6 +323,7 @@
       emoji("❄️", fx, fy, r * 1.4);
     }
     drawUnits(game, now);
+    drawBeams(game);
     drawPlayers(game, now, state);
     drawAim(state);
     drawParticles(now, dt);

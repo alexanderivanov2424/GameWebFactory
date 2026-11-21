@@ -1,10 +1,9 @@
 {
   "name": "Road Salt",
-  "cost": 25000,
-  "text": "Everyone: blizzards drop half as much snow back on cleared ground.",
+  "cost": 5000,
+  "text": "Everyone: blizzards never snow over roads.",
   "effect": {
-    "kind": "dust",
-    "value": 0.5
+    "kind": "flag"
   },
   "shared": true
 }

@@ -48,8 +48,9 @@
   }
 
   input.inReach = (x, y) => {
-    const me = input.me, rules = lobby.state.game.move;
-    return !!me && Math.hypot(x + 0.5 - me.x, y + 0.5 - me.y) <= rules.reach;
+    const me = input.me, mine = lobby.state.private;
+    const reach = (mine && mine.reach) || lobby.state.game.move.reach;
+    return !!me && Math.hypot(x + 0.5 - me.x, y + 0.5 - me.y) <= reach;
   };
 
   input.reset = () => { input.me = null; held.clear(); mouseDig = spaceDig = false; sent = { keys: "", aim: "", dig: false }; };
@@ -66,7 +67,8 @@
     if (dx || dy) {
       stillFor = 0;
       const len = Math.hypot(dx, dy), step = (SB.grid.speed({ ...mine, x: me.x, y: me.y }, rules) * Math.min(dt, 0.1)) / len;
-      [me.x, me.y] = SB.grid.move(me.x, me.y, dx * step, dy * step, rules);
+      const wade = state.private && state.private.wade !== undefined ? state.private.wade : rules.wade;
+      [me.x, me.y] = SB.grid.move(me.x, me.y, dx * step, dy * step, rules, wade);
     } else stillFor += dt;
     const err = Math.hypot(mine.x - me.x, mine.y - me.y);
     if (err > SNAP) { me.x = mine.x; me.y = mine.y; }
@@ -81,7 +83,11 @@
   function swingAt(lot) {
     if (!lot || !playing() || !SB.grid.workable(lot[0], lot[1]) || !input.inReach(lot[0], lot[1])) return;
     lobby.sendGame({ action: "dig", x: lot[0], y: lot[1] });
-    SB.view.puff(lot[0] + 0.5, lot[1] + 0.5, lobby.state.private ? lobby.state.private.click : 0);
+    const mine = lobby.state.private;
+    SB.view.puff(lot[0] + 0.5, lot[1] + 0.5, mine ? mine.click : 0);
+    if (mine && mine.splash) {
+      for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) SB.view.puff(lot[0] + dx + 0.5, lot[1] + dy + 0.5, 0);
+    }
   }
 
   input.init = (lobbyRef) => {

@@ -1,9 +1,0 @@
-{
-  "name": "Snow Cannon",
-  "cost": 2000000,
-  "text": "Clicks also clear 2% of your machines' snow per second.",
-  "effect": {
-    "kind": "click_pct",
-    "value": 2
-  }
-}

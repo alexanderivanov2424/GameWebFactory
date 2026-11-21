@@ -1,16 +1,15 @@
 {
-  "order": 5,
+  "order": 9,
   "name": "Road Grader",
-  "cost": 30000,
-  "rate": 260,
-  "speed": 2.5,
-  "reach": 2,
-  "diesel": 3.5,
-  "text": "Long blade, longer roads.",
-  "upgrades": [
-    "Wing Blade",
-    "Turbo",
-    "GPS Grade"
-  ],
-  "icon": "🚧"
+  "icon": "🚧",
+  "kind": "grader",
+  "cost": 1500000,
+  "rate": 4000,
+  "speed": 3.0,
+  "reach": 1.5,
+  "diesel": 40,
+  "text": "Widens roads: works snow next to road lots, twice as fast while standing on a road, and turns what it clears into road.",
+  "params": {
+    "road_mult": 2
+  }
 }

@@ -1,0 +1,9 @@
+{
+  "name": "Bellows",
+  "cost": 8000,
+  "text": "Braziers melt everything within 3 and burn logs half as fast.",
+  "effect": {
+    "kind": "flag"
+  },
+  "machine": "brazier"
+}

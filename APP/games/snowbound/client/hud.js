@@ -60,8 +60,9 @@
         const d = defs[id];
         const sub = el("div", { className: "sub" });
         const buy1 = el("button", { className: "green", onclick: () => lobby.sendGame({ action: "buy", machine: id, count: 1 }) });
-        const buy10 = el("button", { onclick: () => lobby.sendGame({ action: "buy", machine: id, count: 10 }) });
-        const row = el("div", { className: "sb-machine", title: d.text },
+        const buy10 = d.placed ? el("span", { className: "muted small" }, "where you stand")
+          : el("button", { onclick: () => lobby.sendGame({ action: "buy", machine: id, count: 10 }) });
+        const row = el("div", { className: "sb-machine", title: `${d.text}\nAbout ${fmt(d.nominal)} snow/s each${d.diesel ? `, ${d.diesel} L diesel/s` : ""}` },
           el("span", { className: "icon" }, d.icon),
           el("div", {}, el("b", {}, d.name), el("div", { className: "sub" }, d.text), sub), buy1, buy10);
         machineRows[id] = { row, sub, buy1, buy10 };
@@ -74,10 +75,12 @@
       const r = machineRows[id], m = mine.machines[id];
       r.row.hidden = k > highest + 2 && k > 1;
       r.sub.textContent = m.owned ? `Owned ${m.owned}${m.rate ? ` · ${fmt(m.rate)} snow/s` : ""}` : "";
-      r.buy1.textContent = money(m.cost1);
-      r.buy10.textContent = `×10 ${money(m.cost10)}`;
+      r.buy1.textContent = (defs[id].placed ? "Place " : "") + money(m.cost1);
       r.buy1.disabled = me.cash < m.cost1;
-      r.buy10.disabled = me.cash < m.cost10;
+      if (!defs[id].placed) {
+        r.buy10.textContent = `×10 ${money(m.cost10)}`;
+        r.buy10.disabled = me.cash < m.cost10;
+      }
     });
   }
 
