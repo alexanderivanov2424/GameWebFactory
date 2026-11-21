@@ -189,7 +189,7 @@
     $("listSub").textContent = copyOf ? "Copy of " + copyOf : "";
     $("listSub").hidden = !copyOf || isGlobal;
     renderDoomBar();
-    $("modeButton").textContent = viewing ? "👁️ View" : "✏️ Edit";
+    $("modeButton").textContent = viewing ? "View" : "Edit";
     $("modeButton").title = viewing ? "View mode: tap to edit" : "Edit mode: tap to view";
     const used = renderFilters();
     const shown = viewing && filterTag && used.has(filterTag)
