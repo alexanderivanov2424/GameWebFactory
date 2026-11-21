@@ -2,7 +2,7 @@
 <!-- Food list (/food-list/): shared shopping lists for phones. Not linked from anywhere.
      Two screens: one list (the title button opens the other) and the lists screen: a stack of lists
      (New list on top, then Global = every saved item, then each list with Edit and, on templates, Copy),
-     then every tag with Edit (a small popup: name and colour).
+     then New tag and every tag with Edit (a small popup: name and colour).
      body.global = the Global list is open: no checking off, clearing or adding; each item has Delete,
      which marks it (red) until the bar at the top confirms or cancels; the editor has no Remove
      (.item-only) and its amount is the default. body.copy = a copy of a template is open: its
@@ -242,6 +242,7 @@
   <button type="button" id="newListButton" class="primary wide">+ New list</button>
   <ul id="lists"></ul>
   <h2 class="section">Tags</h2>
+  <button type="button" id="newTagButton" class="wide">+ New tag</button>
   <ul id="tagRows"></ul>
   <p class="empty" id="noTags" hidden>No tags yet. Add them when editing an item.</p>
 </main>
@@ -308,7 +309,7 @@
 
 <dialog id="tagEditor">
   <form method="dialog" id="tagForm" autocomplete="off">
-    <h2>Edit tag</h2>
+    <h2 id="tagTitle">Edit tag</h2>
     <label class="field" for="tagNameInput">Name</label>
     <input type="text" id="tagNameInput" class="lower" maxlength="24" autocapitalize="none" required>
     <label class="field">Colour</label>

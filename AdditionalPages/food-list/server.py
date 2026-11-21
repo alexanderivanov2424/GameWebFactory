@@ -25,6 +25,7 @@ An item as sent: {id, food, name, tags: [tag id], notes, unit, images: [id], amo
     POST /food-list/api/items/<id>/delete              takes it off the list (the food stays)
     POST /food-list/api/foods/<food>/update            {name?, tags?: [tag name], notes?, unit?, amount? (default)}
     POST /food-list/api/foods/delete                   {"ids": [food]} -> {"deleted": n} (for good, off every list)
+    POST /food-list/api/tags                           {name, hue? (0-359)} -> {id, name, hue}
     POST /food-list/api/tags/<tag>/update              {name?, hue? (0-359)} -> {id, name, hue}
     POST /food-list/api/foods/<food>/images            raw RGB (application/octet-stream, see images.py) -> {"image": id}
     POST /food-list/api/foods/<food>/images/<img>/delete
@@ -65,6 +66,7 @@ POST_ROUTES = [
     (re.compile(rf"^/items/{ID}/delete$"), "delete", JSON_TYPE),
     (re.compile(rf"^/foods/{ID}/update$"), "update_food", JSON_TYPE),
     (re.compile(r"^/foods/delete$"), "delete_foods", JSON_TYPE),
+    (re.compile(r"^/tags$"), "add_tag", JSON_TYPE),
     (re.compile(rf"^/tags/{ID}/update$"), "update_tag", JSON_TYPE),
     (re.compile(rf"^/foods/{ID}/images$"), "add_image", IMAGE_TYPE),
     (re.compile(rf"^/foods/{ID}/images/{ID}/delete$"), "delete_image", JSON_TYPE),
@@ -81,6 +83,7 @@ ACTIONS = {
     "delete": lambda store, ids, data: store.delete(ids[0]) or {"ok": True},
     "update_food": lambda store, ids, data: store.update_food(ids[0], data),
     "delete_foods": lambda store, ids, data: {"deleted": store.delete_foods(data.get("ids"))},
+    "add_tag": lambda store, ids, data: store.add_tag(data),
     "update_tag": lambda store, ids, data: store.update_tag(ids[0], data),
     "delete_image": lambda store, ids, data: store.delete_image(ids[0], ids[1]) or {"ok": True},
 }

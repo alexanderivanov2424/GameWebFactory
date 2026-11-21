@@ -13,7 +13,7 @@ The data:
 - tags: every tag ever made ({id, name, hue}), kept forever. Names are lowercase letters and
   single spaces only, and unique; hue (0-359) is the tag's colour, picked at random when it's made
   among the hues used least so far. Setting an item's tags by name makes any new ones. A tag's
-  name and hue can be changed (update_tag) from the lists screen.
+  name and hue can be changed (update_tag), and tags made (add_tag), from the lists screen.
 - lists: {id, name, template, copy_of, items}; list names are unique ignoring case and there is
   always at least one. An entry on a list is {id, food, checked, amount}; a food is on a list at
   most once. A template list can be copied: the copy gets the same foods with the template's
@@ -593,6 +593,21 @@ class Store:
         if len(self.tags) + sum(name not in self.tag_ids for name in names) > MAX_TAGS:
             raise Rejected(f"There are already {MAX_TAGS} tags.", 507)
         return names
+
+    def add_tag(self, data):
+        """Make a tag from the lists screen (hue 0-359; least used one when not given)."""
+        name = tag_name(data.get("name"))
+        if name in self.tag_ids:
+            raise Rejected(f"There's already a tag called “{name}”.", 409)
+        if len(self.tags) >= MAX_TAGS:
+            raise Rejected(f"There are already {MAX_TAGS} tags.", 507)
+        hue = data.get("hue", self._new_hue())
+        if not isinstance(hue, int) or isinstance(hue, bool) or not 0 <= hue < 360:
+            raise Rejected("Bad colour.")
+        tag_id = self._tag(name)
+        self.tags[tag_id]["hue"] = hue
+        self.save()
+        return dict(self.tags[tag_id], id=tag_id)
 
     def update_tag(self, tag_id, data):
         """Rename a tag or change its colour (hue 0-359)."""

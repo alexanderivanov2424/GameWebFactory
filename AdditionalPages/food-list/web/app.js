@@ -6,7 +6,8 @@
 // saved once for all lists (a "food"); only the amount and the checkmark belong to the list. The
 // Global list ("global") is every saved item: edited the same way (its amount is the default new
 // entries start with), nothing checked off or cleared, and Delete marks items (red) for deleting
-// for good once the bar at the top confirms. Below the lists, every tag with Edit (name, colour).
+// for good once the bar at the top confirms. Below the lists, New tag and every tag with Edit
+// (both in the tag popup: name, colour).
 // The open list is remembered in localStorage. While typing a new item, names added before (the server keeps them
 // all, see ../store.py) that aren't on this list are suggested, with their tags.
 // Item names are lowercase: the server lowercases them too.
@@ -469,13 +470,25 @@
     $("noTags").hidden = tags.length > 0;
   }
 
-  let editingTag = null;
+  let editingTag = null;  // null while making a new tag
   let tagHue = 0;
 
+  // A random one of the 12 swatch colours least used by tags so far (the server does the same).
+  function freshHue() {
+    const counts = [];
+    for (let h = 0; h < 360; h += 30) {
+      counts.push([h, tags.filter((t) => Math.abs(((Number(t.hue) - h + 540) % 360) - 180) < 15).length]);
+    }
+    const least = Math.min(...counts.map((c) => c[1]));
+    const options = counts.filter((c) => c[1] === least);
+    return options[Math.floor(Math.random() * options.length)][0];
+  }
+
   function openTagEditor(t) {
-    editingTag = t;
-    tagHue = Number(t.hue) || 0;
-    $("tagNameInput").value = t.name;
+    editingTag = t || null;
+    tagHue = t ? Number(t.hue) || 0 : freshHue();
+    $("tagTitle").textContent = t ? "Edit tag" : "New tag";
+    $("tagNameInput").value = t ? t.name : "";
     $("tagError").textContent = "";
     renderTagEditor();
     tagEditor.showModal();
@@ -500,15 +513,15 @@
   $("tagHue").addEventListener("input", (e) => { tagHue = Number(e.target.value) || 0; renderTagEditor(); });
   $("tagNameInput").addEventListener("input", () => { $("tagError").textContent = ""; renderTagEditor(); });
   $("cancelTag").addEventListener("click", () => tagEditor.close());
+  $("newTagButton").addEventListener("click", () => openTagEditor(null));
 
   $("tagForm").addEventListener("submit", async (e) => {
     e.preventDefault();
     const t = editingTag;
-    if (!t) return tagEditor.close();
     const name = $("tagNameInput").value.normalize("NFC").trim().replace(/\s+/g, " ").toLowerCase();
     if (!name || !TAG_NAME.test(name)) { $("tagError").textContent = "Tags can only have letters and spaces."; return; }
     try {
-      await post("/tags/" + t.id + "/update", { name, hue: tagHue });
+      await post(t ? "/tags/" + t.id + "/update" : "/tags", { name, hue: tagHue });
     } catch (err) { $("tagError").textContent = err.message; return; }
     tagEditor.close();
     reload().catch(showError);
