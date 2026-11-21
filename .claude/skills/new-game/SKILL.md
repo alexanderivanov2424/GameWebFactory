@@ -23,6 +23,7 @@ things are, and its pitfalls. Read only the one closest to your game:
 - `orbit-run`: co-op trick-taking (playable cards from the server), a task draft, a multi-game run saved with `save_data` and shown in the lobby (`lobby_game_state`).
 - `arena`: real-time (`RealtimeGame`); start from it for continuous movement.
 - `deep-colony`: real-time co-op sim without player units: shared orders/pause/speed, live cursors, big grid as row strings.
+- `snowbound`: real-time idle/clicker: rate-limited clicks, growing machine prices, tier upgrades, autonomous crews on a huge grid drawn one pixel per lot, light survival.
 
 ## 1. Pin down the design (ask only about what's genuinely unclear)
 Map the request onto the shared lobby model before writing code:

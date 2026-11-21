@@ -36,6 +36,10 @@
   SB.map.init(lobby, rt);
 
   $("home").addEventListener("click", () => SB.map.center());
+  $("flakeGo").addEventListener("click", () => {
+    const f = state && state.game && state.game.flake;
+    if (f) SB.map.center([f.x + 0.5, f.y + 0.5]);
+  });
   $("clearFocus").addEventListener("click", () => lobby.sendGame({ action: "focus" }));
   for (const button of document.querySelectorAll(".sb-supply button")) {
     button.addEventListener("click", () => {
@@ -145,7 +149,9 @@
     weather.textContent = w.kind === "clear" ? "☀️ Clear skies" : w.kind === "warning" ? `⚠️ Blizzard in ${w.left}s!` : `🌨️ Blizzard! ${w.left}s left`;
     const pct = (100 * game.progress.reached) / game.progress.total;
     $("progressFill").style.width = `${Math.min(100, (100 * pct) / game.progress.goal)}%`;
-    $("progressText").textContent = `${pct.toFixed(1)}% of the valley cleared (goal ${game.progress.goal}%)`;
+    const dusted = game.progress.dusted ? ` · ${fmt(game.progress.dusted)} lots snowed on again` : "";
+    $("progressText").textContent = `${pct.toFixed(1)}% of the valley cleared (goal ${game.progress.goal}%)${dusted}`;
+    $("flakeGo").hidden = !game.flake || !mine;
     $("clock").textContent = `${Math.floor(game.time / 60)}:${String(game.time % 60).padStart(2, "0")}`;
 
     const result = $("result");

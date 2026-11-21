@@ -68,7 +68,7 @@ class Match:
         return self.players[pid]
 
     def progress(self):
-        return len(self.world.reached_list) / (self.world.w * self.world.h)
+        return self.world.cleared() / (self.world.w * self.world.h)
 
     # --- time ------------------------------------------------------------------------
 

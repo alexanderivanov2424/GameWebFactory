@@ -259,6 +259,10 @@ Summary:
    ending a mission early once every task is secured (tasks flag `can_fail_when_done` by hand),
    mission and task cards as JSON (3 mission decks), and a run (ship resources, missions played)
    saved for the host with `save_data` and continued from a later game (`lobby_game_state` shows it).
+   `games/snowbound/` (`RealtimeGame`, `logic/` modules): a co-op idle/clicker game on a huge grid (up to
+   384x384 lots sent as dirty row strings, drawn as one pixel per lot scaled up): rate-limited clicks,
+   machines whose price grows per copy, generated tier upgrades, shared team upgrades, autonomous crews
+   claiming the nearest workable lot, and light survival (shared stove, food, warmth, diesel, blizzards).
 
 ## Lobby model (shared by all games)
 - Every connected tab is a **member**: a **spectator** until it joins, then a **player**. Players join and leave explicitly, and only in the lobby phase.

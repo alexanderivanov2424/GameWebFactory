@@ -5,6 +5,7 @@ Lot index i = y * w + x. The cabin is in the middle; lots near it start cleared.
 - snow[i]: snow left (float). reached[i]: 1 once the lot has been cleared at least once
   (it stays reached even if a blizzard drops snow back on it).
 - feat[i]: feature char (FEATURES); hidden ones look plain until reached.
+- dusted: reached lots a blizzard put snow back on (they don't count as cleared until dug again).
 - targets: lots that can be worked: snow > 0 and reached or next to a reached lot.
 - clear_lot() is the one place a lot is finished; it reports what was found there.
 
@@ -58,6 +59,7 @@ class World:
         self.snow = list(self.depth)
         self.reached = bytearray(n)
         self.reached_list = []
+        self.dusted = set()
         self.targets = set()
         self.dirty = set(range(size))
         self._rows = {"snow": {}, "feat": {}}
@@ -66,7 +68,6 @@ class World:
             if math.hypot(x - self.cx, y - self.cy) <= START_RADIUS:
                 self.snow[i] = 0.0
                 self._reach(i)
-        self.cleared_count = len(self.reached_list)
 
     def _forests(self, rng):
         size = self.w
@@ -93,6 +94,10 @@ class World:
             j = self.index(x + dx, y + dy)
             if j is not None:
                 yield j
+
+    def cleared(self):
+        """Lots clear of snow right now (reached and not dusted)."""
+        return len(self.reached_list) - len(self.dusted)
 
     def workable(self, i):
         return i in self.targets
@@ -124,9 +129,9 @@ class World:
         self.targets.discard(i)
         self.dirty.add(i // self.w)
         if self.reached[i]:
+            self.dusted.discard(i)
             return snow, None
         self._reach(i)
-        self.cleared_count += 1
         return snow, self.kind[i]
 
     def dust(self, i, fraction):
@@ -134,6 +139,7 @@ class World:
         if not self.reached[i] or self.kind[i] == "cabin":
             return
         self.snow[i] = min(self.depth[i], self.snow[i] + self.depth[i] * fraction)
+        self.dusted.add(i)
         self.targets.add(i)
         self.dirty.add(i // self.w)
 

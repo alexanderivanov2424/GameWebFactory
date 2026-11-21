@@ -27,7 +27,7 @@ log = logging.getLogger("snowbound")
 ROOT = Path(__file__).resolve().parent.parent
 
 TIER_OWNED = (1, 10, 25)
-TIER_COST = (10, 100, 1000)
+TIER_COST = (10, 50, 500)
 UNLOCK_SHARE = 0.25
 GROWTH = 1.15  # each machine of a kind costs 15% more than the last
 EFFECTS = {"click_mult", "click_pct", "auto", "food_drain", "warm_loss", "stove", "dust", "flake"}

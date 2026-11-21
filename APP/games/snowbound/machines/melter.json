@@ -1,7 +1,7 @@
 {
   "order": 7,
   "name": "Snow Melter",
-  "cost": 20000000,
+  "cost": 1400000,
   "rate": 9000,
   "speed": 2.0,
   "reach": 3.0,

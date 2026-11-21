@@ -1,6 +1,6 @@
 {
   "name": "Snow Fences",
-  "cost": 2500000,
+  "cost": 1000000,
   "text": "Everyone: blizzards drop half as much snow back on cleared ground.",
   "effect": {
     "kind": "dust",

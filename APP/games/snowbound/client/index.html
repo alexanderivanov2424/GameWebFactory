@@ -46,6 +46,7 @@
     .sb-supply button, .sb-machine button, .sb-upgrade { padding: 3px 7px; font-size: 12px; }
     .sb-machine { display: grid; grid-template-columns: 28px 1fr auto auto; gap: 2px 6px; align-items: center;
                   padding: 4px 0; border-top: 1px solid rgba(127,127,127,0.2); font-size: 13px; }
+    .sb-machine[hidden] { display: none; }
     .sb-machine .icon { font-size: 20px; text-align: center; }
     .sb-machine .sub { font-size: 11px; opacity: 0.75; }
     .sb-upgrades { display: flex; flex-wrap: wrap; gap: 4px; }
@@ -103,6 +104,7 @@
       <div class="sb-top">
         <span id="weather" class="sb-weather clear"></span>
         <div class="sb-progress"><div id="progressFill"></div><span id="progressText"></span></div>
+        <button id="flakeGo" class="small" hidden>✨ Golden snowflake! Go</button>
         <span id="clock" class="muted"></span>
         <button id="back" hidden>Back to lobby</button>
       </div>

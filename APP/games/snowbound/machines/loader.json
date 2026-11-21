@@ -1,11 +1,11 @@
 {
   "order": 4,
   "name": "Skid Loader",
-  "cost": 12000,
-  "rate": 50,
+  "cost": 4500,
+  "rate": 45,
   "speed": 2.5,
   "reach": 1.5,
-  "diesel": 0.7,
+  "diesel": 0.6,
   "text": "Scoops snow into neat piles.",
   "upgrades": [
     "Bigger Bucket",

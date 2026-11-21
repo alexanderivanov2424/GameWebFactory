@@ -1,11 +1,11 @@
 {
   "order": 8,
   "name": "Jet Blower",
-  "cost": 330000000,
-  "rate": 50000,
+  "cost": 10000000,
+  "rate": 55000,
   "speed": 6.0,
   "reach": 4.0,
-  "diesel": 650,
+  "diesel": 730,
   "text": "A jet engine on a flatbed.",
   "upgrades": [
     "Afterburner",

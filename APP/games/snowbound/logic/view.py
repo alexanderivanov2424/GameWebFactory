@@ -8,7 +8,7 @@ public(match):
      "crews": {"<pid>:<machine>": {"x", "y", "m", "p", "n", "s": idle|driving|working|stalled}},
      "weather": {"kind": clear|warning|blizzard, "left": s}, "woodpile": logs,
      "stove": {"lit": bool, "burn": logs per minute}, "flake"?: {"x", "y", "left"},
-     "progress": {"reached", "total", "goal": %}, "shared": {upgrade id: pid},
+     "progress": {"reached" (clear now), "dusted" (reached, snowed on again), "total", "goal": %}, "shared": {upgrade id: pid},
      "log": {"<n>": text}, "logCount": n, "prices": {item: $}}
 private(match, pid): your shop and supplies
     {"click": snow per click, "rations", "diesel", "dieselUse": L/s, "frenzy": s,
@@ -50,7 +50,7 @@ def public(match):
         "rows": world.rows(), "defs": _DEFS, "players": players, "crews": crews.public(match),
         "weather": match.weather.public(), "woodpile": round(match.woodpile, 1),
         "stove": {"lit": match.woodpile > 0, "burn": round(survival.stove_burn(match) * 60, 1)},
-        "progress": {"reached": len(world.reached_list), "total": world.w * world.h,
+        "progress": {"reached": world.cleared(), "dusted": len(world.dusted), "total": world.w * world.h,
                      "goal": round(match.goal * 100)},
         "shared": dict(match.shared_upgrades),
         "log": {str(n): text for n, text in match.log}, "logCount": match.log_count,

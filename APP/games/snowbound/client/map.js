@@ -2,7 +2,7 @@
  * Snowbound map: draws the valley on a canvas and turns mouse/keys into actions.
  *   SB.map.init(lobby, rt)  once; draws every animation frame from lobby.state.game
  *   SB.map.reset()          new game: forget decoded rows, center on the cabin
- *   SB.map.center()         center the view on the cabin
+ *   SB.map.center([x, y]?)  center the view on a point (in lots), or on the cabin
  * Rows (state.game.rows, see logic/world.py) are decoded into one pixel per lot on an
  * offscreen canvas, only for row strings that changed, then scaled up with smoothing off.
  * Crews are interpolated with rt.sample. Clicks: shovel a workable lot (snow, and reached or next
@@ -236,9 +236,9 @@
     if (mine && mine.click > 0) particles.push({ x, y, t: performance.now(), text: "+" + SB.fmt(mine.click) });
   }
 
-  map.center = () => {
+  map.center = (at) => {
     const game = lobby.state && lobby.state.game;
-    if (game) { view.x = game.cabin[0] + 0.5; view.y = game.cabin[1] + 0.5; }
+    if (at) { view.x = at[0]; view.y = at[1]; } else if (game) { view.x = game.cabin[0] + 0.5; view.y = game.cabin[1] + 0.5; }
   };
   map.reset = () => {
     levels = null; w = 0; h = 0; view.zoom = 12; hover = null; lastCursor = null; particles.length = 0;

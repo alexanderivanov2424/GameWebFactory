@@ -1,11 +1,11 @@
 {
   "order": 6,
   "name": "Rotary Plow",
-  "cost": 1400000,
-  "rate": 1600,
+  "cost": 200000,
+  "rate": 1500,
   "speed": 4.0,
   "reach": 2.5,
-  "diesel": 21,
+  "diesel": 20,
   "text": "Throws snow a city block away.",
   "upgrades": [
     "Twin Rotors",

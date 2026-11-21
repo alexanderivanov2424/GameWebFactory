@@ -1,6 +1,6 @@
 {
   "name": "Avalanche Glove",
-  "cost": 500000000,
+  "cost": 50000000,
   "text": "Clicks also clear 4% of your machines' snow per second.",
   "effect": {
     "kind": "click_pct",
