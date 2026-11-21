@@ -1,36 +1,40 @@
 """Snowbound: a real-time co-op idle game about digging a huge valley out of the snow.
 
-1-8 players share one snowed-in valley (a grid of lots, up to 384 x 384) with a cabin in the
-middle. Click snow on lots next to cleared ground to shovel it by hand; every unit of snow you
-clear pays you $1. Spend it on machines (Neighbour Kid, Snowblower, Pickup Plow ... Jet Blower:
-each kind costs 15% more per copy) that drive out and clear snow on their own, and on upgrades
-(x2 machine tiers, stronger clicks, deliveries, shared team upgrades). Snow gets deeper the
-further you get from the cabin. Each player has their own wallet, machines and upgrades.
+1-8 players each walk a character around one snowed-in valley (a grid of lots, up to 384 x 384)
+with a cabin in the middle; the camera follows you. Deep snow is a wall: stand next to it and hold
+the mouse on it (or click fast) to shovel; every unit of snow you clear pays you $1. Spend it on
+machines (Neighbour Kid, Snowblower, Pickup Plow ... Jet Blower: each kind costs 15% more per
+copy). Every machine you buy is its own unit that heads out from the cabin and clears snow on its
+own, near your rally point if you set one (a spot, or "follow me"). Upgrades: x2 machine tiers,
+stronger shoveling, deliveries, shared team upgrades. Snow gets deeper the further you get from
+the cabin. Each player has their own wallet, machines and upgrades.
 Lots hide things: forests (logs for the stove), buried cabins (cash), gas stations (diesel),
-supply caches and lost skiers (free helpers). Golden snowflakes appear on cleared ground now
-and then: the first to click one gets a x5 Frenzy or a lump of cash.
-Survival: a shared stove burns logs from the woodpile; while it's out everyone gets colder,
-and at 0 warmth you get frostbite (no clicking, machines at half speed). Your food drops over
-time and with each click; rations are eaten automatically; at 0 food clicks are weak and you
-get colder. Machines burn diesel and stop when your tank is empty. Blizzards (with a 20 s
-warning) slow machines, burn logs fast, stop deliveries and drop snow back on cleared ground.
-The game is won when the goal share of the valley is cleared (or ended with the End game vote).
+supply caches and lost skiers (free helpers). Golden snowflakes appear near players now and then:
+the first to walk into one gets a x5 Frenzy or a lump of cash.
+Survival: the cabin stove and warming huts (bought, built where you stand) burn logs from a shared
+woodpile. Near a lit one you warm up; anywhere else you get colder, and at 0 warmth you get
+frostbite (can't shovel, walk slowly) until you warm up. Food drops over time and with each
+swing; rations are eaten automatically; at 0 food you shovel weakly, walk slower and get colder.
+Machines burn diesel and stop when your tank is empty. Blizzards (with a 20 s warning) slow
+machines, burn logs fast, chill you faster, stop deliveries and drop snow back on cleared ground.
+The game is won when the goal share of the valley is clear (or ended with the End game vote).
 Numbers: logic/ (see logic/__init__.py), machines/*.json and upgrades/*.json.
 
 Player options:  none
 Settings:        {"mapSize": "small" | "medium" | "large" | "huge", "goal": 10-100 (%),
                   "survival": "easy" | "normal" | "harsh"}
-Input messages:  {"type": "input", "cursor": [x, y] | null}   the lot you point at, shown to everyone
+Input messages:  {"type": "input", "keys": [up/down/left/right held], "aim": [x, y] | null
+                  (lot under the mouse), "dig": bool (dig button held: swings at the aimed lot)}
 Game messages (players only):
-                 {"action": "click", "x": int, "y": int}       shovel a lot (15 clicks/s at most)
-                 {"action": "flake", "x": int, "y": int}       catch the golden snowflake there
+                 {"action": "dig", "x": int, "y": int}         one swing now (a click)
                  {"action": "buy", "machine": id, "count": 1 | 10}
                  {"action": "upgrade", "upgrade": id}
                  {"action": "supply", "item": "rations" | "diesel" | "logs", "qty": number > 0}
                      (logs go to the shared woodpile; diesel and logs can't be bought in a blizzard)
-                 {"action": "focus", "x": int, "y": int} | {"action": "focus"}   where your crews
-                     head first (no x/y: clear it)
-Public / private state: logic/view.py.
+                 {"action": "rally", "x": int, "y": int} | {"action": "rally", "follow": true}
+                     | {"action": "rally"}   where your units look for work first (none: anywhere)
+                 {"action": "hut"}                              build a warming hut where you stand
+Public / private state: logic/view.py (spectators get the units near any character).
 Result:          {"reason": str, "cleared": {pid: snow}}
 """
 
@@ -38,6 +42,7 @@ from gamekit import Choice, Int, LobbyError, RealtimeGame
 from gamekit.validate import one_of, whole_number
 
 from .logic import view
+from .logic.avatars import KEYS
 from .logic.content import MACHINES, UPGRADES
 from .logic.economy import PRICES
 from .logic.match import Match
@@ -69,8 +74,8 @@ class Game(RealtimeGame):
         "survival": Choice("Survival", default="normal",
                            options={"easy": "Easy", "normal": "Normal", "harsh": "Harsh"}),
     }
-    ACTIONS = {"click": "click", "flake": "flake", "buy": "buy", "upgrade": "upgrade",
-               "supply": "supply", "focus": "focus"}
+    ACTIONS = {"dig": "dig", "buy": "buy", "upgrade": "upgrade", "supply": "supply",
+               "rally": "rally", "hut": "hut"}
 
     def __init__(self, room):
         super().__init__(room)
@@ -87,17 +92,15 @@ class Game(RealtimeGame):
     # --- real time ------------------------------------------------------------------------
 
     def on_input(self, member, data):
-        cursor = data.get("cursor")
-        player = self.match.players.get(member.id) if self.match else None
-        if player is None:
+        if self.match is None or member.id not in self.match.players:
             return
-        if cursor is None:
-            player.cursor = None
-        elif (isinstance(cursor, list) and len(cursor) == 2 and all(type(v) is int for v in cursor)
-              and self.match.world.index(*cursor) is not None):
-            player.cursor = cursor
-        else:
-            raise LobbyError("Bad cursor.")
+        keys = data.get("keys", [])
+        if not isinstance(keys, list) or len(keys) > len(KEYS) or not all(isinstance(k, str) and k in KEYS for k in keys):
+            raise LobbyError("Bad keys.")
+        aim = data.get("aim")
+        if aim is not None and not (isinstance(aim, list) and len(aim) == 2 and all(type(v) is int for v in aim)):
+            raise LobbyError("Bad aim.")
+        self.match.set_input(member.id, sorted(set(keys)), aim, data.get("dig") is True)
 
     def tick(self, dt):
         if self.match is None or self.match.result is not None:
@@ -109,9 +112,11 @@ class Game(RealtimeGame):
         return view.public(self.match)
 
     def private_state(self, member):
-        if not member.playing or self.match is None:
+        if self.match is None:
             return None
-        return view.private(self.match, member.id)
+        if member.playing and member.id in self.match.players:
+            return view.private(self.match, member.id)
+        return view.spectator(self.match)
 
     # --- actions --------------------------------------------------------------------------
 
@@ -120,12 +125,9 @@ class Game(RealtimeGame):
             raise LobbyError("Join the game to dig.")
         await self.dispatch(member, data)
 
-    def click(self, member, data):
-        self.match.click(member.id, *_xy(data))
+    def dig(self, member, data):
+        self.match.dig(member.id, *_xy(data))
         self.check_over()
-
-    def flake(self, member, data):
-        self.match.catch_flake(member.id, *_xy(data))
 
     def buy(self, member, data):
         machine = one_of(_name(data, "machine"), MACHINES, "Unknown machine.")
@@ -146,11 +148,16 @@ class Game(RealtimeGame):
             qty = whole_number(qty, "The amount")
         self.match.supply(member.id, item, qty)
 
-    def focus(self, member, data):
-        if "x" not in data and "y" not in data:
-            self.match.set_focus(member.id, None)
+    def rally(self, member, data):
+        if data.get("follow") is True:
+            self.match.rally(member.id, "follow")
+        elif "x" in data or "y" in data:
+            self.match.rally(member.id, _xy(data))
         else:
-            self.match.set_focus(member.id, _xy(data))
+            self.match.rally(member.id, None)
+
+    def hut(self, member, data):
+        self.match.build_hut(member.id)
 
     def on_player_removed(self, member):
         if self.match is not None:

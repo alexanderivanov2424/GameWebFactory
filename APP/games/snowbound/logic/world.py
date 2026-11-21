@@ -1,6 +1,7 @@
 """The snowed-in valley: a W x H grid of lots, each holding some snow.
 
-Lot index i = y * w + x. The cabin is in the middle; lots near it start cleared.
+Lot index i = y * w + x; lot (x, y) covers [x, x + 1) x [y, y + 1) in world coordinates, so
+its centre is (x + 0.5, y + 0.5). The cabin is in the middle; lots near it start cleared.
 - depth[i]: the lot's starting snow (deeper further from the cabin, x1.3 in forests).
 - snow[i]: snow left (float). reached[i]: 1 once the lot has been cleared at least once
   (it stays reached even if a blizzard drops snow back on it).
@@ -30,6 +31,7 @@ FEATURES = {
 }
 SCATTER = {"house": 0.006, "gas": 0.0012, "cache": 0.01, "skier": 0.002}
 NEIGHBOURS = ((1, 0), (-1, 0), (0, 1), (0, -1))
+WADE_LEVEL = 4          # people can walk on lots that are reached or have snow up to this level
 
 
 class World:
@@ -95,6 +97,10 @@ class World:
             if j is not None:
                 yield j
 
+    def passable(self, i):
+        """Can a person walk on lot i? (reached, or shallow enough to wade through)"""
+        return bool(self.reached[i]) or self.level(self.snow[i]) <= WADE_LEVEL
+
     def cleared(self):
         """Lots clear of snow right now (reached and not dusted)."""
         return len(self.reached_list) - len(self.dusted)
@@ -144,7 +150,8 @@ class World:
         self.dirty.add(i // self.w)
 
     def nearest_target(self, x, y, skip=(), limit=None):
-        """The workable lot nearest to (x, y), not in skip; None if there is none.
+        """The workable lot nearest to lot coordinates (x, y) (a lot's own x, y, not its centre),
+        not in skip; None if there is none.
         With limit, only looks at lots within that many lots (fast local search)."""
         if limit is not None:
             best, best_d = None, None

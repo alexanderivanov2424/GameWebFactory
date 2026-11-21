@@ -5,16 +5,20 @@ work at 75%, the stove burns BLIZZARD_BURN x logs, warmth drops faster with the 
 deliveries stop, and every second snow falls back on some reached lots (DUST_SHARE of them,
 DUST_FRACTION of their starting depth, x the team's dust upgrades).
 
-Stove: burns STOVE_BURN logs/s (+50% per extra player) from the shared woodpile. Lit: everyone
-warms WARM_UP/s. Out: everyone loses COLD/s (BLIZZARD_COLD in a blizzard; x the survival
-setting and Thermal Suit), STARVING_COLD more while starving.
+Heat: the cabin stove and every warming hut burn logs from the shared woodpile (STOVE_BURN logs/s,
++50% per extra player, +HUT_BURN per hut). While the woodpile has logs, a character within
+CABIN_HEAT lots of the cabin's centre or HUT_HEAT of a hut warms WARM_UP/s. Anywhere else (or with
+no logs) they lose COLD/s (BLIZZARD_COLD in a blizzard; x the survival setting and Thermal Suit),
+STARVING_COLD more while starving.
 Food: drops FOOD_DRAIN/s and CLICK_FOOD per click (x setting, x Big Thermos). At or below
 EAT_AT a ration is eaten automatically (+RATION_FOOD).
-Needs: warmth 0 -> frostbite (no clicking, machines at half speed) until warmth is back to
-THAW_AT; food 0 -> starving (clicks at 20%, colder).
+Needs: warmth 0 -> frostbite (can't shovel, walk slowly) until warmth is back to THAW_AT;
+food 0 -> starving (shoveling at 20%, slower, colder).
 Deliveries (upgrades, 25% fee, not in blizzards): rations kept at 5, a minute of diesel when
 under 30 s, the woodpile kept at 20 logs.
 """
+
+import math
 
 from gamekit import LobbyError
 
@@ -29,10 +33,13 @@ BLIZZARD_BURN = 2.5
 DUST_SHARE = 0.003
 DUST_FRACTION = 0.15
 STOVE_BURN = 0.04
+HUT_BURN = 0.25
 START_LOGS = 30
-WARM_UP = 1.5
-COLD = 0.6
-BLIZZARD_COLD = 1.5
+CABIN_HEAT = 4.0
+HUT_HEAT = 3.0
+WARM_UP = 6.0
+COLD = 0.35
+BLIZZARD_COLD = 1.0
 STARVING_COLD = 0.3
 FOOD_DRAIN = 0.25
 CLICK_FOOD = 0.02
@@ -79,7 +86,8 @@ def shared_mult(match, kind):
 
 
 def stove_burn(match):
-    burn = STOVE_BURN * (1 + 0.5 * (len(match.players) - 1)) * shared_mult(match, "stove")
+    burn = STOVE_BURN * (1 + 0.5 * (len(match.players) - 1)) * (1 + HUT_BURN * len(match.huts))
+    burn *= shared_mult(match, "stove")
     return burn * (BLIZZARD_BURN if match.weather.blizzard else 1)
 
 
@@ -96,7 +104,7 @@ def step(match, dt):
             p.rations -= 1
             p.food = min(100.0, p.food + RATION_FOOD)
         p.starving = p.food <= 0
-        if lit:
+        if lit and near_heat(match, p.x, p.y):
             p.warmth += WARM_UP * dt
         else:
             p.warmth -= (BLIZZARD_COLD if blizzard else COLD) * harsh * p.effect("warm_loss") * dt
@@ -105,9 +113,16 @@ def step(match, dt):
         p.warmth = max(0.0, min(100.0, p.warmth))
         if p.warmth <= 0 and not p.frostbite:
             p.frostbite = True
-            match.say(f"{p.name} has frostbite! Keep the stove burning.")
+            match.say(f"{p.name} has frostbite! Get back to the cabin or a warming hut.")
         elif p.frostbite and p.warmth >= THAW_AT:
             p.frostbite = False
+
+
+def near_heat(match, x, y):
+    w = match.world
+    if math.hypot(x - w.cx - 0.5, y - w.cy - 0.5) <= CABIN_HEAT:
+        return True
+    return any(math.hypot(x - hx - 0.5, y - hy - 0.5) <= HUT_HEAT for hx, hy in match.huts)
 
 
 def clicked(match, player):

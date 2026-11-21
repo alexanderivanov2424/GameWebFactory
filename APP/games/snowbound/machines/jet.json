@@ -3,8 +3,8 @@
   "name": "Jet Blower",
   "cost": 10000000,
   "rate": 55000,
-  "speed": 6.0,
-  "reach": 4.0,
+  "speed": 4,
+  "reach": 4,
   "diesel": 730,
   "text": "A jet engine on a flatbed.",
   "upgrades": [

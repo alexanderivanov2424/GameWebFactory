@@ -3,8 +3,8 @@
   "name": "Road Grader",
   "cost": 30000,
   "rate": 260,
-  "speed": 3.0,
-  "reach": 2.0,
+  "speed": 2.5,
+  "reach": 2,
   "diesel": 3.5,
   "text": "Long blade, longer roads.",
   "upgrades": [

@@ -3,8 +3,8 @@
   "name": "Snow Melter",
   "cost": 1400000,
   "rate": 9000,
-  "speed": 2.0,
-  "reach": 3.0,
+  "speed": 1.5,
+  "reach": 3,
   "diesel": 120,
   "text": "Turns mountains into puddles.",
   "upgrades": [

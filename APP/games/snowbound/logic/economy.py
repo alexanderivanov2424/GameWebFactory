@@ -6,9 +6,11 @@ once for the whole team and stored on the Match, not here.
 
 Player fields: name, color, cash, earned (cash ever earned), cleared (snow ever cleared),
 owned {machine id: count}, upgrades (set of ids), rations, diesel (litres), food 0-100,
-warmth 0-100, frostbite / starving (bool), frenzy (seconds left of x FRENZY), focus (lot
-index the crews head for, or None), cursor ([x, y] or None), clicks (click budget, refilled
-CLICKS_PER_SECOND per second).
+warmth 0-100, frostbite / starving (bool), frenzy (seconds left of x FRENZY), clicks (swing
+budget, refilled CLICKS_PER_SECOND per second).
+Character (avatars.py): x, y (world coordinates), keys (held: up/down/left/right), aim (lot
+[x, y] under the mouse or None), dig (dig button held), swing_cd, swinging (s left of the swing
+animation), rally (None, a lot index, or "follow": where your units look for work first).
 """
 
 from gamekit import LobbyError
@@ -19,12 +21,21 @@ PRICES = {"rations": 12, "diesel": 1.5, "logs": 8}
 DELIVERY_FEE = 1.25
 FRENZY = 5
 CLICKS_PER_SECOND = 15
+MAX_OWNED = 250
 START = {"cash": 0, "rations": 3, "diesel": 20}
 
 
 class Player:
-    def __init__(self, pid, name, color):
+    def __init__(self, pid, name, color, x=0.0, y=0.0):
         self.id = pid
+        self.x = x
+        self.y = y
+        self.keys = ()
+        self.aim = None
+        self.dig = False
+        self.swing_cd = 0.0
+        self.swinging = 0.0
+        self.rally = None
         self.name = name
         self.color = color
         self.cash = START["cash"]
@@ -39,8 +50,6 @@ class Player:
         self.frostbite = False
         self.starving = False
         self.frenzy = 0.0
-        self.focus = None
-        self.cursor = None
         self.clicks = CLICKS_PER_SECOND
 
     # --- multipliers -----------------------------------------------------------------
@@ -57,17 +66,18 @@ class Player:
     def has_auto(self, item):
         return any(UPGRADES[u]["kind"] == "auto" and UPGRADES[u]["value"] == item for u in self.upgrades)
 
-    def machine_rate(self, mid):
-        """Snow per second of all this player's machines of one kind (before weather/needs)."""
-        n = self.owned[mid]
-        if not n:
-            return 0.0
-        rate = n * MACHINES[mid]["rate"]
+    def unit_rate(self, mid):
+        """Snow per second of one of this player's machines of a kind (before weather)."""
+        rate = MACHINES[mid]["rate"]
         for uid in self.upgrades:
             u = UPGRADES[uid]
             if u["kind"] == "machine" and u["machine"] == mid:
                 rate *= u["value"]
         return rate
+
+    def machine_rate(self, mid):
+        """Snow per second of all this player's machines of one kind (before weather)."""
+        return self.owned[mid] * self.unit_rate(mid) if self.owned[mid] else 0.0
 
     def base_rate(self):
         return sum(self.machine_rate(mid) for mid in MACHINES)
@@ -75,8 +85,6 @@ class Player:
     def work_mult(self, blizzard):
         """Multiplier on this player's machines right now."""
         mult = FRENZY if self.frenzy > 0 else 1
-        if self.frostbite:
-            mult *= 0.5
         if blizzard:
             mult *= 0.75
         return mult
@@ -111,6 +119,8 @@ class Player:
     def buy_machine(self, mid, count):
         if mid not in MACHINES:
             raise LobbyError("Unknown machine.")
+        if self.owned[mid] + count > MAX_OWNED:
+            raise LobbyError(f"At most {MAX_OWNED} of each machine.")
         self.pay(machine_cost(mid, self.owned[mid], count))
         self.owned[mid] += count
 

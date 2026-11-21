@@ -1,26 +1,37 @@
 """What clients see (the contract with client/*.js).
 
 public(match):
-    {"w", "h", "cabin": [x, y], "time": s, "rows": World.rows(), "defs": content.defs(),
-     "players": {pid: {"name", "color", "cash", "cleared", "rate" (machine snow/s now), "food",
-                       "warmth", "status": "ok" | "frenzy" | "starving" | "frostbite",
-                       "focus"?: [x, y], "cursor"?: [x, y], "owned": {machine id: n}}},
-     "crews": {"<pid>:<machine>": {"x", "y", "m", "p", "n", "s": idle|driving|working|stalled}},
+    {"w", "h", "cabin": [x, y] (lot), "time": s, "rows": World.rows(), "defs": content.defs(),
+     "players": {pid: {"name", "color", "x", "y" (world coordinates), "swing": bool,
+                       "cash", "cleared", "rate" (machine snow/s now), "food", "warmth",
+                       "status": "ok" | "frenzy" | "starving" | "frostbite",
+                       "rally"?: [x, y] lot | "follow", "owned": {machine id: n}}},
+     "huts": {"<n>": [x, y]}, "hutCost": $, "heat": {"cabin": lots, "hut": lots},
      "weather": {"kind": clear|warning|blizzard, "left": s}, "woodpile": logs,
      "stove": {"lit": bool, "burn": logs per minute}, "flake"?: {"x", "y", "left"},
-     "progress": {"reached" (clear now), "dusted" (reached, snowed on again), "total", "goal": %}, "shared": {upgrade id: pid},
-     "log": {"<n>": text}, "logCount": n, "prices": {item: $}}
-private(match, pid): your shop and supplies
-    {"click": snow per click, "rations", "diesel", "dieselUse": L/s, "frenzy": s,
+     "progress": {"reached" (clear now), "dusted" (reached, snowed on again), "total", "goal": %},
+     "shared": {upgrade id: pid}, "log": {"<n>": text}, "logCount": n, "prices": {item: $},
+     "move": {"radius", "speed", "dusted", "frostbite", "starving", "wade", "reach"}}
+     (move: the character rules client/grid.js needs to predict your walking)
+private(match, pid): your shop, supplies and the units near you
+    {"click": snow per swing, "rations", "diesel", "dieselUse": L/s, "frenzy": s,
      "machines": {id: {"owned", "cost1", "cost10", "rate"}}, "upgrades": [visible ids by cost],
-     "owned": [your upgrade ids], "auto": [delivered items]}
+     "owned": [your upgrade ids], "auto": [delivered items],
+     "units": {uid: {"x", "y", "m", "p", "s": idle|moving|working|stalled}}}
+spectator(match): {"units": ...} near any character (spectators follow a player).
 """
 
-from . import crews, survival
+from . import avatars, survival, units
 from .content import MACHINES, UPGRADES, defs, machine_cost
 from .economy import PRICES
+from .world import WADE_LEVEL
+
+VIEW = 36  # units within this many lots (square) of your character are sent to you
 
 _DEFS = defs()
+_MOVE = {"radius": avatars.RADIUS, "speed": avatars.WALK_SPEED, "dusted": avatars.DUSTED_SLOW,
+         "frostbite": avatars.FROSTBITE_SLOW, "starving": avatars.STARVING_SLOW,
+         "wade": WADE_LEVEL, "reach": avatars.REACH}
 
 
 def _status(p):
@@ -36,25 +47,28 @@ def public(match):
     blizzard = match.weather.blizzard
     players = {}
     for pid, p in match.players.items():
-        entry = {"name": p.name, "color": p.color, "cash": int(p.cash), "cleared": int(p.cleared),
+        entry = {"name": p.name, "color": p.color, "x": round(p.x, 2), "y": round(p.y, 2),
+                 "swing": p.swinging > 0, "cash": int(p.cash), "cleared": int(p.cleared),
                  "rate": round(p.base_rate() * p.work_mult(blizzard), 1), "food": int(p.food),
                  "warmth": int(p.warmth), "status": _status(p),
                  "owned": {mid: n for mid, n in p.owned.items() if n}}
-        if p.focus is not None:
-            entry["focus"] = list(world.xy(p.focus))
-        if p.cursor is not None:
-            entry["cursor"] = list(p.cursor)
+        if p.rally == "follow":
+            entry["rally"] = "follow"
+        elif p.rally is not None:
+            entry["rally"] = list(world.xy(p.rally))
         players[pid] = entry
     state = {
         "w": world.w, "h": world.h, "cabin": [world.cx, world.cy], "time": int(match.time),
-        "rows": world.rows(), "defs": _DEFS, "players": players, "crews": crews.public(match),
+        "rows": world.rows(), "defs": _DEFS, "players": players,
+        "huts": {str(k): list(xy) for k, xy in enumerate(match.huts)}, "hutCost": match.hut_cost(),
+        "heat": {"cabin": survival.CABIN_HEAT, "hut": survival.HUT_HEAT},
         "weather": match.weather.public(), "woodpile": round(match.woodpile, 1),
         "stove": {"lit": match.woodpile > 0, "burn": round(survival.stove_burn(match) * 60, 1)},
         "progress": {"reached": world.cleared(), "dusted": len(world.dusted), "total": world.w * world.h,
                      "goal": round(match.goal * 100)},
         "shared": dict(match.shared_upgrades),
         "log": {str(n): text for n, text in match.log}, "logCount": match.log_count,
-        "prices": PRICES,
+        "prices": PRICES, "move": _MOVE,
     }
     if match.flake is not None:
         x, y = world.xy(match.flake["i"])
@@ -76,4 +90,9 @@ def private(match, pid):
                            "rate": round(p.machine_rate(mid), 1)} for mid in MACHINES},
         "upgrades": visible, "owned": sorted(p.upgrades),
         "auto": sorted(item for item in ("rations", "diesel", "logs") if p.has_auto(item)),
+        "units": units.visible(match, [(p.x, p.y)], VIEW),
     }
+
+
+def spectator(match):
+    return {"units": units.visible(match, [(p.x, p.y) for p in match.players.values()], VIEW)}

@@ -3,7 +3,7 @@
   "name": "Rotary Plow",
   "cost": 200000,
   "rate": 1500,
-  "speed": 4.0,
+  "speed": 2.5,
   "reach": 2.5,
   "diesel": 20,
   "text": "Throws snow a city block away.",

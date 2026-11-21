@@ -25,28 +25,77 @@ def frontier_lot(match):
     return next(i for i in sorted(world.targets) if world.kind[i] == "plain")
 
 
+def stand_next_to(match, pid, i):
+    """Put pid's character on the reached lot next to lot i."""
+    world, p = match.world, match.players[pid]
+    j = next(j for j in world.neighbours(i) if world.reached[j])
+    p.x, p.y = world.xy(j)[0] + 0.5, world.xy(j)[1] + 0.5
+
+
 class RulesTests(unittest.TestCase):
     def test_click_digs_and_pays(self):
         match = new_match()
         world, p = match.world, match.players["p1"]
         i = frontier_lot(match)
+        stand_next_to(match, "p1", i)
         before = world.snow[i]
-        removed = match.click("p1", *world.xy(i))
+        removed = match.dig("p1", *world.xy(i))
         self.assertEqual(removed, 1)
         self.assertAlmostEqual(world.snow[i], before - 1)
         self.assertEqual(p.cash, 1)
 
     def test_click_far_from_cleared_ground_does_nothing(self):
         match = new_match()
-        self.assertEqual(match.click("p1", 0, 0), 0)
+        self.assertEqual(match.dig("p1", 0, 0), 0)
         self.assertEqual(match.players["p1"].cash, 0)
+
+    def test_cannot_shovel_out_of_reach(self):
+        match = new_match()
+        i = frontier_lot(match)
+        match.players["p1"].x += 20
+        self.assertEqual(match.dig("p1", *match.world.xy(i)), 0)
+
+    def test_deep_snow_blocks_walking(self):
+        match = new_match()
+        world, p = match.world, match.players["p1"]
+        i = frontier_lot(match)
+        stand_next_to(match, "p1", i)
+        x, y = world.xy(i)
+        match.set_input("p1", [{(1, 0): "right", (-1, 0): "left", (0, 1): "down", (0, -1): "up"}[
+            (x - int(p.x), y - int(p.y))]], None, False)
+        for _ in range(20):
+            match.step(0.1)
+        self.assertNotEqual((int(p.x), int(p.y)), (x, y))
+
+    def test_warm_only_near_heat(self):
+        match = new_match()
+        p = match.players["p1"]
+        p.warmth = 50
+        match.step(1)
+        self.assertGreater(p.warmth, 50)  # starts at the cabin
+        p.x += 30
+        p.warmth = 50
+        match.step(1)
+        self.assertLess(p.warmth, 50)
+
+    def test_hut_keeps_you_warm_away_from_the_cabin(self):
+        match = new_match()
+        world, p = match.world, match.players["p1"]
+        far = max(world.reached_list, key=lambda i: abs(world.xy(i)[0] - world.cx))
+        world.reached[far] = 1
+        p.x, p.y = world.xy(far)[0] + 0.5, world.xy(far)[1] + 0.5
+        match.huts.append(world.xy(far))
+        p.warmth = 50
+        match.step(1)
+        self.assertGreater(p.warmth, 50)
 
     def test_clearing_a_lot_opens_its_neighbours(self):
         match = new_match()
         world = match.world
         i = frontier_lot(match)
         world.snow[i] = 0.5
-        match.click("p1", *world.xy(i))
+        stand_next_to(match, "p1", i)
+        match.dig("p1", *world.xy(i))
         self.assertTrue(world.reached[i])
         self.assertNotIn(i, world.targets)
         for j in world.neighbours(i):
@@ -56,7 +105,10 @@ class RulesTests(unittest.TestCase):
     def test_machines_clear_snow_on_their_own(self):
         match = new_match()
         p = match.players["p1"]
-        p.owned["helper"] = 5
+        p.cash = 1000
+        match.buy("p1", "helper", 5)
+        self.assertEqual(sum(u.pid == "p1" for u in match.units.values()), 5)
+        p.cash = 0
         for _ in range(50):
             match.step(0.1)
         self.assertGreater(p.cleared, 0)
@@ -65,10 +117,11 @@ class RulesTests(unittest.TestCase):
     def test_diesel_machines_stop_without_diesel(self):
         match = new_match()
         p = match.players["p1"]
-        p.owned["snowblower"] = 3
+        p.cash = 10_000
+        match.buy("p1", "snowblower", 1)
         p.diesel = 0
         match.step(0.1)
-        self.assertEqual(match.crews["p1:snowblower"].state, "stalled")
+        self.assertEqual(next(iter(match.units.values())).state, "stalled")
         self.assertEqual(p.cleared, 0)
 
     def test_cold_stove_gives_frostbite_and_stops_clicking(self):
@@ -79,7 +132,7 @@ class RulesTests(unittest.TestCase):
         match.step(0.1)
         self.assertTrue(p.frostbite)
         with self.assertRaises(LobbyError):
-            match.click("p1", *match.world.xy(frontier_lot(match)))
+            match.dig("p1", *match.world.xy(frontier_lot(match)))
 
     def test_ration_eaten_when_hungry(self):
         match = new_match()
@@ -120,19 +173,20 @@ class RulesTests(unittest.TestCase):
 
 
 class LobbyTests(unittest.TestCase):
-    def test_spectator_cannot_dig_and_gets_no_private_state(self):
+    def test_spectator_cannot_dig_and_gets_no_shop(self):
         sim = Sim(GAME, players=1, settings={"mapSize": "small"})
         s = sim.spectator()
-        sim.fails(s, {"action": "click", "x": 1, "y": 1}, "not playing")
+        sim.fails(s, {"action": "dig", "x": 1, "y": 1}, "not playing")
         sim.tick(1)
-        self.assertIsNone(sim.state(s).get("private"))
+        self.assertNotIn("machines", sim.state(s)["private"])
         self.assertIn("machines", sim.state(0)["private"])
 
     def test_bad_messages_rejected(self):
         sim = Sim(GAME, players=1, settings={"mapSize": "small"})
         sim.fails(0, {"action": "buy", "machine": ["x"], "count": 1}, "Unknown machine")
         sim.fails(0, {"action": "buy", "machine": "helper", "count": 3}, "Buy 1 or 10")
-        sim.fails(0, {"action": "click", "x": "1", "y": 2}, "Bad lot")
+        sim.fails(0, {"action": "dig", "x": "1", "y": 2}, "Bad lot")
+        self.assertIn("Bad keys", sim.input(0, {"keys": ["jump"]}))
         sim.fails(0, {"action": "supply", "item": "logs", "qty": 1.5}, "whole number")
 
     def test_last_player_leaving_stops_the_game(self):
