@@ -1,21 +1,18 @@
 /*
- * Hex Realms: the pannable, zoomable SVG hex map (terrain, territory (weak land dashed), structures, units,
- * your pending orders (Travel goals dashed; units with orders greyed out), highlights, build ghost, event flashes). No game rules here.
+ * Hex Realms map: the pannable, zoomable SVG hex map (terrain, territory, units, orders, highlights). No rules here.
+ * Keys are pointy-top axial "q,r". Drag pans, wheel zooms, a click reports a cell.
  *
- *   const map = HexMap.create(element, { onCell(key), onHover(key|null), onRightClick(key) });
- *   map.draw(game, you, priv)   rebuild the dynamic layers from state (terrain only if the map changed)
- *   map.setHighlights({key: "reach"|"attack"|"range"|"sel"|"claim"|"goal"})   toggle classes on pre-made cell overlays
- *                               ("sel" cells also get one outline round their outside edge, none inside)
- *   map.setGhost({cells, ok, label} | null)   footprint preview under the mouse (small, rebuilt per hover)
- *   map.flash([{at, kind}])     brief pulsing markers (battle/siege cells)
- *   map.centre(key)             pan to a cell;  map.fit() resets the zoom
- *   map.focus(keys, zoom, ms)   glide (pan + zoom, eased) to centre `keys`; a Promise
- *   map.getView() / map.setView(view, ms)   save and glide back to a view ({x, y, k})
- *   map.mark(keys)              rings round cells (the combat replay.js is showing); [] clears
- *   HexMap.util                 pointy-top axial helpers: parse, key, add, neighbors, dist, center, DIRS
- *
- * Pointy-top axial "q,r" keys: x = SIZE*sqrt(3)*(q + r/2), y = SIZE*1.5*r. Drag pans, the wheel zooms
- * around the pointer, a click without dragging reports the cell. Styles (.hr-*) live in index.html.
+ * HexMap.create(el, {onCell, onHover, onRightClick})  returns the map below
+ * map.draw(game, you, priv)          rebuild the dynamic layers
+ * map.setHighlights({key: kind})     reach, attack, range, sel, claim, goal
+ * map.setGhost({cells, ok, label})   build footprint under the mouse
+ * map.flash([{at, kind}])            pulse battle cells
+ * map.centre(key), map.fit()         pan to a cell; reset zoom
+ * map.focus(keys, zoom, ms)          glide to centre keys (Promise)
+ * map.getView(), map.setView(v, ms)  save and restore {x, y, k}
+ * map.mark(keys)                     rings round combat cells
+ * map.setResView(game, flows, extra) resource view
+ * HexMap.util                        axial helpers
  */
 (() => {
   const { svg, fill } = AppDom;
@@ -23,10 +20,22 @@
   const put = (node, ...children) => node.append(...children.flat(Infinity).filter((c) => c !== null && c !== undefined && c !== false));
   const SIZE = 30;
   const SQ3 = Math.sqrt(3);
+  const UNIT_R = SIZE * 0.42;
   const DIRS = [[1, 0], [0, 1], [-1, 1], [-1, 0], [0, -1], [1, -1]]; // DIRS[i] faces angle 60*i
   const COLORS = {
-    grass: "#5c9a47", plains: "#b3b46f", desert: "#d8bf7c", forest: "#2f6d3c",
+    plains: "#5c9a47", desert: "#d8bf7c", forest: "#2f6d3c",
     hills: "#8c7b55", mountain: "#8a8f9b", water: "#3a6ea6",
+  };
+  // Art: units in art/units/<content "art"> (100x100) draw over the disc; terrain in art/terrain/ (208x240) over the flat colour.
+  // Each terrain lists variants as [file, weight]; a cell picks one by hashing its key. Unlisted terrains keep the flat colour.
+  const ART_DIR = new URL("art/", document.currentScript?.src || location.href).href;
+  const TERRAIN_ART = {
+    plains: [["plains.png", 1]],
+    desert: [["desert.png", 1]],
+    forest: [["forest.png", 1]],
+    mountain: [["mountain_1.png", 99], ["mountain_2.png", 1]],
+    hills: [["hill.png", 1]],
+    water: [["ocean.png", 1]],
   };
 
   const parse = (k) => k.split(",").map(Number);
@@ -46,7 +55,7 @@
   const middle = (ks) => { const ps = ks.map(center); return [0, 1].map((i) => ps.reduce((a, p) => a + p[i], 0) / ps.length); };
   const hexAt = (k, s, attrs) => { const [x, y] = center(k); return svg("polygon", { points: pts(x, y, s), ...attrs }); };
 
-  // Edge i of a cell faces DIRS[i] and joins corners i and i+1: lines where the neighbour isn't in `same`.
+  // Edge i faces DIRS[i]; a line is drawn where the neighbour isn't in `same`.
   // `scale` < 1 draws the edges inset towards each cell's centre.
   function borders(cells, same, attrs, scale = 1) {
     const lines = [];
@@ -61,9 +70,8 @@
     return lines;
   }
 
-  // One solid shape for a group of cells: each cell inset to `scale` of its size, with the gaps
-  // between its own cells filled (a strip along each shared edge, a triangle where three meet),
-  // so only the outside edge is inset. A thin stroke of the same colour hides seams.
+  // One solid shape per group of cells: each inset to `scale`, gaps between its own cells filled,
+  // so only the outside edge is inset. A thin same-colour stroke hides seams.
   const BLOB = 0.8;
   function blob(cells, attrs, scale = BLOB) {
     const own = new Set(cells), out = [], seen = new Set();
@@ -84,10 +92,8 @@
     return out;
   }
 
-  // An inset outline round a region (`same(n)` says whether cell n is in it), drawn for `cells` (all of the
-  // region or part of it, e.g. only its weak land): their outside edges inset to `scale`, plus, where two
-  // region cells meet on the outside (a shared corner whose third cell isn't in the region), each cell's
-  // half of the short join between their inset corners (so parts drawn in different styles still meet).
+  // Inset outline round a region (`same(n)`: n is in it), drawn for `cells` (all or part of it).
+  // Where two region cells meet on the outside, each takes half the join so differently styled parts meet.
   function outline(cells, same, attrs, scale) {
     const out = borders(cells, same, attrs, scale);
     const inset = (k, [vx, vy]) => { const [x, y] = center(k); return [x + scale * (vx - x), y + scale * (vy - y)]; };
@@ -110,8 +116,9 @@
     return outline(cells, (n) => own.has(n), attrs, scale);
   }
 
-  // Territory borders sit this far inside each cell, so two realms' borders show side by side.
-  const BORDER = (SIZE - 3) / SIZE;
+  // Territory borders are inset by half their width, so two realms' borders sit side by side.
+  const BORDER_W = 3;
+  const BORDER = 1 - (BORDER_W / 2) / (SIZE * SQ3 / 2);
 
   function glyph(terrain, x, y) {
     const a = { class: "hr-glyph" };
@@ -123,13 +130,33 @@
     return null;
   }
 
+  // A number in [0, 1) from a string (FNV-1a plus a murmur mix), so art variants match on every page.
+  function hash01(text) {
+    let h = 2166136261;
+    for (let i = 0; i < text.length; i++) h = Math.imul(h ^ text.charCodeAt(i), 16777619);
+    h = Math.imul(h ^ (h >>> 16), 0x85ebca6b);
+    h = Math.imul(h ^ (h >>> 13), 0xc2b2ae35);
+    return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
+  }
+
+  // Terrain art for cell k (an image covering its hex), or the line glyph if there is none.
+  function terrainArt(terrain, k, mapKey, x, y) {
+    const variants = TERRAIN_ART[terrain];
+    if (!variants) return glyph(terrain, x, y);
+    let roll = hash01(`${mapKey}|${k}`) * variants.reduce((sum, [, w]) => sum + w, 0);
+    const [file] = variants.find(([, w]) => (roll -= w) < 0) || variants[variants.length - 1];
+    return svg("image", { href: ART_DIR + "terrain/" + file, x: x - 26, y: y - SIZE, width: 52, height: 2 * SIZE, class: "hr-art" });
+  }
+
   function create(element, handlers = {}) {
     const root = svg("svg", { class: "hr-svg" });
-    const world = svg("g");
-    const layer = (name) => { const g = svg("g", { class: `hr-${name}` }); put(world, g); return g; };
+    const world = svg("g"), base = svg("g", { class: "hr-base" });  // base: every layer but the resource view's
+    const layer = (name) => { const g = svg("g", { class: `hr-${name}` }); put(base, g); return g; };
     const terrainG = layer("terrain"), territoryG = layer("territory"), structG = layer("structs"), dimG = layer("dim"), hlG = layer("hl"), selG = layer("sel");
     const hoverG = layer("hover"), orderG = layer("orders"), unitG = layer("units"), ghostG = layer("ghost"), flashG = layer("flashes"), markG = layer("marks");
+    const resG = svg("g", { class: "hr-resview-layer" });
     hlG.style.pointerEvents = "none";
+    put(world, base, resG);
     put(root, world);
     fill(element, root);
 
@@ -193,7 +220,7 @@
       applyView();
     }, { passive: false });
 
-    // Every cell of the hexagonal map; unexplored ones (not in game.cells under fog) are drawn as fog.
+    // Every map cell; unexplored ones (not in game.cells) are drawn as fog.
     function disk(radius) {
       const out = [];
       for (let q = -radius; q <= radius; q++) {
@@ -202,14 +229,15 @@
       return out;
     }
 
-    function buildStatic(game) {
+    function buildStatic(game, mapKey) {
       fill(terrainG); fill(hlG); hl = {}; hlClass = {};
-      const keys = disk(game.radius);
+      // Top row first, left to right: later cells paint over earlier ones, so art can spill upward.
+      const keys = disk(game.radius).sort((a, b) => { const [qa, ra] = parse(a), [qb, rb] = parse(b); return ra - rb || qa - qb; });
       all = new Set(keys);
       for (const k of keys) {
         const [x, y] = center(k);
         const terrain = game.cells[k];
-        if (terrain) put(terrainG, svg("polygon", { points: pts(x, y), fill: COLORS[terrain] || "#777", class: "hr-cell" }), glyph(terrain, x, y));
+        if (terrain) put(terrainG, svg("polygon", { points: pts(x, y), fill: COLORS[terrain] || "#777", class: "hr-cell" }), terrainArt(terrain, k, mapKey, x, y));
         else put(terrainG, svg("polygon", { points: pts(x, y), class: "hr-fog" }));
         hl[k] = svg("polygon", { points: pts(x, y, SIZE - 1), class: "hr-hlcell" }); // transparent until highlighted (SVG fills black by default)
         put(hlG, hl[k]);
@@ -221,7 +249,7 @@
       if (game.cells !== cells) {
         const first = lastKey !== gkey;
         cells = game.cells; lastKey = gkey;
-        buildStatic(game);
+        buildStatic(game, gkey);
         if (first) { fit(); }
       }
       const players = game.players, content = game.content;
@@ -231,20 +259,16 @@
       // Explored but not seen right now: dimmed (enemy units there aren't shown).
       fill(dimG, (game.dim || []).map((k) => hexAt(k, SIZE, { class: "hr-dim" })));
 
-      // Territory: faint tint plus a border in the owner's colour all round it (ownership shows here).
-      // Weak land (bought with gold, game.claims) is fainter with a dashed border.
-      const weak = game.claims || {};
+      // Territory: owner-coloured border round each region (the inside is not shaded).
+      // Borders share one translucent group so overlaps don't darken.
       for (const pid of game.seats) {
         const mine = Object.keys(game.territory).filter((k) => game.territory[k] === pid);
-        const line = { stroke: color(pid), "stroke-width": 3, "stroke-opacity": 0.8, "stroke-linecap": "round" };
+        const line = { stroke: color(pid), "stroke-width": BORDER_W, "stroke-linecap": "round" };
         const same = (n) => game.territory[n] === pid;
-        const strong = mine.filter((k) => weak[k] !== pid), bought = mine.filter((k) => weak[k] === pid);
-        put(territoryG, strong.map((k) => hexAt(k, SIZE, { fill: color(pid), "fill-opacity": 0.16 })),
-          bought.map((k) => hexAt(k, SIZE, { fill: color(pid), "fill-opacity": 0.07 })),
-          outline(strong, same, line, BORDER), outline(bought, same, { ...line, "stroke-dasharray": "6 5", "stroke-linecap": "butt" }, BORDER));
+        put(territoryG, svg("g", { opacity: 0.8 }, ...outline(mine, same, line, BORDER)));
       }
 
-      // Structures: solid, in the structure's own colour (content "color"), fused into one shape each.
+      // Structures: solid, in their colour, fused into one shape each.
       shapeAt = {};
       const reasonFor = (sid, s, def) => {
         if (s.active === false) return "Switched off.";
@@ -270,30 +294,34 @@
         }
         put(structG, g);
       }
-      // Construction sites: the structure's colour, faded, with turns of work done.
-      const working = new Set((priv && priv.building?.works) || []);
+      // Construction sites: faded structure colour, with hammers done and needed. Your sites that get hammers
+      // this turn (idle people building them) have a pulsing green outline and "+n 🔨"; the rest wait.
+      const working = (priv && priv.building?.works) || {};
       for (const [cid, x] of Object.entries(game.sites || {})) {
         const def = content.structures[x.type];
         if (!def) continue;
         const [mx, my] = middle(x.cells);
         for (const k of x.cells) shapeAt[k] = { cells: x.cells, color: color(x.owner) };
-        let tip = `${def.name} under construction (${nameOf(x.owner)}): ${x.done}/${x.turns} turns, ${x.builders} builder${x.builders > 1 ? "s" : ""} a turn`;
-        if (x.owner === you) tip += working.has(cid) ? "\nBuilders at work this turn." : x.done < x.turns ? "\nWaiting: not enough idle people." : "";
-        put(structG, svg("g", { class: "hr-struct hr-site" }, svg("title", {}, tip),
+        let tip = `${def.name} under construction (${nameOf(x.owner)}): ${x.done}/${x.hammers} 🔨`;
+        if (x.owner === you) tip += working[cid] ? `\n${working[cid]} builder${working[cid] > 1 ? "s" : ""} this turn (+${working[cid]} 🔨).` : x.done < x.hammers ? "\nWaiting: no idle people." : "";
+        const n = x.owner === you ? working[cid] || 0 : 0;
+        put(structG, svg("g", { class: `hr-struct hr-site${n ? " hr-building" : ""}` }, svg("title", {}, tip),
           blob(x.cells, { class: "hr-site-cell", fill: def.color, stroke: def.color }),
           svg("text", { x: mx, y: my + 1, class: "hr-icon" }, def.icon || def.name.slice(0, 2)),
-          svg("text", { x: mx, y: my + 17, class: "hr-site-text" }, `${x.done}/${x.turns}`)));
+          svg("text", { x: mx, y: my + 17, class: "hr-site-text" }, `${x.done}/${x.hammers}`,
+            n ? svg("tspan", { class: "hr-site-plus" }, ` +${n}🔨`) : null)));
       }
 
-      // Units (yours that have an order this turn, or a standing order, greyed out).
+      // Units; yours with an order this turn or a standing order are greyed out.
       const ordered = new Set(priv?.ordered || []);
       for (const [uid, u] of Object.entries(game.units)) {
         const def = content.units[u.type];
         const [x, y] = center(u.at);
         const g = svg("g", { class: u.owner === you ? `hr-unit hr-mine${ordered.has(uid) ? " hr-ordered" : ""}` : "hr-unit" },
           svg("title", {}, `${def?.name || u.type} (${nameOf(u.owner)}) hp ${u.hp}/${u.maxHp}`),
-          svg("circle", { cx: x, cy: y, r: SIZE * 0.42, fill: color(u.owner) }),
-          svg("text", { x, y: y + 1, class: "hr-uicon" }, def?.icon || u.type.slice(0, 2)));
+          svg("circle", { cx: x, cy: y, r: UNIT_R, fill: color(u.owner) }),
+          def?.art ? svg("image", { href: ART_DIR + "units/" + encodeURIComponent(def.art), x: x - UNIT_R, y: y - UNIT_R, width: 2 * UNIT_R, height: 2 * UNIT_R, class: "hr-art" })
+            : svg("text", { x, y: y + 1, class: "hr-uicon" }, def?.icon || u.type.slice(0, 2)));
         if (u.maxHp <= 6) {
           const x0 = x - (u.maxHp - 1) * 3.5;
           for (let i = 0; i < u.maxHp; i++) put(g, svg("circle", { cx: x0 + i * 7, cy: y + SIZE * 0.62, r: 2.6, class: i < u.hp ? "hr-pip on" : "hr-pip" }));
@@ -309,15 +337,12 @@
       // Your pending orders.
       if (!priv) return;
       const o = priv.orders, mine = color(you);
-      for (const b of o.builds) {
-        const def = content.structures[b.type];
-        put(orderG, b.cells.map((k) => hexAt(k, SIZE * 0.9, { fill: def?.color || mine, "fill-opacity": 0.35, stroke: mine, "stroke-width": 2.5, "stroke-dasharray": "5 4" })));
+      for (const b of o.builds) {  // planned builds; "+n 🔨" (green) when idle people start on it this turn
+        const def = content.structures[b.type], n = priv.building?.orders?.[b.id] || 0;
+        put(orderG, b.cells.map((k) => hexAt(k, SIZE * 0.9, { fill: def?.color || mine, "fill-opacity": 0.35, stroke: n ? "#6dff8a" : mine, "stroke-width": 2.5, "stroke-dasharray": "5 4" })));
         const [x, y] = middle(b.cells);
-        put(orderG, svg("text", { x, y: y + 1, class: "hr-icon hr-ghosttext" }, def?.icon || ""));
-      }
-      for (const c of o.claims || []) {
-        put(orderG, hexAt(c.at, SIZE * 0.8, { fill: mine, "fill-opacity": 0.25, stroke: mine, "stroke-width": 2.5, "stroke-dasharray": "4 4" }),
-          svg("text", { x: center(c.at)[0], y: center(c.at)[1] + 1, class: "hr-icon hr-ghosttext" }, "⚑"));
+        put(orderG, svg("text", { x, y: y + 1, class: "hr-icon hr-ghosttext" }, def?.icon || ""),
+          svg("text", { x, y: y + 17, class: `hr-site-text${n ? " hr-site-plus" : " hr-site-wait"}` }, n ? `+${n}🔨` : "no builders"));
       }
       for (const [uid, path] of Object.entries(o.moves)) {
         const u = game.units[uid];
@@ -368,8 +393,7 @@
         hl[k].setAttribute("class", `hr-hlcell hr-hl-${c}`);
         hlClass[k] = c;
       }
-      // "sel" cells are only filled; the selection (a unit's cell, or a whole structure) gets one
-      // outline round its outside edge, with no lines between its own cells.
+      // "sel" cells are only filled; the selection gets one outline round its outside edge.
       const sel = Object.keys(next).filter((k) => next[k] === "sel" && hl[k]);
       fill(selG, borders(sel, (n) => next[n] === "sel", { class: "hr-sel-line" }, (SIZE - 1) / SIZE));
     }
@@ -401,8 +425,7 @@
     }
     function fit() { view.k = 0.9; view.x = element.clientWidth / 2; view.y = element.clientHeight / 2; applyView(); }
 
-    // Smooth pan/zoom to `target` ({x, y, k}) over `ms` (0 = jump). Resolves when it gets there, or
-    // as soon as another glide starts.
+    // Eased pan/zoom to `target` over `ms` (0 = jump); resolves on arrival or when another glide starts.
     let anim = null, settle = null;
     function glide(target, ms) {
       cancelAnimationFrame(anim);
@@ -421,19 +444,54 @@
         anim = requestAnimationFrame(frame);
       });
     }
-    // Glide so the middle of `keys` is in the middle of the screen at zoom k.
+    // Glide to centre `keys` at zoom k.
     function focus(keys, k, ms) {
       const [x, y] = middle(keys);
       return glide({ k, x: element.clientWidth / 2 - x * k, y: element.clientHeight / 2 - y * k }, ms);
     }
-    // Rings round the cells of the combat being shown (replay.js); [] clears them.
+    // Rings round the cells of the combat being shown; [] clears them.
     function mark(keys) {
       fill(markG, keys.filter((k) => all.has(k)).map((k) => hexAt(k, SIZE - 3, { class: "hr-mark" })));
     }
 
+    // Resource view. Badges sit above the thing: a structure's middle, a unit's disc.
+    function setResView(game, flows, extra = {}) {
+      root.classList.toggle("hr-resview", !!flows);
+      fill(resG);
+      if (!flows) return;
+      const byId = {};
+      for (const [id, , n, on, tag, of] of flows) (byId[id] ||= []).push({ n, on, tag, of });
+      for (const [id, items] of Object.entries(byId)) {
+        const land = id.startsWith("land:");  // a bought cell's upkeep: badge on the cell itself
+        const s = game.structures[id] || game.sites?.[id] || extra[id] || (land ? { cells: [id.slice(5)] } : null), u = !s && game.units[id];
+        if (!s && !u) continue;
+        const cells = s ? s.cells : [u.at];
+        if (!cells.every((k) => all.has(k))) continue;
+        const live = items.filter((i) => i.on);
+        const blue = (i) => i.tag === "build" || i.tag === "of";  // builders and population counts
+        const plain = live.filter((i) => !blue(i));
+        const plus = plain.some((i) => i.n > 0), minus = plain.some((i) => i.n < 0);
+        const tone = !live.length ? "off" : !plain.length ? "count" : plus && minus ? "mix" : plus ? "pos" : "neg";
+        if (s) put(resG, blobLine(cells, { class: `hr-res-line hr-res-${tone}` }));
+        else put(resG, svg("circle", { cx: center(u.at)[0], cy: center(u.at)[1], r: UNIT_R + 3, class: `hr-res-ring hr-res-${tone}` }));
+        const [x, y0] = s ? middle(cells) : center(u.at);
+        const y = y0 - (land ? 0 : s ? 22 : UNIT_R + 10);
+        const texts = items.map((i) => (i.tag === "of" ? `${i.n}/${i.of}` : i.n > 0 ? `+${i.n}` : `−${-i.n}`));
+        const widths = texts.map((t) => 8 + 7.5 * t.length);
+        let left = x - (widths.reduce((a, w) => a + w, 0) + 3 * (items.length - 1)) / 2;
+        items.forEach((i, j) => {
+          const cls = `hr-badge ${blue(i) ? "hr-res-count" : i.n > 0 ? "hr-res-pos" : "hr-res-neg"}${i.on ? "" : " hr-res-off"}`;
+          put(resG, svg("g", { class: cls },
+            svg("rect", { x: left.toFixed(1), y: (y - 9).toFixed(1), width: widths[j].toFixed(1), height: 18, rx: 6 }),
+            svg("text", { x: (left + widths[j] / 2).toFixed(1), y: y.toFixed(1) }, texts[j])));
+          left += widths[j] + 3;
+        });
+      }
+    }
+
     applyView();
-    return { draw, setHighlights, setGhost, flash, centre, fit, focus, mark, getView: () => ({ ...view }), setView: glide };
+    return { draw, setHighlights, setGhost, flash, centre, fit, focus, mark, setResView, getView: () => ({ ...view }), setView: glide };
   }
 
-  window.HexMap = { create, util: { parse, key, add, neighbors, dist, center, DIRS } };
+  window.HexMap = { create, util: { parse, key, add, neighbors, dist, center, DIRS, colors: COLORS } };
 })();

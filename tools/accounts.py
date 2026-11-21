@@ -1,15 +1,16 @@
-"""Manage player accounts on the host: find, select, show and delete them. ../accounts.sh runs this.
+"""Manage player accounts on the host: find, select, show and delete them. SiteManagement/accounts.sh
+(kept outside the Dev folder, next to startup.sh and shutdown.sh) runs this.
 
     ./accounts.sh                     interactive prompt (type `help`)
     ./accounts.sh list [TEXT]         list accounts, or only those whose name/display name has TEXT
     ./accounts.sh show NAME...        details of accounts
-    ./accounts.sh delete NAME...      delete accounts (asks first)
+    ./accounts.sh delete NAME...      delete accounts (asks first; only while the site is stopped)
     ./accounts.sh --dir PATH ...      use another accounts folder (e.g. APP/.data/accounts for a
-                                      hand-started server); app-server is then left alone
+                                      hand-started server); the site isn't checked then
 
-The default folder is Accounts/ in the Dev folder (next to APP), where the deployed server keeps
-them (deploy.sh). Its files belong to the folder's owner, so no sudo is needed, except that
-deleting runs `sudo systemctl stop/start app-server` when the server is running.
+The default folder is ExternalWrite/Accounts/ in the Dev folder, where the running site keeps them
+(the startup script). Its files belong to the gwf user; an ACL (set once by hand) gives the Dev
+folder's owner read/write, so run this as that user.
 
 Interactive commands: list/find [TEXT], select ITEMS, unselect ITEMS, clear, selected,
 show [ITEMS], delete [ITEMS], help, quit. ITEMS are names or numbers from the last list
@@ -20,23 +21,22 @@ header for the format). Files that can't be read are listed as "(unreadable)" an
 
 Deleting: the running server keeps every account in memory and rewrites an account's file when
 it saves, so deleting a file under a running server does nothing (or gets undone). With the
-default folder, delete therefore stops app-server, removes the files and starts it again (that
-ends games in progress and logs everyone out; the prompt says so first). Deleted files are
-gone for good: there is no backup.
+default folder, delete therefore refuses while the site answers on port SITE_PORT: stop it
+(shutdown.sh), delete, then start it again (startup.sh). This tool can't stop the site itself: the
+scripts that do live outside the Dev folder. Deleted files are gone for good: there is no backup.
 
 Nothing here imports the server: loading accounts through AccountStore could turtle the site.
 """
 
 import json
 import os
-import shutil
-import subprocess
+import socket
 import sys
 import time
 from pathlib import Path
 
-DEFAULT_DIR = Path(__file__).resolve().parent.parent / "Accounts"
-SERVICE = "app-server"
+DEFAULT_DIR = Path(__file__).resolve().parent.parent / "ExternalWrite" / "Accounts"
+SITE_PORT = 8080  # the site's published port on the host
 
 HELP = """Commands:
   list [TEXT]       list accounts (only those whose name or display name contains TEXT)
@@ -53,29 +53,18 @@ ITEMS: account names or numbers from the last list, e.g. `alice 3 5-7`, or `all`
 last list."""
 
 
-class Service:
-    """The app-server systemd unit (the default accounts folder belongs to it)."""
+class Site:
+    """The running site (the gwf pod), seen from the host: something answers on SITE_PORT."""
 
-    def __init__(self, name=SERVICE):
-        self.name = name
+    def __init__(self, port=SITE_PORT):
+        self.port = port
 
-    def _run(self, *args):
-        if not shutil.which("systemctl"):
+    def is_running(self):
+        try:
+            with socket.create_connection(("127.0.0.1", self.port), timeout=1):
+                return True
+        except OSError:
             return False
-        command = ["systemctl", *args, self.name]
-        if os.geteuid() != 0 and args[0] != "is-active":
-            command = ["sudo", *command]  # may ask for the password; its prompt must show
-            return subprocess.run(command).returncode == 0
-        return subprocess.run(command, capture_output=True).returncode == 0
-
-    def is_active(self):
-        return self._run("is-active", "--quiet")
-
-    def stop(self):
-        return self._run("stop")
-
-    def start(self):
-        return self._run("start")
 
 
 class Account:
@@ -126,9 +115,9 @@ def size_text(count):
 
 
 class Manager:
-    def __init__(self, folder, service=None, out=print, ask=input):
+    def __init__(self, folder, site=None, out=print, ask=input):
         self.folder = Path(folder)
-        self.service = service  # Service, or None to leave the server alone
+        self.site = site  # Site, or None when the folder isn't the running site's
         self.out = out
         self.ask = ask
         self.last = []  # keys of the last list, in order (numbers refer to it)
@@ -254,11 +243,12 @@ class Manager:
         if not keys:
             return
         names = ", ".join(accounts[k].name for k in keys)
+        if self.site is not None and self.site.is_running():
+            self.out("  The site is running and keeps accounts in memory, so deleting now would be")
+            self.out("  undone. Stop it (sudo ./shutdown.sh), delete, then start it (sudo ./startup.sh).")
+            self.out("  Nothing deleted.")
+            return
         self.out(f"  Delete {len(keys)} account(s): {names}  (this can't be undone)")
-        restart = self.service is not None and self.service.is_active()
-        if restart:
-            self.out(f"  {SERVICE} is running and keeps accounts in memory, so it will be restarted:")
-            self.out("  games in progress end and everyone is logged out.")
         try:
             answer = self.ask("  Type yes to delete: ")
         except EOFError:
@@ -266,23 +256,11 @@ class Manager:
         if answer.strip().lower() != "yes":
             self.out("  Cancelled.")
             return
-        if restart:
-            self.out(f"  Stopping {SERVICE}...")
-            if not self.service.stop():
-                self.out(f"  Could not stop {SERVICE}; nothing deleted.")
-                return
-        try:
-            for key in keys:
-                accounts[key].path.unlink(missing_ok=True)
-                self.out(f"  Deleted {accounts[key].name}")
-                if key in self.selected:
-                    self.selected.remove(key)
-        finally:
-            if restart:
-                self.out(f"  Starting {SERVICE}...")
-                if not self.service.start():
-                    self.out(f"  Could not start {SERVICE}; check `journalctl -u {SERVICE}` "
-                             "or run ./deploy.sh.")
+        for key in keys:
+            accounts[key].path.unlink(missing_ok=True)
+            self.out(f"  Deleted {accounts[key].name}")
+            if key in self.selected:
+                self.selected.remove(key)
 
     def cmd_help(self, args):
         self.out(HELP)
@@ -338,17 +316,17 @@ def main(argv):
         print(USAGE)
         print(HELP)
         return 0
-    service = None if folder else Service()
+    site = None if folder else Site()
     folder = folder or DEFAULT_DIR
     if not folder.is_dir():
-        print(f"No accounts folder at {folder} (./deploy.sh creates it, or wrong --dir).")
+        print(f"No accounts folder at {folder} (the startup script creates it, or wrong --dir).")
         return 1
     try:
         os.listdir(folder)
     except PermissionError:
-        print(f"Can't read {folder}: run this as its owner (or with sudo).")
+        print(f"Can't read {folder}: run this as the Dev folder's owner (the ACL on ExternalWrite/ gives them access).")
         return 1
-    manager = Manager(folder, service)
+    manager = Manager(folder, site)
     if not argv:
         try:
             import readline  # noqa: F401 - line editing and history for input()

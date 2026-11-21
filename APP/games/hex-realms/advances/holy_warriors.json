@@ -1,10 +1,9 @@
 {
  "name": "Holy Warriors",
  "cost": {
-  "faith": 25
+  "faith": 5
  },
  "effect": {
   "defendDice": 1
- },
- "text": "Units defending in your territory roll 1 more die."
+ }
 }

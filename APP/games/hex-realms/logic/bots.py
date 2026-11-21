@@ -1,26 +1,12 @@
-"""Hex Realms: bots, computer players that plan their orders through the same rules as people.
+"""Hex Realms: computer players. They plan through the same Match.act checks as people and see only what their player knows.
 
     plan(m, pid)    give bot pid's orders for this turn, then mark it done
 
-Every order goes through Match.act, so bots pass the same checks as people, and they only use
-what pid knows (vision.known_at, m.visible, movement.reach), so fog of war applies to them too.
-A simple strategy, in this order each turn:
-  1. Settlers found a city where they stand if they can; otherwise they head for the nearest
-     explored site within CITY_RANGE that it knows is free (about CITY_SPACING + 2 from its own
-     cities), or wander.
-  2. Research the cheapest advance it can afford.
-  3. Builders: if a construction site gets no builders, switch off its newest working structure
-     that doesn't make food (once nothing is waiting, switch everything back on). Then build by
-     need (at most MAX_BUILDS a turn, only with idle people left over for builders): homes when
-     nearly full, farms when food is short, a lumbermill and a mine per city, storage when goods
-     are near the cap, then Barracks, Market, Chapel, College, Smithy, Towers, more farms, anywhere
-     in its territory (near the Town Hall preferred). If a farm / lumbermill / mine finds no land
-     it needs, it buys land (orders.claim, up to MAX_CLAIMS a turn) towards the nearest such terrain.
-  4. Recruit Settlers until it has 3 cities, then an army that grows with the turn number.
-  5. Units: ranged ones shoot what's in range; everyone attacks enemies near its structures;
-     the oldest unit scouts (explore.target, like the Explore order) until a war needs it; from ATTACK_TURN an army of
-     ATTACK_ARMY marches on the nearest enemy city it knows (or any enemy structure); the rest
-     stay near home and hold.
+Each turn: settlers found cities (or walk to a free site); research the cheapest advance;
+builders staff construction; build by need (homes, farms, a lumbermill and mine per city, storage,
+then military and culture), buying land for farms, mills and mines when none is free;
+recruit settlers up to 3 cities, then an army that grows with the turn; units shoot in range,
+defend near home, explore (the Scout always does), and from ATTACK_TURN march on the nearest enemy.
 """
 
 import random
@@ -29,7 +15,7 @@ from collections import Counter
 from gamekit import LobbyError
 from gamekit.hexes import disk, dist, neighbors, parse
 
-from . import construction, economy, explore, logistics, movement, orders, vision
+from . import construction, economy, explore, logistics, movement, orders, territory, vision
 from .content import ADVANCES, STRUCTURES, TOWN_HALL, UNITS, footprint
 from .economy import report, staffing
 
@@ -39,7 +25,7 @@ CITIES = 3
 CITY_RANGE = 10
 ATTACK_TURN = 20
 ATTACK_ARMY = 5
-NEED_TERRAIN = {"farm": {"grass", "plains"}, "lumbermill": {"forest"}, "mine": {"hills", "mountain"}}
+NEED_TERRAIN = {"farm": {"plains"}, "lumbermill": {"forest"}, "mine": {"hills", "mountain"}}
 
 
 def try_act(m, pid, *args):
@@ -67,11 +53,11 @@ class Bot:
     def __init__(self, m, pid):
         self.m, self.pid = m, pid
         self.rng = random.Random(f"{m.settings.get('seed')}-{pid}-{m.turn}")
-        self.mine = [s for s in m.structures.values() if s["owner"] == pid]
+        self.mine = m.structures_of(pid)
         self.sites = [x for x in m.sites.values() if x["owner"] == pid]
         self.halls = [s for s in self.mine if s["type"] == TOWN_HALL]
         self.hall_cells = [c for s in self.halls for c in s["cells"]]
-        self.units = [u for u in m.units.values() if u["owner"] == pid]
+        self.units = m.units_of(pid)
         self.known = vision.known_at(m, pid)
 
     def near_hall(self, k):
@@ -95,8 +81,7 @@ class Bot:
                 try_act(m, pid, "move", u["id"], self.rng.choice(sorted(options)))
 
     def city_site(self, u):
-        """The nearest explored cell within CITY_RANGE where pid could found a city (as far as it
-        knows), preferring about CITY_SPACING + 2 from its own Town Halls."""
+        """Nearest known-free cell in CITY_RANGE for a city, about CITY_SPACING + 2 from its own halls."""
         m, pid = self.m, self.pid
         explored = m.explored[pid] if m.fog else m.cells
         halls = [c for c, (_, stype) in self.known.items() if stype == TOWN_HALL]
@@ -142,7 +127,7 @@ class Bot:
         cities = len(self.halls)
         full = lambda r: rep["caps"].get(r, 0) - stock.get(r, 0) <= 4
         out = []
-        if m.players[pid]["pop"] + 1 >= rep["housing"]:
+        if m.players[pid]["pop"] + rep["soldiers"] + 1 >= rep["housing"]:
             out.append("house" if stock.get("stone", 0) >= 6 else "hut")
         if rep["net"]["food"] <= 1:
             out.append("farm")
@@ -152,8 +137,6 @@ class Bot:
             out.append("mine")
         if any(full(r) for r in ("wood", "stone", "metal")) and have["storage_yard"] < cities:
             out.append("storage_yard")
-        if full("food") and have["granary"] < cities:
-            out.append("granary")
         if m.turn >= 6 and not have["barracks"]:
             out.append("barracks")
         for stype, turn in (("market", 10), ("chapel", 12), ("college", 14)):
@@ -176,7 +159,7 @@ class Bot:
                 try_act(m, pid, "staff", True)
             return
         working = staffing(m, pid)[0]
-        jobs = [s for s in working if STRUCTURES[s["type"]]["jobs"] and not economy.output_keys(s["type"]) & {"food"}]
+        jobs = [s for s in working if economy.jobs(m, s) and not economy.makes_food(s["type"])]
         if jobs:
             try_act(m, pid, "toggle", max(jobs, key=lambda s: s["n"])["id"])
 
@@ -184,13 +167,13 @@ class Bot:
         if not self.halls:
             return
         wants, idle = self.wants()
-        idle -= sum(STRUCTURES[x["type"]]["builders"] for x in self.sites if not construction.finished(x))
+        idle -= sum(1 for x in self.sites if not construction.finished(x))  # at least one builder each
         built = claims = 0
         for stype in wants:
             d = STRUCTURES[stype]
             if built >= MAX_BUILDS or idle < 1:
                 break
-            if d["jobs"] + d["builders"] > idle:
+            if d["jobs"] + 1 > idle:
                 continue
             site = self.site(stype)
             if site is None:
@@ -199,7 +182,7 @@ class Bot:
                 continue
             if try_act(self.m, self.pid, "build", stype, site[0], site[1]):
                 built += 1
-                idle -= d["jobs"] + d["builders"]
+                idle -= d["jobs"] + 1
 
     def free_cells(self):
         m = self.m
@@ -226,8 +209,10 @@ class Bot:
 
     def value(self, stype, cells, touching):
         terrain = self.m.cells
-        if stype == "farm":
-            return sum(2 if terrain[c] == "grass" else 1 for c in cells)
+        if stype == "farm":  # next to its other farms, touching water
+            own = lambda n: self.m.structures.get(self.m.cell_structure.get(n), {})
+            farms = {own(n)["id"] for n in touching if own(n).get("type") == "farm" and own(n)["owner"] == self.pid}
+            return len(farms) + any(terrain.get(n) == "water" for n in touching)
         if stype == "lumbermill":
             return sum(1 for n in touching if terrain.get(n) == "forest") * 2
         if stype == "windmill":
@@ -235,7 +220,7 @@ class Bot:
         return 0
 
     def claim_land(self, stype):
-        """Buy one cell of land (orders.claim) on the way to the nearest known land stype needs."""
+        """Buy one cell (orders.claim) towards the nearest known terrain stype needs."""
         m, pid = self.m, self.pid
         want = NEED_TERRAIN.get(stype)
         known = m.explored[pid] if m.fog else m.cells
@@ -244,6 +229,8 @@ class Bot:
         if not targets or not options:
             return False
         best = min(options, key=lambda k: (min(dist(k, t) for t in targets), self.near_hall(k), k))
+        if report(m, pid)["net"]["gold"] < territory.LAND_UPKEEP:
+            return False
         return try_act(m, pid, "claim", best)
 
     # --- Recruiting ----------------------------------------------------------------------------
@@ -261,7 +248,7 @@ class Bot:
             return
         archers = sum(1 for u in self.units if u["type"] == "archer")
         for s in sorted(self.mine, key=lambda s: s["type"] != "barracks"):
-            if army >= target or p["pop"] < 3:
+            if army >= target:  # troops cost swords, not people: a failed recruit just moves on
                 return
             for ut in self.unit_choices(s, archers, army):
                 if try_act(m, pid, "recruit", s["id"], ut):
@@ -289,6 +276,9 @@ class Bot:
         known = self.known
         threats = self.threats()
         army = [u for u in self.units if not UNITS[u["type"]]["settler"] and not UNITS[u["type"]]["naval"]]
+        for u in [u for u in army if not UNITS[u["type"]]["attack"]]:  # can't fight (the Scout): always explores
+            self.explore(u)
+        army = [u for u in army if UNITS[u["type"]]["attack"]]
         enemy = [c for c, (owner, stype) in known.items() if owner != pid]
         halls = [c for c in enemy if known[c][1] == TOWN_HALL]
         target = None

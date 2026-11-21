@@ -11,6 +11,9 @@
    0
   ]
  ],
+ "tags": [
+  "industrial"
+ ],
  "cost": {
   "stone": 4,
   "wood": 2
@@ -20,12 +23,10 @@
   "metal": 1
  },
  "requires": "bronze_working",
- "text": "+1 metal. Builds catapults; swordsmen and knights need one too.",
  "recruits": [
   "catapult"
  ],
  "category": "industry",
- "buildTurns": 3,
- "builders": 2,
+ "hammers": 6,
  "color": "#474d57"
 }

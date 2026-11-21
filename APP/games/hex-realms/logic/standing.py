@@ -1,30 +1,22 @@
-"""Hex Realms: standing orders, kept across turns until the player gives the unit another order.
+"""Hex Realms: standing orders, kept across turns until the player orders the unit otherwise.
 
-A unit's standing order is u["auto"] (one of MODES; travel also keeps u["goal"]). It survives the
-per-turn order reset: as each turn's planning starts, plan_all gives every such unit this turn's
-order (Match.resolve), as its owner sees the map (fog). Any other order for the unit
-(orders.clear_unit) ends it.
+u["auto"] holds the mode (u["goal"] for travel). plan_all re-plans every standing order each turn
+from the owner's view (fog); Match.resolve calls it. Any other order for the unit (orders.clear_unit)
+ends it.
 
-    MODES                   explore, fight, pillage (orders.auto toggles them) and travel
-                            (orders.move to a cell out of this turn's reach)
-    start(m, uid, mode, goal=None)   set the mode and plan this turn; False (and nothing set) when
-                            there's nothing to do (nothing left to explore, no known way there)
-    plan(m, uid)            this turn's order for the unit's mode; False when the mode is over
-    plan_all(m)             every unit with a standing order; ended ones are dropped
-    stop(u)                 drop the unit's standing order
+    MODES                           explore, fight, pillage, travel
+    start(m, uid, mode, goal=None)  set the mode and plan now; False (nothing set) if there's nothing to do
+    plan(m, uid)                    this turn's order; False when the mode is over
+    plan_all(m)                     re-plan every standing order; ended ones are dropped
+    stop(u)                         drop the standing order
 
-Modes:
-    explore   walk to clear the fog (explore.target); ends when nothing is left to explore
-    travel    walk toward u["goal"] along movement.route, as far as this turn's movement allows;
-              ends on arrival (or next to the goal when one of your units stands on it), or when no
-              known way is left
-    fight     the nearest enemy unit its owner sees: ranged units shoot the nearest one in range;
-              otherwise walk toward the one cheapest to get to (moving into it attacks; ranged
-              units stop once it is in range); hold
-              (+1 defence die) when none is seen or none can be reached
-    pillage   the same against the nearest seen enemy structure that can take hits (moving into
-              it is a siege); while a seen enemy unit is within ALERT cells it fights that unit
-              instead, then goes back to pillaging
+    explore   walk to clear fog (explore.target); ends when nothing is left to explore
+    travel    walk toward u["goal"] via movement.route, as far as this turn allows; ends on arrival
+              (or next to the goal when one of your units stands on it), or when no known way is left
+    fight     shoot the nearest seen enemy in range, else walk to the cheapest seen enemy; hold
+              (+1 defence die) when there is none
+    pillage   the same against seen enemy structures that can take hits (moving into one is a siege);
+              a seen enemy unit within ALERT cells is fought first
 """
 
 from gamekit.hexes import dist
@@ -114,8 +106,7 @@ def enemy_structures(m, u):
 
 
 def attack(m, uid, targets):
-    """Shoot the nearest target in range (ranged units), else head for the cheapest one to get to;
-    hold when there's none or no way to any."""
+    """Shoot the nearest target in range, else head for the cheapest one; hold when none is reachable."""
     u = m.units[uid]
     o = m.orders[u["owner"]]
     rng = UNITS[u["type"]]["range"]

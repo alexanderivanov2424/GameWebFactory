@@ -1,10 +1,9 @@
 {
  "name": "Academics",
  "cost": {
-  "science": 40
+  "science": 8
  },
  "after": [
   "trade"
- ],
- "text": "Universities."
+ ]
 }

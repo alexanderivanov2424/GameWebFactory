@@ -17,6 +17,7 @@ Subclass LobbyGame (instead of BaseGame) to get:
   (see RECONNECT_GRACE in rooms.py) and are shown as offline meanwhile.
 - State: after every change, each client gets one "state" message describing the room:
   the public part (game_state) plus a private part only they can see (private_state).
+  In the lobby phase state.game is lobby_game_state() (default None), e.g. a saved run to continue.
 - Settings: declare them once in SETTINGS (see settings.py); default_settings/clean_settings
   come from it and clients get state.settingsSpec to draw the inputs.
 - Game messages: list them in ACTIONS ({"move": "move", ...}: action name -> method name);
@@ -141,6 +142,11 @@ class LobbyGame(BaseGame):
 
     def game_state(self):
         """Public game state sent to everyone while playing or finished."""
+        return None
+
+    def lobby_game_state(self):
+        """Public info shown in the lobby phase (e.g. the host's saved progress), sent as state.game
+        while in the lobby. Default None. Read members/settings freely; keep it small."""
         return None
 
     def private_state(self, member):
@@ -443,8 +449,8 @@ class LobbyGame(BaseGame):
         }
 
     def public_game(self):
-        """game_state() while playing or finished, None in the lobby."""
-        return self.game_state() if self.phase != LOBBY else None
+        """game_state() while playing or finished, lobby_game_state() in the lobby."""
+        return self.game_state() if self.phase != LOBBY else self.lobby_game_state()
 
     def private_game(self, member):
         """private_state(member) while playing or finished, None in the lobby."""

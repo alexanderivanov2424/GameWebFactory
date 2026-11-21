@@ -1,7 +1,6 @@
 {
  "name": "Archery",
  "cost": {
-  "science": 12
- },
- "text": "Archers."
+  "science": 2
+ }
 }

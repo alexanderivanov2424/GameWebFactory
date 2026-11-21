@@ -9,31 +9,46 @@
   [
    1,
    0
-  ],
-  [
-   0,
-   1
   ]
+ ],
+ "tags": [
+  "food"
  ],
  "cost": {
   "wood": 3
  },
  "jobs": 1,
  "produce": {
-  "food": 2
+  "food": 1
  },
- "perCell": {
-  "grass": {
-   "food": 1
+ "perAdjacent": [
+  {
+   "type": "farm",
+   "gain": {
+    "food": 2
+   },
+   "max": 9
+  },
+  {
+   "terrain": "water",
+   "gain": {
+    "food": 1
+   },
+   "max": 1
+  },
+  {
+   "tag": "industrial",
+   "gain": {
+    "food": -1
+   },
+   "max": 9
   }
- },
+ ],
  "terrain": [
-  "grass",
   "plains"
  ],
- "text": "+1 food for each of its cells on grassland.",
  "category": "food",
- "buildTurns": 2,
- "builders": 1,
- "color": "#e3c75a"
+ "hammers": 2,
+ "color": "#e3c75a",
+ "freeNear": "water"
 }

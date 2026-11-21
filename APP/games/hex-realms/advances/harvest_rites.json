@@ -1,10 +1,11 @@
 {
  "name": "Harvest Rites",
  "cost": {
-  "faith": 12
+  "faith": 2
  },
- "effect": {
-  "farmFood": 1
- },
- "text": "+1 food from every farm."
+ "bonus": {
+  "farm": {
+   "food": 1
+  }
+ }
 }

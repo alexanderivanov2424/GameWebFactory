@@ -19,6 +19,9 @@
    1
   ]
  ],
+ "tags": [
+  "culture"
+ ],
  "cost": {
   "stone": 20,
   "gold": 20,
@@ -29,9 +32,7 @@
  },
  "score": 10,
  "hp": 10,
- "text": "+10 score.",
  "category": "culture",
- "buildTurns": 5,
- "builders": 3,
+ "hammers": 15,
  "color": "#e2d6b4"
 }

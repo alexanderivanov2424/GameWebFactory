@@ -4,7 +4,8 @@
  "cost": {
   "wood": 6,
   "metal": 2,
-  "gold": 4
+  "gold": 4,
+  "swords": 2
  },
  "attack": 2,
  "defense": 0,
@@ -14,8 +15,6 @@
  "siege": 3,
  "requires": "engineering",
  "upkeep": {
-  "food": 1,
-  "gold": 1
- },
- "text": "Each hit on a structure does 3 damage."
+  "food": 1
+ }
 }

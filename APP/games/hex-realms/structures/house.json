@@ -11,15 +11,22 @@
    0
   ]
  ],
+ "tags": [
+  "home"
+ ],
  "cost": {
   "wood": 3,
   "stone": 3
  },
- "housing": 5,
- "home": true,
- "text": "Housing for 5 people.",
+ "housing": 3,
  "category": "homes",
- "buildTurns": 2,
- "builders": 2,
- "color": "#c08552"
+ "hammers": 4,
+ "color": "#c08552",
+ "perAdjacent": {
+  "tag": "home",
+  "gain": {
+   "gold": 1
+  },
+  "needs": 2
+ }
 }

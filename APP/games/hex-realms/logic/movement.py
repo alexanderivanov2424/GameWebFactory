@@ -1,32 +1,22 @@
 """Hex Realms: unit paths and simultaneous movement.
 
-Movement points are in half steps: a unit with move 2 has 4. Entering a cell costs its
-terrain's "move" (grass 2, forest 4...); naval units move on water only (2 per cell).
-Mountains and water stop land units. Own structures can be crossed. A cell with an enemy unit
-or enemy structure can only be the last
-cell of a path: moving into it is an attack (it costs one step, 2).
-
-    reach(m, uid)          {key: previous key} for every cell the unit can end on this turn, as its
-                           owner sees the map (fog: unexplored cells cost 2, hidden enemies are
-                           ignored, remembered structures count)
-    path(m, uid, to)       [keys] from the next cell to `to`, or None if out of reach
-    route(m, uid, goals)   [keys] to the cheapest of `goals` over any number of turns, or None
-                           (a step costing more than the unit's whole movement is never taken)
+    reach(m, uid)            {key: previous key}: cells the unit can end on this turn (owner's view)
+    path(m, uid, to)         keys from the next cell to `to`, or None if out of reach
+    route(m, uid, goals)     keys to the cheapest goal over any number of turns, or None
     this_turn(m, uid, keys)  the part of a route the unit can walk this turn
-    resolve(m, events)     moves every unit with an order, one cell per step, all at once
+    resolve(m, events)       moves every ordered unit, one cell per step, all at once
 
-Resolution uses the real map: each unit has its real movement points, and stops before a cell
-that's impassable or costs more than it has left (fog hid the terrain).
-
-Each step: (1) moving into an enemy structure is a siege; (2) enemy units moving through each
-other fight (both attacking); (3) enemy units moving into the same cell fight there (nobody
-enters); when one player's units move into the same cell, the lowest id goes and the others try
-again next step; (4) units move into free cells (chains of units following each other work);
-(5) a unit still blocked by an enemy attacks it (the blocker defends); one blocked by its own
-side swaps places with it (when they move into each other's cells) or passes over it (and any
-friends behind) to the next free cell on its path, paying for every cell crossed, and otherwise
-stops (its path ends on the friend). Any unit that fights stops
-for the rest of the turn, wherever it stands.
+Movement is in half steps (move 2 = 4 points). Land units stop at mountains and water; naval
+units move on water only. Own structures can be crossed, and so can enemy ones (normal terrain cost) unless
+they block (Walls, Towers) or the unit can't stand there (a ship and a land structure). An enemy unit or
+blocking structure can only be the last cell of a path; entering it is an attack (ATTACK_COST). Ending a move on
+any enemy structure is a siege; a turn's part of a longer route never ends on one (this_turn). Units with 0 attack (can_attack) never
+attack: their paths avoid enemies (they may walk over enemy structures that don't block), they stop instead of sieging or attacking a blocker, and when they meet an
+enemy they only defend (two such units just stop).
+Planning assumes unexplored cells cost 2 and hides enemy units; resolution uses the real map.
+Per step: (1) sieges; (2) enemy units swapping cells fight; (3) enemy units entering the same
+cell fight there; (4) free cells are entered; (5) a blocked unit attacks an enemy blocker, or swaps
+with or passes over a friend. A unit that fights stops for the rest of the turn.
 """
 
 import heapq
@@ -35,14 +25,26 @@ from gamekit.hexes import neighbors
 
 from . import vision
 from .combat import battle, siege
-from .content import TERRAIN, UNITS
+from .content import STRUCTURES, TERRAIN, UNITS
 
 ATTACK_COST = 2
+
+
+def can_attack(u):
+    return UNITS[u["type"]]["attack"] > 0
 
 
 def enemy_structure(m, pid, k):
     sid = m.cell_structure.get(k)
     return sid is not None and m.structures[sid]["owner"] != pid
+
+
+def sieges(m, u, k, last):
+    """Entering k is a siege of the enemy structure there: it blocks, the move ends there, or u can't stand on it."""
+    sid = m.cell_structure.get(k)
+    if sid is None or m.structures[sid]["owner"] == u["owner"]:
+        return False
+    return last or STRUCTURES[m.structures[sid]["type"]]["blocks"] or step_cost(m, u, k) is None
 
 
 def step_cost(m, u, k):
@@ -83,10 +85,20 @@ def is_target(m, u, k, known):
     return owner is not None and owner != u["owner"]
 
 
+def stops_path(m, u, k, known):
+    """A target the unit can only attack, not walk over: a visible enemy unit, a known blocking enemy
+    structure, or a known enemy structure on a cell it can't stand on."""
+    _, visible, structures = known
+    occ = m.unit_at.get(k)
+    if occ is not None and m.units[occ]["owner"] != u["owner"] and k in visible:
+        return True
+    owner, stype = structures.get(k, (None, None))
+    return owner is not None and owner != u["owner"] and (STRUCTURES[stype]["blocks"] or planned_cost(m, u, k, known) is None)
+
+
 def _search(m, u, limited, goals=None):
-    """Cheapest paths from u's cell as its owner sees the map: ({key: previous key}, goal reached).
-    limited: only cells within this turn's movement. goals: stop at the first of these reached.
-    A step that costs more than the unit's whole movement is never taken (a slow unit and a forest)."""
+    """Cheapest paths over the owner's known map: ({key: previous key}, goal reached).
+    limited: this turn's movement only. A step costing more than the unit's whole movement is never taken."""
     known = knowledge(m, u)
     budget = UNITS[u["type"]]["move"] * 2
     best, prev = {u["at"]: 0}, {}
@@ -97,12 +109,14 @@ def _search(m, u, limited, goals=None):
             continue
         if goals is not None and k in goals and k != u["at"]:
             return prev, k
-        if k != u["at"] and is_target(m, u, k, known):
+        if k != u["at"] and stops_path(m, u, k, known):
             continue
         for n in neighbors(k):
             if n not in m.cells:
                 continue
-            if is_target(m, u, n, known):
+            if stops_path(m, u, n, known):
+                if not can_attack(u):
+                    continue
                 c = ATTACK_COST
                 if not UNITS[u["type"]]["naval"] and n in known[0] and m.cells[n] == "water":
                     continue
@@ -118,7 +132,13 @@ def _search(m, u, limited, goals=None):
 
 
 def reach(m, uid):
-    return _search(m, m.units[uid], True)[0]
+    """Cells it can end on: without attack, enemy structures it could walk over are left out."""
+    u = m.units[uid]
+    prev = _search(m, u, True)[0]
+    if can_attack(u):
+        return prev
+    known = knowledge(m, u)
+    return {k: p for k, p in prev.items() if not is_target(m, u, k, known)}
 
 
 def _walk_back(prev, to):
@@ -129,15 +149,13 @@ def _walk_back(prev, to):
 
 
 def path(m, uid, to):
-    prev = reach(m, uid)
-    if to not in prev:
+    if to not in reach(m, uid):
         return None
-    return _walk_back(prev, to)
+    return _walk_back(_search(m, m.units[uid], True)[0], to)
 
 
 def route(m, uid, goals):
-    """[keys] from the next cell to the cheapest of `goals` to get to, over any number of turns (as
-    the owner sees the map), or None if there's no known way."""
+    """Keys from the next cell to the cheapest of goals, over any number of turns, or None."""
     prev, goal = _search(m, m.units[uid], False, set(goals))
     return _walk_back(prev, goal) if goal else None
 
@@ -148,18 +166,22 @@ def this_turn(m, uid, keys):
     known = knowledge(m, u)
     budget, spent, out = UNITS[u["type"]]["move"] * 2, 0, []
     for k in keys:
-        c = ATTACK_COST if is_target(m, u, k, known) else planned_cost(m, u, k, known)
+        stop = stops_path(m, u, k, known)
+        if stop and not can_attack(u):
+            break
+        c = ATTACK_COST if stop else planned_cost(m, u, k, known)
         if c is None or spent + c > budget:
             break
         spent += c
         out.append(k)
+    while len(out) < len(keys) and out and is_target(m, u, out[-1], known):  # don't stop on an enemy structure on the way
+        out.pop()
     return out
 
 
 def pass_friends(m, uid, keys, left):
-    """Walk over the owner's own units at the front of `keys` to the first free cell after them, in
-    one go (cost of every cell crossed). False (nothing moves) if the path ends on a friend, the free
-    cell holds an enemy or an enemy structure, or the movement left doesn't cover it."""
+    """Walk over friends at the front of keys to the first free cell after them, in one go.
+    False (nothing moves) if the path ends on a friend, the free cell is enemy-held, or left can't pay."""
     u = m.units[uid]
     cost = 0
     for i, k in enumerate(keys):
@@ -174,7 +196,7 @@ def pass_friends(m, uid, keys, left):
             return False
     else:
         return False
-    if occ is not None or cost > left[uid] or enemy_structure(m, u["owner"], k):
+    if occ is not None or cost > left[uid] or sieges(m, u, k, i == len(keys) - 1):
         return False
     left[uid] -= cost
     m.move_unit(uid, k)
@@ -196,8 +218,9 @@ def resolve(m, events):
 
         for uid, k in list(intents.items()):  # (1) sieges
             sid = m.cell_structure.get(k)
-            if k not in m.unit_at and enemy_structure(m, m.units[uid]["owner"], k):
-                siege(m, uid, sid, events)
+            if k not in m.unit_at and sieges(m, m.units[uid], k, len(paths[uid]) == 1):
+                if can_attack(m.units[uid]):
+                    siege(m, uid, sid, events)
                 stop(uid)
         for uid, k in list(intents.items()):  # (2) moving through each other
             other = m.unit_at.get(k)
@@ -205,7 +228,9 @@ def resolve(m, events):
                     and m.units[other]["owner"] != m.units[uid]["owner"]:
                 stop(uid)
                 stop(other)
-                battle(m, uid, other, True, True, events)
+                a, b = can_attack(m.units[uid]), can_attack(m.units[other])
+                if a or b:
+                    battle(m, uid, other, a, b, events)
         groups = {}
         for uid, k in intents.items():
             groups.setdefault(k, []).append(uid)
@@ -225,14 +250,17 @@ def resolve(m, events):
                     champion = x
                     continue
                 if x in m.units and m.units[x]["owner"] != m.units[champion]["owner"]:
-                    battle(m, champion, x, True, True, events)
+                    a, b = can_attack(m.units[champion]), can_attack(m.units[x])
+                    if not (a or b):
+                        continue
+                    battle(m, champion, x, a, b, events)
                     if champion not in m.units:
                         champion = x
         moved = True  # (4) free cells
         while moved:
             moved = False
             for uid, k in sorted(intents.items()):
-                if k not in m.unit_at and not enemy_structure(m, m.units[uid]["owner"], k):
+                if k not in m.unit_at and not sieges(m, m.units[uid], k, len(paths[uid]) == 1):
                     cost = step_cost(m, m.units[uid], k)
                     if cost is None or cost > left[uid]:  # the real terrain was worse than planned
                         stop(uid)
@@ -265,6 +293,6 @@ def resolve(m, events):
                     intents.pop(uid)
                     continue
             stop(uid)
-            if occ is not None and m.units[occ]["owner"] != u["owner"]:  # (a target that left: just stop)
+            if occ is not None and m.units[occ]["owner"] != u["owner"] and can_attack(u):  # (a target that left: just stop)
                 stop(occ)
                 battle(m, uid, occ, True, False, events)

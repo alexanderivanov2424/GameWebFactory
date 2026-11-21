@@ -7,6 +7,9 @@
    0
   ]
  ],
+ "tags": [
+  "defense"
+ ],
  "cost": {
   "stone": 2
  },
@@ -14,16 +17,15 @@
  "defense": 1,
  "requires": "masonry",
  "terrain": [
-  "grass",
   "plains",
   "forest",
   "hills",
   "desert",
   "mountain"
  ],
- "text": "Blocks enemy units until knocked down.",
  "category": "defense",
- "buildTurns": 1,
- "builders": 1,
- "color": "#9a9ca2"
+ "hammers": 1,
+ "color": "#9a9ca2",
+ "blocks": true,
+ "outside": true
 }

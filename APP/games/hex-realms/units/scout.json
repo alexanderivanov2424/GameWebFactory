@@ -1,0 +1,10 @@
+{
+ "name": "Scout",
+ "icon": "s",
+ "art": "scout.png",
+ "people": 0,
+ "attack": 0,
+ "defense": 0,
+ "hp": 1,
+ "move": 4
+}

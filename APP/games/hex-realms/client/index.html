@@ -14,6 +14,7 @@
   <script src="/gamekit/room.js" defer></script>
   <script src="/gamekit/lobby.js" defer></script>
   <script src="/gamekit/lobby-ui.js" defer></script>
+  <script src="text.js" defer></script>
   <script src="map.js" defer></script>
   <script src="hud.js" defer></script>
   <script src="panels.js" defer></script>
@@ -25,23 +26,28 @@
     #status { position: fixed; top: 10px; left: 50%; transform: translateX(-50%); z-index: 30; max-width: 460px; text-align: center; }
     #status p { margin: 0; }
 
-    /* The game page: a full-screen dark map with the HUD floating around its edges. */
+    /* Game page: full-screen dark map, HUD floating round its edges. */
     #game { position: fixed; inset: 0; z-index: 1; background: #12161d; color: #e7eaf0; overflow: hidden; }
     #map { position: absolute; inset: 0; cursor: grab; }
     .hr-svg { width: 100%; height: 100%; display: block; user-select: none; }
     .hr-cell { stroke: rgba(0, 0, 0, 0.28); stroke-width: 1; }
+    .hr-art { pointer-events: none; }
     .hr-glyph { fill: none; stroke: rgba(0, 0, 0, 0.28); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; pointer-events: none; }
     .hr-territory, .hr-orders, .hr-units, .hr-structs { pointer-events: none; }
     .hr-struct, .hr-unit { pointer-events: all; }
     .hr-icon { fill: #fff; font: 700 20px sans-serif; text-anchor: middle; dominant-baseline: central; pointer-events: none; }
     .hr-sfill { stroke-width: 1; stroke-linejoin: round; }
     .hr-hover { pointer-events: none; }
-    .hr-hover-line { stroke-width: 4; stroke-linecap: round; filter: drop-shadow(0 0 2px #000); }
+    .hr-hover-line { stroke-width: 4; stroke-linecap: round; }
     .hr-ghosttext { opacity: 0.8; }
     .hr-idle .hr-icon { opacity: 0.5; }
     .hr-site .hr-icon { opacity: 0.45; }
     .hr-site-cell { fill-opacity: 0.4; stroke-opacity: 0.4; stroke-width: 1; }
     .hr-site-text { fill: #fff; font: 700 11px sans-serif; text-anchor: middle; paint-order: stroke; stroke: #10131a; stroke-width: 3; pointer-events: none; }
+    .hr-site-plus { fill: #6dff8a; } .hr-site-wait { fill: #c9ced9; font-weight: 400; }
+    .hr-building .hr-site-cell { fill-opacity: 0.55; stroke: #6dff8a; stroke-opacity: 1; stroke-width: 2.5; animation: hr-build-pulse 1.2s ease-in-out infinite alternate; }
+    .hr-building .hr-icon { opacity: 0.8; }
+    @keyframes hr-build-pulse { from { stroke-opacity: 0.35; } to { stroke-opacity: 1; } }
     .hr-strike { stroke: #ff6a5a; stroke-width: 3; stroke-linecap: round; }
     .hr-hpback { fill: #20242d; stroke: #000; stroke-width: 0.5; }
     .hr-hpbar { fill: #5ccf6a; }
@@ -57,6 +63,19 @@
     .hr-shot { stroke: #ff4a3a; stroke-width: 3; stroke-dasharray: 7 5; }
     .hr-shotmark { fill: none; stroke: #ff4a3a; stroke-width: 3; }
     .hr-hold { fill: #fff; stroke: #10131a; stroke-width: 1.5; }
+    /* Resource view: map greyscale, makers and users coloured. */
+    .hr-resview .hr-base { filter: grayscale(1) brightness(0.75); }
+    .hr-resview-layer { pointer-events: none; }
+    .hr-res-line, .hr-res-ring { fill: none; stroke-width: 4; stroke-linecap: round; }
+    .hr-res-line.hr-res-pos, .hr-res-ring.hr-res-pos { stroke: #4fd16a; }
+    .hr-res-line.hr-res-neg, .hr-res-ring.hr-res-neg { stroke: #ff5a4a; }
+    .hr-res-line.hr-res-mix, .hr-res-ring.hr-res-mix { stroke: #ffc94a; }
+    .hr-res-line.hr-res-count, .hr-res-ring.hr-res-count { stroke: #5aa8ff; }
+    .hr-res-line.hr-res-off, .hr-res-ring.hr-res-off { stroke: #a0a6b2; stroke-dasharray: 4 5; }
+    .hr-badge rect { stroke: #10131a; stroke-width: 1.5; }
+    .hr-badge.hr-res-pos rect { fill: #1f8a3a; } .hr-badge.hr-res-neg rect { fill: #c0281c; } .hr-badge.hr-res-count rect { fill: #2a64b8; }
+    .hr-badge.hr-res-off { opacity: 0.55; } .hr-badge.hr-res-off rect { fill: #5a606c; }
+    .hr-badge text { fill: #fff; font: 700 12px sans-serif; text-anchor: middle; dominant-baseline: central; }
     .hr-hlcell { fill: none; stroke: none; }
     .hr-fog { fill: #0b0e14; stroke: #1a2030; stroke-width: 1; }
     .hr-dim { fill: rgba(6, 9, 14, 0.55); pointer-events: none; }
@@ -67,8 +86,7 @@
     .hr-hl-sel { fill: rgba(255, 255, 255, 0.1); stroke: none; }
     .hr-sel { pointer-events: none; }
     .hr-sel-line { stroke: #ffe36b; stroke-width: 3.5; stroke-linecap: round; }
-    .hr-autorecruit { margin-top: 6px; padding-top: 6px; border-top: 1px solid #364055; }
-    .hr-autorecruit .row { margin: 3px 0; }
+    .hr-hl-focus { fill: rgba(255, 227, 107, 0.35); stroke: #ffe36b; stroke-width: 3; }
     .hr-hl-goal { fill: rgba(255, 227, 107, 0.25); stroke: #ffe36b; stroke-width: 2.5; stroke-dasharray: 5 4; }
     .hr-ghost { pointer-events: none; }
     .hr-ghost-ok { fill: rgba(80, 230, 110, 0.45); stroke: #6dff8a; stroke-width: 2.5; }
@@ -114,10 +132,14 @@
     .hr-chip { background: #2a3243; border-radius: 6px; padding: 2px 8px; font-size: 0.85rem; white-space: nowrap; }
     .hr-chip b { color: #fff; } .hr-chip small { color: #98a2b6; } .hr-chip.full b { color: #ffd36b; }
     .hr-chip.hr-res-gold b { color: #ffd84a; } .hr-chip.hr-res-faith b { color: #d9a8ff; } .hr-chip.hr-res-science b { color: #7fd0ff; }
-    .hr-people { font-size: 0.85rem; }
+    .hr-people { font-size: 0.85rem; border-radius: 6px; padding: 2px 6px; }
+    .hr-people.full b { color: #ffd36b; }
+    .hr-chip, .hr-people { cursor: pointer; }
+    .hr-chip:hover, .hr-people:hover { background: #36405a; }
+    .hr-chip.on, .hr-people.on { background: #4a5d86; box-shadow: 0 0 0 2px #9fb7ff; }
     #hud button, .hr-btn { font: inherit; font-size: 0.85rem; padding: 4px 10px; border-radius: 6px; border: 1px solid #4a566e; background: #2c3548; color: #e7eaf0; cursor: pointer; }
-    #hud button:hover:not(:disabled) { background: #3a4660; }
-    #hud button:disabled { opacity: 0.45; cursor: not-allowed; }
+    #hud button:hover:not(:disabled):not(.poor) { background: #3a4660; }
+    #hud button:disabled, #hud button.hr-build.poor { opacity: 0.45; cursor: not-allowed; }
     #hud button.on { background: #4a5cff; border-color: #8e9bff; }
     #hud button.endturn { background: #2f9e52; border-color: #6fe08a; font-weight: 700; font-size: 1rem; padding: 7px 18px; }
     #hud button.waiting { background: #7a5a1c; border-color: #ffd36b; font-size: 0.9rem; padding: 7px 14px; }
@@ -125,6 +147,10 @@
     .hr-btnrow { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
     .hr-stats { display: flex; flex-wrap: wrap; gap: 4px 10px; font-size: 0.85rem; color: #b8c1d4; }
     .hr-stats b { color: #fff; }
+    .hr-actions { display: grid; grid-template-columns: auto 1fr; gap: 4px 8px; align-items: center; margin: 4px 0; }
+    .hr-actions .hr-btn { justify-self: stretch; }
+    .hr-ustats { display: flex; flex-wrap: wrap; gap: 4px; margin: 3px 0; }
+    .hr-chip.hr-ustat { cursor: default; padding: 1px 6px; }
     .hr-pending { color: #ffd36b; font-size: 0.85rem; }
     .hr-recruit { margin-top: 6px; padding-top: 6px; border-top: 1px solid #2f3748; }
     .hr-recruit .small { margin-left: 8px; }
@@ -136,6 +162,8 @@
     .hr-tick { color: #6fe08a; font-weight: 700; margin-right: 8px; }
     .hr-outtag { color: #ff7d6d; font-size: 0.75rem; margin-right: 8px; }
     .hr-order { padding: 3px 0; gap: 6px; }
+    .hr-order-map { cursor: pointer; }
+    .hr-order-map:hover { background: rgba(255, 255, 255, 0.06); }
     #hud select { font: inherit; background: #2c3548; color: #e7eaf0; border: 1px solid #4a566e; border-radius: 6px; padding: 3px 4px; }
     #hud .row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; } #hud .spacer { flex: 1; }
     #tabs { display: flex; gap: 4px; padding: 0; background: none; border: none; box-shadow: none; }
@@ -153,12 +181,30 @@
     .hr-die.hit { background: #d7463a; color: #fff; }
     .hr-log { padding: 2px 0; color: #b8c1d4; }
     #hint { position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%); max-width: 62vw; z-index: 5; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    #hint .hr-hintrow { flex-basis: 100%; }
+    #hint .hr-here:empty { display: none; }
+    #hint.hr-hintbuild { align-items: flex-start; flex-wrap: nowrap; gap: 12px; }
+    .hr-hintmain { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+    .hr-scard { font-size: 0.85rem; }
+    .hr-popcard { position: fixed; z-index: 20; width: 240px; pointer-events: none; }
+    .hr-popcard h3 { margin: 0 0 4px; } .hr-popcard p { margin: 4px 0 0; }
+    #hint .hr-scard { flex: none; width: 220px; border-left: 1px solid #364055; padding-left: 12px; }
+    .hr-pips { display: flex; flex-wrap: wrap; gap: 4px; margin: 2px 0 4px; }
+    .hr-pip { border-radius: 9px; padding: 0 7px; font-size: 0.72rem; font-weight: 700; color: #fff; text-shadow: 0 1px 1px rgba(0, 0, 0, 0.5); }
+    .hr-spic { display: block; }
+    .hr-shp { font-weight: 700; margin: 2px 0 4px; }
+    .hr-stext { margin-bottom: 2px; }
+    .hr-sres { margin: 4px 0 0; font-weight: 600; }
+    .hr-sstats { margin: 2px 0 0; padding-left: 16px; color: #c3cad8; }
+    .hr-dcol { display: inline-flex; flex-direction: column; align-items: center; }
+    .hr-delta { font-size: 0.75rem; white-space: nowrap; margin-top: 1px; } .hr-delta:empty { display: none; }
     /* Combat replay (replay.js): a bar at the top, you on the left, the other side on the right. */
     #replay { position: absolute; inset: 0; z-index: 7; pointer-events: none; color: #e7eaf0; }
     #replay > * { pointer-events: auto; position: absolute; }
     #replay .muted { color: #98a2b6; } #replay .small { font-size: 0.85rem; } #replay .neg { color: #ff7d6d; }
     #replay-bar { top: 112px; left: 50%; transform: translateX(-50%); display: flex; align-items: center; gap: 12px; min-width: 380px; }
     #replay-bar .spacer { flex: 1; }
+    #replay-bar .hr-next { background: #2f9e52; border-color: #6fe08a; font-weight: 700; }
     .hr-rp { top: 50%; transform: translateY(-50%); width: 270px; display: flex; flex-direction: column; gap: 6px; }
     #replay-left { left: 24px; } #replay-right { right: 24px; }
     .hr-rp-who { display: flex; align-items: center; font-weight: 700; font-size: 1.05rem; }
@@ -205,36 +251,7 @@
       </div>
       <div class="card">
         <h2>How to play</h2>
-        <p>Everyone plans at the same time, in secret. Place structures inside your territory, train units, order moves and
-          attacks, research advances and trade, then press <b>End turn</b>. When all players are done (or the timer runs out)
-          every order resolves together.</p>
-        <p>Every structure works as long as it has its workers (people, who eat food and need housing). Gold, faith and
-          science go straight to your realm, and goods (food, wood, stone, metal) straight into your stores (Town Halls,
-          Storage Yards, Granaries) up to their room. You grow when you make more food than you eat and have free housing.
-          Structures take time to build: each needs a few turns of work, and every turn of work needs its builders,
-          people without a job (oldest site first). Switch structures off (or all at once with <b>Jobs off</b>) or
-          demolish them to free people for building. You can build anywhere in your territory; to build further out,
-          <b>Extend territory</b> (Build tab): gold claims an explored cell next to your land, with its free
-          neighbours, at the end of the turn. Land your structures reach is <b>strong</b>: first come, first served, it
-          stays yours while they stand, and cells two realms reach in the same turn go to nobody. Land bought with gold
-          is <b>weak</b> (dashed border): it becomes nobody's when an enemy unit stands on or next to it (you can't
-          claim there either), when it's cut off from your strong land, or when another realm's structures reach it;
-          your own structures reaching it make it strong.
-          Nothing can be built where an enemy unit stands, and a construction site with an enemy unit on it gets no work.
-          Units keep a standing order across turns until you give them another: <b>Explore</b> (clear the fog),
-          <b>Fight</b> (attack the nearest enemy unit in sight) or <b>Pillage</b> (attack the nearest enemy structure in
-          sight, fighting enemy units that come close first); click a cell beyond a unit's reach to walk there over
-          several turns. Your own units pass through each other. Units with orders are greyed out.
-          Units fight with dice wherever they meet: each die that rolls 4 or more hits (5 or more against a unit standing
-          in forest, hills or mountains, or on its own structure). Lose every Town Hall and you are out.
-          Units appear on the structure that trains them. A military structure can <b>recruit every turn</b> on its own
-          (when you can pay and have people without a job), and give each unit it trains a standing order.
-          Click a cell again to cycle through what's on it (a unit, then the structure under it).
-          <b>Tech tree</b> (next to the Build tab) shows the science and faith advances. When a turn resolves, a replay
-          visits each fight you saw with the dice (you on the left); Skip or Esc stops it, and Settings → Hex Realms sets its
-          speed or turns it off.</p>
-        <p>The last realm standing wins; if several survive to the turn limit, the highest score wins. The host can add
-          bots (computer players) in the settings; once no person is left in the game, it ends and the highest score wins.</p>
+        <div id="rules"></div>
       </div>
     </section>
   </main>
@@ -244,10 +261,8 @@
     <div id="hud">
       <div id="topbar"></div>
       <div id="col-left">
-        <div id="p-players" class="hr-panel"></div>
         <div id="p-selection" class="hr-panel"></div>
         <div id="p-orders" class="hr-panel"></div>
-        <div id="p-trade" class="hr-panel" hidden></div>
       </div>
       <div id="col-right">
         <div id="tabs"></div>

@@ -5,23 +5,26 @@
   [
    0,
    0
-  ],
-  [
-   1,
-   0
   ]
  ],
+ "tags": [
+  "science"
+ ],
  "cost": {
-  "wood": 4,
-  "stone": 3,
-  "gold": 5
+  "wood": 3,
+  "metal": 1,
+  "gold": 4
  },
  "jobs": 1,
- "produce": {
-  "science": 2
- },
+ "produce": {},
  "category": "culture",
- "buildTurns": 3,
- "builders": 2,
- "color": "#5a70b8"
+ "hammers": 4,
+ "color": "#5a70b8",
+ "perAdjacent": {
+  "unique": true,
+  "gain": {
+   "science": 1
+  },
+  "max": 6
+ }
 }

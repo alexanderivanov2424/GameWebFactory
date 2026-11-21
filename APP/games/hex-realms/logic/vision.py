@@ -1,20 +1,9 @@
-"""Hex Realms: fog of war.
+"""Hex Realms: fog of war: what each player sees, has explored and remembers, and their map view.
 
-Each player sees every cell within `vision` of their units (content default 2) and structures
-(default 3: buildings see further than units). Cells once seen stay explored: their terrain is
-known for good. Enemy units show only on cells you see now; enemy structures show as you last saw
-them (`memory`), refreshed whenever you see them again and forgotten once you see they're gone.
-With the "fog" setting off, or for spectators and players who are out, everything is visible.
-
-    update(m)                 recompute m.visible / m.explored / m.memory for every player
-    sees(m, pid, k)           pid sees cell k right now
-    known_at(m, pid)          {key: (owner, type)} for the structures pid knows of (own + remembered)
-    view(m, pid, staffed)     the map part of the state for pid (pid None = everything); construction
-                              sites ("sites") show to their owner, and to others only while seen
-
-Planning uses only what the player knows (movement.reach, orders.*); resolution uses the truth,
-so a unit that walks into a hidden enemy fights it, and one that meets unknown rough terrain
-stops when its movement runs out.
+    update(m)              recompute visible / explored / memory for every player
+    sees(m, pid, k)        pid sees cell k now
+    known_at(m, pid)       {key: (owner, type)} of structures pid knows (own + remembered)
+    view(m, pid, staffed)  the map part of pid's state (pid None = everything)
 """
 
 from gamekit.hexes import disk, parse
@@ -24,14 +13,11 @@ from .content import STRUCTURES, UNITS
 
 def sight(m, pid):
     out = set()
-    for u in m.units.values():
-        if u["owner"] == pid:
-            out.update(disk(UNITS[u["type"]]["vision"], parse(u["at"])))
-    for s in m.structures.values():
-        if s["owner"] == pid:
-            radius = STRUCTURES[s["type"]]["vision"]
-            for c in s["cells"]:
-                out.update(disk(radius, parse(c)))
+    for u in m.units_of(pid):
+        out.update(disk(UNITS[u["type"]]["vision"], parse(u["at"])))
+    for s in m.structures_of(pid):
+        for c in s["cells"]:
+            out.update(disk(STRUCTURES[s["type"]]["vision"], parse(c)))
     return out & m.cells.keys()
 
 
@@ -72,10 +58,9 @@ def known_at(m, pid):
         for c, sid in m.cell_structure.items():
             out[c] = (m.structures[sid]["owner"], m.structures[sid]["type"])
         return out
-    for s in m.structures.values():
-        if s["owner"] == pid:
-            for c in s["cells"]:
-                out[c] = (pid, s["type"])
+    for s in m.structures_of(pid):
+        for c in s["cells"]:
+            out[c] = (pid, s["type"])
     for s in m.memory[pid].values():
         for c in s["cells"]:
             out.setdefault(c, (s["owner"], s["type"]))
@@ -92,7 +77,7 @@ def event_cells(e):
 
 def _sites(m, keep):
     return {cid: {"type": x["type"], "owner": x["owner"], "at": x["at"], "cells": x["cells"], "done": x["done"],
-                  "turns": STRUCTURES[x["type"]]["buildTurns"], "builders": STRUCTURES[x["type"]]["builders"]}
+                  "hammers": STRUCTURES[x["type"]]["hammers"]}
             for cid, x in m.sites.items() if keep(x)}
 
 

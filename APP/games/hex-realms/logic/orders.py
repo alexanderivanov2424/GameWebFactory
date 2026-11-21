@@ -1,32 +1,24 @@
-"""Hex Realms: the orders a player gives while planning a turn (validated, nothing resolves yet).
+"""Hex Realms: the orders a player gives while planning a turn. Checked when given; nothing resolves here.
 
-Costs are paid when an order is given (goods from the Town Halls and the stores linked to them) and refunded when it's cancelled or fails at resolution,
-so a player can never order more than they have. Orders are private until the turn resolves.
+Costs are paid when given and refunded when cancelled or failed, so orders never exceed the stock.
 
-    build(m, pid, stype, at, rot)   structure footprint anchored at `at`, `rot` 60-degree turns
-    recruit(m, pid, sid, utype)     train a unit at a working structure (1 per structure per turn)
-    (autorecruit is recruiting.set_auto: a structure that recruits every turn on its own)
-    move(m, pid, uid, to)           move along the cheapest path; ending on an enemy = attack;
-                                    `to` = the unit's own cell clears its orders; a cell out of
-                                    this turn's reach starts a Travel standing order (standing.py)
-    shoot(m, pid, uid, at)          ranged unit: shoot a cell instead of moving
-    hold(m, pid, uid)               toggle: stay put and defend with 1 more die
-    claim(m, pid, at)               for CLAIM_COST (gold): at resolution, an unowned explored cell next
-                                    to your territory becomes your weak land with its free neighbours
-                                    (territory.py); not with an enemy unit (that you see) on or next
-                                    to it; cancel refunds it
-    auto(m, pid, uid, mode)         toggle a standing order kept across turns (standing.py): explore
-                                    (clear fog), fight (nearest enemy unit) or pillage (nearest enemy
-                                    structure, fighting enemy units that come close)
-    found(m, pid, uid, rot)         settlers found a Town Hall where they stand (instead of moving)
-    research(m, pid, aid)           buy an advance (takes effect at the start of resolution)
-    cancel(m, pid, oid)             undo a build / claim / recruit / research order (refund)
-    trade(m, pid, give, get)        market: give `rate` of one resource for 1 of another, at once
-    toggle(m, pid, sid)             switch a structure with jobs off/on (frees its workers)
-    staff(m, pid, on)               switch every structure with jobs off (on=False) or on at once
-    demolish(m, pid, sid)           at once: a construction site (cost refunded) or a structure (no
-                                    refund, its goods are lost, recruits there cancelled); never a Town Hall
-    disband(m, pid, uid)            remove one of your units at once (its people come home)
+    build(m, pid, stype, at, rot)   structure footprint anchored at `at`, inside your territory (placeable)
+    recruit(m, pid, sid, utype)     train a unit at a working structure (1 per structure a turn)
+    train(m, pid, sid, utype)       auto-train: recruit utype there every turn it can be paid (None: stop)
+    auto_train(m, pid)              place this turn's auto-train recruit orders (start of planning)
+    move(m, pid, uid, to)           cheapest path; onto an enemy attacks; out of reach = Travel
+    shoot(m, pid, uid, at)          ranged unit shoots a cell instead of moving
+    hold(m, pid, uid)               toggle: stay put, defend with 1 more die
+    claim(m, pid, at)               weak land for gold, at once (no cancel)
+    auto(m, pid, uid, mode)         toggle a standing order: explore, fight, pillage
+    found(m, pid, uid, rot)         settlers found a Town Hall where they stand
+    research(m, pid, aid)           buy an advance
+    cancel(m, pid, oid)             undo a build / claim / recruit / research order
+    trade(m, pid, sid, give, get)   set a trade structure's trade, made every turn (give None: stop)
+    toggle(m, pid, sid)             switch a structure with jobs off or on
+    staff(m, pid, on)               switch every structure with jobs off or on
+    demolish(m, pid, sid)           a construction site (refunded) or a structure (no refund)
+    disband(m, pid, uid)            remove one of your units at once
 """
 
 from gamekit import LobbyError
@@ -34,21 +26,11 @@ from gamekit.hexes import dist, neighbors
 
 from .content import ADVANCES, STRUCTURES, TERRAIN, TOWN_HALL, UNITS, footprint
 from . import construction, logistics, standing, territory, vision
-from .economy import report
-from .movement import path
+from .economy import TRADE_GOODS, jobs
+from .movement import can_attack, is_target, knowledge, path
 
 CITY_SPACING = 5
 CLAIM_COST = {"gold": 2}
-TRADE_GOODS = ["gold", "food", "wood", "stone", "metal"]
-
-
-def pay(m, pid, cost):
-    """From the realm's stores (logistics.py), plus realm gold/faith/science."""
-    logistics.take(m, pid, cost)
-
-
-def refund(m, pid, cost):
-    logistics.give(m, pid, cost)
 
 
 def own_unit(m, pid, uid):
@@ -96,6 +78,12 @@ def site_problem(m, pid, stype, cells, pending=(), seen=None):
     return None
 
 
+def placeable(m, pid, d, c):
+    """Cell c is yours, or (for an `outside` structure like a Wall) nobody's and next to yours."""
+    owner = m.territory.get(c)
+    return owner == pid or (d["outside"] and owner is None and any(m.territory.get(n) == pid for n in neighbors(c)))
+
+
 def build(m, pid, stype, at, rot):
     d = STRUCTURES.get(stype)
     if d is None or stype == TOWN_HALL:
@@ -110,26 +98,35 @@ def build(m, pid, stype, at, rot):
     problem = site_problem(m, pid, stype, cells, pending, m.visible[pid])
     if problem:
         raise LobbyError(problem)
-    if any(m.territory.get(c) != pid for c in cells):
-        raise LobbyError("Build inside your territory (claim more land with gold).")
-    pay(m, pid, d["cost"])
+    if any(not placeable(m, pid, d, c) for c in cells):
+        raise LobbyError(f"Build {d['name']}s inside or next to your territory." if d["outside"]
+                         else "Build inside your territory (claim more land with gold).")
+    logistics.take(m, pid, d["cost"])
     o["builds"].append({"id": m.new_id("o"), "type": stype, "at": at, "rot": rot % 6, "cells": cells, "cost": dict(d["cost"])})
 
 
-def recruit_problem(m, pid, s, utype):
+def train_problem(m, pid, s, utype):
+    """Why structure s can't train utype at all (None if it can)."""
     sd, ud = STRUCTURES[s["type"]], UNITS.get(utype)
     if ud is None or utype not in sd["recruits"]:
         return f"{sd['name']} can't train that."
     if ud["requires"] and ud["requires"] not in m.players[pid]["advances"]:
         return f"Research {ADVANCES[ud['requires']]['name']} first."
-    if ud["needs"] and not any(x["owner"] == pid and x["type"] == ud["needs"] for x in m.structures.values()):
+    if ud["needs"] and not m.structures_of(pid, ud["needs"]):
         return f"{ud['name']} needs a {STRUCTURES[ud['needs']]['name']}."
+    return None
+
+
+def recruit_problem(m, pid, s, utype):
+    problem = train_problem(m, pid, s, utype)
+    if problem:
+        return problem
     if any(r["at"] == s["id"] for r in m.orders[pid]["recruits"]):
         return "One unit per structure per turn."
     return None
 
 
-def recruit(m, pid, sid, utype):
+def recruit(m, pid, sid, utype, auto=False):
     s = own_structure(m, pid, sid)
     problem = recruit_problem(m, pid, s, utype)
     if problem:
@@ -138,10 +135,36 @@ def recruit(m, pid, sid, utype):
     p = m.players[pid]
     if p["pop"] < ud["people"]:
         raise LobbyError(f"{ud['name']} needs {ud['people']} people.")
-    pay(m, pid, ud["cost"])
+    logistics.take(m, pid, ud["cost"])
     p["pop"] -= ud["people"]
     m.orders[pid]["recruits"].append({"id": m.new_id("o"), "type": utype, "at": sid, "cost": dict(ud["cost"]),
-                                      "people": ud["people"]})
+                                      "people": ud["people"], "auto": auto})
+
+
+def train(m, pid, sid, utype):
+    s = own_structure(m, pid, sid)
+    if utype is None:
+        s["train"] = None
+        return
+    problem = train_problem(m, pid, s, utype)
+    if problem:
+        raise LobbyError(problem)
+    if UNITS[utype]["settler"]:
+        raise LobbyError("Settlers can't be auto-trained.")
+    s["train"] = utype
+    auto_train(m, pid)
+
+
+def auto_train(m, pid):
+    """Each structure set to auto-train recruits its unit this turn if nothing is ordered there yet and it can be
+    paid (swords come back when a unit dies, so a lost unit is replaced the turn after)."""
+    for s in m.structures_of(pid):
+        utype = s.get("train")
+        if utype and not recruit_problem(m, pid, s, utype):
+            try:
+                recruit(m, pid, s["id"], utype, auto=True)
+            except LobbyError:
+                pass  # can't pay yet: try again next turn
 
 
 def move(m, pid, uid, to):
@@ -149,6 +172,8 @@ def move(m, pid, uid, to):
     if to == u["at"]:
         clear_unit(m, pid, uid)
         return
+    if to in m.cells and not can_attack(u) and is_target(m, u, to, knowledge(m, u)):
+        raise LobbyError(f"{UNITS[u['type']]['name']} can't attack.")
     p = path(m, uid, to)
     if p is None:
         if to not in m.cells:
@@ -196,8 +221,6 @@ def claim_problem(m, pid, at):
         return "Claim a cell next to your territory."
     if territory.threatened(m, pid, at, m.visible[pid]):
         return "An enemy unit is on or next to that cell."
-    if any(c["at"] == at for c in m.orders[pid]["claims"]):
-        return "You're claiming that cell already."
     return None
 
 
@@ -205,8 +228,9 @@ def claim(m, pid, at):
     problem = claim_problem(m, pid, at)
     if problem:
         raise LobbyError(problem)
-    pay(m, pid, CLAIM_COST)
-    m.orders[pid]["claims"].append({"id": m.new_id("o"), "at": at, "cost": dict(CLAIM_COST)})
+    logistics.take(m, pid, CLAIM_COST)
+    m.claims[at] = pid
+    m.refresh()  # it's land now (a hidden enemy unit on or next to it takes it straight back)
 
 
 def auto(m, pid, uid, mode):
@@ -220,6 +244,8 @@ def auto(m, pid, uid, mode):
         raise LobbyError("There's no fog of war to clear.")
     if UNITS[u["type"]]["settler"]:
         raise LobbyError("Settlers don't explore or fight." if mode != "explore" else "Settlers don't explore.")
+    if mode != "explore" and not UNITS[u["type"]]["attack"]:
+        raise LobbyError(f"{UNITS[u['type']]['name']} can't attack.")
     clear_unit(m, pid, uid)
     if not standing.start(m, uid, mode):
         raise LobbyError("Nothing left to explore from here.")
@@ -232,8 +258,6 @@ def found_problem(m, pid, u, rot, planning=True):
     problem = site_problem(m, pid, TOWN_HALL, cells, seen=m.visible[pid] if planning else None)
     if problem:
         return problem
-    if any(c in m.unit_at and m.unit_at[c] != u["id"] for c in cells):
-        return "Move your other units off the site first."
     if planning:
         halls = [c for c, (owner, stype) in vision.known_at(m, pid).items() if stype == TOWN_HALL]
     else:
@@ -265,43 +289,43 @@ def research(m, pid, aid):
     missing = [ADVANCES[x]["name"] for x in a["after"] if x not in p["advances"]]
     if missing:
         raise LobbyError(f"Research {', '.join(missing)} first.")
-    pay(m, pid, a["cost"])
+    logistics.take(m, pid, a["cost"])
     m.orders[pid]["research"].append({"id": m.new_id("o"), "advance": aid, "cost": dict(a["cost"])})
 
 
 def cancel(m, pid, oid):
     o = m.orders[pid]
-    for kind in ("builds", "claims", "recruits", "research"):
+    for kind in ("builds", "recruits", "research"):
         for x in o[kind]:
             if x["id"] == oid:
                 o[kind].remove(x)
-                refund(m, pid, x["cost"])
+                logistics.give(m, pid, x["cost"])
                 m.players[pid]["pop"] += x.get("people", 0)
                 return
     raise LobbyError("No such order.")
 
 
-def trade(m, pid, give, get):
+def trade(m, pid, sid, give, get):
+    s = own_structure(m, pid, sid)
+    if not STRUCTURES[s["type"]]["trade"]:
+        raise LobbyError("That structure doesn't trade.")
+    if give is None:
+        s["trade"] = None
+        return
     if give not in TRADE_GOODS or get not in TRADE_GOODS or give == get:
         raise LobbyError("Trade gold, food, wood, stone or metal for another one.")
-    rate = report(m, pid)["tradeRate"]
-    if not rate:
-        raise LobbyError("You need a working Market or Trading Hall.")
-    if get in logistics.GOODS and not logistics.room(m, pid, get):
-        raise LobbyError(f"No room left for {get} in your stores.")
-    pay(m, pid, {give: rate})
-    refund(m, pid, {get: 1})
+    s["trade"] = {"give": give, "get": get}
 
 
 def toggle(m, pid, sid):
     s = own_structure(m, pid, sid)
-    if not STRUCTURES[s["type"]]["jobs"]:
+    if not jobs(m, s):
         raise LobbyError("That structure has no workers to send home.")
     s["active"] = not s["active"]
 
 
 def staff(m, pid, on):
-    own = [s for s in m.structures.values() if s["owner"] == pid and STRUCTURES[s["type"]]["jobs"]]
+    own = [s for s in m.structures_of(pid) if STRUCTURES[s["type"]]["jobs"]]
     if not own:
         raise LobbyError("You have no structures with workers.")
     for s in own:
@@ -314,7 +338,7 @@ def demolish(m, pid, sid):
         if site["owner"] != pid:
             raise LobbyError("That's not your construction site.")
         construction.remove(m, sid)
-        refund(m, pid, site["cost"])
+        logistics.give(m, pid, site["cost"])
         return
     s = own_structure(m, pid, sid)
     if s["type"] == TOWN_HALL:

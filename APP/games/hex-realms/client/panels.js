@@ -1,20 +1,16 @@
 /*
- * Hex Realms: the tech tree (game.js shows it in a popup over the map) and the last-turn report (events as readable lines, plus the history log).
+ * Hex Realms: the tech tree popup and the last-turn report (events as lines, then the history log).
  *
- *   HexPanels.techTree(el, ctx, currency)   the advances bought with `currency` drawn as a tree (columns by
- *                                 prerequisite depth, lines prerequisite -> advance), each with its cost, text,
- *                                 status (researched / queued / ready / can't afford / locked) and Research button
- *   HexPanels.currencies(content)  the currencies advances are bought with (science, faith), one tab each
- *   HexPanels.report(el, ctx)     game.events (last resolution) with dice faces, then game.log
- *   HexPanels.flashCells(game)    [{at, kind}] for the map's event markers
- *
- * ctx is the one built in game.js (see hud.js). Event shapes come from logic/combat.py, match.py, economy.py.
+ *   HexPanels.techTree(box, ctx, currency)  advances bought with `currency`, as a tree with Research buttons
+ *   HexPanels.currencies(content)           currencies advances are bought with (science, faith)
+ *   HexPanels.report(box, ctx)              game.events as readable lines, then game.log
+ *   HexPanels.flashCells(game)              [{at, kind}] for the map's event markers
  */
 (() => {
   const { el, fill, svg } = AppDom;
   const { costText, canPay, nameSpan, btn } = HexHud.fmt;
 
-  // Advances are bought with one currency (science or faith): the first key of their cost.
+  // An advance's currency is the first key of its cost.
   const currencyOf = (a) => Object.keys(a.cost || {})[0] || "science";
   const currencies = (content) => {
     const found = new Set(Object.values(content.advances).map(currencyOf));
@@ -23,9 +19,7 @@
 
   const NODE_W = 230, NODE_H = 132, GAP_X = 70, GAP_Y = 18;
 
-  // The advances bought with `currency`, as a tree: columns by depth (one more than the deepest
-  // prerequisite in the same tree), each advance placed level with (the middle of) its prerequisites
-  // where there's room, and a line from each prerequisite to the advances it opens.
+  // Columns by depth in the prerequisite tree; each advance sits level with its prerequisites where there's room.
   function techTree(box, ctx, currency) {
     const { content, me, priv, act } = ctx;
     const A = content.advances;
@@ -64,15 +58,15 @@
     const nodes = ids.map((id) => {
       const a = A[id], [x, y] = pos(id);
       const missing = a.after.filter((x) => !owned.has(x));
-      const why = missing.length ? `Research ${missing.map((x) => A[x]?.name || x).join(", ")} first` : !canPay(ctx, a.cost) ? "Can't afford" : "";
+      const why = missing.length ? HexText.panels.needFirst(missing.map((x) => A[x]?.name || x).join(", ")) : !canPay(ctx, a.cost) ? HexText.panels.cantAfford : "";
       const status = owned.has(id) ? "owned" : queued.has(id) ? "queued" : missing.length ? "locked" : why ? "poor" : "ready";
       const other = a.after.filter((x) => !inTree.has(x));  // prerequisites from the other tree
       return el("div", { className: `hr-tnode ${status}`, style: `left:${x}px;top:${y}px;width:${NODE_W}px;height:${NODE_H}px` },
         el("div", { className: "row" }, el("b", {}, owned.has(id) ? "✓ " : "", a.name), el("span", { className: "spacer" }), el("span", { className: "small" }, costText(a.cost))),
-        el("div", { className: "small muted hr-ttext" }, a.text),
+        el("div", { className: "small muted hr-ttext" }, HexText.advances[id]),
         other.length ? el("div", { className: "small muted" }, `After: ${other.map((x) => A[x]?.name || x).join(", ")}`) : null,
         el("div", { className: "hr-tfoot" }, owned.has(id) ? el("span", { className: "small pos" }, "Researched")
-          : queued.has(id) ? el("span", { className: "small pos" }, "Queued: learnt as the turn resolves")
+          : queued.has(id) ? el("span", { className: "small pos" }, HexText.panels.queued)
           : btn("Research", () => act.send({ action: "research", advance: id }), { disabled: !!why, title: why }),
           !owned.has(id) && !queued.has(id) && why ? el("span", { className: "small muted" }, ` ${why}`) : null));
     });
@@ -87,7 +81,7 @@
     const { game, content, you } = ctx;
     const unitName = (t) => content.units[t]?.name || t;
     const structName = (t) => content.structures[t]?.name || t;
-    const needOf = (s) => s.need || (content.terrain[game.cells[s.at]]?.cover ? 5 : 4);  // the roll that hits unit side s
+    const needOf = (s) => s.need || (content.terrain[game.cells[s.at]]?.cover ? 5 : 4);  // event's hit roll, else by cover
     const who = (s) => el("span", {}, nameSpan(game, s.owner), ` ${unitName(s.type)}`);
     const where = (at) => (at ? el("a", { className: "hr-cell-link", onclick: () => ctx.act.centre(at), title: "Show on the map" }, ` @${at}`) : null);
     const line = (...kids) => el("div", { className: "hr-ev" }, ...kids);
@@ -116,7 +110,6 @@
           lines.push(line(el("b", { className: "neg" }, "Destroyed "), nameSpan(game, e.owner), ` ${structName(e.type)}`, e.by ? [" by ", nameSpan(game, e.by)] : null, where(e.at)));
           break;
         case "built": lines.push(line("Built ", nameSpan(game, e.owner), ` ${structName(e.type)}`, where(e.at))); break;
-        case "claimed": lines.push(line("Claimed ", nameSpan(game, e.owner), " land", where(e.at))); break;
         case "site": lines.push(line("Started building ", nameSpan(game, e.owner), ` ${structName(e.type)}`, where(e.at))); break;
         case "failed":
           if (e.owner === you) lines.push(line(el("span", { className: "neg" }, "Failed: "), `${e.what === "claim" ? "Land claim" : content.structures[e.what]?.name || unitName(e.what)} — ${e.why}`, where(e.at)));
@@ -124,7 +117,9 @@
         case "recruited": lines.push(line("Recruited ", nameSpan(game, e.owner), ` ${unitName(e.type)}`, where(e.at))); break;
         case "founded": lines.push(line(el("b", {}, "Founded "), nameSpan(game, e.owner), " a new city", where(e.at))); break;
         case "research": lines.push(line("Researched ", nameSpan(game, e.owner), ` ${content.advances[e.advance]?.name || e.advance}`)); break;
-        case "starve": lines.push(line(el("span", { className: "neg" }, "Famine "), nameSpan(game, e.owner), " ran out of food")); break;
+        case "starve": lines.push(line(el("span", { className: "neg" }, "Famine "), nameSpan(game, e.owner), ` ran out of food: ${e.n || 1} ${(e.n || 1) === 1 ? "person" : "people"} starved`)); break;
+        case "starved": lines.push(line(el("span", { className: "neg" }, "Famine "), nameSpan(game, e.owner), ` ${unitName(e.type)} starved`, where(e.at))); break;
+        case "landLost": lines.push(line(el("span", { className: "neg" }, "Unpaid land "), nameSpan(game, e.owner), ` gave up ${e.n} cell${e.n === 1 ? "" : "s"} of bought land (not enough gold for its upkeep)`)); break;
         case "desert": lines.push(line(el("span", { className: "neg" }, "Desertion "), nameSpan(game, e.owner), ` ${unitName(e.type)} left`, where(e.at))); break;
         case "eliminated": lines.push(line(el("b", { className: "neg" }, "Eliminated "), nameSpan(game, e.owner))); break;
         default: break;

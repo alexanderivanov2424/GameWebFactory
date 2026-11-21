@@ -1,10 +1,11 @@
 {
  "name": "Pilgrimage",
  "cost": {
-  "faith": 30
+  "faith": 6
  },
- "effect": {
-  "chapelGold": 2
- },
- "text": "+2 gold per working Chapel."
+ "bonus": {
+  "chapel": {
+   "gold": 2
+  }
+ }
 }

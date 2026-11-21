@@ -1,10 +1,9 @@
 {
  "name": "Divine Right",
  "cost": {
-  "faith": 20
+  "faith": 4
  },
- "effect": {
-  "homeHousing": 1
- },
- "text": "+1 housing per Hut and House."
+ "housing": {
+  "home": 1
+ }
 }

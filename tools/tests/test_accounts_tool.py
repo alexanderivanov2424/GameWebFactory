@@ -12,23 +12,12 @@ tool = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(tool)
 
 
-class FakeService:
-    def __init__(self, active=True):
-        self.active = active
-        self.calls = []
+class FakeSite:
+    def __init__(self, running=False):
+        self.running = running
 
-    def is_active(self):
-        return self.active
-
-    def stop(self):
-        self.calls.append("stop")
-        self.active = False
-        return True
-
-    def start(self):
-        self.calls.append("start")
-        self.active = True
-        return True
+    def is_running(self):
+        return self.running
 
 
 class ToolTest(unittest.TestCase):
@@ -44,8 +33,8 @@ class ToolTest(unittest.TestCase):
         (self.folder / "broken.json").write_text("{not json")
         self.lines = []
         self.answers = []
-        self.service = FakeService()
-        self.m = tool.Manager(self.folder, self.service, out=self.lines.append,
+        self.site = FakeSite()
+        self.m = tool.Manager(self.folder, self.site, out=self.lines.append,
                               ask=lambda prompt: self.answers.pop(0))
 
     def text(self):
@@ -83,31 +72,29 @@ class ToolTest(unittest.TestCase):
         self.assertIn("tanks", self.text())
         self.assertIn("Unreadable:", self.text())
 
-    def test_delete_restarts_running_server(self):
+    def test_delete_while_site_stopped(self):
         self.m.run_command("select alice broken")
         self.answers = ["yes"]
         self.m.run_command("delete")
         self.assertEqual(self.files(), ["bob.json", "carol.json"])
-        self.assertEqual(self.service.calls, ["stop", "start"])
         self.assertEqual(self.m.selected, [])
         self.assertEqual(sorted(p.name for p in self.folder.parent.iterdir()), ["accounts"])  # no backup
-        self.assertIn("will be restarted", self.text())
+
+    def test_delete_refused_while_site_runs(self):
+        self.site.running = True
+        self.answers = ["yes"]
+        self.m.run_command("delete bob")
+        self.assertIn("bob.json", self.files())
+        self.assertIn("Nothing deleted", self.text())
+        self.assertEqual(self.answers, ["yes"])  # never asked
 
     def test_delete_needs_yes(self):
         self.answers = ["y"]
         self.m.run_command("delete bob")
         self.assertIn("Cancelled", self.text())
         self.assertIn("bob.json", self.files())
-        self.assertEqual(self.service.calls, [])
 
-    def test_delete_leaves_stopped_server_alone(self):
-        self.service.active = False
-        self.answers = ["yes"]
-        self.m.run_command("delete bob")
-        self.assertNotIn("bob.json", self.files())
-        self.assertEqual(self.service.calls, [])
-
-    def test_delete_without_service(self):
+    def test_delete_without_site(self):
         m = tool.Manager(self.folder, None, out=self.lines.append, ask=lambda p: "yes")
         m.run_command("delete carol")
         self.assertNotIn("carol.json", self.files())

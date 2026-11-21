@@ -5,7 +5,18 @@
   [
    0,
    0
+  ],
+  [
+   1,
+   0
+  ],
+  [
+   0,
+   1
   ]
+ ],
+ "tags": [
+  "industrial"
  ],
  "cost": {
   "wood": 4
@@ -15,19 +26,15 @@
   "hills",
   "mountain"
  ],
- "onTerrain": {
+ "category": "industry",
+ "hammers": 2,
+ "color": "#6e6e78",
+ "perCell": {
   "hills": {
-   "stone": 2,
-   "metal": 1
+   "stone": 1
   },
   "mountain": {
-   "stone": 1,
-   "metal": 2
+   "metal": 1
   }
- },
- "text": "Hills: +2 stone +1 metal. Mountain: +1 stone +2 metal.",
- "category": "industry",
- "buildTurns": 2,
- "builders": 1,
- "color": "#6e6e78"
+ }
 }

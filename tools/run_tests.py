@@ -1,21 +1,23 @@
-"""Check everything that can be checked without a browser. deploy.sh runs this first.
+"""Check everything that can be checked without a browser. The site's startup script runs this first
+(in a throwaway container, on a snapshot of the code).
 
     python3 -I tools/run_tests.py            # everything
     python3 -I tools/run_tests.py tanks      # one game's tests (plus compile + JS checks)
     python3 -I tools/run_tests.py gamekit    # the shared library's tests
-    python3 -I tools/run_tests.py tools      # the tools' tests (accounts.sh, new_game.py + templates)
+    python3 -I tools/run_tests.py tools      # the tools' tests (accounts.py, new_game.py + templates)
 
 Steps (stops with exit code 1 if any fails):
-1. Compile every .py file under APP.
+1. Compile every .py file under APP and AdditionalPages, and check the additional pages
+   (tools/additional_pages.py: folder names, web/index.html, site.json; the startup script lists them with it).
 2. Import every game exactly as the server does (games.<id>.server) and check it has Game.
 3. Run unit tests: every tests/test_*.py under APP/server, APP/gamekit, APP/games/<id> and tools
    (standard-library unittest; APP is on sys.path, so tests import gamekit, gamekit.sim, ...).
-4. Syntax-check every .js file under APP/web and APP/games/*/client (tools/jscheck.py).
+4. Syntax-check every .js file under APP/web, APP/games/*/client and AdditionalPages/*/web (tools/jscheck.py).
 
 Safety: tests run with server/turtle.py in test mode (turtle() raises Turtled instead of shutting
 the site down), with the state folder ($STATE_DIRECTORY) pointed at a temporary folder and
 $ACCOUNTS_DIRECTORY unset (so accounts go there too), so no
-test touches real accounts or writes a real TURTLE marker, even when deploy.sh runs this as root.
+test touches real accounts or writes a real TURTLE marker.
 """
 
 import importlib.util
@@ -27,19 +29,21 @@ import tempfile
 import unittest
 from pathlib import Path
 
-sys.dont_write_bytecode = True  # keep __pycache__ folders out of APP (deploy copies it)
+sys.dont_write_bytecode = True  # keep __pycache__ folders out of APP (the startup script copies it)
 
 ROOT = Path(__file__).resolve().parent.parent
 APP = ROOT / "APP"
+PAGES = ROOT / "AdditionalPages"
 sys.path.insert(0, str(APP))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
+import additional_pages  # noqa: E402
 import jscheck  # noqa: E402
 
 
 def compile_all():
     failures = []
-    for path in sorted(APP.rglob("*.py")):
+    for path in sorted(APP.rglob("*.py")) + sorted(PAGES.glob("*/*.py")):
         try:
             compile(path.read_text(encoding="utf-8"), str(path), "exec")
         except SyntaxError as error:
@@ -88,6 +92,7 @@ def load_tests(dirs):
 def js_files():
     files = sorted((APP / "web").rglob("*.js"))
     files += sorted((APP / "games").glob("*/client/**/*.js"))
+    files += sorted(PAGES.glob("*/web/**/*.js"))
     return files
 
 
@@ -111,6 +116,11 @@ def run(argv):
 
     print("== Compiling Python")
     for failure in compile_all():
+        print(" ", failure)
+        ok = False
+
+    print("== Checking additional pages")
+    for failure in additional_pages.load_sites(PAGES)[1]:
         print(" ", failure)
         ok = False
 

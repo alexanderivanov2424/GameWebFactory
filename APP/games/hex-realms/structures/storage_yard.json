@@ -15,17 +15,20 @@
    1
   ]
  ],
+ "tags": [
+  "storage"
+ ],
  "cost": {
   "wood": 4
  },
- "store": {
-  "wood": 40,
-  "stone": 40,
-  "metal": 40
- },
- "text": "Holds 40 wood, stone and metal.",
  "category": "industry",
- "buildTurns": 2,
- "builders": 1,
- "color": "#a3845c"
+ "hammers": 2,
+ "color": "#a3845c",
+ "storage": 5,
+ "boost": [
+  {
+   "tag": "industrial",
+   "add": 1
+  }
+ ]
 }

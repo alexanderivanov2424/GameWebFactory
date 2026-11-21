@@ -3,7 +3,8 @@
  "icon": "Ga",
  "cost": {
   "wood": 8,
-  "gold": 4
+  "gold": 4,
+  "swords": 2
  },
  "attack": 3,
  "defense": 2,
@@ -12,9 +13,7 @@
  "naval": true,
  "requires": "sailing",
  "upkeep": {
-  "food": 1,
-  "gold": 1
+  "food": 1
  },
- "text": "Moves on water. Attacks units and structures on the shore.",
  "vision": 3
 }

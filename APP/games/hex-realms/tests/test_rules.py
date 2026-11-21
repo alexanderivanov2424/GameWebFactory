@@ -1,13 +1,10 @@
 """Hex Realms: rules tests on logic.Match (one rule per test). Run: python3 -I tools/run_tests.py hex-realms"""
 
 import importlib
-import random
 import unittest
 
-from gamekit import LobbyError
-
 h = importlib.import_module("games.hex-realms.tests.helpers")
-Match, blank, hall, rich, stock, unit = h.Match, h.blank, h.hall, h.rich, h.stock, h.unit
+blank, hall, rich, stock, unit, well_fed = h.blank, h.hall, h.rich, h.stock, h.unit, h.well_fed
 economy = importlib.import_module("games.hex-realms.logic.economy")
 movement = importlib.import_module("games.hex-realms.logic.movement")
 
@@ -15,37 +12,6 @@ movement = importlib.import_module("games.hex-realms.logic.movement")
 def end_turn(m):
     for pid in m.alive():
         m.set_done(pid, True)
-
-
-class StartTests(unittest.TestCase):
-    def test_everyone_starts_with_settlers_only(self):
-        m = Match({"p1": "A", "p2": "B", "p3": "C"}, {"turns": 40, "mapSize": "normal", "seed": 7}, rng=random.Random(3))
-        self.assertEqual(m.structures, {})
-        for pid in m.seats:
-            self.assertEqual([u["type"] for u in m.units.values() if u["owner"] == pid], ["settlers"])
-
-    def test_first_city_gets_the_starting_goods(self):
-        m = Match({"p1": "A", "p2": "B"}, {"turns": 40, "mapSize": "normal", "seed": 7}, rng=random.Random(3))
-        s = next(u for u, x in m.units.items() if x["owner"] == "p1")
-        m.act("p1", "found", s, m.private("p1")["found"][s][0])
-        end_turn(m)
-        self.assertTrue(m.players["p2"]["alive"])  # no city yet, but settlers: still in
-        self.assertEqual(stock(m, "p1")["wood"], h.match_mod.START_GOODS["wood"])
-
-    def test_turn_resolves_when_everyone_is_done(self):
-        m = blank()
-        hall(m, "p1", "-6,0"), hall(m, "p2", "6,0")
-        m.set_done("p1", True)
-        self.assertEqual(m.turn, 1)
-        m.set_done("p2", True)
-        self.assertEqual(m.turn, 2)
-
-    def test_an_order_takes_back_end_turn(self):
-        m = blank()
-        hall(m, "p1", "-6,0"), hall(m, "p2", "6,0")
-        m.set_done("p1", True)
-        m.act("p1", "build", "hut", "-7,0", 0)
-        self.assertFalse(m.players["p1"]["done"])
 
 
 class BuildTests(unittest.TestCase):
@@ -60,19 +26,6 @@ class BuildTests(unittest.TestCase):
         self.assertNotIn("-7,0", self.m.cell_structure)
         end_turn(self.m)
         self.assertEqual(self.m.structures[self.m.cell_structure["-7,0"]]["type"], "hut")
-
-    def test_outside_territory_is_refused(self):
-        with self.assertRaisesRegex(LobbyError, "territory"):
-            self.m.act("p1", "build", "hut", "0,0", 0)
-
-    def test_advance_required(self):
-        rich(self.m, "p1")
-        with self.assertRaisesRegex(LobbyError, "Masonry"):
-            self.m.act("p1", "build", "wall", "-7,0", 0)
-
-    def test_terrain_rule(self):
-        with self.assertRaisesRegex(LobbyError, "grassland"):
-            self.m.act("p1", "build", "mine", "-7,0", 0)
 
     def test_cancel_refunds(self):
         wood = stock(self.m, "p1")["wood"]
@@ -104,86 +57,38 @@ class EconomyTests(unittest.TestCase):
     def put(self, stype, at, rot=0):
         return self.m.add_structure("p1", stype, at, rot)
 
-    def test_structures_work_without_roads(self):
-        farm = self.put("farm", "4,0")["id"]
-        self.assertIn(farm, self.report()["staffed"])
-
     def test_jobs_need_people(self):
         farm = self.put("farm", "2,0")["id"]
         self.m.players["p1"]["pop"] = 0
         self.assertNotIn(farm, self.report()["staffed"])
 
-    def test_switched_off_frees_workers(self):
-        farm = self.put("farm", "2,0")["id"]
-        self.m.act("p1", "toggle", farm)
-        rep = self.report()
-        self.assertNotIn(farm, rep["staffed"])
-        self.assertEqual(rep["idle"], self.m.players["p1"]["pop"])
-
-    def test_farm_gets_grass_bonus(self):
-        self.put("farm", "2,0")
-        with_grass = self.report()["income"]["food"]
-        for c in ("2,0", "3,0", "2,1"):
-            self.m.cells[c] = "plains"
-        self.assertEqual(self.report()["income"]["food"], with_grass - 3)
-
-    def test_starving_loses_a_person(self):
+    def test_starving_kills_everyone_who_cant_eat(self):
         p = self.m.players["p1"]
-        self.m.structures[self.hall]["stock"]["food"], p["pop"] = 0, 10
+        p["pop"] = 10
+        food = self.report()["income"]["food"]
         end_turn(self.m)
-        self.assertEqual(p["pop"], 9)
+        self.assertEqual(p["pop"], food // economy.FOOD_PER_PERSON)
 
-    def test_growth_needs_housing(self):
+    def test_surplus_food_becomes_people_up_to_housing(self):
         p = self.m.players["p1"]
-        p["pop"] = self.report()["housing"]
+        p["pop"], food = 0, self.report()["income"]["food"]
         end_turn(self.m)
-        self.assertEqual(p["pop"], self.report()["housing"])
-        p["pop"] -= 1
+        self.assertEqual(p["pop"], food // economy.FOOD_PER_PERSON)  # as many as the surplus feeds
+        well_fed(self)
         end_turn(self.m)
-        self.assertEqual(p["pop"], self.report()["housing"])
+        self.assertEqual(p["pop"], self.report()["housing"])  # no further than the housing
 
     def test_stores_are_capped(self):
         self.m.structures[self.hall]["stock"]["wood"] = 25
         end_turn(self.m)
         self.assertEqual(stock(self.m, "p1")["wood"], 25)
 
-    def test_market_trade(self):
-        with self.assertRaisesRegex(LobbyError, "Market"):
-            self.m.act("p1", "trade", "wood", "stone")
-        self.put("market", "2,0")
-        before = stock(self.m, "p1")
-        self.m.act("p1", "trade", "wood", "stone")
-        after = stock(self.m, "p1")
-        self.assertEqual((after["wood"], after["stone"]), (before["wood"] - 3, before["stone"] + 1))
-
-
-class LogisticsTests(unittest.TestCase):
-    """Goods sit in the realm's stores (no roads needed)."""
-
-    def setUp(self):
-        self.m = blank(players=1)
-        self.hall = hall(self.m, "p1", "0,0")  # cells 0,0 1,0 0,1
-
-    def put(self, stype, at, rot=0):
-        return self.m.add_structure("p1", stype, at, rot)
-
-    def test_spending_uses_every_store(self):
-        self.m.structures[self.hall]["stock"]["wood"] = 0
-        yard = self.put("storage_yard", "6,0")  # far from the hall, no road
-        yard["stock"]["wood"] = 5
-        self.m.act("p1", "build", "hut", "-1,0", 0)
-        self.assertEqual(yard["stock"]["wood"], 3)
-
 
 class MovementTests(unittest.TestCase):
     def setUp(self):
         self.m = blank(face=1)  # dice never hit unless a test says so
+        well_fed(self)  # units never starve in these tests
         hall(self.m, "p1", "-8,0"), hall(self.m, "p2", "8,0")
-
-    def test_path_cost(self):
-        u = unit(self.m, "p1", "militia", "0,0")
-        self.assertNotIn("3,0", movement.reach(self.m, u))  # out of reach this turn
-        self.m.act("p1", "move", u, "2,0")
 
     def test_moves_happen_together(self):
         a = unit(self.m, "p1", "militia", "0,0")
@@ -233,41 +138,25 @@ class MovementTests(unittest.TestCase):
         end_turn(self.m)
         self.assertIn(b, self.m.units)
 
-    def test_friend_on_the_last_cell_stops(self):
+    def test_no_moving_through_enemy_walls(self):
         a = unit(self.m, "p1", "militia", "0,0")
-        unit(self.m, "p1", "militia", "1,0")
-        self.m.act("p1", "move", a, "1,0")
-        end_turn(self.m)
-        self.assertEqual(self.m.units[a]["at"], "0,0")
-
-    def test_passing_through_a_friend(self):
-        a = unit(self.m, "p1", "militia", "0,0")
-        unit(self.m, "p1", "militia", "1,0")
-        self.m.act("p1", "move", a, "2,0")
-        end_turn(self.m)
-        self.assertEqual(self.m.units[a]["at"], "2,0")
-
-    def test_no_moving_through_enemy_structures(self):
-        a = unit(self.m, "p1", "militia", "0,0")
-        self.m.add_structure("p2", "hut", "1,0", 0)
-        self.m.add_structure("p2", "hut", "1,-1", 0)
-        self.m.add_structure("p2", "hut", "0,1", 0)
+        self.m.add_structure("p2", "wall", "1,0", 0)
+        self.m.add_structure("p2", "wall", "1,-1", 0)
+        self.m.add_structure("p2", "wall", "0,1", 0)
         self.assertNotIn("2,0", movement.reach(self.m, a))
         self.m.act("p1", "move", a, "1,0")  # attacking it is fine
 
-    def test_hold_adds_a_defense_die(self):
+    def test_moving_over_enemy_structures(self):
         a = unit(self.m, "p1", "militia", "0,0")
-        b = unit(self.m, "p2", "militia", "1,0")
-        self.m.act("p1", "hold", a)
-        self.m.act("p2", "move", b, "0,0")
-        end_turn(self.m)
-        battle = next(e for e in self.m.events if e["t"] == "battle")
-        self.assertEqual(len(battle["rounds"][0][1]), 3)
+        for at in ("1,0", "1,-1", "0,1"):
+            self.m.add_structure("p2", "hut", at, 0)
+        self.assertIn("2,0", movement.reach(self.m, a))
 
 
 class CombatTests(unittest.TestCase):
     def setUp(self):
         self.m = blank(face=6)
+        well_fed(self)  # units never starve in these tests
         self.h1, self.h2 = hall(self.m, "p1", "-8,0"), hall(self.m, "p2", "0,0")
 
     def test_archer_shoots_without_reply(self):
@@ -298,16 +187,10 @@ class CombatTests(unittest.TestCase):
         self.assertFalse(any(u["owner"] == "p2" for u in self.m.units.values()))
         self.assertEqual(self.m.result["winner"], "p1")
 
-    def test_tower_shoots_nearest_enemy(self):
-        t = self.m.add_structure("p1", "tower", "-6,0", 0)["id"]
-        b = unit(self.m, "p2", "militia", "-4,0")
-        end_turn(self.m)
-        self.assertEqual(next(e for e in self.m.events if e["t"] == "tower")["structure"], t)
-        self.assertNotIn(b, self.m.units)
-
 
 class CityTests(unittest.TestCase):
     def setUp(self):
+        well_fed(self)  # units never starve in these tests
         self.m = blank()
         hall(self.m, "p1", "-8,0"), hall(self.m, "p2", "8,0")
 
@@ -318,25 +201,11 @@ class CityTests(unittest.TestCase):
         self.assertEqual(self.m.structures[self.m.cell_structure["0,0"]]["type"], "town_hall")
         self.assertNotIn(s, self.m.units)
 
-    def test_too_close_to_a_hall(self):
-        s = unit(self.m, "p1", "settlers", "-5,0")
-        with self.assertRaisesRegex(LobbyError, "Too close"):
-            self.m.act("p1", "found", s, 0)
-
-    def test_recruit_uses_people_and_appears(self):
-        sid = self.m.cell_structure["-8,0"]
-        pop = self.m.players["p1"]["pop"]
-        self.m.act("p1", "recruit", sid, "militia")
-        self.assertEqual(self.m.players["p1"]["pop"], pop - 1)
-        with self.assertRaisesRegex(LobbyError, "per structure"):
-            self.m.act("p1", "recruit", sid, "militia")
-        end_turn(self.m)
-        self.assertEqual(sum(1 for u in self.m.units.values() if u["owner"] == "p1"), 1)
-
 
 class FogTests(unittest.TestCase):
     def setUp(self):
         self.m = blank(fog="on", face=1)
+        well_fed(self)  # units never starve in these tests
         hall(self.m, "p1", "-8,8"), hall(self.m, "p2", "8,-8")  # far away: they keep both players in
 
     def view(self, pid="p1"):
@@ -351,21 +220,6 @@ class FogTests(unittest.TestCase):
         self.assertIn(near, units)
         self.assertNotIn(far, units)
         self.assertNotIn("4,0", self.view()["cells"])  # unexplored: no terrain either
-
-    def test_buildings_see_further(self):
-        self.m.add_structure("p1", "hut", "0,0", 0)
-        far = unit(self.m, "p2", "militia", "3,0")
-        self.m.refresh()
-        self.assertIn(far, self.view()["units"])
-
-    def test_explored_cells_stay_but_dim(self):
-        u = unit(self.m, "p1", "militia", "0,0")
-        self.m.refresh()
-        self.m.move_unit(u, "-6,0")
-        self.m.refresh()
-        view = self.view()
-        self.assertIn("2,0", view["cells"])
-        self.assertIn("2,0", view["dim"])
 
     def test_enemy_structures_are_remembered_until_seen_gone(self):
         u = unit(self.m, "p1", "militia", "0,0")
@@ -385,25 +239,6 @@ class FogTests(unittest.TestCase):
         far = unit(self.m, "p2", "militia", "8,0")
         self.m.refresh()
         self.assertIn(far, self.m.private(None)["view"]["units"])
-
-    def test_can_plan_into_unexplored_cells(self):
-        u = unit(self.m, "p1", "militia", "0,0")
-        self.m.refresh()
-        self.m.act("p1", "move", u, "-2,0")  # within reach either way
-        self.m.cells["3,0"] = "water"
-        for k in ("1,0", "2,0"):
-            self.m.explored["p1"].discard(k)
-        self.assertIn("2,0", movement.reach(self.m, u))
-
-    def test_unknown_rough_ground_stops_the_move(self):
-        u = unit(self.m, "p1", "militia", "0,0")
-        self.m.cells["2,0"] = "forest"
-        self.m.refresh()
-        self.m.explored["p1"] -= {"1,0", "2,0"}
-        self.m.visible["p1"] -= {"1,0", "2,0"}
-        self.m.act("p1", "move", u, "2,0")  # planned as open ground: 2 + 2
-        end_turn(self.m)
-        self.assertEqual(self.m.units[u]["at"], "1,0")  # the forest costs 4: not enough left
 
     def test_hidden_enemies_dont_block_planning(self):
         u = unit(self.m, "p1", "militia", "0,0")

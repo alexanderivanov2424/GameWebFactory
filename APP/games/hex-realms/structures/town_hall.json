@@ -15,11 +15,13 @@
    1
   ]
  ],
+ "tags": [
+  "civic"
+ ],
  "hp": 15,
  "defense": 2,
  "housing": 4,
- "storage": 25,
- "territory": 3,
+ "storage": 10,
  "produce": {
   "gold": 1,
   "food": 2
@@ -29,8 +31,8 @@
   "settlers"
  ],
  "score": 4,
- "text": "Heart of a city: stores 25 of each good and is where you spend from. Founded by Settlers. Lose every Town Hall and you are out.",
  "category": "city",
  "vision": 4,
+ "hammers": 1,
  "color": "#c9a227"
 }

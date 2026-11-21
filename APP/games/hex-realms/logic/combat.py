@@ -1,19 +1,15 @@
-"""Hex Realms: dice combat.
-
-Every die is a d6. A die hits on HIT (4+), or COVER_HIT (5+) against a unit in cover (forest,
-hills, mountains, or standing on its owner's structure). A battle between two units lasts up to
-ROUNDS rounds; both sides roll at once each round and every hit takes 1 hp. A unit at 0 hp dies.
-Dice: attack value when attacking (moving into, or both moving through each other), defense
-value when standing; +1 while holding, +defendDice in its own territory, +vsMounted against
-knights, +attackDice when attacking.
+"""Hex Realms: dice combat. Every die is a d6.
 
     battle(m, a, b, a_attacks, b_attacks, events)  two units fight; both stop for the turn
-    shoot(m, uid, cell, events)       a ranged unit shoots whatever enemy is on `cell` (no reply)
-    siege(m, uid, sid, events)        a unit attacks an enemy structure: one round, the structure
-                                      rolls its defense dice back; hits x the unit's siege damage
-    towers(m, events)                 every tower shoots the nearest enemy unit within range
-Each adds an event to `events` (shapes in the functions below; a unit in one is side(m, u), with "need",
-the roll that hits it). The client's report (panels.js) and combat replay (replay.js) read them.
+    shoot(m, uid, cell, events)                    ranged unit shoots an enemy unit or structure on cell
+    siege(m, uid, sid, events)                     unit hits a structure; the structure rolls back
+    towers(m, events)                              each tower shoots the nearest enemy in range
+
+A die hits on HIT (4+), or COVER_HIT (5+) against a unit in cover (forest, hills, mountains, or on
+its owner's structure). Battles run up to ROUNDS rounds; each hit takes 1 hp, 0 hp dies.
+Dice: attack value when attacking, defense value when standing (+1 holding, +defendDice in own
+territory, +vsMounted against knights, +attackDice when attacking).
+Each fight appends an event to `events`; the client's panels.js and replay.js read them.
 """
 
 from gamekit.hexes import dist
@@ -51,7 +47,7 @@ def dice(m, u, attacking, foe=None):
 
 
 def side(m, u):
-    """A unit in a combat event: hp before the fight, need = the roll that hits it (for the client's dice)."""
+    """hp before the fight; need = the roll that hits it (for the client's dice)."""
     return {"unit": u["id"], "type": u["type"], "owner": u["owner"], "at": u["at"], "hp": u["hp"], "need": need(m, u)}
 
 

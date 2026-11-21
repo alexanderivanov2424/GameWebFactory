@@ -1,27 +1,20 @@
-"""Hex Realms: construction sites. Structures take time and builders.
+"""Hex Realms: construction sites. Structures cost hammers (🔨) that idle people build.
 
-A build order that resolves becomes a site (m.sites, cells in m.cell_site), not a structure yet. A
-site holds its cells (nothing else can be built or founded there) but does nothing: it doesn't
-work, house, store, carry goods, claim territory, see, count for score or take hits.
+A build order that resolves becomes a site (m.sites, cells in m.cell_site). A site holds its cells
+but does nothing (no work, housing, storage, territory, sight, score or hits) until finished.
 
-    start(m, pid, b)              a resolved build order (orders.build) becomes a site
-    plan(m, pid, idle)            [(site, works)] oldest first: which sites get their builders this
-                                  turn from `idle` people
-    forecast(m, pid)              {"builders": people building this turn, "works": [site ids]}
-                                  for the planning screen (idle = economy.staffing's idle people)
-    progress(m, pid, idle, ev)    sites that get their builders advance one turn; finished ones
-                                  become structures
-    remove(m, cid)                take a site off the map (orders.demolish refunds its cost)
+    start(m, pid, b)                 a resolved build order becomes a site
+    left(site)                       hammers still needed
+    plan(m, pid, idle)               ([(site, n)], idle left): hammers per site this turn, oldest first
+    forecast(m, pid, orders=True)    {"builders", "works": {site: n}, "orders": {build order: n}} for the planning screen
+    progress(m, pid, idle, events)   sites get hammers; finished ones become structures
+    remove(m, cid)                   take a site off the map (demolish refunds its cost)
 
-Rules: a structure needs `buildTurns` turns of work (content, default 1), and every turn of work
-needs `builders` idle people (default 1), people without a job (economy.staffing: jobs are filled
-first, so switch structures off or demolish them to free builders). Sites are served oldest first;
-one that can't get all its builders waits this turn, and a later site that needs fewer may still
-get them. Each idle person works on one site a turn, so you build only as much as you have people
-for. Work happens at the end of resolution with the people idle this turn (after production), so a
-1-turn Hut ordered now stands next turn and a finished structure starts working the turn after. A
-site with an enemy unit on any of its cells gets no work (its builders go to other sites) and
-doesn't finish until the unit has gone.
+Rules: a structure costs `hammers` (content, default 1). Each idle person (no job: staffing fills
+jobs first) builds 1 hammer a turn; sites are served oldest first, then this turn's build orders in
+placement order (they take builders as soon as placed). Work happens at the end of resolution with
+the people idle after production; a finished structure works from the next turn. A site with an
+enemy unit on any of its cells gets no work and doesn't finish until it leaves.
 """
 
 from .content import STRUCTURES
@@ -45,25 +38,33 @@ def remove(m, cid):
     return site
 
 
+def left(site):
+    return max(0, STRUCTURES[site["type"]]["hammers"] - site["done"])
+
+
 def finished(site):
-    return site["done"] >= STRUCTURES[site["type"]]["buildTurns"]
+    return left(site) == 0
 
 
 def plan(m, pid, idle):
     out = []
     for site in sorted((x for x in m.sites.values() if x["owner"] == pid), key=lambda x: x["n"]):
-        need = STRUCTURES[site["type"]]["builders"]
-        works = not finished(site) and need <= idle and not blocked(m, site)
-        if works:
-            idle -= need
-        out.append((site, works))
-    return out
+        n = 0 if blocked(m, site) else min(max(idle, 0), left(site))
+        idle -= n
+        out.append((site, n))
+    return out, idle
 
 
-def forecast(m, pid):
-    idle = economy.staffing(m, pid)[1]
-    works = [site["id"] for site, ok in plan(m, pid, idle) if ok]
-    return {"builders": sum(STRUCTURES[m.sites[c]["type"]]["builders"] for c in works), "works": works}
+def forecast(m, pid, orders=True):
+    sites, idle = plan(m, pid, economy.staffing(m, pid)[1])
+    works = {site["id"]: n for site, n in sites if n}
+    placed = {}
+    for b in m.orders[pid]["builds"] if orders else ():
+        n = min(max(idle, 0), STRUCTURES[b["type"]]["hammers"])
+        if n:
+            placed[b["id"]] = n
+            idle -= n
+    return {"builders": sum(works.values()) + sum(placed.values()), "works": works, "orders": placed}
 
 
 def blocked(m, site):
@@ -71,10 +72,8 @@ def blocked(m, site):
 
 
 def progress(m, pid, idle, events):
-    for site, works in plan(m, pid, idle):
-        if works:
-            site["done"] += 1
-            idle -= STRUCTURES[site["type"]]["builders"]
+    for site, n in plan(m, pid, idle)[0]:
+        site["done"] += n
         if finished(site) and not blocked(m, site):
             remove(m, site["id"])
             m.add_structure(pid, site["type"], site["at"], site["rot"])

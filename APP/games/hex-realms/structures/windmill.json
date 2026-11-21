@@ -7,21 +7,21 @@
    0
   ]
  ],
+ "tags": [
+  "food"
+ ],
  "cost": {
   "wood": 3,
-  "stone": 1
+  "stone": 2
  },
  "jobs": 1,
- "perAdjacent": {
-  "type": "farm",
-  "gain": {
-   "food": 2
-  },
-  "max": 3
- },
- "text": "+2 food per Farm next to it (up to 3).",
  "category": "food",
- "buildTurns": 2,
- "builders": 1,
- "color": "#eadfae"
+ "hammers": 2,
+ "color": "#eadfae",
+ "boost": [
+  {
+   "type": "farm",
+   "add": 2
+  }
+ ]
 }

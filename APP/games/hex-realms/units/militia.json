@@ -1,9 +1,10 @@
 {
  "name": "Militia",
  "icon": "m",
+ "art": "militia.png",
  "cost": {
-  "food": 3,
-  "gold": 2
+  "gold": 2,
+  "swords": 1
  },
  "attack": 1,
  "defense": 2,

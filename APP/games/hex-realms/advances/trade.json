@@ -1,10 +1,9 @@
 {
  "name": "Trade",
  "cost": {
-  "science": 30
+  "science": 6
  },
  "after": [
   "masonry"
- ],
- "text": "Trading halls."
+ ]
 }

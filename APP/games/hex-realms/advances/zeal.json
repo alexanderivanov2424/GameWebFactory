@@ -1,13 +1,12 @@
 {
  "name": "Zeal",
  "cost": {
-  "faith": 45
+  "faith": 9
  },
  "after": [
   "holy_warriors"
  ],
  "effect": {
   "attackDice": 1
- },
- "text": "All units roll 1 more die when attacking."
+ }
 }

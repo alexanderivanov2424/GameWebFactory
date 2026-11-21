@@ -62,10 +62,11 @@ Games at a glance (details in each `NOTES.md`):
 - **hex-realms**: `logic/` modules; civilization game on a random hex map. Secret simultaneous
   orders (build / claim / recruit / move / shoot / hold / explore / found / research / trade), resolved together in
   `Match.resolve` (order in `logic/match.py`'s header); movement collisions in `logic/movement.py`,
-  dice in `logic/combat.py`, strong and weak territory in `logic/territory.py`, recruits (spawning, structures that recruit on their own) in `logic/recruiting.py`, workers in `logic/economy.py`, construction sites (build turns, idle builders) in
+  dice in `logic/combat.py`, strong and weak territory in `logic/territory.py`, recruits (where they appear) in `logic/recruiting.py`, workers in `logic/economy.py`, construction sites (hammers built by idle people) in
   `logic/construction.py`, goods in stores in `logic/logistics.py`, standing orders (Explore / Fight / Pillage / Travel) in `logic/standing.py`, fog of war in `logic/vision.py` (the map is in each member's
   private `view`; the client merges it into `game`), bots (a setting; seats `b1`...) in `logic/bots.py`. Content JSON in
-  `structures/`, `units/`, `advances/` (fields in `logic/content.py`).
+  `structures/`, `units/`, `advances/` (fields in `logic/content.py`); every rule/help/description text players
+  read is in `client/text.js` (`HexText`), not in the JSON or index.html.
 - **block-blast**: `logic/` modules; 9x9 boards filled with rotatable shape cards (JSON in
   `cards/`) that place tiles (types with behaviours, `logic/tiles.py`) carrying symbols
   (`logic/symbols.py`, effects in `logic/effects.py`) as separate layers, row/column clears that pay gold or deal damage, a per-player `gamekit.Deck`, a
@@ -131,8 +132,8 @@ Games at a glance (details in each `NOTES.md`):
    paths you changed: element ids used in JS must exist in `index.html`, and every helper you
    call must still be defined (or come from `AppDom` / `AppLobbyUI`). Nothing else will catch
    a client bug before the user does.
-4. Hand off: the user deploys on the host (`cd /home/sasha/Desktop/Dev && ./deploy.sh`; it
-   runs the same checks first) and tests in two browser tabs. Give a short numbered test
+4. Hand off: the user restarts the site on the host (`sudo ./shutdown.sh`, then `sudo ./startup.sh`
+   from their SiteManagement folder; startup runs the same checks first) and tests in two browser tabs. Give a short numbered test
    script for exactly what changed, and say plainly that the browser side is untested.
 
 ## Pitfalls seen here (game-specific ones are in each NOTES.md)

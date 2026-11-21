@@ -1,74 +1,41 @@
-"""Hex Realms: a simultaneous-turn civilization game on a random hex map.
+"""Hex Realms: the lobby side (settings, messages, turn timer). The rules live in logic/.
 
-Each player starts with Settlers and founds their first Town Hall wherever they choose (the
-starting goods go into it). Fog of war (a setting): units and structures (further) reveal the
-map; cells once seen stay explored, enemy structures are remembered as last seen. Every turn all players plan at once, in
-secret: place structures (multi-cell footprints, turned in 60-degree steps) inside their
-territory, train units, order moves and attacks, research advances, trade at a market. When
-everyone has pressed End turn (or the turn timer runs out), all orders resolve together:
-units move one cell per step at the same time and fight with dice wherever they meet. Every
-structure works if it has its workers (people, who need food and housing). Ordered structures
-become construction sites that take a few turns of work, each turn needing builders: people
-without a job (switch structures off, all at once, or demolish them to free people). Gold, faith and
-science are realm-wide; goods (food, wood, stone, metal) go straight into the realm's stores (Town
-Hall, Storage Yard, Granary) up to their room. Structures go anywhere inside your territory.
-Land your structures reach is strong: first come, first served, it stays yours while they reach it,
-and cells two realms reach in the same turn go to no one. Gold buys weak land (claim an explored
-cell next to yours, with its free neighbours): it goes back to no one when an enemy unit stands on or
-next to it (nor can you claim there), when it's cut off from your strong land, or when another
-realm's structures reach it; your own structures reaching it make it strong. No roads. Units can be
-given standing orders kept across turns: Explore (clear the fog), Fight (attack the nearest enemy
-unit in sight), Pillage (attack the nearest enemy structure in sight, fighting enemy units that
-come close first) or a far-away destination (walk there over several turns). Your own units pass
-through each other while moving. Nothing can be built where an enemy unit stands, and a
-construction site with an enemy unit on it gets no work. Recruits appear on the structure that
-trains them. A military structure can be set to recruit a unit every turn on its own (when it can, and
-only with people who have no job), giving each unit it trains a standing order.
-Lose every Town Hall and you are out. Last
-realm standing wins; otherwise the highest score after the last turn.
-Full rules: logic/match.py (turn order, score), logic/economy.py, logic/combat.py,
-logic/movement.py, logic/orders.py, logic/logistics.py, logic/construction.py,
-logic/explore.py, logic/standing.py, logic/territory.py, logic/recruiting.py; content in structures/, units/,
-advances/ (fields in logic/content.py).
+Each player starts with Settlers and a Scout (no people) and founds their first Town Hall anywhere;
+every Town Hall settlers found brings 2 people. Every turn
+everyone plans in secret at once: build inside their territory (Walls and Towers also next to it), train units, order moves and attacks,
+research, set up trade. When all have ended their turn (or the timer runs out), orders resolve together:
+units move step by step (over enemy structures except Walls and Towers; ending a move on one attacks it)
+and fight with dice where they meet. Structures are built by idle people;
+production, eating and population are settled per realm (logic/economy.py). Gold is realm-wide, food
+is never stored, goods sit in stores, and faith and science are flat (what working structures give now,
+minus what advances cost; may go below 0). Swords ⚔️ come from military structures (Barracks 3, Stable and
+Shipyard 2); every troop holds 1-2 of them while it lives (instead of people) and gives them back when it dies,
+and a recruiting structure can auto-train a unit, recruited each turn it can be paid. Only Town Halls spread land: free land around each city (first
+come, first served) and weak land bought with gold (1 gold upkeep a turn per cell). Fog of war (a
+setting) hides what your units and structures don't see. Standing orders (Explore, Fight, Pillage,
+Travel) carry over turns. Lose every Town Hall and you are out; the last realm standing wins,
+otherwise the highest score after the last turn.
 
-Player options:  none (colors by seat)
-Settings:        mapSize (small/normal/large/huge), turns (turn limit), turnSeconds (0 = no timer),
-                 fog (on/off), bots (computer players added to the seats; logic/bots.py),
-                 seed (0 = random map)
-State: the public part has no map; each member's private state has "view" (cells, dim, structures,
-units, construction sites, territory, events as they see them; spectators see everything).
-Game messages (all only while planning; any order un-readies you; never use a "type" key,
-the lobby envelope owns it):
-    {"action": "build", "kind": stype, "at": "q,r", "rot": 0-5}
-    {"action": "claim", "at": "q,r"}                   (2 gold; at resolution the cell and its free neighbours become your weak land)
-    {"action": "recruit", "structure": sid, "kind": utype}
-    {"action": "move", "unit": uid, "to": "q,r"}      (to = own cell clears the unit's orders)
-    {"action": "shoot", "unit": uid, "at": "q,r"}
-    {"action": "hold", "unit": uid}                    (toggle)
-    {"action": "move", ...} to a cell out of reach      a Travel standing order: it walks there over turns
-    {"action": "auto", "unit": uid, "mode": m}          (toggle a standing order, kept across turns; any other
-                                                        order for the unit stops it): "explore" (clear fog),
-                                                        "fight" (attack the nearest enemy unit you see, hold
-                                                        when none), "pillage" (attack the nearest enemy
-                                                        structure you see, fighting enemy units that come
-                                                        close first; hold when none)
-    {"action": "found", "unit": uid, "rot": 0-5}
-    {"action": "research", "advance": aid}
-    {"action": "cancel", "order": oid}                 (a build / claim / recruit / research order)
-    {"action": "trade", "give": res, "get": res}
-    {"action": "toggle", "structure": sid}
-    {"action": "staff", "on": true|false}              (switch every structure with jobs on / off)
-    {"action": "demolish", "structure": sid}           (a structure, no refund, not a Town Hall; or a
-                                                        construction site id, cost refunded)
-    {"action": "autorecruit", "structure": sid, "kind": utype|null, "order": "explore"|"fight"|"pillage"|null}
-                                                       (a military structure (not the Town Hall) recruits `kind`
-                                                        every turn on its own when it can and people without a job
-                                                        are free; units trained there get `order` as a standing order)
-    {"action": "disband", "unit": uid}
-    {"action": "done", "done": true|false}             (End turn / take it back)
-
-Code: this file connects the game to the lobby (settings, messages, the turn timer). The rules
-live in logic/ (see logic/__init__.py for its modules).
+Settings: mapSize, turns (0 = no limit), turnSeconds (0 = no timer), fog, bots, seed (0 = random).
+State: the public part has no map; each member's private state has "view", their fog-limited map.
+Game messages ({"action": name, ...fields}; planning only, any order un-readies you):
+    build      kind, at "q,r", rot 0-5
+    claim      at "q,r"                    2 gold, weak land at once (no cancel)
+    recruit    structure, kind             costs swords (held until the unit dies), no people (but settlers)
+    train      structure, kind?            auto-train kind there every turn it can be paid; no kind = stop
+    move       unit, to "q,r"              own cell clears orders; out of reach = Travel
+    shoot      unit, at "q,r"
+    hold       unit                        toggle
+    auto       unit, mode                  toggle a standing order: explore, fight, pillage
+    found      unit, rot 0-5
+    research   advance
+    cancel     order                       a build / claim / recruit / research order
+    trade      structure, give, get        a trade structure trades every turn; no give = stop
+    toggle     structure
+    staff      on true|false               every structure with jobs
+    demolish   structure                   a structure (no refund) or a site id (refunded)
+    disband    unit
+    done       done true|false             End turn / take it back
 """
 
 from gamekit import Choice, Int, LobbyError, LobbyGame, PatchState
@@ -77,11 +44,40 @@ from gamekit.validate import whole_number
 from .logic.match import Match
 
 
-def text_id(data, k):
-    v = data.get(k)
-    if not isinstance(v, str) or not 0 < len(v) <= 40:
-        raise LobbyError(f"Missing {k}.")
-    return v
+def field(k, optional=False):
+    def read(data):
+        v = data.get(k)
+        if v is None and optional:
+            return None
+        if not isinstance(v, str) or not 0 < len(v) <= 40:
+            raise LobbyError(f"Missing {k}.")
+        return v
+    return read
+
+
+def rotation(data):
+    return whole_number(data.get("rot", 0), "Rotation", 0, 5)
+
+
+# Game message action -> readers for the arguments of the orders.py function of the same name.
+ORDERS = {
+    "build": (field("kind"), field("at"), rotation),
+    "claim": (field("at"),),
+    "recruit": (field("structure"), field("kind")),
+    "train": (field("structure"), field("kind", optional=True)),
+    "move": (field("unit"), field("to")),
+    "shoot": (field("unit"), field("at")),
+    "hold": (field("unit"),),
+    "auto": (field("unit"), field("mode")),
+    "found": (field("unit"), rotation),
+    "research": (field("advance"),),
+    "cancel": (field("order"),),
+    "trade": (field("structure"), field("give", optional=True), field("get", optional=True)),
+    "toggle": (field("structure"),),
+    "staff": (lambda data: data.get("on") is True,),
+    "demolish": (field("structure"),),
+    "disband": (field("unit"),),
+}
 
 
 class Game(LobbyGame):
@@ -90,15 +86,13 @@ class Game(LobbyGame):
     SYNC = PatchState
     SETTINGS = {
         "mapSize": Choice("Map size", default="normal", options={"small": "Small", "normal": "Normal", "large": "Large", "huge": "Huge"}),
-        "turns": Int("Turn limit", default=40, low=10, high=150),
+        "turns": Int("Turn limit", default=40, low=0, high=150, hint="0 = no limit"),
         "turnSeconds": Int("Turn timer", default=0, low=0, high=600, suffix="s", hint="0 = no timer"),
         "fog": Choice("Fog of war", default="on", options={"on": "On", "off": "Off"}),
         "bots": Int("Bots", default=0, low=0, high=5, hint="computer players"),
         "seed": Int("Map seed", default=0, low=0, high=999999, hint="0 = a new random map"),
     }
-    ACTIONS = {name: name for name in
-               ("build", "claim", "recruit", "move", "shoot", "hold", "auto", "found", "research", "cancel", "trade", "toggle", "staff", "demolish",
-                "disband", "autorecruit", "done")}
+    ACTIONS = {**{name: "order" for name in ORDERS}, "done": "done"}
 
     def __init__(self, room):
         super().__init__(room)
@@ -146,60 +140,11 @@ class Game(LobbyGame):
         elif self.match.turn != turn:
             self.start_timer()
 
-    def order(self, member, name, *args):
-        self.match.act(member.id, name, *args)
-
     # --- Messages -------------------------------------------------------------------------------
 
-    def build(self, member, data):
-        self.order(member, "build", text_id(data, "kind"), text_id(data, "at"), whole_number(data.get("rot", 0), "Rotation", 0, 5))
-
-    def claim(self, member, data):
-        self.order(member, "claim", text_id(data, "at"))
-
-    def recruit(self, member, data):
-        self.order(member, "recruit", text_id(data, "structure"), text_id(data, "kind"))
-
-    def move(self, member, data):
-        self.order(member, "move", text_id(data, "unit"), text_id(data, "to"))
-
-    def shoot(self, member, data):
-        self.order(member, "shoot", text_id(data, "unit"), text_id(data, "at"))
-
-    def hold(self, member, data):
-        self.order(member, "hold", text_id(data, "unit"))
-
-    def auto(self, member, data):
-        self.order(member, "auto", text_id(data, "unit"), text_id(data, "mode"))
-
-    def found(self, member, data):
-        self.order(member, "found", text_id(data, "unit"), whole_number(data.get("rot", 0), "Rotation", 0, 5))
-
-    def research(self, member, data):
-        self.order(member, "research", text_id(data, "advance"))
-
-    def cancel(self, member, data):
-        self.order(member, "cancel", text_id(data, "order"))
-
-    def trade(self, member, data):
-        self.order(member, "trade", text_id(data, "give"), text_id(data, "get"))
-
-    def toggle(self, member, data):
-        self.order(member, "toggle", text_id(data, "structure"))
-
-    def staff(self, member, data):
-        self.order(member, "staff", data.get("on") is True)
-
-    def demolish(self, member, data):
-        self.order(member, "demolish", text_id(data, "structure"))
-
-    def disband(self, member, data):
-        self.order(member, "disband", text_id(data, "unit"))
-
-    def autorecruit(self, member, data):
-        kind = text_id(data, "kind") if data.get("kind") else None
-        order = text_id(data, "order") if data.get("order") else None
-        self.order(member, "autorecruit", text_id(data, "structure"), kind, order)
+    def order(self, member, data):
+        action = data["action"]
+        self.match.act(member.id, action, *(read(data) for read in ORDERS[action]))
 
     def done(self, member, data):
         turn = self.match.turn

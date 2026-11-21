@@ -1,0 +1,8 @@
+{
+  "name": "Moon Pit Stop",
+  "deck": 1,
+  "fuel": 3,
+  "food": 3,
+  "tasks": ["refuel", "safety-checks", "load-supplies"],
+  "setup": []
+}

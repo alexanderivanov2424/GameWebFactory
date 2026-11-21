@@ -11,24 +11,25 @@
    0
   ]
  ],
+ "tags": [
+  "culture"
+ ],
  "cost": {
   "wood": 3,
   "stone": 3
  },
  "jobs": 1,
  "produce": {
-  "faith": 2
+  "faith": 1
  },
  "perAdjacent": {
-  "home": true,
   "gain": {
    "faith": 1
   },
-  "max": 3
+  "max": 3,
+  "tag": "home"
  },
- "text": "+1 faith per Hut/House next to it (up to 3).",
  "category": "culture",
- "buildTurns": 2,
- "builders": 2,
+ "hammers": 4,
  "color": "#ece6d2"
 }

@@ -1,7 +1,6 @@
 {
  "name": "Masonry",
  "cost": {
-  "science": 12
- },
- "text": "Walls and towers."
+  "science": 2
+ }
 }

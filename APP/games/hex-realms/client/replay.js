@@ -1,39 +1,32 @@
 /*
- * Hex Realms: the combat replay that plays when a turn resolves. It glides the map to each combat you
- * saw (battles, shots, sieges, tower fire, in the order they happened), shows the dice on the left
- * (you) and right (the other side) of the screen round by round with the hits lit, then the result,
- * and moves on to the next one; at the end the view goes back to where it was. A Skip button (or Esc)
- * stops it. No rules here: everything comes from game.events (logic/combat.py's event shapes).
+ * Hex Realms: the combat replay played when a turn resolves. The map glides to each combat in order,
+ * the dice show round by round (you on the left, the other side on the right), then the result, which stays
+ * until Next (or Enter / Space) moves on to the next combat. Skip (or Esc) stops it. No rules here: everything
+ * comes from game.events.
  *
- *   const replay = HexReplay.create(map, { onChange(playing) })
- *   replay.play(game, you)   start (stops one already playing); false when there's nothing to show or
- *                            the player turned replays off (the caller flashes the cells instead)
- *   replay.skip()            stop now and put the view back
- *   replay.playing           true while it plays
- *   HexReplay.steps(game, you)   one step per combat: {cells, title, left, right, rounds, result}
+ *   HexReplay.create(map, { onChange(playing) })  replay: play(game, you) (false when nothing to show or
+ *                                                 replays are off), next(), skip(), playing
+ *   HexReplay.steps(game, you)                    one step per combat: {cells, title, left, right, rounds, ...}
  *
- * Player settings (Settings -> Hex Realms, AppSettings.addPageSettings): SPEED_KEY (a multiplier:
- * "0.5" slow ... "4" very fast) and SKIP_KEY (true = never play). Durations below are at speed 1.
- * DOM: #replay (with #replay-bar, #replay-left, #replay-right) in index.html; #game gets the
- * "replaying" class while it plays (the side columns hide).
+ * Settings (Settings -> Hex Realms): SPEED_KEY (multiplier) and SKIP_KEY. Durations are at speed 1.
+ * DOM: #replay (#replay-bar, #replay-left, #replay-right); #game gets "replaying" while it plays.
  */
 (() => {
   const { $, el, fill } = AppDom;
   const SPEED_KEY = "hex-realms.replaySpeed", SKIP_KEY = "hex-realms.replaySkip";
-  const PAN = 900, ROUND = 850, RESULT = 1100, BACK = 700, ZOOM = 1.8;
+  const PAN = 900, ROUND = 850, BACK = 700, ZOOM = 1.8;
 
   AppSettings.addPageSettings("Hex Realms", [
     { key: SPEED_KEY, label: "Combat replay speed", type: "select", default: "1",
       options: [["0.5", "Slow"], ["1", "Normal"], ["2", "Fast"], ["4", "Very fast"]],
-      hint: "How fast the end-of-turn combat replay moves from fight to fight." },
+      hint: HexText.replay.speedHint },
     { key: SKIP_KEY, label: "Skip combat replays", type: "checkbox", default: false,
-      hint: "Don't play the replay; combat cells just flash and the Report tab lists the dice." },
+      hint: HexText.replay.skipHint },
   ]);
 
-  const HIT = 4;  // structures are hit on 4+ (units' need comes with each event)
+  const HIT = 4;  // structures are hit on 4+; units' need comes with each event
 
-  // Who fought in event e, as two sides {owner, name, icon, hp: [before, after] | null, dead, role};
-  // `rolls` are [aDice, bDice] per round, with the roll each side needs to hit.
+  // The two sides of event e: {owner, name, icon, hp, dead, role}; rounds are [aDice, bDice].
   function describe(e, game) {
     const content = game.content;
     const unit = (s, role) => ({ owner: s.owner, name: content.units[s.type]?.name || s.type, icon: content.units[s.type]?.icon || "",
@@ -84,8 +77,8 @@
   }
 
   function create(map, handlers = {}) {
-    let run = 0, saved = null;
-    const replay = { playing: false, play, skip };
+    let run = 0, saved = null, advance = null;  // advance: resolves the wait for Next
+    const replay = { playing: false, play, skip, next };
     const box = $("replay");
 
     const speed = () => { const s = Number(AppSettings.get(SPEED_KEY) ?? 1); return s > 0 ? s : 1; };
@@ -99,9 +92,9 @@
       handlers.onChange?.(on);
     }
 
-    // A replay that starts while another plays (or glides back) keeps the first saved view.
+    // A replay started during another keeps the first saved view.
     function play(game, you) {
-      if (replay.playing) { run++; setPlaying(false); }
+      if (replay.playing) { run++; next(); setPlaying(false); }
       if (AppSettings.get(SKIP_KEY)) { skip(); return false; }
       const list = steps(game, you);
       if (!list.length) { skip(); return false; }
@@ -118,8 +111,16 @@
       return true;
     }
 
+    // Move on from a combat's result (only once it's shown).
+    function next() {
+      const go = advance;
+      advance = null;
+      go?.();
+    }
+
     function skip() {
       run++;
+      next();
       if (replay.playing) setPlaying(false);
       if (saved) map.setView(saved, 0);
       saved = null;
@@ -147,8 +148,9 @@
     }
 
     async function show(game, st, i, n, token) {
+      const nextBtn = el("button", { className: "hr-btn hr-next", onclick: () => next(), hidden: true }, i + 1 < n ? "Next (Enter)" : "Done (Enter)");
       fill($("replay-bar"), el("b", {}, `${st.kind} ${i + 1} / ${n}`), el("span", { className: "small" }, st.title),
-        el("span", { className: "spacer" }), el("button", { className: "hr-btn", onclick: () => skip() }, "Skip (Esc)"));
+        el("span", { className: "spacer" }), nextBtn, el("button", { className: "hr-btn", onclick: () => skip() }, "Skip (Esc)"));
       const L = $("replay-left"), R = $("replay-right");
       fill(L, sidePanel(game, st.left)); fill(R, sidePanel(game, st.right));
       map.mark(st.cells);
@@ -164,7 +166,8 @@
         if (token !== run) return;
       }
       L.append(outcome(st.left)); R.append(outcome(st.right));
-      await wait(RESULT);
+      nextBtn.hidden = false;
+      await new Promise((r) => { advance = r; });
     }
 
     return replay;

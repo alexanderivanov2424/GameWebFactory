@@ -7,6 +7,9 @@
    0
   ]
  ],
+ "tags": [
+  "industrial"
+ ],
  "cost": {
   "wood": 2
  },
@@ -17,9 +20,7 @@
  "produce": {
   "stone": 1
  },
- "text": "Hills only: +1 stone. Cheaper and quicker to build than a Mine, but no metal.",
  "category": "industry",
- "buildTurns": 1,
- "builders": 1,
+ "hammers": 1,
  "color": "#a39a8a"
 }

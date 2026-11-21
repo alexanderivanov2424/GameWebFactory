@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<!-- Planet Jumpers: game page. Lobby (players, run choice + the host's saved run), then the mission
+     screen: mission card (task names) and ship on the left, the round table in the middle (seats
+     with their tasks below them, the tasks being drafted in its centre), the player list and log
+     top right, your hand fixed at the bottom. Rendering is in game.js. -->
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Planet Jumpers</title>
+
+  <script src="/shared/theme.js"></script>
+  <script src="/shared/home.js" defer></script>
+  <script src="/shared/settings.js" defer></script>
+  <script src="/shared/chat.js" defer></script>
+  <script src="/gamekit/dom.js" defer></script>
+  <script src="/gamekit/room.js" defer></script>
+  <script src="/gamekit/lobby.js" defer></script>
+  <script src="/gamekit/lobby-ui.js" defer></script>
+  <script src="game.js" defer></script>
+
+  <style>
+    :root {
+      --gwf-main-width: 1320px;
+      --gwf-bg: #11141f; --gwf-surface: #1b2030; --gwf-line: #2c3448; --gwf-text: #e8ebf4;
+      --gwf-muted: #95a0b8; --gwf-soft: #26304a; --gwf-soft-hover: #2f3b5c; --gwf-accent: #5b7cff;
+      --gwf-input-line: #3a4560;
+      --red: #d64545; --blue: #3a6fd8; --yellow: #e0b52a; --green: #3c9a57; --black: #0b0b10;
+      --done: #2fa463; --failed: #d64545; --open: #5d6680;
+    }
+    main { padding-bottom: 170px; padding-right: 110px; }
+    #lobby { max-width: 680px; }
+    .gwf-player { border-bottom-color: var(--gwf-line) !important; }
+
+    /* Layout: left column (mission, ship) | table | right column (players, log) */
+    #layout { display: grid; grid-template-columns: 270px 1fr 230px; gap: 16px; align-items: start; }
+    #left .card, #right .card { padding: 12px 14px; margin-bottom: 12px; }
+    .label { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--gwf-muted); }
+
+    /* Mission card */
+    #mission h2 { font-size: 1.25rem; margin: 2px 0 6px; }
+    .yields { display: flex; gap: 10px; margin-bottom: 10px; font-size: 0.9rem; }
+    .task-name { border-left: 4px solid var(--open); padding: 2px 8px; margin-bottom: 4px; font-weight: 600; cursor: default; }
+    .task-name.done { border-left-color: var(--done); }
+    .task-name.failed { border-left-color: var(--failed); }
+
+    /* Task cards (middle of the table while drafting, below their holder's seat after) */
+    .task { display: block; width: 100%; text-align: left; background: var(--gwf-surface); color: var(--gwf-text);
+      border: 1px solid var(--gwf-line); border-left: 4px solid var(--open); border-radius: 8px; padding: 4px 7px;
+      margin: 0 0 4px; font: inherit; font-size: 0.8rem; }
+    .task.done { border-left-color: var(--done); }
+    .task.failed { border-left-color: var(--failed); }
+    button.task { cursor: pointer; }
+    button.task:hover { background: var(--gwf-soft-hover); border-color: #f2c94c; }
+    .task-head { display: flex; gap: 6px; align-items: baseline; justify-content: space-between; font-weight: 600; }
+    .task-text { font-size: 0.75rem; color: var(--gwf-muted); }
+    .pill { font-size: 0.7rem; padding: 1px 7px; border-radius: 999px; background: var(--open); color: #fff; font-weight: 600; }
+    .pill.done { background: var(--done); }
+    .pill.failed { background: var(--failed); }
+    .owner { margin-left: auto; font-size: 0.8rem; font-weight: 500; color: var(--gwf-text); }
+
+    /* Ship */
+    .meter { display: grid; grid-template-columns: 64px 1fr 36px; align-items: center; gap: 8px; margin: 5px 0; font-size: 0.9rem; }
+    .pips { display: flex; gap: 4px; }
+    .pip { width: 16px; height: 12px; border-radius: 3px; background: #2a3146; }
+    .pip.on.health { background: #e0564f; } .pip.on.fuel { background: #f0a13a; } .pip.on.food { background: #59b86f; }
+
+    /* Table */
+    #table-wrap { position: relative; width: 600px; height: 520px; margin: 0 auto; }
+    #table { position: absolute; left: 110px; top: 70px; width: 380px; height: 380px; border-radius: 50%;
+      background: radial-gradient(circle at 50% 40%, #234a3a, #142a22 70%); border: 6px solid #3a2f22;
+      box-shadow: 0 10px 40px rgba(0,0,0,0.5) inset; }
+    /* A seat's box is centred on its point on the circle; its tasks hang below it */
+    .seat { position: absolute; width: 160px; transform: translate(-50%, -27px); z-index: 2; }
+    .seat-box { height: 54px; box-sizing: border-box; background: var(--gwf-surface); border: 2px solid var(--gwf-line);
+      border-radius: 10px; padding: 6px 8px; font-size: 0.85rem; margin-bottom: 4px; }
+    .seat-box.turn { border-color: #f2c94c; box-shadow: 0 0 0 3px rgba(242,201,76,0.35); }
+    .seat .who { font-weight: 700; display: flex; gap: 6px; align-items: center; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+    .seat .stats { color: var(--gwf-muted); font-size: 0.8rem; }
+    .captain { display: inline-block; font-size: 0.7rem; font-weight: 800; color: #1b1b1b; background: #f2c94c;
+      border-radius: 999px; padding: 1px 6px; flex: none; }
+    .played { position: absolute; transform: translate(-50%, -50%); z-index: 1; transition: transform 0.2s; }
+    .played.winner .pcard { box-shadow: 0 0 0 3px #f2c94c, 0 0 18px #f2c94c; }
+    #table-center { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); text-align: center;
+      color: #cfe3d6; font-size: 0.85rem; width: 230px; z-index: 1; }
+    .draft-label { margin-bottom: 6px; }
+
+    /* Cards */
+    .pcard { width: 54px; height: 78px; border-radius: 7px; border: 2px solid rgba(255,255,255,0.85); color: #fff;
+      display: flex; flex-direction: column; justify-content: space-between; padding: 3px 5px; font-weight: 800;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.4); user-select: none; }
+    .pcard .big { font-size: 1.7rem; text-align: center; line-height: 1; }
+    .pcard .corner { font-size: 0.75rem; line-height: 1; }
+    .pcard.s-r { background: var(--red); } .pcard.s-b { background: var(--blue); }
+    .pcard.s-y { background: var(--yellow); color: #2a2200; } .pcard.s-g { background: var(--green); }
+    .pcard.s-k { background: var(--black); border-color: #c9a227; color: #f2c94c; }
+
+    /* Status panel under the table */
+    #status { max-width: 600px; margin: 0 auto; text-align: center; }
+    #status .choices { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin-top: 8px; }
+    .end-early { margin-top: 6px; }
+    #result { font-weight: 700; font-size: 1.1rem; margin-bottom: 8px; }
+    .debrief { text-align: left; display: inline-block; margin: 6px 0; }
+
+    /* Right column */
+    #plist { list-style: none; margin: 0; padding: 0; }
+    #plist li { display: flex; align-items: center; gap: 6px; padding: 5px 0; border-bottom: 1px solid var(--gwf-line); font-size: 0.9rem; }
+    #plist li:last-child { border-bottom: none; }
+    #plist li.turn { color: #f2c94c; }
+    #plist .count { margin-left: auto; color: var(--gwf-muted); font-size: 0.8rem; white-space: nowrap; }
+    #log { font-size: 0.8rem; color: var(--gwf-muted); max-height: 240px; overflow-y: auto; margin: 0; padding-left: 16px; }
+
+    /* Hand */
+    #hand-bar { position: fixed; left: 0; right: 0; bottom: 0; padding: 10px 110px 14px 16px; background: rgba(10,12,20,0.94);
+      border-top: 1px solid var(--gwf-line); z-index: 10; }
+    #hand { display: flex; justify-content: center; gap: 6px; flex-wrap: wrap; }
+    #hand .pcard { transition: transform 0.1s; }
+    #hand .pcard.can { cursor: pointer; }
+    #hand .pcard.can:hover { transform: translateY(-10px); }
+    #hand.myturn .pcard:not(.can) { opacity: 0.35; }
+    #hand-label { text-align: center; font-size: 0.8rem; color: var(--gwf-muted); margin-bottom: 6px; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Planet Jumpers</h1>
+    <p id="connection" class="muted">Connecting…</p>
+    <div id="error" hidden></div>
+
+    <section id="lobby" hidden>
+      <div class="card">
+        <div class="row" style="margin-bottom: 8px">
+          <h2 style="margin: 0">Crew (3-5 players)</h2>
+          <span class="spacer"></span>
+          <button id="join" class="green" hidden>Join game</button>
+          <button id="ready" class="green" hidden>Ready</button>
+          <button id="leave" class="red" hidden>Leave game</button>
+        </div>
+        <ul id="players"></ul>
+        <div id="start"></div>
+        <p id="spectators" class="muted"></p>
+      </div>
+      <div class="card">
+        <h2>Run</h2>
+        <div id="settings"></div>
+        <p id="save" class="small"></p>
+      </div>
+      <div class="card small">
+        <h2>How to play</h2>
+        <p>Everyone works together. All 40 cards are dealt: red, blue, yellow and green 1-9 and black trumps 1-4.
+          Whoever holds the black 4 is the captain and leads the first trick. Follow the suit led if you can;
+          the highest black wins a trick, otherwise the highest card of the suit led. The winner leads next.</p>
+        <p>Each mission's tasks are drafted first, starting with the captain. Complete them to fuel and supply
+          the ship; fail them and the ship may take damage. Once every task is done and none can fail any more,
+          the host may end the mission early. Each mission costs 1 fuel and 1 food. The run ends
+          when the hull is gone or every mission deck is empty.</p>
+      </div>
+    </section>
+
+    <section id="game" hidden>
+      <div id="layout">
+        <div id="left">
+          <div class="card" id="mission"></div>
+          <div class="card" id="ship"></div>
+        </div>
+        <div id="center">
+          <div id="table-wrap">
+            <div id="table"><div id="table-center"></div></div>
+          </div>
+          <div id="status">
+            <div id="result" hidden></div>
+            <div id="status-body"></div>
+            <button id="back" hidden>Back to lobby</button>
+          </div>
+        </div>
+        <div id="right">
+          <div class="card">
+            <div class="label">Crew</div>
+            <ul id="plist"></ul>
+          </div>
+          <div class="card">
+            <div class="label">Log</div>
+            <ol id="log"></ol>
+          </div>
+        </div>
+      </div>
+      <div id="hand-bar" hidden>
+        <div id="hand-label"></div>
+        <div id="hand"></div>
+      </div>
+    </section>
+  </main>
+</body>
+</html>

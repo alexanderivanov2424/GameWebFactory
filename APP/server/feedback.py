@@ -6,7 +6,7 @@ and it is saved as plain text files for the owner (and the `feedback` skill) to 
 
 Each submission is appended to that file under a "--- <date time>" line. The folder
 (feedback_dir()) is $FEEDBACK_DIRECTORY, else <state dir>/feedback (turtle.state_dir()); on the
-host deploy.sh sets it to Feedback/ next to APP (git-ignored).
+host the startup script sets it to ExternalWrite/Feedback/ in the Dev folder (git-ignored).
 
 /ws/feedback?client=<uuid>   one request per connection; the server answers, then closes it
     client -> server  {"type": "feedback", "game": game id, "site" or "new_game", "name", "text"}

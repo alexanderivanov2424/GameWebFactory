@@ -1,0 +1,7 @@
+{
+  "name": "Safety checks",
+  "text": "Win 0 tricks. If not, the ship takes 1 damage.",
+  "goal": {"kind": "tricks", "max": 0},
+  "failure": {"damage": 1},
+  "can_fail_when_done": true
+}

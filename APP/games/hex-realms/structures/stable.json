@@ -11,6 +11,9 @@
    0
   ]
  ],
+ "tags": [
+  "military"
+ ],
  "cost": {
   "wood": 6,
   "gold": 2
@@ -20,12 +23,12 @@
  ],
  "requires": "horsemanship",
  "terrain": [
-  "grass",
   "plains"
  ],
- "text": "Trains knights.",
  "category": "military",
- "buildTurns": 3,
- "builders": 2,
- "color": "#86613f"
+ "hammers": 6,
+ "color": "#86613f",
+ "produce": {
+  "swords": 2
+ }
 }

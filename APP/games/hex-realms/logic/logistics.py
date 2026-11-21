@@ -1,24 +1,24 @@
-"""Hex Realms: goods (food, wood, stone, metal) kept in a player's storage structures.
+"""Hex Realms: goods (wood, stone, metal) kept in storage structures. Food is never stored (economy.py).
 
-Gold, faith and science are realm-wide (players[pid]["res"], never stored anywhere). Goods live in
-structures: each storage structure (Town Hall, Storage Yard, Granary: content "storage" / "store")
-has a "stock" up to its capacity. Every store counts wherever it is: what a working structure makes goes
-straight into the stores with room (Town Halls first, then oldest), and anything that doesn't fit
-is lost.
+Gold is realm-wide (players[pid]["res"]). Faith and science are flat: what pid's working structures give
+now (economy.flat) minus players[pid]["spent"] (advances bought; can go below 0). Storage structures (Town Hall, Storage
+Yard) hold a "stock" up to their capacity. Swords are held: what working structures give now minus what pid's
+living units and recruit orders hold (held()), so a unit that dies or is disbanded gives its swords back. At end of turn, what's left of production after
+upkeep (economy.end_of_turn) fills the stores with room (Town Halls first, then oldest); the rest is lost.
 
-    stores(m, pid)            pid's storage structures (Town Halls first, then oldest)
-    stock(m, pid)             {res: amount} pid can spend now: goods in stores + gold/faith/science
-    capacity(s)               {good: room} of one storage structure (empty if it isn't one)
-    room(m, pid, good)        free space for `good` in pid's stores
-    take(m, pid, cost)        spend (LobbyError if short): goods from stores, in stores() order
-    store(m, pid, good, n)    put produce in: fills stores with room, returns what didn't fit (lost)
-    give(m, pid, amounts)     add (refunds, trades): like store, but what doesn't fit goes into the
-                              first store anyway (a refund is never lost)
+    stores(m, pid)           pid's storage structures, in fill order
+    stock(m, pid)            {res: amount} spendable now
+    capacity(s)              {good: room} of one storage structure
+    room(m, pid, good)       free space for good in pid's stores
+    take(m, pid, cost)       spend (LobbyError if short), goods from stores first
+    store(m, pid, good, n)   put produce in; returns what didn't fit
+    give(m, pid, amounts)    add (refunds, trades); what doesn't fit goes into the first store anyway
+    held(m, pid)             {res: n} pid's living units and recruit orders hold (swords)
 """
 
 from gamekit import LobbyError
 
-from .content import CAPPED, STRUCTURES, TOWN_HALL
+from .content import CAPPED, FLAT, HELD, STRUCTURES, TOWN_HALL, UNITS
 
 GOODS = CAPPED
 
@@ -30,17 +30,33 @@ def capacity(s):
 
 
 def stores(m, pid):
-    return sorted((s for s in m.structures.values() if s["owner"] == pid and capacity(s)),
+    return sorted((s for s in m.structures_of(pid) if capacity(s)),
                   key=lambda s: (s["type"] != TOWN_HALL, s["n"]))
 
 
 def stock(m, pid):
+    from .economy import flat  # economy imports this module
     out = dict(m.players[pid]["res"])
+    made = flat(m, pid)
+    for r in FLAT:
+        out[r] = made[r] - m.players[pid]["spent"][r]
+    hold = held(m, pid)
+    for r in HELD:
+        out[r] = made[r] - hold[r]
     for r in GOODS:
         out[r] = 0
     for s in stores(m, pid):
         for r, n in s["stock"].items():
             out[r] += n
+    return out
+
+
+def held(m, pid):
+    out = dict.fromkeys(HELD, 0)
+    costs = [UNITS[u["type"]]["cost"] for u in m.units_of(pid)] + [r["cost"] for r in m.orders[pid]["recruits"]]
+    for cost in costs:
+        for r in HELD:
+            out[r] += cost.get(r, 0)
     return out
 
 
@@ -55,6 +71,11 @@ def take(m, pid, cost):
         raise LobbyError(f"Not enough {', '.join(short)}.")
     own = stores(m, pid)
     for r, n in cost.items():
+        if r in FLAT:
+            m.players[pid]["spent"][r] += n
+            continue
+        if r in HELD:  # the recruit order (then the unit) holds it
+            continue
         if r not in GOODS:
             m.players[pid]["res"][r] -= n
             continue
@@ -84,6 +105,11 @@ def store(m, pid, good, n, own=None):
 def give(m, pid, amounts):
     own = stores(m, pid)
     for r, n in amounts.items():
+        if r in FLAT:
+            m.players[pid]["spent"][r] -= n
+            continue
+        if r in HELD:  # freed when the order or unit goes
+            continue
         if r not in GOODS:
             m.players[pid]["res"][r] = m.players[pid]["res"].get(r, 0) + n
             continue
