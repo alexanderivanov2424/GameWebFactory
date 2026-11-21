@@ -6,7 +6,8 @@
 // saved once for all lists (a "food"); only the amount and the checkmark belong to the list. The
 // Global list ("global") is every saved item: edited the same way (its amount is the default new
 // entries start with), nothing checked off or cleared, and Delete marks items (red) for deleting
-// for good once the bar at the top confirms. The open list is remembered in localStorage. While typing a new item, names added before (the server keeps them
+// for good once the bar at the top confirms. Below the lists, every tag with Edit (name, colour).
+// The open list is remembered in localStorage. While typing a new item, names added before (the server keeps them
 // all, see ../store.py) that aren't on this list are suggested, with their tags.
 // Item names are lowercase: the server lowercases them too.
 // Tags (coloured by their hue) are set in the item editor, by name: new names make new tags on Save.
@@ -35,7 +36,7 @@
 
   const $ = (id) => document.getElementById(id);
   const list = $("list"), editor = $("editor"), viewer = $("viewer");
-  const listEditor = $("listEditor"), nameDialog = $("nameDialog");
+  const listEditor = $("listEditor"), nameDialog = $("nameDialog"), tagEditor = $("tagEditor");
   let lists = [];      // [{id, name, template, count, left}]
   let foods = [];      // every item ever added: [{name, tags}] (sorted by name)
   let tags = [];       // every tag: [{id, name, hue}] (sorted by name)
@@ -129,6 +130,7 @@
     if (open.id !== listId) { listId = open.id; remember(listId); }
     render();
     renderLists();
+    renderTagRows();
     renderSuggestions();
     if (editingId) renderEditorPics();
   }
@@ -452,6 +454,66 @@
     }));
   }
 
+  // ---- the tags section and the tag editor ----
+
+  function renderTagRows() {
+    $("tagRows").replaceChildren(...tags.map((t) => {
+      const used = foods.filter((f) => (f.tags || []).includes(t.id)).length;
+      const li = el("li", "item");
+      const info = el("div", "info");
+      info.append(tagChip(t), el("div", "notes", used ? plural(used, "item") : "Not on any item"));
+      info.addEventListener("click", () => openTagEditor(t));
+      li.append(info, button("Edit", "edit", () => openTagEditor(t)));
+      return li;
+    }));
+    $("noTags").hidden = tags.length > 0;
+  }
+
+  let editingTag = null;
+  let tagHue = 0;
+
+  function openTagEditor(t) {
+    editingTag = t;
+    tagHue = Number(t.hue) || 0;
+    $("tagNameInput").value = t.name;
+    $("tagError").textContent = "";
+    renderTagEditor();
+    tagEditor.showModal();
+  }
+
+  function renderTagEditor() {
+    $("tagHue").value = String(tagHue);
+    const preview = $("tagPreview");
+    preview.textContent = $("tagNameInput").value.trim().toLowerCase() || "tag";
+    preview.style.setProperty("--h", String(tagHue));
+    const swatches = [];
+    for (let h = 0; h < 360; h += 30) {
+      const swatch = button("", "swatch", () => { tagHue = h; renderTagEditor(); });
+      swatch.style.setProperty("--h", String(h));
+      swatch.setAttribute("aria-label", "Colour " + h);
+      swatch.setAttribute("aria-pressed", String(h === tagHue));
+      swatches.push(swatch);
+    }
+    $("swatches").replaceChildren(...swatches);
+  }
+
+  $("tagHue").addEventListener("input", (e) => { tagHue = Number(e.target.value) || 0; renderTagEditor(); });
+  $("tagNameInput").addEventListener("input", () => { $("tagError").textContent = ""; renderTagEditor(); });
+  $("cancelTag").addEventListener("click", () => tagEditor.close());
+
+  $("tagForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const t = editingTag;
+    if (!t) return tagEditor.close();
+    const name = $("tagNameInput").value.normalize("NFC").trim().replace(/\s+/g, " ").toLowerCase();
+    if (!name || !TAG_NAME.test(name)) { $("tagError").textContent = "Tags can only have letters and spaces."; return; }
+    try {
+      await post("/tags/" + t.id + "/update", { name, hue: tagHue });
+    } catch (err) { $("tagError").textContent = err.message; return; }
+    tagEditor.close();
+    reload().catch(showError);
+  });
+
   $("listButton").addEventListener("click", openLists);
   $("closeLists").addEventListener("click", closeLists);
   window.addEventListener("popstate", () => showScreen(onListsScreen() ? "lists" : "list"));
@@ -739,7 +801,7 @@
   // ---- keeping in sync with other phones ----
 
   function refresh() {
-    if (document.hidden || editor.open || viewer.open || listEditor.open || nameDialog.open) return;
+    if (document.hidden || editor.open || viewer.open || listEditor.open || nameDialog.open || tagEditor.open) return;
     reload().catch(() => { /* quiet: try again next time */ });
   }
   setInterval(refresh, REFRESH_MS);
