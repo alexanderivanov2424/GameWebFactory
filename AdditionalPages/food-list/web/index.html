@@ -30,6 +30,7 @@
     }
   }
   * { box-sizing: border-box; }
+  [hidden] { display: none !important; }  /* hidden always wins over display rules below */
   html { -webkit-text-size-adjust: 100%; }
   body {
     margin: 0; background: var(--bg); color: var(--text);
@@ -85,6 +86,7 @@
   .qty { font-weight: 500; color: var(--muted); margin-left: 6px; white-space: nowrap; }
   .item.doomed { border-color: var(--danger); background: color-mix(in srgb, var(--danger) 14%, var(--card)); }
   .item.doomed .name { color: var(--danger); }
+  body:not(.global) #doomBar { display: none; }
   .doombar { display: flex; align-items: center; gap: 8px; margin-top: 10px; padding: 8px 10px; border-radius: 10px;
     border: 1px solid var(--danger); background: color-mix(in srgb, var(--danger) 10%, var(--card)); }
   .doombar span { flex: 1; min-width: 0; font-size: 14px; }
