@@ -176,8 +176,10 @@
     return chip;
   }
 
+  // An item's tags, always in the same order: by name, like the tags list from the server.
   function itemTags(item) {
-    return (item.tags || []).map((id) => tagsById.get(id)).filter(Boolean);
+    const own = new Set(item.tags || []);
+    return tags.filter((t) => own.has(t.id));
   }
 
   function render() {
@@ -692,7 +694,7 @@
 
   function renderEditorTags() {
     const byName = new Map(tags.map((t) => [t.name, t]));
-    $("editTags").replaceChildren(...editTagNames.map((name) => {
+    $("editTags").replaceChildren(...editTagNames.slice().sort().map((name) => {
       const tag = byName.get(name);
       const chip = tag ? tagChip(tag, "button", name + " ✕") : el("button", "tag plain new", name + " ✕");
       chip.type = "button";
