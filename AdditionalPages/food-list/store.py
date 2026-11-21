@@ -1,41 +1,47 @@
-"""Food list: several shopping lists plus every item name ever added, kept in <data>/lists.json,
-with the pictures in <data>/images/<id>.png.
+"""Food list: several shopping lists plus every item ever added, kept in <data>/lists.json, with
+the pictures in <data>/images/<id>.png.
 
 The data:
-- foods: every item name ever added ({id, name, tags: [tag id]}), kept forever (removing an item
-  from a list keeps its food) so the page can suggest them when adding. Food names are lowercase
-  (whatever is typed is lowercased; symbols, spaces and digits are fine) and unique. Tags belong
-  to the food, so they come back when it's added again and show on every list holding it.
+- foods: every item ever added, kept forever (removing it from a list keeps it) so the page can
+  suggest it when adding and edit it in the Global list: {id, name, tags: [tag id], notes, unit,
+  amount, images: [image id]}. Everything about an item lives here, once, whichever list it's on,
+  except how many to get: amount here is only the default a list entry starts with.
+  Names are lowercase (whatever is typed is lowercased; symbols, spaces and digits are fine) and
+  unique: adding a name that's already a food reuses it, and a rename to another food's name is
+  refused. Deleting a food (only from the Global list) takes it off every list and deletes its
+  pictures.
 - tags: every tag ever made ({id, name, hue}), kept forever. Names are lowercase letters and
   single spaces only, and unique; hue (0-359) is the tag's colour, picked at random when it's made
   among the hues used least so far. Setting an item's tags by name makes any new ones.
-- lists: {id, name, template, items}; list names are unique ignoring case and there is always at
-  least one. A template list can be copied: the copy gets the same items (notes and pictures too,
-  the pictures as new files), all unchecked, and isn't a template itself.
-  An item is {id, food (a food id), notes, checked, images}; a food is on a list at most once.
-  Adding a name that's already a food reuses it; renaming an item renames its food (so the new
-  name is what's suggested, and it shows on every list holding it); a rename to another food's
-  name is refused.
-The page's Global list isn't stored: it's every food (public_foods), where a food's name and tags
-can be changed (update_food) but nothing is checked off.
-An older list.json (one list: {"items": [{id, name, notes, checked, images}]}) becomes the list
-"Food list" when lists.json doesn't exist yet; list.json itself is left as it was.
+- lists: {id, name, template, copy_of, items}; list names are unique ignoring case and there is
+  always at least one. An entry on a list is {id, food, checked, amount}; a food is on a list at
+  most once. A template list can be copied: the copy gets the same foods with the template's
+  amounts, all unchecked, isn't a template itself, and has copy_of = {id, name} of the template
+  (the name follows renames of the template, and stays after it's deleted).
+The page's Global list isn't stored: it's every food (public_foods).
+Amounts are numbers above 0 (at most AMOUNT_MAX, rounded to 2 decimals) or None for "not set".
+
+Older data is moved over when loaded (and saved again once): list.json (one list:
+{"items": [{id, name, notes, checked, images}]}) becomes the list "Food list" when lists.json
+doesn't exist yet (list.json itself is left as it was), and notes/pictures that were kept on list
+entries move to their food (notes joined, pictures up to the limit).
 
 Nothing from the browser is trusted. Every value is checked here before it's kept:
 - text: must be a string, normalised (NFC), control/format/private/unassigned characters dropped
   (newlines kept in notes), trimmed, and rejected when longer than the limit;
-- checked: must be exactly true or false;
+- checked and template: must be exactly true or false; amounts: numbers in range or null;
 - ids are made here (random hex) and the browser can only name existing ones; file names are
   only ever built from those ids, never from anything the browser sends;
 - images come in as raw RGB and go out as a PNG written by images.py.
-Limits (lists, items per list, foods, pictures per item and in all, total data size, uploads per
-hour) keep a stranger who finds the page from filling the disk. lists.json is checked the same way
-when it's loaded, and image files nobody refers to are removed then.
+Limits (lists, items per list, foods, tags, pictures per item and in all, total data size, uploads
+per hour) keep a stranger who finds the page from filling the disk. lists.json is checked the
+same way when it's loaded, and image files nobody refers to are removed then.
 
 Files are written to a temporary name and renamed, so a crash never leaves a half-written file.
 """
 
 import json
+import math
 import os
 import re
 import secrets
@@ -50,6 +56,8 @@ NAME_MAX = 80
 LIST_NAME_MAX = 40
 TAG_NAME_MAX = 24
 NOTES_MAX = 500
+UNIT_MAX = 16
+AMOUNT_MAX = 9999
 MAX_LISTS = 30
 MAX_ITEMS = 300  # per list
 MAX_FOODS = 3000
@@ -60,6 +68,7 @@ MAX_IMAGES_PER_ITEM = 4
 MAX_IMAGES = 300
 MAX_DATA_BYTES = 200 * 1024 * 1024
 UPLOADS_PER_HOUR = 120
+MAX_DELETE = 500  # foods deleted in one request
 DEFAULT_LIST = "Food list"
 
 ID = re.compile(r"^[0-9a-f]{16}$")
@@ -122,6 +131,27 @@ def tag_name(value):
     return name
 
 
+def clean_amount(value):
+    """An amount as it's kept: a number above 0 (2 decimals at most) or None, or Rejected."""
+    if value is None or value == "":
+        return None
+    if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value):
+        raise Rejected("The amount must be a number.")
+    if not 0 <= value <= AMOUNT_MAX:
+        raise Rejected(f"The amount must be between 0 and {AMOUNT_MAX}.")
+    value = round(float(value), 2)
+    if value == 0:
+        return None
+    return int(value) if value.is_integer() else value
+
+
+def saved_amount(value):
+    try:
+        return clean_amount(value)
+    except Rejected:
+        return None
+
+
 def free_name(name, taken, limit=NAME_MAX):
     """name, or name with " 2", " 3"... added so its lowercase isn't in taken (when loading bad data)."""
     n = 1
@@ -153,6 +183,10 @@ def read_json(path):
     return data if isinstance(data, dict) else None
 
 
+def has_id(entry):
+    return isinstance(entry, dict) and isinstance(entry.get("id"), str) and bool(ID.match(entry["id"]))
+
+
 class Store:
     def __init__(self, folder):
         self.folder = Path(folder)
@@ -160,7 +194,7 @@ class Store:
         self.data_file = self.folder / "lists.json"
         self.old_file = self.folder / "list.json"  # before there were several lists
         self.lists = []
-        self.foods = {}     # food id -> {"name", "tags": [tag id]}
+        self.foods = {}     # food id -> {"name", "tags", "notes", "unit", "amount", "images"}
         self.food_ids = {}  # name -> food id
         self.tags = {}      # tag id -> {"name", "hue"}
         self.tag_ids = {}   # name -> tag id
@@ -171,64 +205,37 @@ class Store:
     # ---- loading and saving ----
 
     def load(self):
-        fresh = not self.data_file.exists()
+        self.moved = not self.data_file.exists()  # older data was moved over: save once loaded
         raw = read_json(self.data_file)
-        if raw is None and fresh:
+        if raw is None and self.moved:
             old = read_json(self.old_file) or {}
             raw = {"lists": [{"id": new_id(), "name": DEFAULT_LIST, "items": old.get("items", [])}]}
         raw = raw or {}
         self.lists, self.foods, self.food_ids, self.tags, self.tag_ids = [], {}, {}, {}, {}
         seen = set()
-        for entry in raw.get("tags", []) if isinstance(raw.get("tags"), list) else []:
-            if len(self.tags) >= MAX_TAGS:
-                break
-            try:
-                self._load_tag(entry, seen)
-            except Rejected:
-                continue
-        for entry in raw.get("foods", []) if isinstance(raw.get("foods"), list) else []:
-            if len(self.foods) >= MAX_FOODS:
-                break
-            try:
-                self._load_food(entry, seen)
-            except Rejected:
-                continue
-        for entry in raw.get("lists", []) if isinstance(raw.get("lists"), list) else []:
-            if len(self.lists) >= MAX_LISTS:
-                break
-            try:
-                self._load_list(entry, seen)
-            except Rejected:
-                continue
+        for key, load, limit, kept in (("tags", self._load_tag, MAX_TAGS, self.tags),
+                                       ("foods", self._load_food, MAX_FOODS, self.foods),
+                                       ("lists", self._load_list, MAX_LISTS, self.lists)):
+            for entry in raw.get(key, []) if isinstance(raw.get(key), list) else []:
+                if len(kept) >= limit:
+                    break
+                try:
+                    load(entry, seen)
+                except Rejected:
+                    continue
         if not self.lists:
-            self.lists.append({"id": new_id(), "name": DEFAULT_LIST, "items": []})
-        referenced = {image for item in self.all_items() for image in item["images"]}
+            self.lists.append(self._new_list(DEFAULT_LIST))
+        referenced = {image for food in self.foods.values() for image in food["images"]}
         for path in self.images_dir.iterdir():
             if path.is_file() and (path.stem not in referenced or path.suffix != ".png"):
                 path.unlink(missing_ok=True)
         self.data_bytes = sum(p.stat().st_size for p in self.images_dir.iterdir() if p.is_file())
-        if fresh:
+        if self.moved:
             self.save()
 
-    def _load_food(self, entry, seen):
-        if not isinstance(entry, dict) or not isinstance(entry.get("id"), str) or not ID.match(entry["id"]):
-            raise Rejected("bad food")
-        if entry["id"] in seen:
-            raise Rejected("duplicate id")
-        name = free_name(food_name(entry.get("name")) or "?", self.food_ids)
-        tags = []
-        for tag in entry.get("tags", []) if isinstance(entry.get("tags"), list) else []:
-            if isinstance(tag, str) and tag in self.tags and tag not in tags and len(tags) < MAX_TAGS_PER_ITEM:
-                tags.append(tag)
-        seen.add(entry["id"])
-        self._set_food(entry["id"], name)
-        self.foods[entry["id"]]["tags"] = tags
-
     def _load_tag(self, entry, seen):
-        if not isinstance(entry, dict) or not isinstance(entry.get("id"), str) or not ID.match(entry["id"]):
+        if not has_id(entry) or entry["id"] in seen:
             raise Rejected("bad tag")
-        if entry["id"] in seen:
-            raise Rejected("duplicate id")
         name = tag_name(entry.get("name"))
         if name in self.tag_ids:
             raise Rejected("duplicate tag")
@@ -239,15 +246,41 @@ class Store:
         self.tags[entry["id"]] = {"name": name, "hue": hue}
         self.tag_ids[name] = entry["id"]
 
+    def _load_food(self, entry, seen):
+        if not has_id(entry) or entry["id"] in seen:
+            raise Rejected("bad food")
+        name = free_name(food_name(entry.get("name")) or "?", self.food_ids)
+        food = self._make_food(entry["id"], name)
+        seen.add(entry["id"])
+        for tag in entry.get("tags", []) if isinstance(entry.get("tags"), list) else []:
+            if isinstance(tag, str) and tag in self.tags and tag not in food["tags"] and len(food["tags"]) < MAX_TAGS_PER_ITEM:
+                food["tags"].append(tag)
+        try:
+            food["notes"] = clean_text(entry.get("notes"), NOTES_MAX, multiline=True)
+            food["unit"] = clean_text(entry.get("unit"), UNIT_MAX)
+        except Rejected:
+            pass
+        food["amount"] = saved_amount(entry.get("amount"))
+        self._take_images(food, entry.get("images"), seen)
+
+    def _take_images(self, food, pictures, seen):
+        for image in pictures if isinstance(pictures, list) else []:
+            if (isinstance(image, str) and ID.match(image) and image not in seen
+                    and (self.images_dir / f"{image}.png").is_file()
+                    and len(food["images"]) < MAX_IMAGES_PER_ITEM):
+                seen.add(image)
+                food["images"].append(image)
+
     def _load_list(self, entry, seen):
-        if not isinstance(entry, dict) or not isinstance(entry.get("id"), str) or not ID.match(entry["id"]):
+        if not has_id(entry) or entry["id"] in seen:
             raise Rejected("bad list")
-        if entry["id"] in seen:
-            raise Rejected("duplicate id")
         seen.add(entry["id"])
         taken = {lst["name"].lower() for lst in self.lists}
         name = free_name(clean_text(entry.get("name"), LIST_NAME_MAX) or "List", taken, LIST_NAME_MAX)
-        lst = {"id": entry["id"], "name": name, "template": entry.get("template") is True, "items": []}
+        lst = self._new_list(name, template=entry.get("template") is True, entry_id=entry["id"])
+        source = entry.get("copy_of")
+        if has_id(source):
+            lst["copy_of"] = {"id": source["id"], "name": clean_text(source.get("name"), LIST_NAME_MAX) or "?"}
         on_list = set()
         for raw in entry.get("items", []) if isinstance(entry.get("items"), list) else []:
             if len(lst["items"]) >= MAX_ITEMS:
@@ -259,55 +292,55 @@ class Store:
         self.lists.append(lst)
 
     def _load_item(self, entry, seen, on_list):
-        if not isinstance(entry, dict) or not isinstance(entry.get("id"), str) or not ID.match(entry["id"]):
+        if not has_id(entry) or entry["id"] in seen:
             raise Rejected("bad item")
-        if entry["id"] in seen:
-            raise Rejected("duplicate id")
         if "food" in entry:
-            food = entry["food"]
-            if not isinstance(food, str) or food not in self.foods or food in on_list:
+            food_id = entry["food"]
+            if not isinstance(food_id, str) or food_id not in self.foods or food_id in on_list:
                 raise Rejected("bad food")
-        else:  # from the old list.json: the item has its own name
+        else:  # from the old list.json: the entry has its own name
             name = food_name(entry.get("name")) or "?"
-            food = self.food_ids.get(name)
-            if food in on_list:
-                name, food = free_name(name, self.food_ids), None
-            if food is None:
+            food_id = self.food_ids.get(name)
+            if food_id in on_list:
+                name, food_id = free_name(name, self.food_ids), None
+            if food_id is None:
                 if len(self.foods) >= MAX_FOODS:
                     raise Rejected("too many foods")
-                food = new_id()
-                self._set_food(food, name)
+                food_id = new_id()
+                self._make_food(food_id, name)
         seen.add(entry["id"])
-        on_list.add(food)
-        pictures = []
-        for image in entry.get("images", []) if isinstance(entry.get("images"), list) else []:
-            if (isinstance(image, str) and ID.match(image) and image not in seen
-                    and (self.images_dir / f"{image}.png").is_file()
-                    and len(pictures) < MAX_IMAGES_PER_ITEM):
-                seen.add(image)
-                pictures.append(image)
-        return {
-            "id": entry["id"],
-            "food": food,
-            "notes": clean_text(entry.get("notes"), NOTES_MAX, multiline=True),
-            "checked": entry.get("checked") is True,
-            "images": pictures,
-        }
+        on_list.add(food_id)
+        food = self.foods[food_id]
+        if "notes" in entry or "images" in entry:  # from before everything moved to the food
+            self.moved = True
+            try:
+                notes = clean_text(entry.get("notes"), NOTES_MAX, multiline=True)
+            except Rejected:
+                notes = ""
+            if notes and notes not in food["notes"]:
+                joined = (food["notes"] + "\n" + notes).strip()
+                if len(joined) <= NOTES_MAX:
+                    food["notes"] = joined
+            self._take_images(food, entry.get("images"), seen)
+        return {"id": entry["id"], "food": food_id, "checked": entry.get("checked") is True,
+                "amount": saved_amount(entry.get("amount"))}
 
     def save(self):
         data = json.dumps({
             "tags": [dict(tag, id=tag_id) for tag_id, tag in self.tags.items()],
-            "foods": [{"id": food, "name": entry["name"], "tags": entry["tags"]} for food, entry in self.foods.items()],
+            "foods": [dict(food, id=food_id) for food_id, food in self.foods.items()],
             "lists": self.lists,
         }, ensure_ascii=False, indent=1)
         write_atomic(self.data_file, data.encode("utf-8"))
 
-    def _set_food(self, food, name):
-        """Make a food or rename one."""
-        entry = self.foods.setdefault(food, {"name": name, "tags": []})
-        self.food_ids.pop(entry["name"], None)
-        entry["name"] = name
-        self.food_ids[name] = food
+    def _make_food(self, food_id, name):
+        food = {"name": name, "tags": [], "notes": "", "unit": "", "amount": None, "images": []}
+        self.foods[food_id] = food
+        self.food_ids[name] = food_id
+        return food
+
+    def _new_list(self, name, template=False, entry_id=None):
+        return {"id": entry_id or new_id(), "name": name, "template": template, "copy_of": None, "items": []}
 
     def _new_hue(self):
         used = [tag["hue"] for tag in self.tags.values()]
@@ -317,43 +350,47 @@ class Store:
 
     # ---- reading ----
 
-    def all_items(self):
-        return [item for lst in self.lists for item in lst["items"]]
-
     def summary(self):
         """Every list (without items), every food's name and tags, and every tag: for the lists screen
         and the suggestions while typing."""
         return {
             "lists": [{"id": lst["id"], "name": lst["name"], "template": lst["template"],
+                       "copy_of": lst["copy_of"]["name"] if lst["copy_of"] else None,
                        "count": len(lst["items"]), "left": sum(not item["checked"] for item in lst["items"])}
                       for lst in self.lists],
-            "foods": sorted(({"name": entry["name"], "tags": list(entry["tags"])} for entry in self.foods.values()),
+            "foods": sorted(({"name": food["name"], "tags": list(food["tags"])} for food in self.foods.values()),
                            key=lambda food: food["name"]),
             "tags": sorted(({"id": tag_id, "name": tag["name"], "hue": tag["hue"]}
                             for tag_id, tag in self.tags.items()), key=lambda tag: tag["name"]),
         }
 
+    def public_food(self, food_id):
+        food = self.foods[food_id]
+        return {"food": food_id, "name": food["name"], "tags": list(food["tags"]), "notes": food["notes"],
+                "unit": food["unit"], "images": list(food["images"])}
+
     def public_item(self, item):
-        food = self.foods[item["food"]]
-        return {"id": item["id"], "name": food["name"], "tags": list(food["tags"]), "notes": item["notes"],
-                "checked": item["checked"], "images": list(item["images"])}
+        return dict(self.public_food(item["food"]), id=item["id"], amount=item["amount"], checked=item["checked"])
 
     def public_list(self, list_id):
         """One list with its items, plus the summary."""
         lst = self.find_list(list_id)
         items = [self.public_item(item) for item in lst["items"]]
-        return dict(self.summary(), list={"id": lst["id"], "name": lst["name"], "items": items})
+        return dict(self.summary(), list={"id": lst["id"], "name": lst["name"], "template": lst["template"],
+                                          "copy_of": lst["copy_of"]["name"] if lst["copy_of"] else None,
+                                          "items": items})
 
     def public_foods(self):
-        """The Global list: every food with its tags and the lists holding it, plus the summary."""
+        """The Global list: every food (amount = its default) and the lists holding it, plus the summary."""
         holders = {}
         for lst in self.lists:
             for item in lst["items"]:
                 holders.setdefault(item["food"], []).append(lst["name"])
-        items = sorted(({"id": food, "name": entry["name"], "tags": list(entry["tags"]),
-                         "lists": holders.get(food, [])} for food, entry in self.foods.items()),
+        items = sorted((dict(self.public_food(food_id), id=food_id, amount=food["amount"],
+                             lists=holders.get(food_id, [])) for food_id, food in self.foods.items()),
                        key=lambda item: item["name"])
         return dict(self.summary(), list={"id": "global", "name": "Global", "global": True, "items": items})
+
     def find_list(self, list_id):
         for lst in self.lists:
             if lst["id"] == list_id:
@@ -362,11 +399,11 @@ class Store:
 
     def find_food(self, food_id):
         if food_id not in self.foods:
-            raise Rejected("That item is gone.", 404)
+            raise Rejected("That item is gone (someone may have deleted it).", 404)
         return self.foods[food_id]
 
     def find(self, item_id):
-        """(list, item) for an item on any list."""
+        """(list, entry) for an entry on any list."""
         for lst in self.lists:
             for item in lst["items"]:
                 if item["id"] == item_id:
@@ -374,8 +411,8 @@ class Store:
         raise Rejected("That item is gone (someone may have removed it).", 404)
 
     def image_path(self, image_id):
-        """The file for a picture that's on a list, else None."""
-        if not ID.match(image_id) or not any(image_id in item["images"] for item in self.all_items()):
+        """The file for a picture some food has, else None."""
+        if not ID.match(image_id) or not any(image_id in food["images"] for food in self.foods.values()):
             return None
         return self.images_dir / f"{image_id}.png"
 
@@ -389,10 +426,13 @@ class Store:
             raise Rejected(f"There's already a list called “{name}”.")
         return name
 
-    def add_list(self, data):
+    def _room_for_list(self):
         if len(self.lists) >= MAX_LISTS:
             raise Rejected(f"There are already {MAX_LISTS} lists.", 507)
-        lst = {"id": new_id(), "name": self._list_name(data.get("name")), "template": False, "items": []}
+
+    def add_list(self, data):
+        self._room_for_list()
+        lst = self._new_list(self._list_name(data.get("name")))
         self.lists.append(lst)
         self.save()
         return {"id": lst["id"], "name": lst["name"]}
@@ -404,33 +444,22 @@ class Store:
         if not isinstance(template, bool):
             raise Rejected("Bad template value.")
         lst["name"], lst["template"] = name, template
+        for other in self.lists:
+            if other["copy_of"] and other["copy_of"]["id"] == lst["id"]:
+                other["copy_of"]["name"] = name
         self.save()
         return {"id": lst["id"], "name": lst["name"], "template": lst["template"]}
 
     def copy_list(self, list_id, data):
-        """A new list holding a template's items (unchecked, with copies of their pictures)."""
+        """A new list holding a template's items with its amounts, all unchecked."""
         source = self.find_list(list_id)
         if not source["template"]:
             raise Rejected("Only template lists can be copied.")
-        if len(self.lists) >= MAX_LISTS:
-            raise Rejected(f"There are already {MAX_LISTS} lists.", 507)
-        name = self._list_name(data.get("name"))
-        pictures = [image for item in source["items"] for image in item["images"]]
-        if sum(len(i["images"]) for i in self.all_items()) + len(pictures) > MAX_IMAGES:
-            raise Rejected(f"Copying its pictures would pass {MAX_IMAGES} pictures; remove some first.", 507)
-        sizes = {image: (self.images_dir / f"{image}.png").stat().st_size for image in pictures}
-        if self.data_bytes + sum(sizes.values()) > MAX_DATA_BYTES:
-            raise Rejected("There's no room to copy its pictures; remove some first.", 507)
-        lst = {"id": new_id(), "name": name, "template": False, "items": []}
-        for item in source["items"]:
-            copies = []
-            for image in item["images"]:
-                copy = new_id()
-                write_atomic(self.images_dir / f"{copy}.png", (self.images_dir / f"{image}.png").read_bytes())
-                self.data_bytes += sizes[image]
-                copies.append(copy)
-            lst["items"].append({"id": new_id(), "food": item["food"], "notes": item["notes"],
-                                 "checked": False, "images": copies})
+        self._room_for_list()
+        lst = self._new_list(self._list_name(data.get("name")))
+        lst["copy_of"] = {"id": source["id"], "name": source["name"]}
+        lst["items"] = [{"id": new_id(), "food": item["food"], "checked": False, "amount": item["amount"]}
+                        for item in source["items"]]
         self.lists.append(lst)
         self.save()
         return {"id": lst["id"], "name": lst["name"]}
@@ -441,80 +470,116 @@ class Store:
             raise Rejected("That's the only list; add another one before deleting it.")
         self.lists.remove(lst)
         self.save()
-        self._remove_files([image for item in lst["items"] for image in item["images"]])
 
-    # ---- items ----
+    # ---- entries on a list ----
 
     def add(self, list_id, data):
+        """Put a food on a list by name (made if it's new), with the food's default amount."""
         lst = self.find_list(list_id)
         if len(lst["items"]) >= MAX_ITEMS:
             raise Rejected(f"The list is full ({MAX_ITEMS} items).", 507)
         name = food_name(data.get("name"))
         if not name:
             raise Rejected("Give the item a name.")
-        food = self.food_ids.get(name)
-        if food is not None and any(item["food"] == food for item in lst["items"]):
+        food_id = self.food_ids.get(name)
+        if food_id is not None and any(item["food"] == food_id for item in lst["items"]):
             raise Rejected(f"“{name}” is already on this list.", 409)
-        if food is None:
+        if food_id is None:
             if len(self.foods) >= MAX_FOODS:
-                raise Rejected(f"There are already {MAX_FOODS} saved names.", 507)
-            food = new_id()
-            self._set_food(food, name)
-        item = {"id": new_id(), "food": food,
-                "notes": clean_text(data.get("notes"), NOTES_MAX, multiline=True, label="The notes"),
-                "checked": False, "images": []}
+                raise Rejected(f"There are already {MAX_FOODS} saved items.", 507)
+            food_id = new_id()
+            self._make_food(food_id, name)
+        item = {"id": new_id(), "food": food_id, "checked": False, "amount": self.foods[food_id]["amount"]}
         lst["items"].append(item)
         self.save()
         return self.public_item(item)
 
-    def _food_changes(self, food, data):
-        """Checks a new name and tags for a food; returns a function that applies them."""
-        name = tags = None
+    def update(self, item_id, data):
+        """Change an entry: checked and amount are the entry's own; the rest goes to its food."""
+        _, item = self.find(item_id)
+        checked = item["checked"]
+        if "checked" in data:
+            checked = data["checked"]
+            if not isinstance(checked, bool):
+                raise Rejected("Bad checked value.")
+        amount = clean_amount(data["amount"]) if "amount" in data else item["amount"]
+        apply_food = self._food_changes(item["food"], data)
+        apply_food()
+        item["checked"], item["amount"] = checked, amount
+        self.save()
+        return self.public_item(item)
+
+    def delete(self, item_id):
+        """Take an entry off its list (the food stays)."""
+        lst, item = self.find(item_id)
+        lst["items"].remove(item)
+        self.save()
+
+    def clear(self, list_id, which):
+        lst = self.find_list(list_id)
+        if which not in ("checked", "all"):
+            raise Rejected("Bad clear request.")
+        before = len(lst["items"])
+        lst["items"] = [item for item in lst["items"] if which == "checked" and not item["checked"]]
+        self.save()
+        return before - len(lst["items"])
+
+    # ---- foods (everything about an item) ----
+
+    def _food_changes(self, food_id, data, default_amount=False):
+        """Checks name, tags, notes, unit (and the default amount) for a food; returns a function
+        that applies them, so nothing changes when any of them is refused."""
+        food = self.foods[food_id]
+        changes = {}
         if "tags" in data:
-            tags = self._tag_names(data["tags"])
+            changes["tags"] = self._tag_names(data["tags"])
         if "name" in data:
             name = food_name(data["name"])
             if not name:
                 raise Rejected("Give the item a name.")
             other = self.food_ids.get(name)
-            if other is not None and other != food:
+            if other is not None and other != food_id:
                 raise Rejected(f"There's already an item called “{name}”.", 409)
+            changes["name"] = name
+        if "notes" in data:
+            changes["notes"] = clean_text(data["notes"], NOTES_MAX, multiline=True, label="The notes")
+        if "unit" in data:
+            changes["unit"] = clean_text(data["unit"], UNIT_MAX, label="The unit")
+        if default_amount and "amount" in data:
+            changes["amount"] = clean_amount(data["amount"])
 
         def apply():
-            if name is not None:
-                self._set_food(food, name)
-            if tags is not None:
-                self.foods[food]["tags"] = [self._tag(tag) for tag in tags]
+            if "name" in changes:
+                del self.food_ids[food["name"]]
+                self.food_ids[changes["name"]] = food_id
+            if "tags" in changes:
+                changes["tags"] = [self._tag(tag) for tag in changes["tags"]]
+            food.update(changes)
         return apply
 
     def update_food(self, food_id, data):
-        """Rename or retag a saved item (from the Global list)."""
+        """Change a food from the Global list (amount there is the default for new entries)."""
         self.find_food(food_id)
-        self._food_changes(food_id, data)()
+        self._food_changes(food_id, data, default_amount=True)()
         self.save()
-        entry = self.foods[food_id]
-        return {"id": food_id, "name": entry["name"], "tags": list(entry["tags"])}
+        return dict(self.public_food(food_id), id=food_id, amount=self.foods[food_id]["amount"])
 
-    def update(self, item_id, data):
-        _, item = self.find(item_id)
-        notes = checked = None
-        apply_food = self._food_changes(item["food"], data)
-        if "notes" in data:
-            notes = clean_text(data["notes"], NOTES_MAX, multiline=True, label="The notes")
-        if "checked" in data:
-            if not isinstance(data["checked"], bool):
-                raise Rejected("Bad checked value.")
-            checked = data["checked"]
-        apply_food()
-        if notes is not None:
-            item["notes"] = notes
-        if checked is not None:
-            item["checked"] = checked
+    def delete_foods(self, food_ids):
+        """Delete foods for good: off every list, pictures deleted. Unknown ids are skipped."""
+        if not isinstance(food_ids, list) or len(food_ids) > MAX_DELETE:
+            raise Rejected("Bad delete request.")
+        gone = {food_id for food_id in food_ids if isinstance(food_id, str) and food_id in self.foods}
+        pictures = [image for food_id in gone for image in self.foods[food_id]["images"]]
+        for food_id in gone:
+            del self.food_ids[self.foods.pop(food_id)["name"]]
+        for lst in self.lists:
+            lst["items"] = [item for item in lst["items"] if item["food"] not in gone]
         self.save()
-        return self.public_item(item)
+        self._remove_files(pictures)
+        return len(gone)
 
     def _tag_names(self, value):
-        """Checked tag names for an item (nothing is made yet)."""
+        """Checked tag names for a food (nothing is made yet)."""
         if not isinstance(value, list) or len(value) > MAX_TAGS_PER_ITEM * 2:
             raise Rejected("Bad tags.")
         names = []
@@ -536,28 +601,14 @@ class Store:
             self.tag_ids[name] = tag_id
         return self.tag_ids[name]
 
-    def delete(self, item_id):
-        lst, item = self.find(item_id)
-        lst["items"].remove(item)
-        self.save()
-        self._remove_files(item["images"])
+    # ---- pictures (on foods) ----
 
-    def clear(self, list_id, which):
-        lst = self.find_list(list_id)
-        if which not in ("checked", "all"):
-            raise Rejected("Bad clear request.")
-        gone = [item for item in lst["items"] if which == "all" or item["checked"]]
-        lst["items"] = [item for item in lst["items"] if item not in gone]
-        self.save()
-        self._remove_files([image for item in gone for image in item["images"]])
-        return len(gone)
-
-    def add_image(self, item_id, body, now=None):
-        _, item = self.find(item_id)
-        if len(item["images"]) >= MAX_IMAGES_PER_ITEM:
+    def add_image(self, food_id, body, now=None):
+        food = self.find_food(food_id)
+        if len(food["images"]) >= MAX_IMAGES_PER_ITEM:
             raise Rejected(f"An item can have at most {MAX_IMAGES_PER_ITEM} pictures.", 507)
-        if sum(len(i["images"]) for i in self.all_items()) >= MAX_IMAGES:
-            raise Rejected(f"The lists already have {MAX_IMAGES} pictures; remove some first.", 507)
+        if sum(len(f["images"]) for f in self.foods.values()) >= MAX_IMAGES:
+            raise Rejected(f"There are already {MAX_IMAGES} pictures; remove some first.", 507)
         now = time.monotonic() if now is None else now
         while self.uploads and now - self.uploads[0] > 3600:
             self.uploads.popleft()
@@ -573,15 +624,15 @@ class Store:
         image_id = new_id()
         write_atomic(self.images_dir / f"{image_id}.png", png)
         self.data_bytes += len(png)
-        item["images"].append(image_id)
+        food["images"].append(image_id)
         self.save()
         return image_id
 
-    def delete_image(self, item_id, image_id):
-        _, item = self.find(item_id)
-        if image_id not in item["images"]:
+    def delete_image(self, food_id, image_id):
+        food = self.find_food(food_id)
+        if image_id not in food["images"]:
             raise Rejected("That picture is gone.", 404)
-        item["images"].remove(image_id)
+        food["images"].remove(image_id)
         self.save()
         self._remove_files([image_id])
 

@@ -2,8 +2,10 @@
 <!-- Food list (/food-list/): shared shopping lists for phones. Not linked from anywhere.
      Two screens: one list (the title button opens the other) and the lists screen: a stack of lists
      (New list on top, then Global = every saved item, then each list with Edit and, on templates, Copy).
-     body.global = the Global list is open: no checking off, clearing or adding; the item editor shows
-     only name and tags (.item-only parts hidden).
+     body.global = the Global list is open: no checking off, clearing or adding; each item has Delete,
+     which marks it (red) until the bar at the top confirms or cancels; the editor has no Remove
+     (.item-only) and its amount is the default. body.copy = a copy of a template is open: its
+     template's name under the title, and Delete list instead of Clear checked / Clear all.
      The list has two modes (the small button next to the title; body.viewing = view mode):
      edit shows the add row and each item's Edit button; view shows the tag filter row instead.
      Logic in app.js; data and pictures are kept by ../server.py (API at /food-list/api/).
@@ -78,6 +80,21 @@
   body:not(.viewing) #filters { display: none; }
   body.global .check, body.global #clearChecked, body.global #clearAll, body.global #add,
   body.global #suggest, body.global .item-only { display: none; }
+  body.copy #clearChecked, body.copy #clearAll, body:not(.copy) #deleteListTop, body.global #deleteListTop { display: none; }
+  .sub { font-size: 13px; color: var(--muted); margin: -2px 0 0 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .qty { font-weight: 500; color: var(--muted); margin-left: 6px; white-space: nowrap; }
+  .item.doomed { border-color: var(--danger); background: color-mix(in srgb, var(--danger) 14%, var(--card)); }
+  .item.doomed .name { color: var(--danger); }
+  .doombar { display: flex; align-items: center; gap: 8px; margin-top: 10px; padding: 8px 10px; border-radius: 10px;
+    border: 1px solid var(--danger); background: color-mix(in srgb, var(--danger) 10%, var(--card)); }
+  .doombar span { flex: 1; min-width: 0; font-size: 14px; }
+  .danger-fill { background: var(--danger); color: #fff; border-color: var(--danger); }
+  .pair { display: flex; gap: 8px; }
+  .pair > div { flex: 1; min-width: 0; }
+  input[type=number] {
+    width: 100%; min-height: 44px; padding: 10px 12px; border-radius: 10px;
+    border: 1px solid var(--line); background: var(--card);
+  }
   .wide { width: 100%; margin-bottom: 10px; }
   .badge {
     display: inline-block; margin-left: 6px; padding: 0 7px; border-radius: 999px; vertical-align: 2px;
@@ -169,13 +186,20 @@
     <button type="button" id="modeButton" class="mode">✏️ Edit</button>
     <button type="button" id="clearChecked">Clear checked</button>
     <button type="button" id="clearAll" class="danger">Clear all</button>
+    <button type="button" id="deleteListTop" class="danger">Delete list</button>
   </div>
+  <div class="sub" id="listSub" hidden></div>
   <form id="add" class="add" autocomplete="off">
     <input type="text" id="addName" class="lower" maxlength="80" placeholder="Add an item…" enterkeyhint="done" autocapitalize="none" aria-label="New item">
     <button type="submit" class="primary">Add</button>
   </form>
   <ul id="suggest" hidden></ul>
   <div id="filters" class="chips" role="group" aria-label="Show only items with a tag"></div>
+  <div id="doomBar" class="doombar" hidden>
+    <span id="doomText"></span>
+    <button type="button" id="doomCancel">Cancel</button>
+    <button type="button" id="doomConfirm" class="danger-fill">Delete</button>
+  </div>
 </header>
 
 <main>
@@ -203,11 +227,19 @@
     <h2>Edit item</h2>
     <label class="field" for="editName">Name</label>
     <input type="text" id="editName" class="lower" maxlength="80" autocapitalize="none" required>
-    <div class="hint">Renames it on every list and in the suggestions.</div>
-    <div class="item-only">
-      <label class="field" for="editNotes">Notes</label>
-      <textarea id="editNotes" maxlength="500" placeholder="Brand, size, how many…"></textarea>
+    <div class="hint">Everything here except the amount is the same on every list.</div>
+    <div class="pair">
+      <div>
+        <label class="field" for="editAmount" id="amountLabel">Amount</label>
+        <input type="number" id="editAmount" inputmode="decimal" min="0" max="9999" step="any" placeholder="—">
+      </div>
+      <div>
+        <label class="field" for="editUnit">Unit</label>
+        <input type="text" id="editUnit" maxlength="16" placeholder="dozen, lb, pack…">
+      </div>
     </div>
+    <label class="field" for="editNotes">Notes</label>
+    <textarea id="editNotes" maxlength="500" placeholder="Brand, size…"></textarea>
     <label class="field" for="tagInput">Tags</label>
     <div class="chips" id="editTags"></div>
     <div class="add">
@@ -216,17 +248,16 @@
     </div>
     <div class="hint" id="tagHint">Letters and spaces only. Tags stay with the item on every list.</div>
     <div class="chips" id="tagChoices"></div>
-    <div class="item-only">
-      <label class="field">Pictures</label>
-      <div class="pics" id="editPics"></div>
-      <div class="upload">
-        <label class="btn">📷 Take photo<input type="file" id="takePhoto" accept="image/*" capture="environment"></label>
-        <label class="btn">🖼️ Choose image<input type="file" id="choosePhoto" accept="image/*" multiple></label>
-      </div>
-      <div id="busy"></div>
+    <label class="field">Pictures</label>
+    <div class="pics" id="editPics"></div>
+    <div class="upload">
+      <label class="btn">📷 Take photo<input type="file" id="takePhoto" accept="image/*" capture="environment"></label>
+      <label class="btn">🖼️ Choose image<input type="file" id="choosePhoto" accept="image/*" multiple></label>
     </div>
+    <div id="busy"></div>
+    <div class="hint bad" id="editError"></div>
     <div class="actions">
-      <button type="button" id="deleteItem" class="danger item-only">Delete</button>
+      <button type="button" id="deleteItem" class="danger item-only">Remove</button>
       <span class="grow"></span>
       <button type="button" id="cancelEdit">Close</button>
       <button type="submit" id="saveEdit" class="primary">Save</button>
@@ -239,7 +270,7 @@
     <h2>Edit list</h2>
     <label class="field" for="listNameInput">Name</label>
     <input type="text" id="listNameInput" maxlength="40" required>
-    <label class="checkline"><input type="checkbox" id="listTemplate"> Template (gets a Copy button on the lists screen)</label>
+    <label class="checkline"><input type="checkbox" id="listTemplate"> Template</label>
     <div class="hint bad" id="listError"></div>
     <div class="actions">
       <button type="button" id="deleteList" class="danger">Delete</button>

@@ -1,9 +1,12 @@
 // Food list page (/food-list/): shows one shared list (adds/edits/checks items, uploads pictures)
 // and the lists screen (the title button; the phone's Back button closes it): New list, the Global
 // list, then every list with Edit (name, template, delete) and, on templates, Copy (named in a
-// popup, "<name>-<month>/<day>" by default). The Global list ("global") is every saved item: only
-// names and tags can be changed there, nothing is checked off or cleared. The open list is
-// remembered in localStorage. While typing a new item, names added before (the server keeps them
+// popup, "<name>-<month>/<day>" by default; a copy shows its template's name and has Delete list
+// instead of the clear buttons). Everything about an item (name, tags, notes, unit, pictures) is
+// saved once for all lists (a "food"); only the amount and the checkmark belong to the list. The
+// Global list ("global") is every saved item: edited the same way (its amount is the default new
+// entries start with), nothing checked off or cleared, and Delete marks items (red) for deleting
+// for good once the bar at the top confirms. The open list is remembered in localStorage. While typing a new item, names added before (the server keeps them
 // all, see ../store.py) that aren't on this list are suggested, with their tags.
 // Item names are lowercase: the server lowercases them too.
 // Tags (coloured by their hue) are set in the item editor, by name: new names make new tags on Save.
@@ -43,6 +46,8 @@
   let listId = remembered();
   let listName = "";
   let isGlobal = false;
+  let copyOf = null;     // the template's name when the open list is a copy of one
+  let doomed = new Set(); // Global list: food ids marked for deleting
   let items = [];
   let editingId = null;
   let msgTimer = 0;
@@ -120,6 +125,7 @@
     items = Array.isArray(open.items) ? open.items : [];
     listName = String(open.name || "");
     isGlobal = open.global === true;
+    copyOf = typeof open.copy_of === "string" ? open.copy_of : null;
     if (open.id !== listId) { listId = open.id; remember(listId); }
     render();
     renderLists();
@@ -176,6 +182,10 @@
     document.title = listName || "Food list";
     document.body.classList.toggle("viewing", viewing);
     document.body.classList.toggle("global", isGlobal);
+    document.body.classList.toggle("copy", !!copyOf && !isGlobal);
+    $("listSub").textContent = copyOf ? "Copy of " + copyOf : "";
+    $("listSub").hidden = !copyOf || isGlobal;
+    renderDoomBar();
     $("modeButton").textContent = viewing ? "👁️ View" : "✏️ Edit";
     $("modeButton").title = viewing ? "View mode: tap to edit" : "Edit mode: tap to view";
     const used = renderFilters();
@@ -190,7 +200,8 @@
   }
 
   function row(item) {
-    const li = el("li", "item" + (item.checked && !isGlobal ? " done" : ""));
+    const doom = isGlobal && doomed.has(item.id);
+    const li = el("li", "item" + (item.checked && !isGlobal ? " done" : "") + (doom ? " doomed" : ""));
 
     const check = el("label", "check");
     const box = el("input");
@@ -205,7 +216,10 @@
     check.append(box);
 
     const info = el("div", "info");
-    info.append(el("div", "name", item.name));
+    const name = el("div", "name", item.name);
+    const qty = quantity(item);
+    if (qty) name.append(el("span", "qty", qty));
+    info.append(name);
     const chips = itemTags(item);
     if (chips.length) {
       const line = el("div", "chips");
@@ -225,10 +239,49 @@
     edit.type = "button";
     edit.addEventListener("click", () => openEditor(item.id));
 
-    if (isGlobal) li.append(info, edit);
-    else li.append(check, info, edit);
+    if (isGlobal) {
+      const remove = button(doom ? "Keep" : "Delete", "edit danger", () => {
+        if (doomed.has(item.id)) doomed.delete(item.id);
+        else doomed.add(item.id);
+        render();
+      });
+      li.append(info, edit, remove);
+    } else {
+      li.append(check, info, edit);
+    }
     return li;
   }
+
+  // "2 dozen", "×3", or "" when no amount is set.
+  function quantity(item) {
+    if (item.amount === null || item.amount === undefined) return "";
+    return item.unit ? item.amount + " " + item.unit : "×" + item.amount;
+  }
+
+  // ---- deleting saved items for good (Global list) ----
+
+  function renderDoomBar() {
+    for (const id of doomed) if (!isGlobal || !items.some((i) => i.id === id)) doomed.delete(id);
+    $("doomBar").hidden = doomed.size === 0;
+    $("doomText").textContent = "Delete " + plural(doomed.size, "item") + " for good, from every list?";
+  }
+
+  $("doomCancel").addEventListener("click", () => { doomed.clear(); render(); });
+  $("doomConfirm").addEventListener("click", () => {
+    const ids = Array.from(doomed);
+    doomed.clear();
+    render();
+    act(() => post("/foods/delete", { ids }));
+  });
+
+  $("deleteListTop").addEventListener("click", () => {
+    const id = listId;
+    if (!confirm("Delete the list “" + listName + "”? This can't be undone.")) return;
+    act(async () => {
+      await post("/lists/" + id + "/delete");
+      if (listId === id) listId = null;  // reload opens the first list
+    });
+  });
 
   // The view mode's filter row: "All" plus every tag on this list. Returns the set of those tag ids.
   function renderFilters() {
@@ -251,6 +304,7 @@
 
   $("modeButton").addEventListener("click", () => {
     viewing = !viewing;
+    doomed.clear();
     store(MODE_KEY, viewing ? "view" : "edit");
     render();
   });
@@ -356,6 +410,8 @@
       remember(id);
       items = [];
       isGlobal = id === GLOBAL;
+      copyOf = null;
+      doomed.clear();
       listName = isGlobal ? "Global" : (lists.find((l) => l.id === id) || {}).name || "";
       render();
       renderSuggestions();
@@ -386,10 +442,12 @@
     $("lists").replaceChildren(global, ...lists.map((l) => {
       const name = el("div", "name", l.name);
       if (l.template) name.append(el("span", "badge", "Template"));
+      if (l.copy_of) name.append(el("span", "badge", "Copy"));
+      const counts = l.count ? l.left + " to get · " + plural(l.count, "item") : "Empty";
       const buttons = [];
       if (l.template) buttons.push(button("Copy", "edit", () => openNameDialog(l)));
       buttons.push(button("Edit", "edit", () => openListEditor(l)));
-      return listRow(name, l.count ? l.left + " to get · " + plural(l.count, "item") : "Empty",
+      return listRow(name, l.copy_of ? "Copy of " + l.copy_of + " · " + counts : counts,
         l.id === listId, () => openList(l.id), buttons);
     }));
   }
@@ -482,6 +540,10 @@
     editingId = id;
     $("editName").value = item.name;
     $("editNotes").value = item.notes || "";
+    $("editUnit").value = item.unit || "";
+    $("editAmount").value = item.amount === null || item.amount === undefined ? "" : String(item.amount);
+    $("amountLabel").textContent = isGlobal ? "Default amount" : "Amount";
+    $("editError").textContent = "";
     $("busy").textContent = "";
     editTagNames = itemTags(item).map((t) => t.name);
     $("tagInput").value = "";
@@ -504,7 +566,9 @@
       remove.type = "button";
       remove.setAttribute("aria-label", "Remove picture");
       remove.addEventListener("click", () => {
-        if (confirm("Remove this picture?")) act(() => post("/items/" + item.id + "/images/" + id + "/delete"));
+        if (confirm("Remove this picture? It's gone from every list.")) {
+          act(() => post("/foods/" + item.food + "/images/" + id + "/delete"));
+        }
       });
       box.append(img, remove);
       return box;
@@ -581,17 +645,22 @@
     if (!item) return editor.close();
     const name = $("editName").value.trim().toLowerCase();
     if (!name) { showError(new Error("Give the item a name.")); return; }
+    const amountText = $("editAmount").value.trim();
+    const amount = amountText === "" ? null : Number(amountText);
+    if ($("editAmount").validity.badInput || (amount !== null && !(amount >= 0 && amount <= 9999))) {
+      $("editError").textContent = "The amount must be a number from 0 to 9999 (or empty).";
+      return;
+    }
     if (!addTypedTag()) return;  // a tag typed but not added yet counts
-    const id = item.id;
-    const itemTagNames = editTagNames.slice();
+    const change = { name, tags: editTagNames.slice(), notes: $("editNotes").value, unit: $("editUnit").value, amount };
+    const path = isGlobal ? "/foods/" + item.food + "/update" : "/items/" + item.id + "/update";
     editor.close();
-    if (isGlobal) act(() => post("/foods/" + id + "/update", { name, tags: itemTagNames }));
-    else act(() => post("/items/" + id + "/update", { name, notes: $("editNotes").value, tags: itemTagNames }));
+    act(() => post(path, change));
   });
 
   $("deleteItem").addEventListener("click", () => {
     const item = current();
-    if (!item || !confirm("Delete “" + item.name + "”?")) return;
+    if (!item || !confirm("Remove “" + item.name + "” from this list? It stays saved.")) return;
     editor.close();
     act(() => post("/items/" + item.id + "/delete"));
   });
@@ -643,7 +712,7 @@
       busy.textContent = "Uploading picture " + (n + 1) + " of " + files.length + "…";
       try {
         const raw = await toRawRgb(files[n]);
-        await request("/items/" + item.id + "/images", {
+        await request("/foods/" + item.food + "/images", {
           method: "POST",
           headers: { "Content-Type": "application/octet-stream" },
           body: raw,

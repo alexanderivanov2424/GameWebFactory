@@ -159,13 +159,13 @@ AdditionalPages/        Extra standalone pages served with the games site but ne
                         run in gwf-app next to the game server; its data goes in $SITE_DATA =
                         ExternalWrite/AdditionalPages/<id>/). They don't use theme/settings/chat or gamekit.
                         Phone support is wanted here. startup.sh and shutdown.sh start and stop them with the site.
-  food-list/            Secret shared shopping lists (/food-list): several lists (the title opens the lists screen:
-                        New list, a Global list of every saved item for editing names/tags, then each list with Edit
-                        and, for template lists, Copy),
-                        items with checkbox, name, notes, photos; every item name ever added is kept (lowercase,
-                        unique) and suggested when adding, and renaming an item renames that saved name; coloured
-                        tags (letters and spaces, unique, saved) on those names; an edit/view mode toggle, where
-                        view mode filters the list by tag.
+  food-list/            Secret shared shopping lists (/food-list). Everything about an item (name, tags, notes, unit,
+                        photos) is saved once for all lists and kept after it leaves a list (names lowercase and unique,
+                        suggested when adding); a list entry has only its checkmark and amount. The title opens the
+                        lists screen: New list, a Global list of every saved item (edit everything, default amounts,
+                        delete items for good), then each list with Edit (name, template, delete) and, on templates,
+                        Copy (amounts copied; copies show their template's name). Coloured tags; edit/view modes, where
+                        view mode filters by tag.
                         Photos are decoded in the browser and sent as raw RGB; images.py writes a fresh PNG from them.
 ExternalWrite/          Everything the running site writes; the only writable mount (git-ignored, owner gwf):
   Accounts/             Account files (never edited by hand while the site runs)
