@@ -13,7 +13,8 @@
 // Item names are lowercase: the server lowercases them too.
 // Tags (coloured by their hue) are set in the item editor, by name: new names make new tags on Save.
 // Two modes, remembered in localStorage: edit (add row, Edit buttons) and view (a row of the list's
-// tags that filters the items; the filter only applies in view mode).
+// tags that filters the items: tap several to show only items having all of them; the filter only
+// applies in view mode).
 // Pictures are decoded and scaled down here, then sent as raw RGB pixels only (4-byte size header
 // + width*height*3 bytes, see ../images.py); the server writes its own PNG from them.
 // Everything shown comes from the server and is put on the page as text (textContent), never HTML.
@@ -43,7 +44,7 @@
   let tags = [];       // every tag: [{id, name, hue}] (sorted by name)
   let tagsById = new Map();
   let viewing = stored(MODE_KEY) === "view";
-  let filterTag = null;  // tag id shown in view mode, or null for everything
+  let filterTags = new Set();  // view mode shows only items having every one of these tag ids
   let editTagNames = []; // the open editor's tags, saved on Save
   let listId = remembered();
   let listName = "";
@@ -193,13 +194,17 @@
     renderDoomBar();
     $("modeButton").textContent = viewing ? "View" : "Edit";
     $("modeButton").title = viewing ? "View mode: tap to edit" : "Edit mode: tap to view";
-    const used = renderFilters();
-    const shown = viewing && filterTag && used.has(filterTag)
-      ? items.filter((i) => (i.tags || []).includes(filterTag)) : items;
+    renderFilters();
+    const wanted = viewing ? Array.from(filterTags) : [];
+    const shown = items.filter((i) => wanted.every((id) => (i.tags || []).includes(id)));
     const sorted = shown.filter((i) => !i.checked).concat(shown.filter((i) => i.checked));
     list.replaceChildren(...sorted.map(row));
     $("empty").hidden = items.length > 0;
     $("empty").textContent = isGlobal ? "Nothing has been added to a list yet." : "The list is empty.";
+    if (items.length && !shown.length) {
+      $("empty").hidden = false;
+      $("empty").textContent = "No items have all of these tags.";
+    }
     $("clearChecked").disabled = !items.some((i) => i.checked);
     $("clearAll").disabled = items.length === 0;
   }
@@ -288,23 +293,28 @@
     });
   });
 
-  // The view mode's filter row: "All" plus every tag on this list. Returns the set of those tag ids.
+  // The view mode's filter row: "All" (clears the selection) plus every tag on this list, each
+  // toggled on or off. Selected tags no longer on the list are dropped.
   function renderFilters() {
     const used = new Set(items.flatMap((i) => i.tags || []));
+    for (const id of filterTags) if (!used.has(id)) filterTags.delete(id);
     const onList = tags.filter((t) => used.has(t.id));
-    if (!onList.length) { $("filters").replaceChildren(); return used; }
-    const pick = (id) => { filterTag = id; render(); window.scrollTo(0, 0); };
+    if (!onList.length) { $("filters").replaceChildren(); return; }
+    const changed = () => { render(); window.scrollTo(0, 0); };
     const all = el("button", "tag plain", "All");
     all.type = "button";
-    all.setAttribute("aria-pressed", String(!filterTag || !used.has(filterTag)));
-    all.addEventListener("click", () => pick(null));
+    all.setAttribute("aria-pressed", String(filterTags.size === 0));
+    all.addEventListener("click", () => { filterTags.clear(); changed(); });
     $("filters").replaceChildren(all, ...onList.map((t) => {
       const chip = tagChip(t, "button");
-      chip.setAttribute("aria-pressed", String(filterTag === t.id));
-      chip.addEventListener("click", () => pick(filterTag === t.id ? null : t.id));
+      chip.setAttribute("aria-pressed", String(filterTags.has(t.id)));
+      chip.addEventListener("click", () => {
+        if (filterTags.has(t.id)) filterTags.delete(t.id);
+        else filterTags.add(t.id);
+        changed();
+      });
       return chip;
     }));
-    return used;
   }
 
   $("modeButton").addEventListener("click", () => {

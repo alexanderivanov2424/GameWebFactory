@@ -165,7 +165,7 @@ AdditionalPages/        Extra standalone pages served with the games site but ne
                         lists screen: New list, a Global list of every saved item (edit everything, default amounts,
                         delete items for good), then each list with Edit (name, template, delete) and, on templates,
                         Copy (amounts copied; copies show their template's name), then New tag and every tag with Edit (name,
-                        colour, delete). Coloured tags; edit/view modes, where view mode filters by tag.
+                        colour, delete). Coloured tags; edit/view modes, where view mode filters by tags (items having all the selected ones).
                         Photos are decoded in the browser and sent as raw RGB; images.py writes a fresh PNG from them.
 ExternalWrite/          Everything the running site writes; the only writable mount (git-ignored, owner gwf):
   Accounts/             Account files (never edited by hand while the site runs)
