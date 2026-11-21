@@ -272,8 +272,9 @@ position, act, check), one test per rule, effect or scoring case. Test the lobby
 that play whole games. See the `game-dev` skill, section 3, for what to cover and how to
 check the client by reading.
 Then hand testing to the user:
-- `cd /home/sasha/Desktop/Dev && ./deploy.sh` (it runs the checks first; if the server fails
-  to start, it prints its log).
+- Restart the site from the SiteManagement folder: `sudo ./shutdown.sh`, then `sudo ./startup.sh`
+  (it runs the checks first and refuses to start if they fail; the server log is printed if it
+  fails to start).
 - Give a short, concrete test script. Two tabs count as two players, since the ID is per tab. Cover:
   - joining and readying, then the host clicking Start (others see "waiting for the host")
   - host-only settings and "Make host"

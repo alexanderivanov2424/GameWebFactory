@@ -1,7 +1,8 @@
 """Food list: the HTTP API behind the secret /food-list page (Python standard library only).
 
-Run by deploy.sh as the systemd unit app-site-food-list (sandboxed: it can write only $SITE_DATA,
-reach only localhost). nginx forwards /food-list/api/ here; it listens on 127.0.0.1:$PORT only.
+Run by the site's startup script in the gwf-app container, next to the game server (read-only
+code; it writes only $SITE_DATA = ExternalWrite/AdditionalPages/food-list/ on the host). nginx
+forwards /food-list/api/ here; it listens on 127.0.0.1:$PORT only.
 By hand: `PORT=8771 SITE_DATA=/some/folder python3 server.py` (default data: ./data next to this file).
 
 Routes (all JSON unless noted; errors are {"error": message} with a 4xx status):

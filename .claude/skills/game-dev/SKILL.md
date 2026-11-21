@@ -132,8 +132,8 @@ Games at a glance (details in each `NOTES.md`):
    paths you changed: element ids used in JS must exist in `index.html`, and every helper you
    call must still be defined (or come from `AppDom` / `AppLobbyUI`). Nothing else will catch
    a client bug before the user does.
-4. Hand off: the user deploys on the host (`cd /home/sasha/Desktop/Dev && ./deploy.sh`; it
-   runs the same checks first) and tests in two browser tabs. Give a short numbered test
+4. Hand off: the user restarts the site on the host (`sudo ./shutdown.sh`, then `sudo ./startup.sh`
+   from their SiteManagement folder; startup runs the same checks first) and tests in two browser tabs. Give a short numbered test
    script for exactly what changed, and say plainly that the browser side is untested.
 
 ## Pitfalls seen here (game-specific ones are in each NOTES.md)

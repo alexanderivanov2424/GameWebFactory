@@ -25,8 +25,8 @@ rename): {"name", "password": {"salt", "hash", "iterations"}, "created", "displa
 "games": {game_id: value}}. displayName is the display name (Settings -> User name, up to
 MAX_DISPLAY_NAME characters) last used while logged in; it is restored when logging in.
 The folder (accounts_dir()) is $ACCOUNTS_DIRECTORY, else <state dir>/accounts (turtle.state_dir()).
-On the host deploy.sh sets ACCOUNTS_DIRECTORY to the Accounts/ folder next to APP (the Dev folder,
-git-ignored), so accounts survive deploys and belong to the folder's owner, who runs the server.
+On the host the startup script sets ACCOUNTS_DIRECTORY to ExternalWrite/Accounts/ in the Dev folder
+(git-ignored), so accounts survive restarts; the files belong to the gwf user that runs the site.
 
 Passwords: PBKDF2-HMAC-SHA256 with a random salt (hash_password / check_password); slow on
 purpose, so callers run them in a thread (asyncio.to_thread).

@@ -1,4 +1,4 @@
-"""Build the home page's game list (games.json) from APP/games. deploy.sh runs this.
+"""Build the home page's game list (games.json) from APP/games. The startup script runs this.
 
     python3 -I tools/games_list.py APP/games > games.json
 
@@ -16,7 +16,7 @@ import json
 import sys
 from pathlib import Path
 
-sys.dont_write_bytecode = True  # never leave __pycache__ folders in APP (deploy copies it)
+sys.dont_write_bytecode = True  # never leave __pycache__ folders in APP (the startup script copies it)
 
 NO_CAP = 16  # LobbyGame.MAX_PLAYERS default: a game that keeps it has no real cap
 

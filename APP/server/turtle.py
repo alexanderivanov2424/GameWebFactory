@@ -9,15 +9,15 @@ What happens:
 1. The reason is logged (CRITICAL) and written to the marker file TURTLE in the state folder.
 2. The process exits at once with EXIT_CODE (os._exit: no cleanup code runs), which closes the
    game server's port and every connection.
-3. On the host, systemd sees the marker or the exit code (units written by deploy.sh) and stops
-   and disables nginx and the game server, so port 8080 closes too and a reboot stays down.
-4. While the marker exists the server refuses to start (check_startup) and deploy.sh refuses to
-   deploy. `./deploy.sh --unturtle` shows the reason, removes the marker and deploys again.
+3. On the host, the server's container stops with that exit code and the startup script's watcher
+   stops the whole pod (nginx too), so port 8080 closes. Nothing restarts on its own.
+4. While the marker exists the server refuses to start (check_startup) and the startup script
+   refuses to start the site. `startup.sh --unturtle` shows the reason, removes the marker and starts.
 
-State folder (state_dir()): $STATE_DIRECTORY, which systemd sets from StateDirectory=
-(/var/lib/app-server on the host), else APP/.data/ when the server is started by hand.
+State folder (state_dir()): $STATE_DIRECTORY (on the host: ExternalWrite/State/ in the Dev
+folder, set by the startup script), else APP/.data/ when the server is started by hand.
 Accounts live there too unless $ACCOUNTS_DIRECTORY says otherwise (server/accounts.py
-accounts_dir(); on the host they are in the Dev folder's Accounts/).
+accounts_dir(); on the host they are in ExternalWrite/Accounts/).
 
 Tests: install_test_handler() (tools/run_tests.py and gamekit.sim.Sim call it) makes turtle()
 record the reason in `triggered` and raise Turtled instead of exiting. Turtled is a
@@ -32,7 +32,7 @@ from pathlib import Path
 
 log = logging.getLogger("turtle")
 
-EXIT_CODE = 77  # deploy.sh's unit: RestartPreventExitStatus=77, so systemd doesn't restart it
+EXIT_CODE = 77  # the container stops with it and the startup script's watcher stops the pod
 MARKER = "TURTLE"
 APP_DIR = Path(__file__).resolve().parent.parent
 
@@ -71,7 +71,7 @@ def turtle(reason):
         tmp = path.with_suffix(".tmp")
         tmp.write_text(f"{time.strftime('%Y-%m-%d %H:%M:%S')} {reason}\n", encoding="utf-8")
         os.replace(tmp, path)
-    except Exception:  # noqa: BLE001 - the exit code still tells systemd
+    except Exception:  # noqa: BLE001 - the exit code still tells the startup watcher
         pass
     try:
         sys.stderr.flush()
@@ -88,7 +88,7 @@ def check_startup():
             reason = path.read_text(encoding="utf-8", errors="replace").strip()[:500]
         except OSError:
             reason = "(unreadable)"
-        log.critical("Turtled: %s. Not starting. Clear it with ./deploy.sh --unturtle.", reason)
+        log.critical("Turtled: %s. Not starting. Clear it with startup.sh --unturtle.", reason)
         sys.exit(EXIT_CODE)
 
 

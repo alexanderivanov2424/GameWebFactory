@@ -1,20 +1,20 @@
-"""Find and check the sites in ExternalSites/ (extra pages deployed next to the games site).
-deploy-external.sh uses it to know what to deploy, and tools/run_tests.py runs the same checks.
+"""Find and check the pages in AdditionalPages/ (extra pages served next to the games site).
+The site's startup script uses it to know what to serve, and tools/run_tests.py runs the same checks.
 
-    python3 -I tools/external_sites.py list [ExternalSites folder]
+    python3 -I tools/additional_pages.py list [AdditionalPages folder]
 
 Prints one line per site, "<id> <port> <max body MB>" ("-" for port and size when the site is
 static only), or the problems found (exit code 1).
 
-A site is a folder ExternalSites/<id>/ (id: lowercase letters, digits and "-"), served at /<id>/:
-    web/          static files (must hold index.html), copied to the web root under /<id>/
-    server.py     optional: the site's own Python (standard library) HTTP server for /<id>/api/,
-                  listening on 127.0.0.1:$PORT and keeping its data in $SITE_DATA
+A page is a folder AdditionalPages/<id>/ (id: lowercase letters, digits and "-"), served at /<id>/:
+    web/          static files (must hold index.html), served under /<id>/
+    server.py     optional: the page's own Python (standard library) HTTP server for /<id>/api/,
+                  listening on 127.0.0.1:$PORT and keeping its data in $SITE_DATA (on the host:
+                  ExternalWrite/AdditionalPages/<id>/; it runs in the same container as the game server)
     site.json     needed with server.py: {"port": 1024-65535, "max_body_mb": 1-20 (default 1)}
-    data/         the server's saved data (git-ignored, never deployed)
 The id can't clash with anything the games site already serves at the top level.
 
-Paths: reads only the folder given (default: ExternalSites next to tools/) and APP/web; writes stdout.
+Paths: reads only the folder given (default: AdditionalPages next to tools/) and APP/web; writes stdout.
 """
 
 import json
@@ -23,10 +23,10 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-SITES_DIR = ROOT / "ExternalSites"
+SITES_DIR = ROOT / "AdditionalPages"
 SITE_ID = re.compile(r"^[a-z0-9][a-z0-9-]{0,39}$")
-TAKEN_PORTS = {8080, 8765}  # nginx and app-server (deploy.sh)
-RESERVED = {"games", "games.json", "ws"}  # added to the web root by deploy.sh / proxied by nginx
+TAKEN_PORTS = {8080, 8765}  # nginx and the game server (same pod, same localhost)
+RESERVED = {"games", "games.json", "ws"}  # added to the web root by the startup script / proxied by nginx
 
 
 def reserved_names():
@@ -48,7 +48,7 @@ def load_sites(folder=SITES_DIR):
         site_id = path.name
         if site_id.startswith(".") or site_id == "__pycache__":
             continue
-        where = f"ExternalSites/{site_id}"
+        where = f"AdditionalPages/{site_id}"
         if not SITE_ID.match(site_id):
             problems.append(f"{where}: folder name must be lowercase letters, digits and '-'")
             continue

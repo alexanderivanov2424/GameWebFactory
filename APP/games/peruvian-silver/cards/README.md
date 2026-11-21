@@ -1,8 +1,8 @@
 # Peruvian Silver cards
 
-Everything here is read when the game server starts, so redeploy (`./deploy.sh`) after a
-change. Mistakes are skipped and the reason is written to the server log
-(`journalctl -u app-server`).
+Everything here is read when the game server starts, so restart the site after a change
+(`sudo ./shutdown.sh`, then `sudo ./startup.sh`). Mistakes are skipped and the reason is
+written to the server log (`sudo runuser -u gwf -- env XDG_RUNTIME_DIR=/run/user/$(id -u gwf) podman logs gwf-app`).
 
 ## `starting-deck.json`: the deck at the start of a game
 

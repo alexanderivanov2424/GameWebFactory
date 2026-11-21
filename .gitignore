@@ -1,10 +1,5 @@
-deploy.sh
-stop.sh
-accounts.sh
-Accounts/
-Feedback/
+# Everything the running site writes (accounts, feedback, turtle marker, page data).
+ExternalWrite/
+# Rebuilt by the startup script on every start.
+Deployed/
 __pycache__/
-# External sites keep their saved data (lists, uploaded pictures) here.
-ExternalSites/*/data/
-deploy-external.sh
-stop-external.sh

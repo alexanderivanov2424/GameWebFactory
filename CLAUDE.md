@@ -24,8 +24,8 @@ a Python standard-library WebSocket server plus plain HTML/JS pages behind nginx
 - **Changing, fixing or testing an existing game or shared code:** use the `game-dev` skill.
   It maps where everything is documented so you don't need to read whole files.
 - **Adding a game:** use the `new-game` skill. It generates the folder with `tools/new_game.py`.
-- **Player feedback:** use the `feedback` skill (implements `Feedback/<game>/`, several games at once
-  with one subagent per game on request, or builds one new game from `Feedback/new_game/`, then deletes
+- **Player feedback:** use the `feedback` skill (implements `ExternalWrite/Feedback/<game>/`, several games at once
+  with one subagent per game on request, or builds one new game from `ExternalWrite/Feedback/new_game/`, then deletes
   the feedback it used).
 - Every file starts with a header comment describing it. Each game's `server.py` docstring
   is its rules spec and message list, and its `NOTES.md` holds developer notes (patterns,
@@ -34,8 +34,8 @@ a Python standard-library WebSocket server plus plain HTML/JS pages behind nginx
   module. `server.py` stays the thin lobby side. Split a module when it mixes topics or
   passes ~400 lines.
 - **Tests:** `python3 -I tools/run_tests.py [<game-id> | gamekit | server | tools]` compiles
-  everything, imports every game, runs the unit tests and syntax-checks the JS. `deploy.sh`
-  runs it first and stops if it fails. Every change keeps it passing and adds unit tests
+  everything, imports every game, runs the unit tests and syntax-checks the JS. The site's
+  `startup.sh` script runs it first (on a snapshot, as root) and stops if it fails. Every change keeps it passing and adds unit tests
   for new behavior.
 - **Each change:** move anything another game would also need into gamekit (with tests,
   updating the games that use it), and keep the docs true in the same change (see the skills).
@@ -43,28 +43,40 @@ a Python standard-library WebSocket server plus plain HTML/JS pages behind nginx
 ## Dev environment
 - Claude runs in a pod where `/T` is the user's `/home/sasha/Desktop/Dev`. The pod has
   Python 3 but no nginx, systemd, browser or Node. Test with `tools/run_tests.py`. The user
-  runs `./deploy.sh` on the host and tests in the browser.
+  starts the site on the host (`sudo ./startup.sh` in SiteManagement/, see below) and tests in the browser.
 - The project is a git repository, but commit only when asked. Before deleting anything that
   isn't committed, copy it to the scratchpad.
-- Rooms live in server memory, so a deploy resets every game in progress (setting
+- Rooms live in server memory, so restarting the site resets every game in progress (setting
   renames need no migration).
-- **Desktop PC browsers only** (mouse and keyboard), except ExternalSites/ pages, which are for phones too. Don't spend effort on phone or touch
+- **Desktop PC browsers only** (mouse and keyboard), except AdditionalPages/ pages, which are for phones too. Don't spend effort on phone or touch
   support. Hover interactions are fine, and existing responsive CSS can stay.
 
-## Host scripts (deploy.sh, stop.sh, deploy-external.sh, stop-external.sh, accounts.sh, tools/)
-- **Keep work inside the project folder** (`/home/sasha/Desktop/Dev`) as much as possible: data, state,
-  backups, generated files and helper scripts go in folders under it (git-ignored if they hold data, like
-  `Accounts/`), not in `/var`, `/opt`, `/etc`, `/usr/local` or elsewhere in the user's home.
-- Reach outside it only where the system requires it. Today that's nginx's site config, the systemd units
-  (including one `app-site-<id>` per external site with a server), the deployed copies (`/var/www/app`, `/opt/app`;
-  external sites: `/var/www/app-external`, `/opt/app-external`, `/etc/nginx/app-external/`, `/etc/nginx/conf.d/app-external.conf`), `/usr/local/sbin/app-turtle` and `/var/lib/app-server`
-  (the TURTLE marker). Don't add a new outside path unless the project folder can't do the job; list every
-  outside path a script touches, and why, in its header.
-- When changing a script, mention in your final message any outside path it uses that could move into
-  the project; don't move it without asking.
-- Services that use project data run as the folder's owner, sandboxed to just the folders they need (see
-  the `app-server` unit in deploy.sh). New scripts: logic in Python under `tools/`, a thin bash wrapper at
-  the top level, and sudo only for the steps that need it.
+## Running the site (SiteManagement/, outside the Dev folder)
+- The site runs as one rootless **podman pod `gwf`** owned by the locked-down `gwf` user, plain HTTP on
+  port 8080 (the router forwards external 80 to it). Two containers: `gwf-app` (the game server and every
+  additional page's server, started by `launcher.py`) and `gwf-nginx` (static files, `/ws/`, the pages).
+  Both have a read-only root filesystem, no capabilities and no automatic restarts.
+- `sudo ./startup.sh [--skip-tests] [--unturtle]` and `sudo ./shutdown.sh` live in **SiteManagement/, which the
+  user keeps outside the Dev folder** so nothing that can write to Dev changes what runs as root. Claude
+  can't see or edit them from the pod unless the user shares them. Their headers list every path they use.
+- `startup.sh` snapshots the code, runs `tools/run_tests.py`, `tools/additional_pages.py` and
+  `tools/games_list.py` on the snapshot with the host's python3 (as root: keep tests free of side
+  effects outside temp folders), builds `Deployed/` (git-ignored, read-only in the containers, rebuilt every start),
+  writes the nginx config there and starts the pod. If the app container stops for any reason (crash,
+  turtle), a watcher stops the whole pod. Nothing restarts by itself, not even after a reboot.
+- **No outbound connections:** before starting the pod, `startup.sh` loads an nftables table (`inet gwf_egress`)
+  that rejects every connection the `gwf` user starts (LAN, internet, Pi-hole); replies to visitors pass. The site
+  must never need to call out (no fetching URLs, no outside APIs); a feature that would is a question for the user.
+- **`ExternalWrite/` is the only writable folder** (git-ignored; mounted into `gwf-app` only; written by
+  `gwf`; ACLs set once by hand, not by the scripts, give `gwf` and `sasha` read/write, inherited by new files, so
+  this pod can read it): `Accounts/`, `Feedback/`, `State/` (TURTLE marker) and `AdditionalPages/<id>/`
+  (each page server's data). Anything new the running site must write goes in there.
+- **Keep work inside the project folder** (`/home/sasha/Desktop/Dev`): data, state, generated files and
+  helper scripts go in folders under it, not in `/var`, `/opt`, `/etc`, `/usr/local` or elsewhere in the
+  user's home. Outside paths today: SiteManagement/ itself, and gwf's podman storage and runtime folder.
+- `SiteManagement/accounts.sh` (host account manager, run without sudo as `sasha`) is a thin
+  wrapper around `tools/accounts.py` in Dev. New host scripts follow the same pattern: logic in Python under
+  `tools/`, a thin bash wrapper in SiteManagement/, and sudo only for the steps that need it.
 
 ## Project layout
 Three layers: the **site platform** (games never touch it), **gamekit** (the shared library
@@ -133,43 +145,37 @@ APP/
     tests/              unittest files (test_*.py) using gamekit.sim.Sim; not deployed
     NOTES.md            Developer notes: what to learn from it, map, pitfalls; not deployed
 tools/
-  run_tests.py          All checks (compile, import games, unit tests, JS syntax); deploy.sh runs it
+  run_tests.py          All checks (compile, import games, unit tests, JS syntax); startup.sh runs it
   jscheck.py            Rough JS syntax check (no Node allowed)
   new_game.py           Creates APP/games/<id>/ from the new-game skill's templates (agents use it)
-  accounts.py           Account manager behind accounts.sh (list/find, select, show, delete)
+  accounts.py           Account manager behind SiteManagement/accounts.sh (list/find, select, show, delete)
   games_list.py         Builds games.json for the home page (name, description, player-count badge
-                        from each Game's MIN_PLAYERS/MAX_PLAYERS); deploy.sh runs it
-  external_sites.py     Lists and checks ExternalSites/ for deploy.sh and run_tests.py (layout rules in its header)
+                        from each Game's MIN_PLAYERS/MAX_PLAYERS); startup.sh runs it
+  additional_pages.py   Lists and checks AdditionalPages/ for startup.sh and run_tests.py (layout rules in its header)
   tests/                Tests for the tools (run_tests.py runs them too: `run_tests.py tools`)
-ExternalSites/          Extra standalone pages, not part of the games site and never linked from it.
+AdditionalPages/        Extra standalone pages served with the games site but never linked from it.
                         <id>/ is served at /<id>/: web/ (static, strict CSP: no inline scripts), optional
-                        server.py + site.json (its own stdlib HTTP server for /<id>/api/, unit app-site-<id>,
-                        sandboxed to write only <id>/data/, which is git-ignored and never deployed).
-                        They don't use theme/settings/chat or gamekit. Phone support is wanted here.
-                        Deployed only by deploy-external.sh / stopped by stop-external.sh; they share the
-                        games site's nginx (its server block includes /etc/nginx/app-external/*.conf), so
-                        ./deploy.sh must have run once, and stop.sh takes their pages down too.
+                        server.py + site.json (its own stdlib HTTP server for /<id>/api/ on 127.0.0.1:<port>,
+                        run in gwf-app next to the game server; its data goes in $SITE_DATA =
+                        ExternalWrite/AdditionalPages/<id>/). They don't use theme/settings/chat or gamekit.
+                        Phone support is wanted here. startup.sh and shutdown.sh start and stop them with the site.
   food-list/            Secret shared shopping list (/food-list): items with checkbox, name, notes, photos.
                         Photos are decoded in the browser and sent as raw RGB; images.py writes a fresh PNG from them.
-deploy.sh               Runs the checks, then deploys the games site; safe to re-run (--skip-tests to force);
-                        installs the turtle units; refuses while turtled (--unturtle clears it);
-                        creates Accounts/ and Feedback/ and runs app-server as the folder's owner
-Accounts/               Account files (created by deploy.sh; git-ignored, never deployed or edited by hand
-                        while app-server runs)
-Feedback/               Player feedback, Feedback/<game id, "site" or "new_game">/<uuid>_<name>.txt (created
-                        by deploy.sh; git-ignored, never deployed; the feedback skill deletes what it uses)
-stop.sh                 Stops app-server, nginx and any hand-started game server; ./deploy.sh restarts
-deploy-external.sh      Deploys only ExternalSites/ (pages, app-site-<id> units, nginx locations); checks only the ExternalSites layout
-stop-external.sh        Stops only ExternalSites/ (units, hand-started site servers, their nginx locations); keeps data
-accounts.sh             Host account manager: find, select, show and delete accounts; deleting
-                        restarts app-server (it keeps accounts in memory); no backup is kept
+ExternalWrite/          Everything the running site writes; the only writable mount (git-ignored, owner gwf):
+  Accounts/             Account files (never edited by hand while the site runs)
+  Feedback/             Player feedback, <game id, "site" or "new_game">/<uuid>_<name>.txt (the feedback
+                        skill deletes what it uses)
+  State/                TURTLE marker
+  AdditionalPages/<id>/ Each additional page server's data
+Deployed/               Built by startup.sh on every start (git-ignored): the code, web files and nginx.conf
+                        the pod runs. Never edit it.
 .claude/skills/
-  feedback/             Implementing one game's feedback (or several, one subagent each), or one new game from Feedback/new_game/, then deleting it
+  feedback/             Implementing one game's feedback (or several, one subagent each), or one new game from ExternalWrite/Feedback/new_game/, then deleting it
   game-dev/             Working on existing games and shared code: where things are, testing, pitfalls
   new-game/             Adding a game: shared API rules, pitfalls, templates/ (mirror a game folder; filled in
                         by tools/new_game.py, whose tests build a game from them and run its tests)
 ```
-- nginx serves the static files on port 8080 and forwards `/ws/` to the Python server (systemd unit `app-server`, 127.0.0.1:8765).
+- nginx serves the static files on port 8080 and forwards `/ws/` to the Python server (127.0.0.1:8765 in the same pod).
 - Shared components (settings, chat) must keep working no matter how a page changes. Pages only include their `<script>` tags.
 - Dependencies point one way: games -> gamekit -> server. Games never import `server`, and
   `server` never imports a game except through `main.load_game`.
@@ -200,7 +206,7 @@ Summary:
    (deferred, in that order), then call `AppLobby.connect("<game-id>", {...})` and render from the
    `state` it delivers. theme.js's `main` leaves 72px free at the top for the fixed buttons.
    Real-time games also load `/gamekit/realtime.js` after `lobby-ui.js`.
-5. Write tests in `tests/`, run `python3 -I tools/run_tests.py <game-id>`, then `./deploy.sh`.
+5. Write tests in `tests/`, run `python3 -I tools/run_tests.py <game-id>`; the user restarts the site.
    Examples: `games/tictactoe/` (smallest full game), `games/tanks/` (hidden information, turn
    counters, secret mines, building walls), `games/peruvian-silver/` (simultaneous secret plays,
    timed reveals, cards defined as JSON files, game split into modules). Each has a `NOTES.md`.
@@ -273,29 +279,27 @@ Summary:
   is without the page sending anything. Logging in or out is refused while the tab is playing a game.
 - Games save and load data **on the server only**: `self.load_data(member)`, `self.save_data(member, value)`
   (plain JSON, one value per game per player), `self.account_name(member)`. Same calls for guests (memory,
-  forgotten when the tab's session ends) and accounts (files in `Accounts/` in the Dev folder, kept across
-  deploys). On login, each game's guest data moves to the account unless the account already has data for
+  forgotten when the tab's session ends) and accounts (files in `ExternalWrite/Accounts/` in the Dev folder, kept across
+  restarts). On login, each game's guest data moves to the account unless the account already has data for
   that game (then the account's wins). Save at milestones, never per tick.
 - Staying logged in: the server keeps logins in memory, and each tab also keeps a signed login token
-  (sessionStorage, 30 days, key in `Accounts/.login-key`) that logs it back in after a reload, a long
-  disconnect or a deploy ("resume" in `server/sessions.py`). Deleting `.login-key` logs every tab out.
-- Account files: `Accounts/<lowercase name>.json` next to `APP/` (git-ignored, mode 700). The server finds
+  (sessionStorage, 30 days, key in `ExternalWrite/Accounts/.login-key`) that logs it back in after a reload, a long
+  disconnect or a restart ("resume" in `server/sessions.py`). Deleting `.login-key` logs every tab out.
+- Account files: `ExternalWrite/Accounts/<lowercase name>.json` (git-ignored, owned by gwf). The server finds
   the folder through `$ACCOUNTS_DIRECTORY` (`accounts_dir()` in `server/accounts.py`; without it,
-  `<state dir>/accounts`, e.g. `APP/.data/accounts` for a hand-started server). deploy.sh runs app-server
-  as the Dev folder's owner so the files are theirs, sandboxed (`ProtectHome=tmpfs` +
-  `BindPaths=` Accounts/ and Feedback/ only, `ProtectSystem=strict`); the state dir (`/var/lib/app-server`) keeps only
-  the TURTLE marker.
+  `<state dir>/accounts`, e.g. `APP/.data/accounts` for a hand-started server). The state dir
+  (`$STATE_DIRECTORY`, `ExternalWrite/State/` on the host) keeps only the TURTLE marker.
 - The server loads every account at startup and rewrites an account's file on each save, so account
-  files are only changed with the server stopped. `./accounts.sh` (on the host) does that for deletes.
+  files are only changed with the site stopped. `SiteManagement/accounts.sh` (on the host) refuses to delete while it runs.
 
 ## Turtle (emergency shutdown)
 - `turtle(reason)` (`server/turtle.py`, re-exported as `gamekit.turtle`) is the shared response to anything
-  that looks like abuse: the server writes a `TURTLE` marker, exits with code 77, and systemd
-  (units from `deploy.sh`) stops and disables nginx and app-server, so ports 8080 and 8765 close and stay
-  closed across reboots. `./deploy.sh` refuses to run until `./deploy.sh --unturtle`.
+  that looks like abuse: the server writes a `TURTLE` marker (`ExternalWrite/State/`), exits with code 77, its container
+  stops and startup.sh's watcher stops the whole pod, so port 8080 closes (nothing restarts by itself).
+  `startup.sh` refuses to run until `startup.sh --unturtle`.
 - Current triggers: more than `MAX_ACCOUNTS` accounts, saved data over `MAX_DATA_BYTES` per player
   (`accounts.py`), too many saves per session or site-wide in `SAVE_WINDOW` (`sessions.py`), feedback over 50 KB,
-  sent too often (per tab or site-wide) or a Feedback/ folder over 100 MB (`feedback.py`). Add new safety
+  sent too often (per tab or site-wide) or a feedback folder over 100 MB (`feedback.py`). Add new safety
   checks by calling `turtle(...)`; tests run in test mode (it raises `Turtled`, a BaseException), so
   test them with `assertRaises(Turtled)`.
 
@@ -304,7 +308,8 @@ Summary:
 - **Player settings for a game** (not the host's `SETTINGS`): `AppSettings.addPageSettings(label, fields)`
   adds a tab to the Settings dialog (selects and checkboxes, keys starting with the game id); they stay in the
   browser like any setting. Example: Hex Realms' combat replay speed / skip (`client/replay.js`).
-- **Admin view** (`server/admin.py`, `web/shared/admin.js`): view only, and not meant to be secure (one shared
-  password, `ADMIN_PASSWORD`). Never add actions that change anything there without the user's OK, never send
+- **Admin view** (`server/admin.py`, `web/shared/admin.js`): **turned off on the live site**: nginx answers
+  `/ws/admin` with 404 (startup.sh), so the site gives nobody special access. The code stays (a hand-started
+  server still has it). View only, and not meant to be secure (one shared password, `ADMIN_PASSWORD`). Never add actions that change anything there without the user's OK, never send
   password hashes, and only shortened client UUIDs (a full one is a seat key). Games show up in the Rooms tab
   through `admin_info()` (`BaseGame` default; `LobbyGame` lists members, phase, host and settings).
