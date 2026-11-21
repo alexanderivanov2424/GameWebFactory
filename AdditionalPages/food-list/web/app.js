@@ -7,7 +7,7 @@
 // Global list ("global") is every saved item: edited the same way (its amount is the default new
 // entries start with), nothing checked off or cleared, and Delete marks items (red) for deleting
 // for good once the bar at the top confirms. Below the lists, New tag and every tag with Edit
-// (both in the tag popup: name, colour).
+// (both in the tag popup: name, colour; Delete takes an existing tag off every item).
 // The open list is remembered in localStorage. While typing a new item, names added before (the server keeps them
 // all, see ../store.py) that aren't on this list are suggested, with their tags.
 // Item names are lowercase: the server lowercases them too.
@@ -488,6 +488,7 @@
     editingTag = t || null;
     tagHue = t ? Number(t.hue) || 0 : freshHue();
     $("tagTitle").textContent = t ? "Edit tag" : "New tag";
+    $("deleteTag").hidden = !t;
     $("tagNameInput").value = t ? t.name : "";
     $("tagError").textContent = "";
     renderTagEditor();
@@ -514,6 +515,16 @@
   $("tagNameInput").addEventListener("input", () => { $("tagError").textContent = ""; renderTagEditor(); });
   $("cancelTag").addEventListener("click", () => tagEditor.close());
   $("newTagButton").addEventListener("click", () => openTagEditor(null));
+
+  $("deleteTag").addEventListener("click", () => {
+    const t = editingTag;
+    if (!t) return;
+    const used = foods.filter((f) => (f.tags || []).includes(t.id)).length;
+    const what = used ? " It comes off " + plural(used, "item") + "." : "";
+    if (!confirm("Delete the tag “" + t.name + "” for good?" + what)) return;
+    tagEditor.close();
+    act(() => post("/tags/" + t.id + "/delete"));
+  });
 
   $("tagForm").addEventListener("submit", async (e) => {
     e.preventDefault();

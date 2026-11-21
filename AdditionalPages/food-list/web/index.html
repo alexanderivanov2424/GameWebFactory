@@ -2,7 +2,7 @@
 <!-- Food list (/food-list/): shared shopping lists for phones. Not linked from anywhere.
      Two screens: one list (the title button opens the other) and the lists screen: a stack of lists
      (New list on top, then Global = every saved item, then each list with Edit and, on templates, Copy),
-     then New tag and every tag with Edit (a small popup: name and colour).
+     then New tag and every tag with Edit (a small popup: name, colour, delete).
      body.global = the Global list is open: no checking off, clearing or adding; each item has Delete,
      which marks it (red) until the bar at the top confirms or cancels; the editor has no Remove
      (.item-only) and its amount is the default. body.copy = a copy of a template is open: its
@@ -318,6 +318,7 @@
     <div class="preview"><span class="tag" id="tagPreview">tag</span></div>
     <div class="hint bad" id="tagError"></div>
     <div class="actions">
+      <button type="button" id="deleteTag" class="danger">Delete</button>
       <span class="grow"></span>
       <button type="button" id="cancelTag">Close</button>
       <button type="submit" class="primary">Save</button>
