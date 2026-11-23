@@ -1,0 +1,17 @@
+{
+  "order": 102,
+  "name": "Snow Spirit",
+  "icon": "👻",
+  "kind": "spirit",
+  "cost": 1,
+  "rate": 1500,
+  "speed": 10,
+  "reach": 1,
+  "diesel": 0,
+  "unique": true,
+  "text": "Flies anywhere in the valley to clear snow blizzards dropped on cleared ground; skims shallow edges between storms. Paid on the spot.",
+  "params": {
+    "shallow": 60,
+    "fly": 1
+  }
+}

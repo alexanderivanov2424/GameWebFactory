@@ -6,8 +6,8 @@ shallow enough to wade: Player.wade_level(), raised by Snowshoes), so deep snow 
 separately, so you slide along walls. client/grid.js mirrors blocked() and move() exactly, for
 prediction: keep them in sync.
 
-Speed: WALK_SPEED lots/s, x DUSTED_SLOW on a reached lot with snow on it (else x ROAD_FAST on a
-road), x FROSTBITE_SLOW with
+Speed: WALK_SPEED lots/s, x DUSTED_SLOW on a reached lot with snow on it (else x the road level's
+"walk" on a road, roads.LEVELS), x FROSTBITE_SLOW with
 frostbite, x STARVING_SLOW while starving.
 Shoveling: a swing digs Player.click_power() from a workable lot whose centre is within REACH
 of you. Swings come from clicks (actions) and from holding the dig button (input "dig"), at most
@@ -16,12 +16,12 @@ SWING_RATE a second while held; both use the click budget (economy.CLICKS_PER_SE
 
 import math
 
+from .roads import LEVELS
 from .world import WADE_LEVEL
 
 RADIUS = 0.3
 WALK_SPEED = 4.0
 DUSTED_SLOW = 0.6
-ROAD_FAST = 1.3
 FROSTBITE_SLOW = 0.4
 STARVING_SLOW = 0.7
 REACH = 2.2
@@ -59,7 +59,7 @@ def speed(world, p):
     if i is not None and world.snow[i] > 0 and world.reached[i]:
         s *= DUSTED_SLOW
     elif i is not None and world.road[i]:
-        s *= ROAD_FAST
+        s *= LEVELS[world.road[i]]["walk"]
     if p.frostbite:
         s *= FROSTBITE_SLOW
     if p.starving:

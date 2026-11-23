@@ -1,0 +1,18 @@
+{
+  "order": 103,
+  "name": "St. Bernard",
+  "icon": "🐕‍🦺",
+  "kind": "bernard",
+  "cost": 1,
+  "rate": 1,
+  "speed": 5,
+  "reach": 0,
+  "diesel": 0,
+  "unique": true,
+  "text": "Follows you everywhere. Anyone near it stays warm, and it tops your food up when you get hungry.",
+  "params": {
+    "heat": 2.5,
+    "food": 3,
+    "hungry": 60
+  }
+}

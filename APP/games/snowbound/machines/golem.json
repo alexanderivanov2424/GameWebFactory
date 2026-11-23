@@ -1,0 +1,18 @@
+{
+  "order": 105,
+  "name": "Snow Golem",
+  "icon": "⛄",
+  "kind": "golem",
+  "cost": 1,
+  "rate": 1,
+  "speed": 3,
+  "reach": 0.5,
+  "diesel": 0,
+  "unique": true,
+  "text": "Upgrades your roads for free: every few seconds it walks to the slowest road near your rally point and raises it a level (up to Paved).",
+  "params": {
+    "every": 4,
+    "max": 3,
+    "range": 14
+  }
+}

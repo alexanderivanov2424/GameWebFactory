@@ -1,0 +1,16 @@
+{
+  "order": 1,
+  "name": "Mammoth Cave",
+  "icon": "🦣",
+  "size": 3,
+  "band": [
+    0.35,
+    0.8
+  ],
+  "max": 1,
+  "text": "A woolly mammoth was frozen in here. Dig it out and it joins your crew.",
+  "reward": {
+    "kind": "unit",
+    "machine": "mammoth"
+  }
+}

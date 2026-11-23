@@ -1,10 +1,13 @@
 """Snowbound economy: one Player per seat (wallet, machines, upgrades, supplies, needs).
 
 Every player has their own cash, machines and upgrades; snow anyone clears pays whoever
-cleared it ($1 per unit of snow). Shared upgrades (content.UPGRADES[...]["shared"]) are bought
+cleared it ($1 per unit of snow): at once for your shovel and machines that don't haul, when it is
+unloaded at a drop point for hauling machines (hauling.py), and processed snow pays when its goods
+sell (factory.py). Shared upgrades (content.UPGRADES[...]["shared"]) are bought
 once for the whole team and stored on the Match, not here.
 
 Player fields: name, color, cash, earned (cash ever earned), cleared (snow ever cleared),
+goods_sold ($ ever made from goods),
 owned {machine id: count}, upgrades (set of ids), rations, diesel (litres), food 0-100,
 warmth 0-100, frostbite / starving (bool), frenzy (seconds left of x FRENZY), clicks (swing
 budget, refilled CLICKS_PER_SECOND per second).
@@ -42,6 +45,7 @@ class Player:
         self.cash = START["cash"]
         self.earned = 0.0
         self.cleared = 0.0
+        self.goods_sold = 0.0
         self.owned = {mid: 0 for mid in MACHINES}
         self.upgrades = set()
         self.rations = START["rations"]
@@ -81,6 +85,16 @@ class Player:
         for uid in self.upgrades:
             u = UPGRADES[uid]
             if u["kind"] == "machine_mult" and u["machine"] == mid:
+                mult *= u["value"]
+        return mult
+
+    def carry_mult(self, mid):
+        """Product of this player's carry_mult upgrades that apply to one machine kind."""
+        mult = 1.0
+        for uid in self.upgrades:
+            u = UPGRADES[uid]
+            if u["kind"] == "carry_mult" and u["machine"] in (None, mid) and (
+                    u["machine"] or MACHINES[mid]["kind"] != "sled"):
                 mult *= u["value"]
         return mult
 
@@ -124,6 +138,17 @@ class Player:
         self.earned += snow
         self.cleared += snow
 
+    def sell(self, snow):
+        """Snow a hauling machine unloaded at a drop point ($1 each; counted as cleared when dug)."""
+        self.cash += snow
+        self.earned += snow
+
+    def sell_goods(self, value):
+        value *= self.effect("goods_mult")
+        self.cash += value
+        self.earned += value
+        self.goods_sold += value
+
     def pay(self, cost):
         if cost > self.cash + 1e-9:
             raise LobbyError(f"Not enough cash (need ${cost:,.0f}).")
@@ -132,6 +157,8 @@ class Player:
     def buy_machine(self, mid, count):
         if mid not in MACHINES:
             raise LobbyError("Unknown machine.")
+        if MACHINES[mid]["unique"]:
+            raise LobbyError("That one can't be bought: it's found buried in the valley.")
         if self.owned[mid] + count > MAX_OWNED:
             raise LobbyError(f"At most {MAX_OWNED} of each machine.")
         self.pay(machine_cost(mid, self.owned[mid], count))

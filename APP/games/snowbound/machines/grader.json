@@ -11,5 +11,6 @@
   "text": "Widens roads: works snow next to road lots, twice as fast while standing on a road, and turns what it clears into road.",
   "params": {
     "road_mult": 2
-  }
+  },
+  "carry": 200000
 }

@@ -9,6 +9,8 @@ dog      (Drift Dog) walks to the frontier, then tunnels in a straight line (car
          away from where it came): digs the lot ahead at rate while it has at most params.limit snow,
          steps into it once clear and makes it road. Snow too deep ahead: turns left or right; if
          both are too deep it goes back to looking for a frontier lot. sled-harness: x2 rate, x3 limit.
+         params.wide (Old Snowcat): the lots on both sides of the lot ahead get the same work and
+         become Track; params.pave: the road level the tunnel gets (default Track).
 sweeper  (Dust Sweeper) digs only lots a blizzard snowed over, or with at most params.shallow snow.
          ember-pack: every EMBER_LOTS lots it clears add a log to the woodpile.
 brazier  (Brazier, placed) while the woodpile has logs: melts rate from every lot with snow within
@@ -33,12 +35,16 @@ grader   (Road Grader) digs workable lots next to a road (any workable lot if th
 jet      (Jet Blower) drives to the frontier near the rally point; every params.cooldown s it fires
          a beam straight away from the cabin: every lot within params.range loses up to rate snow
          (World.melt, paid) and becomes road. long-throw: double range, LONG_COOLDOWN s.
+processor, sled: factory.py. mammoth, spirit, bernard, golem, spring (landmark rewards): uniques.py.
+Snow removed is paid through units.collect(): hauling machines carry it home first (hauling.py).
 """
 
 import math
 
 from .content import MACHINES
-from .units import move_toward, work
+from .factory import processor, sled
+from .uniques import bernard, golem, mammoth, spirit, spring
+from .units import collect, move_toward, work
 
 ANGEL_SNOW = 20
 EMBER_LOTS = 10
@@ -61,7 +67,7 @@ def worker(ctx, unit, player, rate):
             for j in world.neighbours(i):
                 if 0 < world.snow[j] <= ANGEL_SNOW and world.workable(j):
                     got, found = world.dig(j, ANGEL_SNOW)
-                    player.earn(got)
+                    collect(unit, player, got)
                     if found:
                         ctx.match.found(player.id, found, j)
 
@@ -117,11 +123,22 @@ def dog(ctx, unit, player, rate):
             unit.dir = (ddx, ddy)
             unit.state = "working"
             removed, found = world.dig(ahead, rate * ctx.dt)
-            player.earn(removed)
+            collect(unit, player, removed)
             if found:
                 ctx.match.found(player.id, found, ahead)
+            if p.get("wide"):
+                ax, ay = world.xy(ahead)
+                for sx, sy in ((ddy, ddx), (-ddy, -ddx)):
+                    j = world.index(ax + sx, ay + sy)
+                    if j is not None and world.snow[j] > 0 and world.kind[j] != "cabin":
+                        got, found = world.melt(j, rate * ctx.dt)
+                        collect(unit, player, got)
+                        if found:
+                            ctx.match.found(player.id, found, j)
+                        if world.snow[j] <= 0:
+                            world.make_road(j)
             if world.snow[ahead] <= 0:
-                world.make_road(ahead)
+                world.make_road(ahead, int(p.get("pave", 1)))
                 unit.lot = ahead
             return
     unit.lot = unit.dir = None  # boxed in by deep snow: find a new frontier lot
@@ -160,7 +177,7 @@ def brazier(ctx, unit, player, rate):
             if i is None or (x - hx) ** 2 + (y - hy) ** 2 > r * r + 0.5 or world.snow[i] <= 0 or world.kind[i] == "cabin":
                 continue
             removed, found = world.melt(i, rate * ctx.dt)
-            player.earn(removed)
+            collect(unit, player, removed)
             if found:
                 match.found(player.id, found, i)
 
@@ -232,7 +249,7 @@ def auger(ctx, unit, player, rate):
         return
     unit.state = "working"
     removed, found = world.melt(unit.target, rate * ctx.dt)
-    player.earn(removed)
+    collect(unit, player, removed)
     if found:
         ctx.match.found(player.id, found, unit.target)
 
@@ -259,7 +276,7 @@ def still(ctx, unit, player, rate):
         total += removed
         if found:
             match.found(player.id, found, i)
-    player.earn(total)
+    collect(unit, player, total)
     player.diesel += total / p.get("diesel_per", 20)
     if player.has("ration-kettle"):
         unit.acc += total
@@ -287,7 +304,7 @@ def grader(ctx, unit, player, rate):
                 j = world.index(x + sx, y + sy)
                 if j is not None and world.snow[j] > 0:
                     got, found = world.melt(j, removed)
-                    player.earn(got)
+                    collect(unit, player, got)
                     if found:
                         ctx.match.found(player.id, found, j)
                     if world.snow[j] <= 0:
@@ -336,7 +353,7 @@ def jet(ctx, unit, player, rate):
             match.found(player.id, found, i)
         if world.snow[i] <= 0 and world.kind[i] != "cabin":
             world.make_road(i)
-    player.earn(total)
+    collect(unit, player, total)
     unit.cd = cooldown
     unit.state = "charging"
     ctx.release(unit)
@@ -344,4 +361,6 @@ def jet(ctx, unit, player, rate):
 
 
 STEPS = {"worker": worker, "dog": dog, "sweeper": sweeper, "brazier": brazier, "buddy": buddy,
-         "dozer": dozer, "auger": auger, "still": still, "grader": grader, "jet": jet}
+         "dozer": dozer, "auger": auger, "still": still, "grader": grader, "jet": jet,
+         "processor": processor, "sled": sled, "mammoth": mammoth, "spirit": spirit, "bernard": bernard,
+         "golem": golem, "spring": spring}

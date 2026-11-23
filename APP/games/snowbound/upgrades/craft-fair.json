@@ -1,0 +1,9 @@
+{
+  "name": "Craft Fair",
+  "cost": 400000,
+  "text": "Your goods sell for 25% more.",
+  "effect": {
+    "kind": "goods_mult",
+    "value": 1.25
+  }
+}

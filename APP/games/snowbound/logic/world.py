@@ -10,12 +10,18 @@ its centre is (x + 0.5, y + 0.5). The cabin is in the middle; lots near it start
 - targets: lots that can be worked: snow > 0 and reached or next to a reached lot.
 - clear_lot() is the one place a lot is finished; it reports what was found there.
 
-Rows sent to clients (rows()): {"snow": {"<y>": str}, "feat": {"<y>": str}}, one char per lot.
+Rows sent to clients (rows()): {"snow": {"<y>": str}, "feat": {"<y>": str}, "road": {"<y>": str}},
+one char per lot.
 snow char: SNOW_CHARS[level], level 0 = no snow, else 1 + floor(log(snow) / log(LEVEL_BASE))
 (clamped 1-61; the client shows about LEVEL_BASE ** (level - 1)).
-feat char: lowercase = not reached yet, uppercase = reached (see FEATURES; "." and "," plain,
-"=" a plain reached lot that is road).
-- road[i]: 1 for road lots (made by Drift Dogs, Road Graders, Jet Blower beams).
+feat char: lowercase = not reached yet, uppercase = reached (see FEATURES; "." and "," plain;
+landmark lots look plain until reached, then "S").
+road char: the lot's road level "0"-"4" (roads.LEVELS).
+- road[i]: road level 0-4 (0 = none). Drift Dogs, Road Graders and Jet Blower beams make level 1;
+  players lay and upgrade roads (roads.py). road_changed: lots whose level went up since roads.py
+  last looked (it keeps the route fields up to date).
+- site[i]: landmark number for landmark lots (landmarks.py places them); sites[n]["left"] counts
+  its lots not reached yet.
 """
 
 import math
@@ -29,7 +35,7 @@ FOREST_SNOW = 1.3
 # feature: (unreached char, reached char, chance per lot or None for forests, visible before reached)
 FEATURES = {
     "plain": (".", ","), "cabin": ("x", "X"), "forest": ("t", "T"), "house": ("h", "H"),
-    "gas": ("g", "G"), "cache": (".", "C"), "skier": (".", "K"),
+    "gas": ("g", "G"), "cache": (".", "C"), "skier": (".", "K"), "site": (".", "S"),
 }
 SCATTER = {"house": 0.006, "gas": 0.0012, "cache": 0.01, "skier": 0.002}
 NEIGHBOURS = ((1, 0), (-1, 0), (0, 1), (0, -1))
@@ -64,11 +70,14 @@ class World:
         self.reached = bytearray(n)
         self.road = bytearray(n)
         self.road_count = 0
+        self.road_changed = []
+        self.site = {}
+        self.sites = []
         self.reached_list = []
         self.dusted = set()
         self.targets = set()
         self.dirty = set(range(size))
-        self._rows = {"snow": {}, "feat": {}}
+        self._rows = {"snow": {}, "feat": {}, "road": {}}
         for i in range(n):
             x, y = i % size, i // size
             if math.hypot(x - self.cx, y - self.cy) <= START_RADIUS:
@@ -119,6 +128,8 @@ class World:
         self.reached_list.append(i)
         self.targets.discard(i)
         self.dirty.add(i // self.w)
+        if i in self.site:
+            self.sites[self.site[i]]["left"] -= 1
         for j in self.neighbours(i):
             if not self.reached[j] and self.snow[j] > 0:
                 self.targets.add(j)
@@ -173,11 +184,15 @@ class World:
         if self.level(self.snow[i]) != before:
             self.dirty.add(i // self.w)
 
-    def make_road(self, i):
+    def make_road(self, i, level=1):
+        """Raise lot i's road to `level` (never lowers it)."""
+        if self.road[i] >= level:
+            return
         if not self.road[i]:
-            self.road[i] = 1
             self.road_count += 1
-            self.dirty.add(i // self.w)
+        self.road[i] = level
+        self.road_changed.append(i)
+        self.dirty.add(i // self.w)
 
     def dust(self, i, fraction):
         """A blizzard drops snow back on reached lot i (not the cabin)."""
@@ -227,14 +242,14 @@ class World:
     def rows(self):
         """Row strings for the client, rebuilt for dirty rows only."""
         if self.dirty:
-            snow_rows, feat_rows = dict(self._rows["snow"]), dict(self._rows["feat"])
+            snow_rows, feat_rows, road_rows = (dict(self._rows[k]) for k in ("snow", "feat", "road"))
             w = self.w
             for y in self.dirty:
                 lo = y * w
                 snow_rows[str(y)] = "".join(SNOW_CHARS[self.level(self.snow[i])] for i in range(lo, lo + w))
-                feat_rows[str(y)] = "".join(
-                    "=" if self.road[i] and self.reached[i] and self.kind[i] == "plain"
-                    else FEATURES[self.kind[i]][1 if self.reached[i] else 0] for i in range(lo, lo + w))
-            self._rows = {"snow": snow_rows, "feat": feat_rows}
+                feat_rows[str(y)] = "".join(FEATURES[self.kind[i]][1 if self.reached[i] else 0]
+                                            for i in range(lo, lo + w))
+                road_rows[str(y)] = "".join(str(self.road[i]) for i in range(lo, lo + w))
+            self._rows = {"snow": snow_rows, "feat": feat_rows, "road": road_rows}
             self.dirty = set()
         return self._rows

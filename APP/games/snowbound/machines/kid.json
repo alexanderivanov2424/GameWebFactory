@@ -8,5 +8,6 @@
   "speed": 2.5,
   "reach": 1.0,
   "diesel": 0,
-  "text": "Shovels the nearest snow near your rally point."
+  "text": "Shovels the nearest snow near your rally point and carries it back to a drop point.",
+  "carry": 15
 }

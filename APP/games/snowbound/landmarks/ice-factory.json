@@ -1,0 +1,16 @@
+{
+  "order": 7,
+  "name": "Old Ice Factory",
+  "icon": "🏭",
+  "size": 3,
+  "band": [
+    0.3,
+    0.7
+  ],
+  "max": 1,
+  "text": "An abandoned ice factory. Clear it and it works for you again.",
+  "reward": {
+    "kind": "placed",
+    "machine": "ice-factory"
+  }
+}

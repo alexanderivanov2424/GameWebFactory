@@ -3,10 +3,15 @@
 machines.py (STEPS[kind]).
 
 Unit fields: id, pid, mid, x, y (world coordinates, centre of a lot = x + 0.5), target (lot or
-None), state ("idle" | "moving" | "working" | "stalled" | "unlit" | "charging" for the client),
-home (lot of a placed machine), and per-kind scratch: dir, lot, cd, acc.
+None), state ("idle" | "moving" | "working" | "hauling" | "full" | "stalled" | "unlit" | "charging"
+for the client), home (lot of a placed machine), per-kind scratch: dir, lot, cd, acc, and
+hauling (hauling.py / factory.py): load (snow carried), cargo {good: n} (sleds), trip (None |
+"home" | "back" | "fetch"), dest, path, back; processors: inbox, outbox.
 Moving: straight lines at the machine's speed, WADE_SLOW through lots a person couldn't walk
-on (units never get stuck).
+on (units never get stuck; params.fly ignores that), x the road level's speed on roads
+(lot_mult, roads.LEVELS).
+Pay: collect() is how machine code is paid for snow it removed: hauling machines (content
+"carry") add it to their load (sold when they unload, hauling.py), others are paid at once.
 Targets (Ctx.pick): the nearest workable lot passing the kind's filter and not claimed by
 another unit, looked for around the unit first (LOCAL lots past its reach); then a full
 search from the owner's rally point (a lot, or the owner with "follow"; else the unit), at
@@ -19,6 +24,7 @@ Diesel machines stop ("stalled") while their owner's tank is empty.
 
 import math
 
+from . import roads
 from .content import MACHINES
 
 LOCAL = 2.5
@@ -42,6 +48,14 @@ class Unit:
         self.lot = None
         self.cd = 0.0
         self.acc = 0.0
+        self.load = 0.0
+        self.cargo = {}
+        self.trip = None
+        self.dest = None
+        self.path = []
+        self.back = None
+        self.inbox = 0.0
+        self.outbox = 0
 
 
 def add(match, pid, mid, count, x=None, y=None, home=None):
@@ -66,6 +80,26 @@ def placed_at(match, i):
     return any(u.home == i for u in match.units.values())
 
 
+def collect(unit, player, snow):
+    """unit removed `snow`: carried in its load if the machine hauls, else paid now."""
+    if snow <= 0:
+        return
+    if MACHINES[unit.mid]["carry"]:
+        unit.load += snow
+        player.cleared += snow
+    else:
+        player.earn(snow)
+
+
+def lot_mult(world, i, fly=False):
+    """Speed multiplier for a machine on lot i: roads speed it up, deep snow slows it down."""
+    if i is None:
+        return 1.0
+    if not fly and not world.passable(i):
+        return WADE_SLOW
+    return roads.unit_speed(world, i)
+
+
 def rally_point(match, player):
     """Lot coordinates (x, y) where a player's units look for work, or None."""
     if player.rally == "follow":
@@ -81,8 +115,7 @@ def move_toward(world, unit, tx, ty, speed, dt, stop=0.0):
     if dist <= stop:
         return dist
     here = world.index(math.floor(unit.x), math.floor(unit.y))
-    slow = 1 if here is None or world.passable(here) else WADE_SLOW
-    step = min(dist - stop, speed * slow * dt)
+    step = min(dist - stop, speed * lot_mult(world, here, MACHINES[unit.mid]["params"].get("fly")) * dt)
     unit.x += (tx - unit.x) / dist * step
     unit.y += (ty - unit.y) / dist * step
     return dist - step
@@ -98,6 +131,11 @@ class Ctx:
         self.searches = SEARCHES_PER_TICK
         self.claimed = {u.target: u.id for u in match.units.values() if u.target is not None}
         self.rallies = {pid: rally_point(match, p) for pid, p in match.players.items()}
+        self.placed = {u.home: u for u in match.units.values() if u.home is not None}
+        self.fetching = {}
+        for u in match.units.values():
+            if u.trip == "fetch":
+                self.fetching[u.dest[1]] = self.fetching.get(u.dest[1], 0) + 1
 
     def release(self, unit):
         if unit.target is not None and self.claimed.get(unit.target) == unit.id:
@@ -114,9 +152,9 @@ class Ctx:
         return (i is not None and self.world.workable(i) and self.claimed.get(i, unit.id) == unit.id
                 and (ok is None or ok(i)))
 
-    def pick(self, unit, reach, ok=None, local_only=False):
+    def pick(self, unit, reach, ok=None, local_only=False, anywhere=False):
         world = self.world
-        rally = self.rallies.get(unit.pid)
+        rally = None if anywhere else self.rallies.get(unit.pid)
         ux, uy = unit.x - 0.5, unit.y - 0.5
         near_rally = rally is None or math.hypot(ux - rally[0], uy - rally[1]) <= RALLY_NEAR
         if near_rally or local_only:
@@ -131,15 +169,16 @@ class Ctx:
         return found if found is not None else world.nearest_target(fx, fy, ok=ok)
 
 
-def work(ctx, unit, player, amount, ok=None, on_dig=None, local_only=False, pay=1.0):
+def work(ctx, unit, player, amount, ok=None, on_dig=None, local_only=False, pay=1.0, anywhere=False):
     """Generic "go to the nearest suitable lot and dig it". amount: snow this tick.
-    on_dig(i, removed, cleared) runs after each dig. pay: share of removed snow paid."""
+    on_dig(i, removed, cleared) runs after each dig. pay: share of removed snow paid (collected).
+    anywhere: ignore the rally point."""
     world, m = ctx.world, MACHINES[unit.mid]
     moved = False
     for _ in range(MAX_STEPS):
         if not ctx.valid(unit, ok):
             ctx.release(unit)
-            ctx.claim(unit, ctx.pick(unit, m["reach"], ok, local_only))
+            ctx.claim(unit, ctx.pick(unit, m["reach"], ok, local_only, anywhere))
             if unit.target is None:
                 unit.state = "idle"
                 return
@@ -158,7 +197,7 @@ def work(ctx, unit, player, amount, ok=None, on_dig=None, local_only=False, pay=
         i = unit.target
         removed, found = world.dig(i, amount)
         if removed:
-            player.earn(removed * pay)
+            collect(unit, player, removed * pay)
             amount -= removed
         if found:
             ctx.match.found(player.id, found, i)
@@ -169,7 +208,8 @@ def work(ctx, unit, player, amount, ok=None, on_dig=None, local_only=False, pay=
 
 
 def step(match, dt):
-    from .machines import STEPS  # machines imports this module
+    from .hauling import haul  # both import this module
+    from .machines import STEPS
     ctx = Ctx(match, dt)
     blizzard = match.weather.blizzard
     for unit in list(match.units.values()):  # finds can add units (rescued skiers)
@@ -180,16 +220,29 @@ def step(match, dt):
         if m["diesel"] and player.diesel <= 0:
             unit.state = "stalled"
             continue
+        if m["carry"] and m["kind"] != "sled" and haul(ctx, unit, player):
+            continue
         rate = m["rate"] * player.machine_mult(unit.mid) * player.work_mult(blizzard)
         STEPS[m["kind"]](ctx, unit, player, rate)
 
 
 def visible(match, centres, radius):
-    """Units within radius (lots, square) of any of the centres, for the client."""
+    """Units within radius (lots, square) of any of the centres, for the client.
+    "l": how full a hauler's load or a sled's cargo is (0-1, only when carrying);
+    "f": [input fill 0-1, goods waiting] for processors."""
+    from .hauling import capacity
     out = {}
     for u in match.units.values():
-        if u.pid not in match.players:
+        p = match.players.get(u.pid)
+        if p is None:
             continue
         if any(abs(u.x - cx) <= radius and abs(u.y - cy) <= radius for cx, cy in centres):
-            out[u.id] = {"x": round(u.x, 2), "y": round(u.y, 2), "m": u.mid, "p": u.pid, "s": u.state}
+            entry = {"x": round(u.x, 2), "y": round(u.y, 2), "m": u.mid, "p": u.pid, "s": u.state}
+            m = MACHINES[u.mid]
+            carried = sum(u.cargo.values()) if m["kind"] == "sled" else u.load
+            if carried > 0:
+                entry["l"] = round(min(1.0, carried / max(1e-9, capacity(p, u.mid))), 2)
+            if m["kind"] == "processor":
+                entry["f"] = [round(u.inbox / max(1e-9, m["params"].get("buffer", 100)), 2), int(u.outbox)]
+            out[u.id] = entry
     return out

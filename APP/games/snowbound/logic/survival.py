@@ -1,14 +1,17 @@
 """Weather, the shared cabin stove, and each player's food and warmth.
 
-Weather cycles clear -> warning (WARNING s) -> blizzard -> clear. During a blizzard: machines
+Weather cycles clear -> warning (WARNING s, or landmarks.FORECAST_WARNING with the Weather Station)
+-> blizzard (x FORECAST_SHORTER with it) -> clear. During a blizzard: machines
 work at 75%, the stove burns BLIZZARD_BURN x logs, warmth drops faster with the stove out,
 deliveries stop, and every second snow falls back on some reached lots (DUST_SHARE of them,
-DUST_FRACTION of their starting depth, x the team's dust upgrades; never roads with Road Salt).
+DUST_FRACTION of their starting depth, x the team's dust upgrades; never roads with Road Salt, never
+Heated roads).
 
 Heat: the cabin stove and every warming hut burn logs from the shared woodpile (STOVE_BURN logs/s,
 +50% per extra player, +HUT_BURN per hut). While the woodpile has logs, a character within
 CABIN_HEAT lots of the cabin's centre, HUT_HEAT of a hut or BRAZIER_HEAT of a brazier (which also
-burn logs: machines.py) warms WARM_UP/s. Anywhere else (or with
+burn logs: machines.py) warms WARM_UP/s; so does being within params.heat of a Hot Spring or a
+St. Bernard (landmark rewards, no logs needed). Anywhere else (or with
 no logs) they lose COLD/s (BLIZZARD_COLD in a blizzard; x the survival setting and Thermal Suit),
 STARVING_COLD more while starving.
 Food: drops FOOD_DRAIN/s and CLICK_FOOD per click (x setting, x Big Thermos). At or below
@@ -25,6 +28,8 @@ from gamekit import LobbyError
 
 from .content import MACHINES, UPGRADES
 from .economy import DELIVERY_FEE
+from .landmarks import FORECAST_SHORTER, FORECAST_WARNING
+from .roads import HEATED
 
 WARNING = 20
 FIRST_CLEAR = (240, 360)
@@ -57,6 +62,13 @@ class Weather:
         self.kind = "clear"
         self.left = rng.uniform(*FIRST_CLEAR)
         self.dust_timer = 0.0
+        self.warning = WARNING
+        self.length = 1.0
+
+    def forecast(self):
+        """Weather Station: earlier warnings, shorter blizzards."""
+        self.warning = FORECAST_WARNING
+        self.length = FORECAST_SHORTER
 
     @property
     def blizzard(self):
@@ -68,9 +80,9 @@ class Weather:
         if self.left > 0:
             return None
         if self.kind == "clear":
-            self.kind, self.left = "warning", WARNING
+            self.kind, self.left = "warning", self.warning
         elif self.kind == "warning":
-            self.kind, self.left = "blizzard", self.rng.uniform(*BLIZZARD)
+            self.kind, self.left = "blizzard", self.rng.uniform(*BLIZZARD) * self.length
         else:
             self.kind, self.left = "clear", self.rng.uniform(*CLEAR)
         return self.kind
@@ -110,7 +122,7 @@ def step(match, dt):
             p.rations -= 1
             p.food = min(100.0, p.food + RATION_FOOD)
         p.starving = p.food <= 0
-        if lit and near_heat(match, p.x, p.y):
+        if near_heat(match, p.x, p.y, lit):
             p.warmth += WARM_UP * dt
         else:
             p.warmth -= (BLIZZARD_COLD if blizzard else COLD) * harsh * p.effect("warm_loss") * dt
@@ -124,14 +136,22 @@ def step(match, dt):
             p.frostbite = False
 
 
-def near_heat(match, x, y):
+def near_heat(match, x, y, lit=True):
+    """Is (x, y) warm? lit: the woodpile has logs (the cabin, huts and braziers need them)."""
     w = match.world
-    if math.hypot(x - w.cx - 0.5, y - w.cy - 0.5) <= CABIN_HEAT:
+    if lit and math.hypot(x - w.cx - 0.5, y - w.cy - 0.5) <= CABIN_HEAT:
         return True
-    if any(math.hypot(x - hx - 0.5, y - hy - 0.5) <= HUT_HEAT for hx, hy in match.huts):
+    if lit and any(math.hypot(x - hx - 0.5, y - hy - 0.5) <= HUT_HEAT for hx, hy in match.huts):
         return True
-    return any(MACHINES[u.mid]["kind"] == "brazier" and math.hypot(x - u.x, y - u.y) <= BRAZIER_HEAT
-               for u in match.units.values())
+    for u in match.units.values():
+        kind = MACHINES[u.mid]["kind"]
+        if kind == "brazier" and lit:
+            if math.hypot(x - u.x, y - u.y) <= BRAZIER_HEAT:
+                return True
+        elif kind in ("spring", "bernard"):
+            if math.hypot(x - u.x, y - u.y) <= MACHINES[u.mid]["params"].get("heat", 2):
+                return True
+    return False
 
 
 def clicked(match, player):
@@ -148,7 +168,7 @@ def dust(match):
     salted = match.team_has("road-salt")
     for _ in range(max(2, int(len(lots) * DUST_SHARE * match.harshness))):
         i = match.rng.choice(lots)
-        if not (salted and world.road[i]):
+        if not (salted and world.road[i]) and world.road[i] < HEATED:
             world.dust(i, fraction)
 
 

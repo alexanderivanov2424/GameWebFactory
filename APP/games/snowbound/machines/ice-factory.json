@@ -1,0 +1,23 @@
+{
+  "order": 107,
+  "name": "Ice Factory",
+  "icon": "🏭",
+  "kind": "processor",
+  "cost": 1,
+  "rate": 1500,
+  "speed": 0,
+  "reach": 0,
+  "diesel": 0,
+  "placed": true,
+  "unique": true,
+  "text": "An old factory, working again: turns 40 snow into Crystal Ice ($140). Needs no fuel.",
+  "recipe": {
+    "in": "snow",
+    "per": 40,
+    "out": "crystal"
+  },
+  "params": {
+    "buffer": 60000,
+    "store": 3000
+  }
+}

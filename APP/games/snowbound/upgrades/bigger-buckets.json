@@ -1,0 +1,9 @@
+{
+  "name": "Bigger Buckets",
+  "cost": 2000,
+  "text": "Every machine that hauls snow carries 50% more per load.",
+  "effect": {
+    "kind": "carry_mult",
+    "value": 1.5
+  }
+}

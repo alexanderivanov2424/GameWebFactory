@@ -1,0 +1,9 @@
+{
+  "name": "Dump Trailers",
+  "cost": 3000000,
+  "text": "Every machine that hauls snow carries twice as much per load.",
+  "effect": {
+    "kind": "carry_mult",
+    "value": 2
+  }
+}

@@ -1,0 +1,22 @@
+{
+  "order": 6.5,
+  "name": "Igloo Workshop",
+  "icon": "🛠️",
+  "kind": "processor",
+  "cost": 8000,
+  "rate": 3,
+  "speed": 0,
+  "reach": 0,
+  "diesel": 0,
+  "placed": true,
+  "text": "Placed next to a Brick Press: pulls its bricks and builds an Igloo Kit ($180) from 6.",
+  "recipe": {
+    "in": "brick",
+    "per": 6,
+    "out": "igloo"
+  },
+  "params": {
+    "buffer": 60,
+    "store": 100
+  }
+}

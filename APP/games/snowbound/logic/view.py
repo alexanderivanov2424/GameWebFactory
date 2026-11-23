@@ -5,13 +5,16 @@ public(match):
      "players": {pid: {"name", "color", "x", "y" (world coordinates), "swing": bool,
                        "cash", "cleared", "rate" (machine snow/s now), "food", "warmth",
                        "status": "ok" | "frenzy" | "starving" | "frostbite",
-                       "rally"?: [x, y] lot | "follow", "owned": {machine id: n}}},
+                       "rally"?: [x, y] lot | "follow", "owned": {machine id: n}, "goods": $ from goods}},
      "huts": {"<n>": [x, y]}, "hutCost": $, "heat": {"cabin": lots, "hut": lots},
+     "depots": {"<n>": [x, y]} (Snow Depots), "depotCost": $, "markets": {"<n>": [x, y]} (Old Rail
+     Stations), "landmarks": landmarks.public(), "effects": [team effect ids from landmarks],
+     "roadLevels": [{"name", "cost", "unit", "walk"}] (roads.LEVELS; index = level),
      "weather": {"kind": clear|warning|blizzard, "left": s}, "woodpile": logs,
      "stove": {"lit": bool, "burn": logs per minute}, "flake"?: {"x", "y", "left"},
      "progress": {"reached" (clear now), "dusted" (reached, snowed on again), "total", "goal": %},
      "shared": {upgrade id: pid}, "log": {"<n>": text}, "logCount": n, "prices": {item: $},
-     "move": {"radius", "speed", "dusted", "road", "frostbite", "starving", "wade", "reach"},
+     "move": {"radius", "speed", "dusted", "road": [walk x per road level], "frostbite", "starving", "wade", "reach"},
      "beams": {"<n>": {"x0", "y0", "x1", "y1", "c"}} (Jet Blower shots, kept 1.5 s)}
      (move: the character rules client/grid.js needs to predict your walking)
 private(match, pid): your shop, supplies and the units near you
@@ -19,19 +22,24 @@ private(match, pid): your shop, supplies and the units near you
      Buddy), "wade": deepest snow level you can walk on, "rations", "diesel", "dieselUse": L/s, "frenzy": s,
      "machines": {id: {"owned", "cost1", "cost10", "rate"}}, "upgrades": [visible ids by cost],
      "owned": [your upgrade ids], "auto": [delivered items],
-     "units": {uid: {"x", "y", "m", "p", "s": idle|moving|working|stalled|unlit|charging}}}
+     "carried": snow your machines are carrying, "waiting": $ of goods waiting in your processors,
+     "cargo": $ of goods on your sleds,
+     "units": {uid: {"x", "y", "m", "p", "s": idle|moving|working|hauling|full|stalled|unlit|charging,
+                     "l"?: load 0-1, "f"?: [processor input 0-1, goods waiting]}}}
 spectator(match): {"units": ...} near any character (spectators follow a player).
 """
 
-from . import avatars, survival, units
-from .content import MACHINES, UPGRADES, defs, machine_cost
+from . import avatars, hauling, landmarks, survival, units
+from .content import GOODS, MACHINES, UPGRADES, defs, machine_cost
 from .economy import PRICES
+from .roads import LEVELS
 from .world import WADE_LEVEL
 
 VIEW = 36  # units within this many lots (square) of your character are sent to you
 
 _DEFS = defs()
-_MOVE = {"radius": avatars.RADIUS, "speed": avatars.WALK_SPEED, "dusted": avatars.DUSTED_SLOW, "road": avatars.ROAD_FAST,
+_MOVE = {"radius": avatars.RADIUS, "speed": avatars.WALK_SPEED, "dusted": avatars.DUSTED_SLOW,
+         "road": [level["walk"] for level in LEVELS],
          "frostbite": avatars.FROSTBITE_SLOW, "starving": avatars.STARVING_SLOW,
          "wade": WADE_LEVEL, "reach": avatars.REACH}
 
@@ -53,7 +61,7 @@ def public(match):
                  "swing": p.swinging > 0, "cash": int(p.cash), "cleared": int(p.cleared),
                  "rate": round(p.base_rate() * p.work_mult(blizzard), 1), "food": int(p.food),
                  "warmth": int(p.warmth), "status": _status(p),
-                 "owned": {mid: n for mid, n in p.owned.items() if n}}
+                 "owned": {mid: n for mid, n in p.owned.items() if n}, "goods": int(p.goods_sold)}
         if p.rally == "follow":
             entry["rally"] = "follow"
         elif p.rally is not None:
@@ -64,6 +72,10 @@ def public(match):
         "rows": world.rows(), "defs": _DEFS, "players": players,
         "huts": {str(k): list(xy) for k, xy in enumerate(match.huts)}, "hutCost": match.hut_cost(),
         "heat": {"cabin": survival.CABIN_HEAT, "hut": survival.HUT_HEAT},
+        "depots": {str(k): list(world.xy(i)) for k, i in enumerate(match.depots)},
+        "depotCost": hauling.depot_cost(match),
+        "markets": {str(k): list(world.xy(i)) for k, i in enumerate(match.markets)},
+        "landmarks": landmarks.public(match), "effects": sorted(match.effects), "roadLevels": LEVELS,
         "weather": match.weather.public(), "woodpile": round(match.woodpile, 1),
         "stove": {"lit": match.woodpile > 0, "burn": round(survival.stove_burn(match) * 60, 1)},
         "progress": {"reached": world.cleared(), "dusted": len(world.dusted), "total": world.w * world.h,
@@ -86,6 +98,13 @@ def private(match, pid):
     visible = sorted((uid for uid in UPGRADES if p.upgrade_visible(uid, match.shared_upgrades)),
                      key=lambda uid: UPGRADES[uid]["cost"])
     power, reach, splash = match.shovel(p)
+    carried = waiting = cargo = 0.0
+    for u in match.units.values():
+        if u.pid == pid:
+            carried += u.load
+            if u.outbox:
+                waiting += u.outbox * GOODS[MACHINES[u.mid]["recipe"]["out"]]["value"]
+            cargo += sum(n * GOODS[g]["value"] for g, n in u.cargo.items())
     return {
         "click": round(power, 2), "reach": reach, "splash": splash, "wade": p.wade_level(),
         "rations": p.rations, "diesel": round(p.diesel, 1),
@@ -95,6 +114,7 @@ def private(match, pid):
                            "rate": round(p.machine_rate(mid), 1)} for mid in MACHINES},
         "upgrades": visible, "owned": sorted(p.upgrades),
         "auto": sorted(item for item in ("rations", "diesel", "logs") if p.has_auto(item)),
+        "carried": int(carried), "waiting": int(waiting), "cargo": int(cargo),
         "units": units.visible(match, [(p.x, p.y)], VIEW),
     }
 

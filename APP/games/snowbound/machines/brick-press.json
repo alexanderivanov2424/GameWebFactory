@@ -1,0 +1,22 @@
+{
+  "order": 3.5,
+  "name": "Brick Press",
+  "icon": "🏭",
+  "kind": "processor",
+  "cost": 1500,
+  "rate": 30,
+  "speed": 0,
+  "reach": 0,
+  "diesel": 0,
+  "placed": true,
+  "text": "Placed where you stand. Your machines drop snow here; it presses 10 snow into a Snow Brick ($15). Cargo Sleds take bricks to the cabin.",
+  "recipe": {
+    "in": "snow",
+    "per": 10,
+    "out": "brick"
+  },
+  "params": {
+    "buffer": 900,
+    "store": 300
+  }
+}

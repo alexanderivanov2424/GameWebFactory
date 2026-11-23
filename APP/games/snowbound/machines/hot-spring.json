@@ -1,0 +1,18 @@
+{
+  "order": 109,
+  "name": "Hot Spring",
+  "icon": "♨️",
+  "kind": "spring",
+  "cost": 1,
+  "rate": 40,
+  "speed": 0,
+  "reach": 0,
+  "diesel": 0,
+  "placed": true,
+  "unique": true,
+  "text": "Melts every lot within 4 a little each second (paid to you) and keeps everyone near it warm. Burns nothing.",
+  "params": {
+    "radius": 4,
+    "heat": 4
+  }
+}

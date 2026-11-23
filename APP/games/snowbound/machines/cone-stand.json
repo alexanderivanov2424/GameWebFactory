@@ -1,0 +1,24 @@
+{
+  "order": 108,
+  "name": "Snow Cone Stand",
+  "icon": "🍧",
+  "kind": "processor",
+  "cost": 1,
+  "rate": 60,
+  "speed": 0,
+  "reach": 0,
+  "diesel": 0,
+  "placed": true,
+  "unique": true,
+  "text": "Your machines drop snow here and it sells Snow Cones on the spot: $3 per snow, no hauling needed.",
+  "recipe": {
+    "in": "snow",
+    "per": 1,
+    "out": "cone"
+  },
+  "params": {
+    "buffer": 3000,
+    "store": 1,
+    "sell": 1
+  }
+}

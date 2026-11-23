@@ -11,5 +11,6 @@
   "text": "Tunnels straight out into the drifts, leaving a road. Turns at snow too deep to dig.",
   "params": {
     "limit": 150
-  }
+  },
+  "carry": 120
 }

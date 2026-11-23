@@ -1,0 +1,16 @@
+{
+  "order": 9,
+  "name": "Hot Spring",
+  "icon": "♨️",
+  "size": 2,
+  "band": [
+    0.2,
+    0.7
+  ],
+  "max": 2,
+  "text": "Steam rises from under the snow here.",
+  "reward": {
+    "kind": "placed",
+    "machine": "hot-spring"
+  }
+}

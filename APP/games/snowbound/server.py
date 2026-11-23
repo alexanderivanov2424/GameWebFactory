@@ -9,7 +9,21 @@ become roads, Dust Sweepers clean up blizzard snow, Braziers (placed where you s
 and keep you warm, Shovel Buddies follow you and boost your shovel, Blade Dozers shove drifts
 outward, Deep Augers drill the deepest snow, Snow Stills (placed) turn snow into diesel, Road
 Graders widen roads, Jet Blowers fire beams. Mobile ones work near your rally point if you set one
-(a spot, or "follow me"). Upgrades mostly change how one machine works (Snow Angels, Sled
+(a spot, or "follow me").
+Hauling: digging machines (kids, dogs, sweepers, dozers, augers, graders) carry what they dig and
+are paid only when they unload it at a drop point: the cabin, a Snow Depot (built where you stand,
+used by everyone) or an Old Rail Station. Roads (Track, Gravel, Paved, Heated: laid and upgraded
+by players on cleared ground, Track also left by dogs, graders and jets) make machines and people
+faster, and machines route along the road network (logic/roads.py, logic/hauling.py).
+Factory: processors (placed) take snow from your own haulers and turn it into goods worth more
+(Brick Press -> Snow Bricks, Ice Press -> Ice Blocks); a processor placed next to another one pulls
+its goods (Igloo Workshop next to a Brick Press, Ice Carver next to an Ice Press). Cargo Sleds and
+Freight Trucks fetch goods and sell them at a market: the cabin or an Old Rail Station
+(logic/factory.py).
+Landmarks: a few one-of-a-kind ruins are hidden in each valley (landmarks/*.json). Whoever clears
+the last of a ruin's lots gets its reward: a unique helper (Woolly Mammoth, Snow Spirit, St. Bernard,
+Reindeer Team, Snow Golem, Old Snowcat), a unique building (Ice Factory, Snow Cone Stand, Hot
+Spring) or a team perk (Old Rail Station, Weather Station, Observatory) (logic/landmarks.py). Upgrades mostly change how one machine works (Snow Angels, Sled
 Harness, Corkscrew, Long Throw...), plus shovel, survival, delivery and shared team upgrades;
 Snowshoes let you walk over deeper snow. Snow gets deeper the further you get from
 the cabin. Each player has their own wallet, machines and upgrades.
@@ -40,6 +54,9 @@ Game messages (players only):
                  {"action": "rally", "x": int, "y": int} | {"action": "rally", "follow": true}
                      | {"action": "rally"}   where your units look for work first (none: anywhere)
                  {"action": "hut"}                              build a warming hut where you stand
+                 {"action": "depot"}                            build a Snow Depot where you stand
+                 {"action": "road", "level": 1-4, "lots": [[x, y], ...]}   lay or upgrade road
+                     (at most 200 lots; pays the difference per lot; lots already that good are skipped)
 Public / private state: logic/view.py (spectators get the units near any character).
 Result:          {"reason": str, "cleared": {pid: snow}}
 """
@@ -52,6 +69,7 @@ from .logic.avatars import KEYS
 from .logic.content import MACHINES, UPGRADES
 from .logic.economy import PRICES
 from .logic.match import Match
+from .logic.roads import MAX_LOTS as MAX_ROAD_LOTS
 
 PALETTE = ["#ff5c5c", "#4fc3f7", "#ffd54f", "#81c784", "#ba68c8", "#ff8a65", "#4db6ac", "#f06292"]
 
@@ -81,7 +99,7 @@ class Game(RealtimeGame):
                            options={"easy": "Easy", "normal": "Normal", "harsh": "Harsh"}),
     }
     ACTIONS = {"dig": "dig", "buy": "buy", "upgrade": "upgrade", "supply": "supply",
-               "rally": "rally", "hut": "hut"}
+               "rally": "rally", "hut": "hut", "depot": "depot", "road": "road"}
 
     def __init__(self, room):
         super().__init__(room)
@@ -164,6 +182,18 @@ class Game(RealtimeGame):
 
     def hut(self, member, data):
         self.match.build_hut(member.id)
+
+    def depot(self, member, data):
+        self.match.build_depot(member.id)
+
+    def road(self, member, data):
+        level, lots = data.get("level"), data.get("lots")
+        if type(level) is not int:
+            raise LobbyError("Unknown road level.")
+        if not isinstance(lots, list) or not 0 < len(lots) <= MAX_ROAD_LOTS or not all(
+                isinstance(lot, list) and len(lot) == 2 and all(type(v) is int for v in lot) for lot in lots):
+            raise LobbyError("Bad lots.")
+        self.match.lay_road(member.id, lots, level)
 
     def on_player_removed(self, member):
         if self.match is not None:

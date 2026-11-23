@@ -11,5 +11,6 @@
   "text": "Shoves snow off the frontier onto the lots beyond. Advances fast, but only 40% of the snow is paid; the rest piles up further out.",
   "params": {
     "paid": 0.4
-  }
+  },
+  "carry": 6000
 }

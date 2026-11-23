@@ -1,0 +1,16 @@
+{
+  "order": 11,
+  "name": "Weather Station",
+  "icon": "📡",
+  "size": 2,
+  "band": [
+    0.25,
+    0.7
+  ],
+  "max": 1,
+  "text": "Clear it and everyone gets blizzard warnings 60 s ahead, and blizzards are 30% shorter.",
+  "reward": {
+    "kind": "team",
+    "effect": "forecast"
+  }
+}

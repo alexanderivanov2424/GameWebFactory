@@ -1,0 +1,14 @@
+{
+  "order": 101,
+  "name": "Woolly Mammoth",
+  "icon": "🦣",
+  "kind": "mammoth",
+  "cost": 1,
+  "rate": 400,
+  "speed": 2.5,
+  "reach": 1.5,
+  "diesel": 0,
+  "carry": 40000,
+  "unique": true,
+  "text": "Stomps the lot it works and the 8 around it at once, and carries huge loads."
+}

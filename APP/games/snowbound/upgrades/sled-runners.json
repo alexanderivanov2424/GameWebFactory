@@ -1,0 +1,10 @@
+{
+  "name": "Sled Runners",
+  "cost": 5000,
+  "text": "Cargo Sleds carry twice as many goods.",
+  "effect": {
+    "kind": "carry_mult",
+    "value": 2
+  },
+  "machine": "sled"
+}

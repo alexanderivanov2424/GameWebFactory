@@ -1,0 +1,19 @@
+{
+  "order": 106,
+  "name": "Old Snowcat",
+  "icon": "🚙",
+  "kind": "dog",
+  "cost": 1,
+  "rate": 1500,
+  "speed": 4,
+  "reach": 1,
+  "diesel": 0,
+  "carry": 60000,
+  "unique": true,
+  "text": "Tunnels straight out through deep snow three lots wide, leaving a Paved road down the middle.",
+  "params": {
+    "limit": 3000,
+    "wide": 1,
+    "pave": 3
+  }
+}

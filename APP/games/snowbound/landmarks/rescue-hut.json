@@ -1,0 +1,16 @@
+{
+  "order": 3,
+  "name": "Rescue Hut",
+  "icon": "🏚️",
+  "size": 2,
+  "band": [
+    0.2,
+    0.5
+  ],
+  "max": 1,
+  "text": "A mountain rescue hut. Its St. Bernard follows whoever digs it out.",
+  "reward": {
+    "kind": "unit",
+    "machine": "bernard"
+  }
+}

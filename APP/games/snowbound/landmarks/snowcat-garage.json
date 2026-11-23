@@ -1,0 +1,16 @@
+{
+  "order": 6,
+  "name": "Snowcat Garage",
+  "icon": "🚙",
+  "size": 3,
+  "band": [
+    0.35,
+    0.8
+  ],
+  "max": 1,
+  "text": "A garage with an old snowcat that still starts.",
+  "reward": {
+    "kind": "unit",
+    "machine": "snowcat"
+  }
+}

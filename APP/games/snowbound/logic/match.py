@@ -3,10 +3,12 @@
 Match(names, settings, colors, rng). Players are public ids ("p1"); no lobby code here.
 step(dt) advances everything (called TICK_RATE times a second by server.py):
 weather -> once a second (blizzard snowfall or deliveries) -> golden snowflakes -> stove and
-needs (survival.py) -> characters walk and shovel (avatars.py) -> units (units.py) -> swing
-budgets -> goal check.
+needs (survival.py) -> characters walk and shovel (avatars.py) -> route fields (roads.py) ->
+units (units.py, hauling.py, factory.py) -> swing budgets -> goal check.
 Player actions raise LobbyError when refused: dig (one swing), buy, upgrade, supply, rally,
-build_hut; set_input stores held controls. swing() is quiet for lots you can't dig (the snow
+build_hut, build_depot (hauling.py), lay_road (roads.py); set_input stores held controls.
+The valley also holds hidden landmarks (landmarks.py; effects: the team effects found so far,
+markets: Old Rail Station lots; depots: Snow Depot lots). swing() is quiet for lots you can't dig (the snow
 may simply have been cleared a moment ago).
 Golden snowflakes appear on reached ground near a random player; walking into one catches it.
 result: {"reason": str, "cleared": {pid: snow}} once the goal share of lots is clear.
@@ -17,7 +19,7 @@ import random
 
 from gamekit import LobbyError
 
-from . import avatars, survival, units
+from . import avatars, hauling, landmarks, roads, survival, units
 from .content import MACHINES, UPGRADES
 from .economy import CLICKS_PER_SECOND, MAX_OWNED, PRICES, Player
 from .world import World
@@ -44,8 +46,14 @@ class Match:
     def __init__(self, names, settings, colors=None, rng=None):
         self.rng = rng or random.Random()
         colors = colors or {}
-        self.world = World(SIZES.get(settings.get("mapSize"), SIZES["large"]), self.rng)
+        size = settings.get("mapSize") if settings.get("mapSize") in SIZES else "large"
+        self.world = World(SIZES[size], self.rng)
         w = self.world
+        landmarks.place(w, self.rng, size)
+        self.roads = roads.Network(w)
+        self.depots = []            # Snow Depot lots
+        self.markets = []           # Old Rail Station lots
+        self.effects = set()        # team effects from landmarks
         self.players = {}
         for k, (pid, name) in enumerate(names.items()):
             angle = 2 * math.pi * k / max(1, len(names))
@@ -112,6 +120,11 @@ class Match:
     def hut_cost(self):
         return round(HUT_COST * HUT_GROWTH ** len(self.huts))
 
+    def occupied(self, i):
+        """Is something built on lot i (a placed machine, depot, rail station or hut)?"""
+        x, y = self.world.xy(i)
+        return units.placed_at(self, i) or i in self.depots or i in self.markets or (x, y) in self.huts
+
     # --- time ------------------------------------------------------------------------
 
     def step(self, dt):
@@ -120,7 +133,7 @@ class Match:
         self.time += dt
         changed = self.weather.step(dt)
         if changed == "warning":
-            self.say(f"A blizzard is coming in {survival.WARNING} seconds! Stock up on logs and head for shelter.")
+            self.say(f"A blizzard is coming in {self.weather.warning} seconds! Stock up on logs and head for shelter.")
         elif changed == "blizzard":
             self.say("Blizzard! Snow is piling back up and the stove burns fast.")
         elif changed == "clear":
@@ -135,6 +148,7 @@ class Match:
         self._flakes(dt)
         survival.step(self, dt)
         avatars.step(self, dt)
+        self.roads.update()
         units.step(self, dt)
         for key in [k for k, b in self.beams.items() if b["left"] <= dt]:
             del self.beams[key]
@@ -160,7 +174,7 @@ class Match:
             return
         self.flake_timer -= dt
         if self.flake_timer <= 0 and self.players:
-            self.flake_timer = self.rng.uniform(*FLAKE_EVERY)
+            self.flake_timer = self.rng.uniform(*FLAKE_EVERY) * (0.5 if "observatory" in self.effects else 1)
             self.flake = {"i": self._flake_spot(), "left": float(FLAKE_LIFE)}
 
     def _flake_spot(self):
@@ -190,7 +204,9 @@ class Match:
     def found(self, pid, kind, i):
         """Lot i was cleared for the first time by pid or pid's unit; kind is its feature."""
         p = self.players[pid]
-        if kind == "forest":
+        if kind == "site":
+            landmarks.found(self, pid, i)
+        elif kind == "forest":
             self.woodpile += FOREST_LOGS
         elif kind == "house":
             bonus = round(max(50, 30 * p.base_rate()))
@@ -253,9 +269,9 @@ class Match:
             i = w.index(x, y)
             if count != 1:
                 raise LobbyError("Placed machines are built one at a time, where you stand.")
-            if i is None or not w.reached[i] or w.kind[i] == "cabin":
-                raise LobbyError("Stand on cleared ground (not the cabin) to place it.")
-            if units.placed_at(self, i):
+            if i is None or not w.reached[i] or w.kind[i] in ("cabin", "site"):
+                raise LobbyError("Stand on cleared ground (not the cabin or a landmark) to place it.")
+            if self.occupied(i):
                 raise LobbyError("Something is already built on this spot.")
             p.buy_machine(mid, 1)
             units.add(self, pid, mid, 1, x + 0.5, y + 0.5, home=i)
@@ -303,6 +319,7 @@ class Match:
         for u in self.units.values():
             if u.pid == pid:
                 u.target = None
+                hauling.cancel_back(u)
 
     def build_hut(self, pid):
         """A warming hut on the lot pid stands on (paid by pid; heats everyone)."""
@@ -312,14 +329,22 @@ class Match:
         i = w.index(x, y)
         if len(self.huts) >= MAX_HUTS:
             raise LobbyError(f"The valley has the most huts it can take ({MAX_HUTS}).")
-        if i is None or not w.reached[i] or w.kind[i] == "cabin":
+        if i is None or not w.reached[i] or w.kind[i] in ("cabin", "site"):
             raise LobbyError("Build huts on cleared ground.")
+        if self.occupied(i):
+            raise LobbyError("Something is already built on this spot.")
         if math.hypot(x - w.cx, y - w.cy) < HUT_SPACING or any(
                 math.hypot(x - hx, y - hy) < HUT_SPACING for hx, hy in self.huts):
             raise LobbyError(f"Too close to the cabin or another hut (keep {HUT_SPACING} lots apart).")
         p.pay(self.hut_cost())
         self.huts.append((x, y))
         self.say(f"{p.name} built a warming hut.")
+
+    def build_depot(self, pid):
+        hauling.build_depot(self, pid)
+
+    def lay_road(self, pid, lots, level):
+        return roads.lay(self, pid, lots, level)
 
     def remove(self, pid):
         p = self.players.pop(pid, None)

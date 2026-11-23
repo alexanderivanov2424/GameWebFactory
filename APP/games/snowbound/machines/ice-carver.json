@@ -1,0 +1,22 @@
+{
+  "order": 9.5,
+  "name": "Ice Carver",
+  "icon": "🪚",
+  "kind": "processor",
+  "cost": 2000000,
+  "rate": 80,
+  "speed": 0,
+  "reach": 0,
+  "diesel": 0,
+  "placed": true,
+  "text": "Placed next to an Ice Press: pulls its blocks and carves 5 into an Ice Sculpture ($750).",
+  "recipe": {
+    "in": "ice",
+    "per": 5,
+    "out": "sculpture"
+  },
+  "params": {
+    "buffer": 800,
+    "store": 800
+  }
+}

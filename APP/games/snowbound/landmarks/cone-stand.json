@@ -1,0 +1,16 @@
+{
+  "order": 8,
+  "name": "Snow Cone Kiosk",
+  "icon": "🍧",
+  "size": 2,
+  "band": [
+    0.15,
+    0.45
+  ],
+  "max": 2,
+  "text": "A snow cone kiosk, ready to open again.",
+  "reward": {
+    "kind": "placed",
+    "machine": "cone-stand"
+  }
+}

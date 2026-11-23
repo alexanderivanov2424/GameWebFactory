@@ -1,0 +1,16 @@
+{
+  "order": 5,
+  "name": "Snowman Garden",
+  "icon": "⛄",
+  "size": 2,
+  "band": [
+    0.2,
+    0.6
+  ],
+  "max": 1,
+  "text": "A garden of snowmen. One of them comes alive and builds roads for you.",
+  "reward": {
+    "kind": "unit",
+    "machine": "golem"
+  }
+}

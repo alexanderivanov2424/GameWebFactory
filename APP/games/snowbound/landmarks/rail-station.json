@@ -1,0 +1,16 @@
+{
+  "order": 10,
+  "name": "Old Rail Station",
+  "icon": "🚉",
+  "size": 3,
+  "band": [
+    0.4,
+    0.85
+  ],
+  "max": 2,
+  "text": "Clear it and it opens for everyone: a drop point for snow where goods also sell, like the cabin.",
+  "reward": {
+    "kind": "team",
+    "effect": "market"
+  }
+}

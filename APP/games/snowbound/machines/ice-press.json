@@ -1,0 +1,22 @@
+{
+  "order": 8.5,
+  "name": "Ice Press",
+  "icon": "🗜️",
+  "kind": "processor",
+  "cost": 300000,
+  "rate": 2000,
+  "speed": 0,
+  "reach": 0,
+  "diesel": 3,
+  "placed": true,
+  "text": "Placed where you stand. Squeezes 25 snow into an Ice Block ($50). Burns diesel.",
+  "recipe": {
+    "in": "snow",
+    "per": 25,
+    "out": "ice"
+  },
+  "params": {
+    "buffer": 60000,
+    "store": 4000
+  }
+}

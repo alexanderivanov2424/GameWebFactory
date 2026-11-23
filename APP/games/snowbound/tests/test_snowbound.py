@@ -112,7 +112,7 @@ class RulesTests(unittest.TestCase):
         for _ in range(50):
             match.step(0.1)
         self.assertGreater(p.cleared, 0)
-        self.assertGreater(p.cash, 0)
+        self.assertGreater(sum(u.load for u in match.units.values()), 0)  # carried home, paid there
 
     def test_diesel_machines_stop_without_diesel(self):
         match = new_match()
