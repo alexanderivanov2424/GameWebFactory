@@ -6,7 +6,7 @@
  *   ML.view.owners            show who built each road (thin stripe in their colour); O toggles it
  * Draw order: terrain -> outside the city limits (shaded) -> roads (links, bridges, tunnels, owner
  * stripes, driveways) -> roundabouts and lights -> houses, shops (pins, timer ring)
- * -> cars (interpolated by rt.sample) -> ML.input's preview -> other players' cursors.
+ * -> cars (interpolated by rt.sample) -> "+1" pops -> ML.input's preview -> other players' cursors.
  */
 (() => {
   const ML = (window.ML = window.ML || {});
@@ -19,7 +19,11 @@
   const view = (ML.view = { owners: true });
   let lobby, rt, canvas, ctx;
   let z = 20, ox = 0, oy = 0;
-  const headings = new Map();
+  const headings = new Map();   // car id -> {x, y, a: heading, t: road tile it last reached}
+  // "+1" pops: a car reaching the middle of a road tile scores 1 for its builder (the server credits
+  // it as the car moves on, logic/traffic.py); shown here in the builder's colour. Purely visual.
+  const POP_LIFE = 800, POP_CORE = 0.3, MAX_POPS = 150;
+  let pops = [];                 // {x, y, color, born}
 
   const dpr = () => window.devicePixelRatio || 1;
   const cx = (t) => (t % lobby.state.game.w + 0.5) * z + ox;
@@ -29,7 +33,7 @@
     const rect = canvas.getBoundingClientRect();
     return [((clientX - rect.left) * dpr() - ox) / z, ((clientY - rect.top) * dpr() - oy) / z];
   };
-  view.reset = () => headings.clear();
+  view.reset = () => { headings.clear(); pops = []; };
 
   function layout(game) {
     const d = dpr();
@@ -193,13 +197,21 @@
     }
   }
 
-  function drawCars(game) {
+  function drawCars(game, now) {
     const cars = rt.sample((g) => g.cars) || {};
     for (const [id, c] of Object.entries(cars)) {
       const prev = headings.get(id);
       let a = prev ? prev.a : 0;
       if (prev && Math.hypot(c.x - prev.x, c.y - prev.y) > 0.01) a = Math.atan2(c.y - prev.y, c.x - prev.x);
-      headings.set(id, { x: c.x, y: c.y, a });
+      // The tile whose middle the car is in (none while between tiles, so diagonals don't clip corners).
+      const tx = Math.floor(c.x), ty = Math.floor(c.y);
+      const inCore = Math.abs(c.x - tx - 0.5) < POP_CORE && Math.abs(c.y - ty - 0.5) < POP_CORE;
+      const t = inCore && ML.city.onMap(tx, ty) ? ML.city.idx(tx, ty) : (prev ? prev.t : null);
+      if (prev && t !== prev.t && t !== null) {
+        const road = ML.city.road(t), owner = road && game.players[road.o];
+        if (owner && pops.length < MAX_POPS) pops.push({ x: tx + 0.5, y: ty + 0.35, color: owner.color, born: now });
+      }
+      headings.set(id, { x: c.x, y: c.y, a, t });
       ctx.save();
       ctx.translate(ox + c.x * z, oy + c.y * z);
       ctx.rotate(a);
@@ -210,6 +222,24 @@
       ctx.restore();
     }
     if (headings.size > 400) for (const id of headings.keys()) if (!cars[id]) headings.delete(id);
+  }
+
+  function drawPops(now) {
+    pops = pops.filter((p) => now - p.born < POP_LIFE);
+    if (!pops.length) return;
+    ctx.font = `bold ${Math.max(9, Math.round(z * 0.36))}px system-ui, sans-serif`;
+    ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    ctx.lineWidth = Math.max(1.5, z * 0.08);
+    ctx.strokeStyle = "rgba(255,255,255,0.85)";
+    for (const p of pops) {
+      const f = (now - p.born) / POP_LIFE;
+      const x = ox + p.x * z, y = oy + (p.y - f * 0.6) * z;
+      ctx.globalAlpha = f < 0.6 ? 1 : (1 - f) / 0.4;
+      ctx.strokeText("+1", x, y);
+      ctx.fillStyle = p.color;
+      ctx.fillText("+1", x, y);
+    }
+    ctx.globalAlpha = 1;
   }
 
   function drawPreview(game) {
@@ -252,7 +282,8 @@
       drawTerrain(game);
       drawRoads(game);
       drawBuildings(game, now);
-      drawCars(game);
+      drawCars(game, now);
+      drawPops(now);
       drawPreview(game);
       drawCursors(game);
     });

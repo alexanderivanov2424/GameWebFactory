@@ -26,7 +26,7 @@ the same weekly rewards for all, points by road ownership, shared loss on overfl
   `step_owner` (who scores a car's step: 1 per road tile), `owner_shares`.
 - `logic/city.py`: houses/shops, spawn placement (houses in clusters: `grow_cluster`), demand, overflow. `logic/grid.py`: tiles, terrain
   generation, the area. `logic/players.py`: stock. `logic/upgrades.py`: offers. `logic/view.py`: client contract.
-- `client/`: `game.js` wiring, `city.js` lookups + mirrored rules, `view.js` canvas, `input.js` tools and
+- `client/`: `game.js` wiring, `city.js` lookups + mirrored rules, `view.js` canvas (incl. the "+1" pops in the builder's colour, worked out client-side from car positions), `input.js` tools and
   strokes, `hud.js` boxes (top clock, players, tool bar, pick dialog, result).
 
 ## Pitfalls seen here
