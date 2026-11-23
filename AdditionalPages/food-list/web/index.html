@@ -1,11 +1,11 @@
 <!doctype html>
 <!-- Food list (/food-list/): shared shopping lists for phones. Not linked from anywhere.
      Two screens: one list (the title button opens the other) and the lists screen: a stack of lists
-     (New list on top, then Global = every saved item, then each list with Edit and, on templates, Copy),
+     (New list on top, then Global = the items added to it, then each list with Edit and, on templates, Copy),
      then New tag and every tag with Edit (a small popup: name, colour, delete).
      body.global = the Global list is open: no checking off, clearing or adding; each item has Delete,
-     which marks it (red) until the bar at the top confirms or cancels; the editor has no Remove
-     (.item-only) and its amount is the default. body.copy = a copy of a template is open: its
+     which marks it (red) until the bar at the top confirms or cancels; the editor has no Remove or
+     Add to global (.item-only) and its amount is the default. Amounts are any short text. body.copy = a copy of a template is open: its
      template's name under the title, and Delete list instead of Clear checked / Clear all.
      The list has two modes (the small button next to the title; body.viewing = view mode):
      edit shows the add row and each item's Edit button; view shows the tag filter row instead.
@@ -122,6 +122,8 @@
     display: inline-block; margin-left: 6px; padding: 0 7px; border-radius: 999px; vertical-align: 2px;
     font-size: 12px; font-weight: 500; color: var(--muted); border: 1px solid var(--line);
   }
+  .globalrow { display: flex; align-items: center; gap: 10px; margin-top: 10px; }
+  .globalrow .hint { margin-top: 0; }
   .checkline { display: flex; align-items: center; gap: 10px; margin-top: 14px; cursor: pointer; }
   .checkline input { width: 22px; height: 22px; margin: 0; accent-color: var(--accent); flex: none; }
   /* Tags: --h is the tag's hue, set from the page script. */
@@ -254,10 +256,14 @@
     <label class="field" for="editName">Name</label>
     <input type="text" id="editName" class="lower" maxlength="80" autocapitalize="none" required>
     <div class="hint">Everything here except the amount is the same on every list.</div>
+    <div class="globalrow item-only">
+      <button type="button" id="globalItem">Add to global</button>
+      <span class="hint" id="globalHint"></span>
+    </div>
     <div class="pair">
       <div>
         <label class="field" for="editAmount" id="amountLabel">Amount</label>
-        <input type="number" id="editAmount" inputmode="decimal" min="0" max="9999" step="any" placeholder="—">
+        <input type="text" id="editAmount" maxlength="20" placeholder="2, a few…">
       </div>
       <div>
         <label class="field" for="editUnit">Unit</label>

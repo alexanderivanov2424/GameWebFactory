@@ -7,14 +7,16 @@ By hand: `PORT=8771 SITE_DATA=/some/folder python3 server.py` (default data: ./d
 
 Routes (all JSON unless noted; errors are {"error": message} with a 4xx status). The data model
 (lists, their entries, foods = everything about an item, tags) is described in store.py.
-An item as sent: {id, food, name, tags: [tag id], notes, unit, images: [id], amount, checked}.
+An item as sent: {id, food, name, tags: [tag id], notes, unit, images: [id], global, amount (text or null),
+checked}.
     GET  /food-list/api/lists                          summary: {"lists": [{id, name, template, copy_of (template
-                                                                 name or null), count, left}], "foods": [{name, tags}],
+                                                                 name or null), count, left}], "foods": [{name, tags,
+                                                                 global}],
                                                                  "tags": [{id, name, hue}]}
     GET  /food-list/api/lists/<list>                   summary + {"list": {id, name, template, copy_of, items: [item]}}
     GET  /food-list/api/foods                          summary + {"list": {id: "global", name, global: true, items:
-                                                                 [item without checked, id = food, amount = default,
-                                                                 lists: [list name]]}}
+                                                                 [global foods as items without checked, id = food,
+                                                                 amount = default]}}
     POST /food-list/api/lists                          {name} -> {id, name}
     POST /food-list/api/lists/<list>/update            {name?, template?} -> {id, name, template}
     POST /food-list/api/lists/<list>/copy              {name} -> {id, name} (template lists only)
@@ -22,8 +24,10 @@ An item as sent: {id, food, name, tags: [tag id], notes, unit, images: [id], amo
     POST /food-list/api/lists/<list>/items             {name} -> the new item
     POST /food-list/api/lists/<list>/clear             {"which": "checked" | "all"} -> {"removed": n}
     POST /food-list/api/items/<id>/update              {checked?, amount?, and any food field below} -> the item
-    POST /food-list/api/items/<id>/delete              takes it off the list (the food stays)
-    POST /food-list/api/foods/<food>/update            {name?, tags?: [tag name], notes?, unit?, amount? (default)}
+    POST /food-list/api/items/<id>/delete              takes it off the list (the food stays if it's global or on
+                                                       another list)
+    POST /food-list/api/foods/<food>/update            {name?, tags?: [tag name], notes?, unit?, global?, amount?
+                                                       (default)}
     POST /food-list/api/foods/delete                   {"ids": [food]} -> {"deleted": n} (for good, off every list)
     POST /food-list/api/tags                           {name, hue? (0-359)} -> {id, name, hue}
     POST /food-list/api/tags/<tag>/update              {name?, hue? (0-359)} -> {id, name, hue}

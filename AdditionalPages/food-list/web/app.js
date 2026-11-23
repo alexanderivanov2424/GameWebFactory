@@ -3,13 +3,14 @@
 // list, then every list with Edit (name, template, delete) and, on templates, Copy (named in a
 // popup, "<name>-<month>/<day>" by default; a copy shows its template's name and has Delete list
 // instead of the clear buttons). Everything about an item (name, tags, notes, unit, pictures) is
-// saved once for all lists (a "food"); only the amount and the checkmark belong to the list. The
-// Global list ("global") is every saved item: edited the same way (its amount is the default new
-// entries start with), nothing checked off or cleared, and Delete marks items (red) for deleting
-// for good once the bar at the top confirms. Below the lists, New tag and every tag with Edit
+// saved once for all lists (a "food"); only the amount (any short text) and the checkmark belong to
+// the list. The Global list ("global") holds only the items added to it with the editor's "Add to
+// global" button (new items aren't; an item in neither the Global list nor any list is forgotten):
+// edited the same way (its amount is the default new entries start with), nothing checked off or
+// cleared, and Delete marks items (red) for deleting for good once the bar at the top confirms. Below the lists, New tag and every tag with Edit
 // (both in the tag popup: name, colour; Delete takes an existing tag off every item).
-// The open list is remembered in localStorage. While typing a new item, names added before (the server keeps them
-// all, see ../store.py) that aren't on this list are suggested, with their tags.
+// The open list is remembered in localStorage. While typing a new item, saved names (on any list or in the
+// Global list, see ../store.py) that aren't on this list are suggested, with their tags.
 // Item names are lowercase: the server lowercases them too.
 // Tags (coloured by their hue) are set in the item editor, by name: new names make new tags on Save.
 // Two modes, remembered in localStorage: edit (add row, Edit buttons) and view (a row of the list's
@@ -35,12 +36,13 @@
   const TAG_NAME = /^[\p{L} ]+$/u;  // the server checks the same: letters and spaces
   const TAG_NAME_MAX = 24;
   const MAX_TAGS_PER_ITEM = 10;
+  const AMOUNT_MAX = 20;          // characters, like the server
 
   const $ = (id) => document.getElementById(id);
   const list = $("list"), editor = $("editor"), viewer = $("viewer");
   const listEditor = $("listEditor"), nameDialog = $("nameDialog"), tagEditor = $("tagEditor");
   let lists = [];      // [{id, name, template, count, left}]
-  let foods = [];      // every item ever added: [{name, tags}] (sorted by name)
+  let foods = [];      // every saved item: [{name, tags, global}] (sorted by name)
   let tags = [];       // every tag: [{id, name, hue}] (sorted by name)
   let tagsById = new Map();
   let viewing = stored(MODE_KEY) === "view";
@@ -134,7 +136,7 @@
     renderLists();
     renderTagRows();
     renderSuggestions();
-    if (editingId) renderEditorPics();
+    if (editingId) { renderEditorPics(); renderEditorGlobal(); }
   }
 
   function showError(error) {
@@ -200,7 +202,7 @@
     const sorted = shown.filter((i) => !i.checked).concat(shown.filter((i) => i.checked));
     list.replaceChildren(...sorted.map(row));
     $("empty").hidden = items.length > 0;
-    $("empty").textContent = isGlobal ? "Nothing has been added to a list yet." : "The list is empty.";
+    $("empty").textContent = isGlobal ? "Nothing here yet. Edit an item on a list and tap “Add to global”." : "The list is empty.";
     if (items.length && !shown.length) {
       $("empty").hidden = false;
       $("empty").textContent = "No items have all of these tags.";
@@ -236,7 +238,6 @@
       line.append(...chips.map((t) => tagChip(t)));
       info.append(line);
     }
-    if (isGlobal) info.append(el("div", "notes", item.lists && item.lists.length ? "On " + item.lists.join(", ") : "Not on a list"));
     if (item.notes) info.append(el("div", "notes", item.notes));
     if (item.images && item.images.length) {
       const thumbs = el("div", "thumbs");
@@ -262,10 +263,12 @@
     return li;
   }
 
-  // "2 dozen", "×3", or "" when no amount is set.
+  // "2 dozen", "×3", "a few", or "" when no amount is set.
   function quantity(item) {
-    if (item.amount === null || item.amount === undefined) return "";
-    return item.unit ? item.amount + " " + item.unit : "×" + item.amount;
+    const amount = item.amount === null || item.amount === undefined ? "" : String(item.amount);
+    if (!amount) return "";
+    if (item.unit) return amount + " " + item.unit;
+    return /^\d+([.,]\d+)?$/.test(amount) ? "×" + amount : amount;
   }
 
   // ---- deleting saved items for good (Global list) ----
@@ -453,7 +456,7 @@
 
   function renderLists() {
     const global = listRow(el("div", "name", "Global"),
-      plural(foods.length, "saved item") + " · names and tags", listId === GLOBAL, () => openList(GLOBAL), []);
+      plural(foods.filter((f) => f.global).length, "saved item") + " · names and tags", listId === GLOBAL, () => openList(GLOBAL), []);
     $("lists").replaceChildren(global, ...lists.map((l) => {
       const name = el("div", "name", l.name);
       if (l.template) name.append(el("span", "badge", "Template"));
@@ -648,6 +651,7 @@
     tagHint("");
     renderEditorTags();
     renderEditorPics();
+    renderEditorGlobal();
     editor.showModal();
   }
 
@@ -673,6 +677,20 @@
     });
     $("editPics").replaceChildren(...pics);
   }
+
+  // The "Add to global" / "Remove from global" button (list items only; it saves right away).
+  function renderEditorGlobal() {
+    const item = current();
+    if (!item) return;
+    $("globalItem").textContent = item.global ? "Remove from global" : "Add to global";
+    $("globalHint").textContent = item.global ? "In the Global list." : "Not in the Global list.";
+  }
+
+  $("globalItem").addEventListener("click", () => {
+    const item = current();
+    if (!item || isGlobal) return;
+    act(() => post("/items/" + item.id + "/update", { global: !item.global }));
+  });
 
   // ---- the editor's tags (sent by name with Save; the server makes new ones) ----
 
@@ -743,10 +761,10 @@
     if (!item) return editor.close();
     const name = $("editName").value.trim().toLowerCase();
     if (!name) { showError(new Error("Give the item a name.")); return; }
-    const amountText = $("editAmount").value.trim();
-    const amount = amountText === "" ? null : Number(amountText);
-    if ($("editAmount").validity.badInput || (amount !== null && !(amount >= 0 && amount <= 9999))) {
-      $("editError").textContent = "The amount must be a number from 0 to 9999 (or empty).";
+    const amountText = $("editAmount").value.trim().replace(/\s+/g, " ");
+    const amount = amountText === "" ? null : amountText;
+    if (amountText.length > AMOUNT_MAX) {
+      $("editError").textContent = "The amount can have at most " + AMOUNT_MAX + " characters.";
       return;
     }
     if (!addTypedTag()) return;  // a tag typed but not added yet counts
@@ -758,7 +776,9 @@
 
   $("deleteItem").addEventListener("click", () => {
     const item = current();
-    if (!item || !confirm("Remove “" + item.name + "” from this list? It stays saved.")) return;
+    if (!item) return;
+    const after = item.global ? "It stays in the Global list." : "It's not in the Global list, so it's forgotten unless another list has it.";
+    if (!confirm("Remove “" + item.name + "” from this list? " + after)) return;
     editor.close();
     act(() => post("/items/" + item.id + "/delete"));
   });
