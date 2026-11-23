@@ -5,10 +5,10 @@ everyone picks one of the same two offers (drawn at random from UPGRADES). Each 
 themselves; whoever hasn't picked when the pick timer runs out gets the first offer.
 """
 
-WEEKLY = {"roads": 20}
+WEEKLY = {"roads": 5}
 
 UPGRADES = {
-    "roads": {"name": "+30 roads", "text": "Thirty more road tiles.", "gives": {"roads": 30}},
+    "roads": {"name": "+5 roads", "text": "Five more road tiles.", "gives": {"roads": 5}},
     "bridge": {"name": "Bridge", "text": "Cross up to 4 water tiles in a straight line.", "gives": {"bridges": 1}},
     "tunnel": {"name": "Tunnel", "text": "Dig through up to 5 mountain tiles in a straight line.", "gives": {"tunnels": 1}},
     "motorway": {"name": "Motorway", "text": "A fast road between two road tiles 3-14 tiles apart, over anything.",

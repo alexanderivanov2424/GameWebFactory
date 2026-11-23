@@ -2,13 +2,14 @@
 
 1-6 players build roads in the same growing city. Houses and shops appear over time in colours;
 shops make demand (pins) and cars from houses of the same colour drive there along the roads to
-take it. Each player has their own stock of pieces (30 roads and 1 bridge to start): road tiles
+take it. Each player has their own stock of pieces (15 roads for the whole team, split
+between the players, and 1 bridge each to start): road tiles
 (drag to draw, 8 directions), bridges and tunnels (drawn straight across water / mountains),
 motorways (fast links between two road tiles), roundabouts and traffic lights (busier
 junctions). You can erase only what you built (refunded). Everyone may link onto anyone's road.
 Points: every trip (a car reaching a shop) is worth 10, split between the players whose tiles
 the car drove on, by tiles. The team's trips are the shared score.
-Weeks: every `weekLength` seconds the city limits grow, every player gets 20 roads, and the
+Weeks: every `weekLength` seconds the city limits grow, every player gets 5 roads, and the
 game pauses while each player picks one of the same two upgrades (time limit `pickTime`; the
 first offer if you don't pick). Building works during the pause.
 Losing: a shop with 6+ pins runs its timer; when any timer reaches `overflow` seconds, everyone

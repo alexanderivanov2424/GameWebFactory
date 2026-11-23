@@ -13,7 +13,7 @@ from gamekit import LobbyError
 
 from .city import COLOR_NAMES, City
 from .grid import Grid
-from .players import Player
+from .players import Player, start_roads
 from .roads import FEATURES, RoadNet
 from .traffic import Traffic
 from .upgrades import UPGRADES, WEEKLY, give, offers
@@ -26,6 +26,8 @@ class Match:
         self.rng = rng or random.Random()
         colors = colors or {}
         self.players = {pid: Player(pid, name, colors.get(pid, "#888888")) for pid, name in names.items()}
+        for player, roads in zip(self.players.values(), start_roads(len(self.players))):
+            player.stock["roads"] = roads
         self.settings = settings
         self.week_len = settings["weekLength"]
         self.overflow = settings["overflow"]

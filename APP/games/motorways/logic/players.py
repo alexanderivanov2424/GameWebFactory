@@ -3,12 +3,21 @@
 Every player has their own stock (roads, bridges, tunnels, motorways, roundabouts, lights) and
 gets the same weekly delivery and the same two upgrade offers as everyone else. Points come from
 cars driving on roads you built (traffic.py credits them).
+The starting roads are START_ROADS for the whole team, split as evenly as possible (start_roads();
+earlier players get the spare ones).
 """
 
 from gamekit import LobbyError
 
-START_STOCK = {"roads": 30, "bridges": 1, "tunnels": 0, "motorways": 0, "roundabouts": 0, "lights": 0}
+START_ROADS = 15      # for the whole team, split between the players
+START_STOCK = {"roads": 0, "bridges": 1, "tunnels": 0, "motorways": 0, "roundabouts": 0, "lights": 0}
 ITEMS = tuple(START_STOCK)
+
+
+def start_roads(count):
+    """Starting roads for each of count players, in join order (they add up to START_ROADS)."""
+    share, spare = divmod(START_ROADS, count)
+    return [share + (k < spare) for k in range(count)]
 
 
 class Player:
