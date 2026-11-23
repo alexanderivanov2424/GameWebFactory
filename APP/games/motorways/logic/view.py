@@ -13,7 +13,7 @@ public(match):
      "shops": {id: {"t": top-left tile, "node", "door", "c", "pins", "timer": 0-1, "parked"}},
      "cars": {id: {"x", "y", "c"}} (cars on the road; tile units, centre of tile (x, y) is x+0.5),
      "pick"?: {"offers": [{"id", "name", "text"}, ...], "left": s},
-     "rules": {"weekly", "span": {"b", "t"}}}
+     "rules": {"weekly", "span": {"b": n, "t": n | null (no limit)}}}
 Tiles are t = y * w + x.
 """
 

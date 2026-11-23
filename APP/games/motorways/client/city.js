@@ -10,7 +10,7 @@
  *   ML.city.span(a, b)     drawing from land a straight into water/mountain b:
  *                          {kind: "b"|"t", tiles: [...], land: t} or {error: "..."}
  *   ML.city.spanEnd(a, b)  stepping from a onto an existing bridge/tunnel tile b: the land tile past it
- * Rules mirrored from logic/roads.py: spans go straight, at most game.rules.span[kind] tiles.
+ * Rules mirrored from logic/roads.py: spans go straight, at most game.rules.span[kind] tiles (null: no limit).
  */
 (() => {
   const ML = (window.ML = window.ML || {});
@@ -58,7 +58,8 @@
     let [x, y] = [bx, by];
     while (city.onMap(x, y) && city.terrain(city.idx(x, y)) === ter) {
       tiles.push(city.idx(x, y));
-      if (tiles.length > game.rules.span[kind]) return { error: `Too far: a ${name} spans at most ${game.rules.span[kind]} tiles.` };
+      const max = game.rules.span[kind];
+      if (max != null && tiles.length > max) return { error: `Too far: a ${name} spans at most ${game.rules.span[kind]} tiles.` };
       x += dx; y += dy;
     }
     if (!city.onMap(x, y) || city.terrain(city.idx(x, y)) !== ".") return { error: `The ${name} has nowhere to land.` };

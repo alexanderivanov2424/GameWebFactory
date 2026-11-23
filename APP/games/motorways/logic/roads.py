@@ -5,7 +5,7 @@ Pieces (each owned by the player who built it):
   directions when you draw between them (linking two existing tiles is free). Two diagonal
   links may not cross.
 - Bridges / tunnels: drawing from land straight (not diagonally) into water / a mountain builds a
-  whole span across it (at most MAX_SPAN tiles) and the road where it lands. Costs 1 bridge /
+  whole span across it (a bridge at most MAX_SPAN tiles; a tunnel any length) and the road where it lands. Costs 1 bridge /
   tunnel (plus 1 road for each new land tile). Span tiles link only along the span.
 - Roundabouts and traffic lights: placed on a road tile (anyone's), they make that junction
   carry more traffic (traffic.py).
@@ -24,7 +24,7 @@ import heapq
 from gamekit import LobbyError
 
 ROAD, BRIDGE, TUNNEL = "r", "b", "t"
-MAX_SPAN = {BRIDGE: 4, TUNNEL: 5}
+MAX_SPAN = {BRIDGE: 4, TUNNEL: None}   # None: no limit
 ROAD_SPEED = 2.0          # tiles per second
 JUNCTION_COST = 0.4       # extra seconds a route counts for a junction without a roundabout
 FEATURES = {"roundabout": "roundabouts", "light": "lights"}   # feature -> stock item
@@ -195,7 +195,7 @@ class RoadNet:
             if t in self.roads:
                 raise LobbyError(f"There's already a {name} there.")
             tiles.append(t)
-            if len(tiles) > MAX_SPAN[kind]:
+            if MAX_SPAN[kind] is not None and len(tiles) > MAX_SPAN[kind]:
                 raise LobbyError(f"Too far: a {name} spans at most {MAX_SPAN[kind]} tiles.")
             t = g.step(t, dx, dy)
         if t is None or g.terrain[t] != ".":
