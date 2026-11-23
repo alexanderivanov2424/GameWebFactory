@@ -32,8 +32,8 @@ Upgrade file <id>.json:
     rate), auto ("rations" | "diesel" | "logs": deliveries), food_drain (x hunger), warm_loss
     (x warmth lost), stove (x logs burned, shared), dust (x blizzard snow on cleared ground,
     shared), flake (x golden snowflake rewards), wade (you can walk on snow up to this level),
-    machine_mult (x that machine's rate), carry_mult (x loads: one machine, or every hauling
-    machine without one), goods_mult (x what your goods sell for), flag (a rule change checked by id in code:
+    machine_mult (x that machine's rate), carry_mult (x loads: that machine, or with no machine
+    every snow-hauling machine), goods_mult (x what your goods sell for), flag (a rule change checked by id in code:
     Player.has(id) / Match.team_has(id)).
 Upgrades without a machine show up once a player has earned UNLOCK_SHARE of their cost.
 """

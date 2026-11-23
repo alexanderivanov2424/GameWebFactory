@@ -4,7 +4,8 @@
  *   SB.hud.refresh(state)  update every HUD box from the state
  *   SB.hud.reset()         new game (rebuild the machine rows and upgrade buttons)
  *   SB.hud.toggle(name)    open/close the side panel: "machines" | "upgrades" | "team" | null (close)
- *   SB.hud.buildHut(), follow(), anywhere()   hotbar actions (also keys H, F, R)
+ *   SB.hud.buildHut(), buildDepot(), follow(), anywhere()   hotbar actions (also keys H, Q, F, R)
+ *   SB.hud.roadTool(level)  show the road tool box with that level picked (0 hides it; input.js owns the tool)
  * Buttons are built once and updated in place (machines, supplies) or rebuilt only when their list
  * changes (upgrades), so a click never lands on a button that was just replaced.
  *   SB.fmt(n)   short number: 9.5, 950, 1.2k, 3.4M, 5.6B
@@ -27,7 +28,7 @@
   const money = (n) => "$" + fmt(n);
 
   const FEATURE_NAMES = { ".": "Snow", ",": "Cleared ground", x: "Cabin", X: "Cabin", t: "Forest", T: "Forest (logs found)",
-    h: "Buried cabin", H: "Dug-out cabin", g: "Gas station", G: "Gas station", C: "Supply cache", K: "Skier rescued" };
+    h: "Buried cabin", H: "Dug-out cabin", g: "Gas station", G: "Gas station", C: "Supply cache", K: "Skier rescued", S: "Ruins" };
   const hud = (SB.hud = {});
   let lobby = null, panel = null, machineRows = null, upgradeKey = null, upgradeButtons = [], logCount = null, miniAt = 0;
 
@@ -42,9 +43,37 @@
     $("tabTeam").classList.toggle("on", panel === "team");
   };
   hud.buildHut = () => lobby.sendGame({ action: "hut" });
+  hud.buildDepot = () => lobby.sendGame({ action: "depot" });
+  let roadButtons = null;
+  hud.roadTool = (level) => {
+    const box = $("hudRoads");
+    box.hidden = !level;
+    $("roadTool").classList.toggle("on", !!level);
+    const game = lobby && lobby.state && lobby.state.game;
+    if (!level || !game || !game.roadLevels) return;
+    if (!roadButtons) {
+      roadButtons = game.roadLevels.slice(1).map((lv, k) => el("button", { onclick: () => SB.input.setRoad(k + 1),
+        title: `Machines ×${lv.unit} speed, you ×${lv.walk}${k + 1 === 4 ? ". Never snowed over." : ""}` },
+      el("kbd", {}, String(k + 1)), `${lv.name} ${money(lv.cost)}`));
+      fill($("roadLevels"), roadButtons);
+    }
+    roadButtons.forEach((b, k) => b.classList.toggle("on", k + 1 === level));
+  };
   hud.follow = () => lobby.sendGame({ action: "rally", follow: true });
   hud.anywhere = () => lobby.sendGame({ action: "rally" });
   hud.reset = () => { machineRows = null; upgradeKey = null; logCount = null; };
+
+  function machineSub(game, d) {
+    const goods = game.defs.goods;
+    const name = (g) => (g === "snow" ? "snow" : `${goods[g].icon} ${goods[g].name}`);
+    if (d.recipe) {
+      const out = goods[d.recipe.out];
+      return `${fmt(d.recipe.per)} ${name(d.recipe.in)} → ${out.icon} ${out.name} (${money(out.value)})`;
+    }
+    if (d.kind === "sled") return `Carries ${fmt(d.carry)} goods`;
+    if (d.carry) return `Hauls ${fmt(d.carry)} snow per load`;
+    return "";
+  }
 
   function supplyQty(button, mine) {
     if (button.dataset.minutes) return Math.max(20, Math.ceil(mine.dieselUse * 60 * Number(button.dataset.minutes)));
@@ -53,7 +82,7 @@
 
   function renderMachines(game, mine, me) {
     const defs = game.defs.machines;
-    const ids = Object.keys(defs).sort((a, b) => defs[a].order - defs[b].order);
+    const ids = Object.keys(defs).filter((id) => !defs[id].unique).sort((a, b) => defs[a].order - defs[b].order);
     if (!machineRows) {
       machineRows = {};
       fill($("machines"), ids.map((id) => {
@@ -64,7 +93,8 @@
           : el("button", { onclick: () => lobby.sendGame({ action: "buy", machine: id, count: 10 }) });
         const row = el("div", { className: "sb-machine", title: `${d.text}\nAbout ${fmt(d.nominal)} snow/s each${d.diesel ? `, ${d.diesel} L diesel/s` : ""}` },
           el("span", { className: "icon" }, d.icon),
-          el("div", {}, el("b", {}, d.name), el("div", { className: "sub" }, d.text), sub), buy1, buy10);
+          el("div", {}, el("b", {}, d.name), el("div", { className: "sub" }, d.text),
+            machineSub(game, d) ? el("div", { className: "sub" }, machineSub(game, d)) : null, sub), buy1, buy10);
         machineRows[id] = { row, sub, buy1, buy10 };
         return row;
       }));
@@ -116,9 +146,36 @@
       return el("li", { title: "Click to follow (spectators)", onclick: () => { SB.view.spectate = pid; } },
         el("span", { className: "sb-dot", style: `background:${p.color}` }), el("b", {}, p.name + (pid === state.you ? " (you)" : "")),
         statusChip(p),
-        el("div", { className: "muted" }, `${money(p.cash)} · ${fmt(p.rate)} snow/s · ${units} units · cleared ${fmt(p.cleared)}`),
+        el("div", { className: "muted" }, `${money(p.cash)} · ${fmt(p.rate)} snow/s · ${units} units · cleared ${fmt(p.cleared)}` +
+          (p.goods ? ` · goods ${money(p.goods)}` : "")),
         el("div", { className: "muted" }, `🍲 ${p.food}  🌡️ ${p.warmth}`));
     }));
+  }
+
+  function hoverText(game, mine, [x, y]) {
+    const snow = SB.grid.snowAt(x, y), workable = SB.grid.workable(x, y), road = SB.grid.road(x, y);
+    const parts = [FEATURE_NAMES[SB.grid.feat(x, y)] || "Snow"];
+    const at = (list) => Object.values(list || {}).some(([lx, ly]) => lx === x && ly === y);
+    if (at(game.depots)) parts[0] = "🏪 Snow Depot: machines unload snow here";
+    if (at(game.markets)) parts[0] = "🚉 Old Rail Station: snow drop point and goods market";
+    for (const lm of Object.values(game.landmarks || {})) {
+      if (x >= lm.x && y >= lm.y && x < lm.x + lm.size && y < lm.y + lm.size) {
+        const d = game.defs.landmarks[lm.id];
+        parts[0] = `${d.icon} ${d.name}` + (lm.found ? ` (found by ${game.players[lm.found] ? game.players[lm.found].name : "someone"})` : ` · ${lm.left} of ${lm.total} lots to clear`);
+      }
+    }
+    const placed = mine && mine.units ? Object.values(mine.units).find((u) => u.f && Math.floor(u.x) === x && Math.floor(u.y) === y) : null;
+    if (placed) {
+      const d = game.defs.machines[placed.m], out = game.defs.goods[d.recipe.out];
+      parts[0] = `${d.icon} ${d.name}: input ${Math.round(placed.f[0] * 100)}% · ${placed.f[1]} ${out.icon} waiting${placed.s === "full" ? " · FULL: needs a sled" : ""}`;
+    }
+    if (road) parts.push(`${game.roadLevels[road].name} road`);
+    if (snow) parts.push(`~${fmt(snow)} snow`);
+    if (SB.input.road) {
+      const lv = game.roadLevels[SB.input.road];
+      parts.push(SB.input.canRoad(x, y) ? `click: ${lv.name} ${money(lv.cost - game.roadLevels[road].cost)}` : "can't lay road here");
+    } else if (workable) parts.push(SB.input.inReach(x, y) ? "hold to shovel" : "walk closer to shovel");
+    return parts.join(" · ");
   }
 
   hud.refresh = (state) => {
@@ -142,11 +199,8 @@
     }
 
     const aim = SB.input.aim;
-    if (aim && aim[0] >= 0 && aim[1] >= 0 && aim[0] < game.w && aim[1] < game.h) {
-      const [x, y] = aim, snow = SB.grid.snowAt(x, y), workable = SB.grid.workable(x, y);
-      $("hover").textContent = `${FEATURE_NAMES[SB.grid.feat(x, y)] || "Snow"}${snow ? ` · ~${fmt(snow)} snow` : ""}` +
-        (workable ? (SB.input.inReach(x, y) ? " · hold to shovel" : " · walk closer to shovel") : "");
-    } else $("hover").textContent = "";
+    if (aim && aim[0] >= 0 && aim[1] >= 0 && aim[0] < game.w && aim[1] < game.h) $("hover").textContent = hoverText(game, mine, aim);
+    else $("hover").textContent = "";
 
     const now = performance.now();
     if (now - miniAt > 400) { miniAt = now; SB.view.drawMinimap($("minimap")); }
@@ -167,6 +221,11 @@
     }
     $("cash").textContent = money(me.cash);
     $("rates").textContent = `Machines ${fmt(me.rate)} snow/s · Shovel ${fmt(mine.click)}/swing`;
+    const haul = [];
+    if (mine.carried) haul.push(`🛒 ${fmt(mine.carried)} snow on the way`);
+    if (mine.waiting) haul.push(`🏭 ${money(mine.waiting)} goods waiting`);
+    if (mine.cargo) haul.push(`🛷 ${money(mine.cargo)} on sleds`);
+    $("haul").textContent = haul.join(" · ");
     const notes = [];
     if (me.status === "frostbite") notes.push("🥶 Frostbite! You can't shovel. Get to the cabin or a hut.");
     if (me.status === "starving") notes.push("🍽️ Starving: weak and slow. Buy rations!");
@@ -192,6 +251,9 @@
     $("buildHut").innerHTML = "";
     $("buildHut").append(el("kbd", {}, "H"), `Hut ${money(game.hutCost)}`);
     $("buildHut").disabled = me.cash < game.hutCost;
+    $("buildDepot").innerHTML = "";
+    $("buildDepot").append(el("kbd", {}, "Q"), `Depot ${money(game.depotCost)}`);
+    $("buildDepot").disabled = me.cash < game.depotCost;
     $("follow").classList.toggle("on", me.rally === "follow");
     $("anywhere").classList.toggle("on", me.rally === undefined);
     renderMachines(game, mine, me);
@@ -204,6 +266,8 @@
     $("tabUpgrades").addEventListener("click", () => hud.toggle("upgrades"));
     $("tabTeam").addEventListener("click", () => hud.toggle("team"));
     $("buildHut").addEventListener("click", hud.buildHut);
+    $("buildDepot").addEventListener("click", hud.buildDepot);
+    $("roadTool").addEventListener("click", () => SB.input.setRoad(SB.input.road ? 0 : 1));
     $("follow").addEventListener("click", hud.follow);
     $("anywhere").addEventListener("click", hud.anywhere);
     for (const button of document.querySelectorAll(".sb-supply button")) {

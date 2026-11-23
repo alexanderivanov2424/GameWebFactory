@@ -16,21 +16,37 @@ Tests: `tests/` (`python3 -I tools/run_tests.py snowbound`).
   Upgrades are mostly behaviour flags checked by id (`Player.has`, `Match.team_has`).
 - Area-of-interest sync: hundreds of units would be too much per tick, so each player's
   `private_state` only carries the units within `view.VIEW` lots of their character.
-- A very large grid (up to 384 x 384) over `Snapshots` as two dirty-row string layers, drawn as
-  one pixel per lot on an offscreen canvas, plus per-lot details only for the visible window.
+- A very large grid (up to 384 x 384) over `Snapshots` as three dirty-row string layers (snow,
+  features, road levels), drawn as one pixel per lot on an offscreen canvas, plus per-lot details
+  only for the visible window.
+- A small factory game on top: digging machines carry their snow to drop points (`logic/hauling.py`),
+  processors turn it into goods and pull from neighbours (`logic/factory.py`), sleds sell goods at a
+  market, and everyone routes over a player-built road network (`logic/roads.py`).
+- **Incremental pathing on a big grid**: `roads.Field` keeps "cost to the nearest drop point" for
+  every road lot. Roads only get added or faster, so costs only drop: changes are relaxed with a
+  persistent heap and a per-tick budget instead of re-running Dijkstra. Trips go straight to a road
+  lot within `ACCESS`, then follow `next` pointers (or straight, if cheaper).
+- Hidden one-of-a-kind landmarks (`logic/landmarks.py`, `landmarks/*.json`) that reward whoever
+  clears their last lot with a unique machine (`"unique": true`, never in the shop), a unique
+  building or a team effect.
 
 ## Map
-- `machines/*.json`, `upgrades/*.json`: content (schema in `logic/content.py`'s docstring).
+- `machines/*.json`, `upgrades/*.json`, `goods/*.json`, `landmarks/*.json`: content (schema in
+  `logic/content.py`'s docstring). Processor recipes are in their machine file.
 - `logic/match.py`: `Match.step(dt)` order: weather -> once a second (blizzard snowfall or
   deliveries) -> golden snowflakes (caught by walking into them) -> `survival.step` ->
-  `avatars.step` (walking, held-down shoveling) -> `units.step` -> beams -> goal. Actions, huts,
+  `avatars.step` (walking, held-down shoveling) -> `roads.Network.update` (route fields) ->
+  `units.step` (hauling trips run before a machine's own step) -> beams -> goal. Actions, huts,
   placed machines, Shovel Buddy boost (`shovel()`), finds.
 - `logic/world.py`: lots, `targets`, `dig()` (workable lots) and `melt()` (any lot), roads,
   dusting, `nearest_target(..., ok=filter)`, row strings.
+- `logic/hauling.py`: trips home / back, unloading, Snow Depots. `logic/roads.py`: levels, `lay()`,
+  route fields. `logic/factory.py`: processors and sleds. `logic/uniques.py`: landmark helpers.
+  `logic/landmarks.py`: placement, rewards, team effects (`Match.effects`).
 - `logic/economy.py`: `Player`. `logic/survival.py`: weather, heat sources (cabin, huts,
   braziers), food/warmth, deliveries. `logic/view.py`: the client contract.
 - `client/`: `game.js` wiring, `grid.js` rows + walking rules, `view.js` canvas, `input.js`
-  controls + prediction, `hud.js` HUD.
+  controls + prediction + the road tool, `hud.js` HUD (road tool box, depot button).
 
 ## Pitfalls seen here
 - Lot index 0 is a real lot: never write `nearest_target(...) or fallback`.
@@ -44,4 +60,11 @@ Tests: `tests/` (`python3 -I tools/run_tests.py snowbound`).
 - `AppDom.el` assigns props with `Object.assign`: use `className`, not `class`. A CSS `display`
   rule on a class overrides the `hidden` attribute: add `[hidden] { display: none }`.
 - Machine speed/reach/collision changes on the server must be mirrored in `client/grid.js`
-  (`move` rules are sent in `state.game.move`).
+  (`move` rules are sent in `state.game.move`, including walk speed per road level).
+- Pay machine snow through `units.collect()`, never `player.earn()`: hauling machines must carry it.
+  The player's own shovel is still paid at once.
+- Route fields assume roads are never removed or downgraded and drop points never go away. If
+  that ever changes, the fields need a full rebuild (costs can only go down incrementally).
+- Landmark lots are kind `"site"`: nothing can be built on them (placed rewards take the centre lot).
+- Unique machines still count in `Player.owned` (so their rate and diesel count) but are hidden
+  from the shop and refused by `buy_machine`.

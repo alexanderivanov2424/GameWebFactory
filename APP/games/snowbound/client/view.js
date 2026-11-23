@@ -7,8 +7,8 @@
  *   SB.view.toLot(clientX, clientY) -> [x, y] lot under a screen point
  *   SB.view.zoomBy(factor), SB.view.puff(x, y, amount)   zoom; a snow puff (+amount) at world x, y
  *   SB.view.drawMinimap(canvas)   the minimap (called by hud.js)
- * Draw order: lots (SB.grid.image scaled up) -> snow bank edges, sparkles, features -> heat glow,
- * cabin, huts -> rally flag, golden snowflake -> units (placed ones glow) -> jet beams -> characters -> aim box -> particles ->
+ * Draw order: lots (SB.grid.image scaled up) -> snow bank edges, sparkles, features, road markings ->
+ * landmarks (ruins) -> heat glow, cabin, huts, depots, rail stations -> rally flag, golden snowflake -> units (placed ones glow; load bars, processor gauges) -> jet beams -> characters -> aim box -> particles ->
  * weather -> off-screen arrows (snowflake, cabin) -> frost vignette when you're cold.
  */
 (() => {
@@ -94,11 +94,39 @@
             ctx.globalAlpha = 1;
           }
         }
+        const road = g.road(x, y);
+        if (road >= 3 && !level && z > 18) {
+          ctx.fillStyle = road === 4 ? "rgba(255,140,60,0.55)" : "rgba(255,255,255,0.45)";
+          if ((x + y) % 2 === 0) ctx.fillRect(px + z * 0.4, py + z * 0.46, z * 0.2, z * 0.08);
+        }
         const f = g.feat(x, y);
         if (FEATURE_EMOJI[f]) {
           emoji(FEATURE_EMOJI[f], px + z / 2, py + z / 2, z * (f === "t" ? 0.8 : 0.9));
           if (f === "t" || f === "h" || f === "g") { ctx.fillStyle = "rgba(245,249,255,0.45)"; ctx.fillRect(px, py + z * 0.55, z, z * 0.45); }
         }
+      }
+    }
+  }
+
+  function drawLandmarks(game) {
+    const z = Z(), defs = game.defs.landmarks;
+    for (const lm of Object.values(game.landmarks || {})) {
+      const d = defs[lm.id];
+      if (!d) continue;
+      const px = sx(lm.x), py = sy(lm.y), size = lm.size * z;
+      ctx.lineWidth = Math.max(2, z * 0.06);
+      ctx.strokeStyle = lm.found ? "rgba(255,215,0,0.9)" : "rgba(190,160,255,0.85)";
+      ctx.setLineDash(lm.found ? [] : [z * 0.25, z * 0.15]);
+      ctx.strokeRect(px + 1, py + 1, size - 2, size - 2);
+      ctx.setLineDash([]);
+      ctx.globalAlpha = lm.found ? 1 : 0.55;
+      emoji(d.icon, px + size / 2, py + size / 2, z * Math.min(1.8, lm.size * 0.7));
+      ctx.globalAlpha = 1;
+      if (!lm.found) {
+        ctx.font = `bold ${Math.round(Math.max(10 * dpr(), z * 0.3))}px system-ui, sans-serif`;
+        ctx.lineWidth = 3; ctx.strokeStyle = "rgba(0,0,0,0.6)"; ctx.fillStyle = "#fff";
+        const label = `${d.name} · ${lm.left} left`;
+        ctx.strokeText(label, px + size / 2, py - z * 0.3); ctx.fillText(label, px + size / 2, py - z * 0.3);
       }
     }
   }
@@ -117,6 +145,8 @@
     }
     emoji(game.stove.lit ? "🏠" : "🏚️", sx(cx + 0.5), sy(cy + 0.4), z * 2.6);
     for (const [hx, hy] of Object.values(game.huts)) emoji("🛖", sx(hx + 0.5), sy(hy + 0.5), z * 1.1);
+    for (const [dx, dy] of Object.values(game.depots || {})) emoji("🏪", sx(dx + 0.5), sy(dy + 0.5), z * 1.1);
+    for (const [mx, my] of Object.values(game.markets || {})) emoji("🚉", sx(mx + 0.5), sy(my + 0.5), z * 1.6);
     if (game.stove.lit) {
       for (let k = 0; k < 3; k++) {
         const a = ((now / 1600 + k / 3) % 1);
@@ -138,13 +168,30 @@
       ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
       if (Math.random() < 0.15) particles.push({ kind: "spark", x: u.x + (Math.random() - 0.5) * 0.4, y: u.y, vx: (Math.random() - 0.5) * 0.4, vy: -1.5, t: now });
     }
-    if (d.kind === "still" && u.s === "working" && Math.random() < 0.1) {
+    if ((d.kind === "still" || d.kind === "processor" || d.kind === "spring") && u.s === "working" && Math.random() < 0.1) {
       particles.push({ kind: "puff", x: u.x, y: u.y - 0.4, vx: 0, vy: -0.8, t: now });
     }
     ctx.fillStyle = owner.color; ctx.globalAlpha = 0.6;
     ctx.fillRect(x - z * 0.45, y + z * 0.3, z * 0.9, z * 0.12);
     ctx.globalAlpha = 1;
     emoji(u.s === "unlit" ? "🪵" : d.icon, x, y, z * 0.9);
+    if (u.f) {
+      bar(x, y - z * 0.6, u.f[0], "#9fd8ff");
+      if (u.f[1]) {
+        ctx.font = `bold ${Math.round(Math.max(9 * dpr(), z * 0.24))}px system-ui, sans-serif`;
+        ctx.lineWidth = 3; ctx.strokeStyle = "rgba(0,0,0,0.6)"; ctx.fillStyle = "#fff";
+        const label = `${SB.fmt(u.f[1])} ${lobby.state.game.defs.goods[d.recipe.out].icon}`;
+        ctx.strokeText(label, x, y + z * 0.62); ctx.fillText(label, x, y + z * 0.62);
+      }
+      if (u.s === "full") emoji("⏸️", x + z * 0.4, y - z * 0.4, z * 0.35);
+    }
+    if (u.s === "stalled") emoji("⛽", x + z * 0.4, y - z * 0.4, z * 0.35);
+  }
+
+  function bar(x, y, fill, color) {
+    const z = Z(), w = z * 0.7, h = Math.max(3, z * 0.09);
+    ctx.fillStyle = "rgba(0,0,0,0.45)"; ctx.fillRect(x - w / 2, y, w, h);
+    ctx.fillStyle = color; ctx.fillRect(x - w / 2, y, w * Math.min(1, fill), h);
   }
 
   function drawBeams(game) {
@@ -177,6 +224,10 @@
       if (u.s === "stalled") emoji("⛽", x + z * 0.4, y - z * 0.5, z * 0.4);
       if (u.s === "charging") emoji("⚡", x + z * 0.4, y - z * 0.5, z * 0.35);
       if (u.s === "idle") emoji("💤", x + z * 0.4, y - z * 0.5, z * 0.35);
+      if (u.l) {
+        bar(x, y - z * 0.62 * big, u.l, d.kind === "sled" ? "#ffd54f" : "#ffffff");
+        if (d.kind === "sled") emoji("📦", x - z * 0.4, y - z * 0.45, z * 0.35);
+      }
       if (u.s === "working" && Math.random() < 0.08) {
         particles.push({ kind: "puff", x: u.x + (Math.random() - 0.5), y: u.y + (Math.random() - 0.5), vx: (Math.random() - 0.5), vy: -Math.random(), t: now });
       }
@@ -210,6 +261,14 @@
     const aim = SB.input.aim;
     if (!aim || !SB.input.me) return;
     const [x, y] = aim, z = Z();
+    if (SB.input.road) {
+      const ok = SB.input.canRoad(x, y);
+      ctx.fillStyle = ok ? "rgba(120,220,120,0.35)" : "rgba(255,90,90,0.3)";
+      ctx.fillRect(sx(x), sy(y), z, z);
+      ctx.lineWidth = Math.max(2, z * 0.05); ctx.strokeStyle = ok ? "#9cf09c" : "rgba(255,90,90,0.8)";
+      ctx.strokeRect(sx(x) + 1, sy(y) + 1, z - 2, z - 2);
+      return;
+    }
     if (!SB.grid.workable(x, y)) return;
     const ok = SB.input.inReach(x, y);
     ctx.lineWidth = Math.max(2, z * 0.06);
@@ -312,6 +371,7 @@
     ctx.fillStyle = "#1b232c"; ctx.fillRect(0, 0, canvas.width, canvas.height);
     ctx.textAlign = "center"; ctx.textBaseline = "middle";
     drawLots(game, now);
+    drawLandmarks(game);
     drawHeat(game, now);
     const mine = game.players[state.you];
     if (mine && Array.isArray(mine.rally)) emoji("🚩", sx(mine.rally[0] + 0.5), sy(mine.rally[1] + 0.3), Z() * 0.9);
@@ -341,6 +401,9 @@
     const dot = (x, y, r, color) => { c.fillStyle = color; c.beginPath(); c.arc(x * k, y * k, r, 0, Math.PI * 2); c.fill(); };
     dot(game.cabin[0] + 0.5, game.cabin[1] + 0.5, 4, "#ff9a3c");
     for (const [hx, hy] of Object.values(game.huts)) dot(hx + 0.5, hy + 0.5, 2.5, "#ffb070");
+    for (const [dx, dy] of Object.values(game.depots || {})) dot(dx + 0.5, dy + 0.5, 2.5, "#7fd3ff");
+    for (const [mx, my] of Object.values(game.markets || {})) dot(mx + 0.5, my + 0.5, 3.5, "#ffd54f");
+    for (const lm of Object.values(game.landmarks || {})) dot(lm.x + lm.size / 2, lm.y + lm.size / 2, 3, lm.found ? "#ffd700" : "#c0a0ff");
     if (game.flake) dot(game.flake.x + 0.5, game.flake.y + 0.5, 4, "#ffd700");
     const me = game.players[state.you];
     if (me && Array.isArray(me.rally)) dot(me.rally[0] + 0.5, me.rally[1] + 0.5, 3, "#ff3b3b");

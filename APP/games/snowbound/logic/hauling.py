@@ -195,7 +195,7 @@ def build_depot(match, pid):
     if len(match.depots) >= MAX_DEPOTS:
         raise LobbyError(f"The valley has the most depots it can take ({MAX_DEPOTS}).")
     if i is None or not w.reached[i] or w.kind[i] in ("cabin", "site"):
-        raise LobbyError("Build depots on cleared ground.")
+        raise LobbyError("Build depots on cleared ground (not the cabin or ruins).")
     if match.occupied(i):
         raise LobbyError("Something is already built on this spot.")
     for s in match.roads.drop.sources:

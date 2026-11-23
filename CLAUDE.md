@@ -268,7 +268,10 @@ Summary:
    `games/snowbound/` (`RealtimeGame`, `logic/` modules): a co-op idle game on a huge grid (up to 384x384
    lots as dirty row strings): you walk a character (client-side prediction mirroring the server's
    collision), full-screen canvas with a HUD, every machine its own unit with its own behaviour
-   (`logic/machines.py`), behaviour-flag upgrades, per-player area-of-interest unit sync, survival near heat.
+   (`logic/machines.py`), behaviour-flag upgrades, per-player area-of-interest unit sync, survival near heat,
+   machines hauling snow to drop points over a player-built road network (levelled roads, incremental route
+   fields), processors chained side by side and sleds selling goods, hidden one-of-a-kind landmarks with
+   unique rewards.
    `games/motorways/` ("Metro Lanes", `RealtimeGame`, `logic/` modules): co-op Mini Motorways in one shared
    city: players draw road tiles they own (8-direction links, bridges/tunnels, motorways, roundabouts,
    lights) from their own stock, cars route over the graph with lanes and junction capacity, each trip's

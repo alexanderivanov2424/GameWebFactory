@@ -58,6 +58,10 @@
     #hudBar button { font-size: 13px; padding: 6px 10px; }
     .hud kbd { background: #33414f; border-radius: 3px; padding: 0 4px; font-size: 11px; margin-right: 4px; color: #fff; }
     #hudBar button.on { outline: 2px solid #ffd54f; }
+    #hudRoads { bottom: 104px; left: 50%; transform: translateX(-50%); text-align: center; }
+    #roadLevels { display: flex; gap: 6px; margin-top: 4px; }
+    #roadLevels button.on { outline: 2px solid #ffd54f; }
+    #haul { margin-top: 3px; font-size: 12px; color: #c9e3ff; }
     #hover { position: fixed; bottom: 70px; left: 50%; transform: translateX(-50%); z-index: 10; font-size: 12px; color: #fff;
              text-shadow: 0 1px 2px #000; pointer-events: none; white-space: nowrap; }
     #hudPanel { top: 330px; right: 16px; bottom: 80px; width: 380px; overflow-y: auto; }
@@ -106,8 +110,11 @@
         <h3>How to play</h3>
         <ul class="sb-rules">
           <li>A huge valley is snowed in and you're standing at the cabin in the middle. Walk with <b>WASD</b> or the arrow keys.</li>
-          <li>Deep snow is a wall. Stand next to it and <b>hold the mouse</b> (or Space) on it to shovel, or click fast. Every unit of snow pays you $1.</li>
+          <li>Deep snow is a wall. Stand next to it and <b>hold the mouse</b> (or Space) on it to shovel, or click fast. Every unit of snow you shovel pays you $1.</li>
           <li>Buy helpers and machines (<b>B</b>): each one works its own way. Kids shovel, dogs tunnel roads, sweepers clean up after blizzards, braziers melt a ring and keep you warm, dozers shove drifts outward, augers drill the deepest snow, stills turn snow into diesel, graders widen roads, and jet blowers fire beams. <b>Shift+click</b> sets where they work, <b>F</b> makes them follow you.</li>
+          <li>Digging machines carry their snow back and are paid when they unload it at the cabin or a <b>Snow Depot</b> (<b>Q</b>, built where you stand, shared). Lay and upgrade <b>roads</b> (<b>G</b>, then click or drag): machines follow the road network and move much faster on it.</li>
+          <li>Factories: place a Brick Press or Ice Press and your machines drop snow there instead; it turns it into goods worth more. Place an Igloo Workshop or Ice Carver right next to them to refine further. Cargo Sleds and Freight Trucks carry goods to the cabin to sell.</li>
+          <li>Ruins are hidden in the drifts. Clear every lot of one to claim it: a unique helper, a unique building or a perk for the whole team.</li>
           <li>Upgrades (<b>U</b>) make everything faster. Snow gets deeper the further you go.</li>
           <li>Stay warm: you only warm up near the cabin's stove or a warming hut (<b>H</b>, built where you stand). Both burn logs from the shared woodpile.</li>
           <li>Keep rations (you eat automatically) and diesel for your machines. Blizzards come with a warning: no deliveries, logs burn fast, snow piles back up.</li>
@@ -128,6 +135,7 @@
       <div id="hudWallet" class="hud">
         <div class="sb-cash" id="cash">$0</div>
         <div id="rates" class="muted"></div>
+        <div id="haul"></div>
         <div id="status"></div>
       </div>
 
@@ -159,9 +167,16 @@
         <button id="tabMachines"><kbd>B</kbd>Machines</button>
         <button id="tabUpgrades"><kbd>U</kbd>Upgrades</button>
         <button id="buildHut"><kbd>H</kbd>Hut</button>
+        <button id="buildDepot"><kbd>Q</kbd>Depot</button>
+        <button id="roadTool"><kbd>G</kbd>Roads</button>
         <button id="follow"><kbd>F</kbd>Follow me</button>
         <button id="anywhere"><kbd>R</kbd>Work anywhere</button>
         <button id="tabTeam"><kbd>T</kbd>Team</button>
+      </div>
+
+      <div id="hudRoads" class="hud" hidden>
+        <div><b>Road tool</b> <span class="muted">· click or drag on cleared ground · <kbd>1</kbd>-<kbd>4</kbd> level · <kbd>Esc</kbd> done</span></div>
+        <div id="roadLevels"></div>
       </div>
 
       <div id="hudPanel" class="hud" hidden>
