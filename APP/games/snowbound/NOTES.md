@@ -20,8 +20,12 @@ Tests: `tests/` (`python3 -I tools/run_tests.py snowbound`).
   features, road levels), drawn as one pixel per lot on an offscreen canvas, plus per-lot details
   only for the visible window.
 - A small factory game on top: digging machines carry their snow to drop points (`logic/hauling.py`),
-  processors turn it into goods and pull from neighbours (`logic/factory.py`), sleds sell goods at a
-  market, and everyone routes over a player-built road network (`logic/roads.py`).
+  processors turn it into goods and pull from neighbours (`logic/factory.py`), conveyor belts carry
+  goods to a market or the next processor (`logic/conveyors.py`), and machines route over a
+  player-built road network (`logic/roads.py`).
+- Conveyors as runs of goods per tile ([[good, n], ...], CAP per tile) moved by count each tick,
+  downstream tiles first (order rebuilt only when belts change), so a full belt keeps its full
+  throughput; the client animates chevrons and shows the front good.
 - **Incremental pathing on a big grid**: `roads.Field` keeps "cost to the nearest drop point" for
   every road lot. Roads only get added or faster, so costs only drop: changes are relaxed with a
   persistent heap and a per-tick budget instead of re-running Dijkstra. Trips go straight to a road
@@ -41,7 +45,7 @@ Tests: `tests/` (`python3 -I tools/run_tests.py snowbound`).
 - `logic/world.py`: lots, `targets`, `dig()` (workable lots) and `melt()` (any lot), roads,
   dusting, `nearest_target(..., ok=filter)`, row strings.
 - `logic/hauling.py`: trips home / back, unloading, Snow Depots. `logic/roads.py`: levels, `lay()`,
-  route fields. `logic/factory.py`: processors and sleds. `logic/uniques.py`: landmark helpers.
+  route fields. `logic/factory.py`: processors. `logic/conveyors.py`: belts. `logic/uniques.py`: landmark helpers.
   `logic/landmarks.py`: placement, rewards, team effects (`Match.effects`). `logic/demolish.py`:
   tearing things down for 25% back.
 - `logic/economy.py`: `Player`. `logic/survival.py`: weather, heat sources (cabin, huts,
@@ -68,7 +72,9 @@ Tests: `tests/` (`python3 -I tools/run_tests.py snowbound`).
   team values (diesel use, deliveries): do it once (`Match.diesel_use()`). `unit.pid` is only the
   buyer (log credit, colour); units outlive their buyer, so machine code gets the buyer's Player or
   any player. One rally point (`Match.rally_spot`); Shovel Buddies follow `units.buddy_leaders()`.
-  Processors and sleds serve everyone (no owner checks).
+  Processors and conveyors serve everyone (no owner checks).
+- Drags with the build tools (`client/input.js`) step through 4-connected lots: roads and belts
+  only connect through edges, never corners.
 - Pay machine snow through `units.collect()`, never `player.earn()`: hauling machines must carry it.
   The player's own shovel is still paid at once.
 - Route fields only relax incrementally when costs go down (roads laid, drop points added). Anything

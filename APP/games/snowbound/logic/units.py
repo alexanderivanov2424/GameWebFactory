@@ -5,8 +5,8 @@ machines.py (STEPS[kind]).
 Unit fields: id, pid, mid, x, y (world coordinates, centre of a lot = x + 0.5), target (lot or
 None), state ("idle" | "moving" | "working" | "hauling" | "full" | "stalled" | "unlit" | "charging"
 for the client), home (lot of a placed machine), per-kind scratch: dir, lot, cd, acc, and
-hauling (hauling.py / factory.py): load (snow carried), cargo {good: n} (sleds), trip (None |
-"home" | "back" | "fetch"), dest, path, back; processors: inbox, outbox.
+hauling (hauling.py): load (snow carried), trip (None | "home" | "back"), dest, path, back;
+processors (factory.py): inbox, outbox.
 Moving: straight lines at the machine's speed, WADE_SLOW through lots a person couldn't walk
 on (units never get stuck; params.fly ignores that), x the road level's speed on roads
 (lot_mult, roads.LEVELS).
@@ -53,7 +53,6 @@ class Unit:
         self.cd = 0.0
         self.acc = 0.0
         self.load = 0.0
-        self.cargo = {}
         self.trip = None
         self.dest = None
         self.path = []
@@ -144,10 +143,6 @@ class Ctx:
         self.rally = rally_point(match)
         self.leaders = buddy_leaders(match)
         self.placed = {u.home: u for u in match.units.values() if u.home is not None}
-        self.fetching = {}
-        for u in match.units.values():
-            if u.trip == "fetch":
-                self.fetching[u.dest[1]] = self.fetching.get(u.dest[1], 0) + 1
 
     def release(self, unit):
         if unit.target is not None and self.claimed.get(unit.target) == unit.id:
@@ -235,7 +230,7 @@ def step(match, dt):
         if m["diesel"] and player.diesel <= 0:
             unit.state = "stalled"
             continue
-        if m["carry"] and m["kind"] != "sled" and haul(ctx, unit, player):
+        if m["carry"] and haul(ctx, unit, player):
             continue
         rate = m["rate"] * player.machine_mult(unit.mid) * player.work_mult(blizzard)
         STEPS[m["kind"]](ctx, unit, player, rate)
@@ -243,7 +238,7 @@ def step(match, dt):
 
 def visible(match, centres, radius):
     """Units within radius (lots, square) of any of the centres, for the client.
-    "l": how full a hauler's load or a sled's cargo is (0-1, only when carrying);
+    "l": how full a hauler's load is (0-1, only when carrying);
     "f": [input fill 0-1, goods waiting] for processors."""
     from .hauling import capacity
     out = {}
@@ -254,9 +249,8 @@ def visible(match, centres, radius):
         if any(abs(u.x - cx) <= radius and abs(u.y - cy) <= radius for cx, cy in centres):
             entry = {"x": round(u.x, 2), "y": round(u.y, 2), "m": u.mid, "p": u.pid, "s": u.state}
             m = MACHINES[u.mid]
-            carried = sum(u.cargo.values()) if m["kind"] == "sled" else u.load
-            if carried > 0:
-                entry["l"] = round(min(1.0, carried / max(1e-9, capacity(p, u.mid))), 2)
+            if u.load > 0:
+                entry["l"] = round(min(1.0, u.load / max(1e-9, capacity(p, u.mid))), 2)
             if m["kind"] == "processor":
                 entry["f"] = [round(u.inbox / max(1e-9, m["params"].get("buffer", 100)), 2), int(u.outbox)]
             out[u.id] = entry

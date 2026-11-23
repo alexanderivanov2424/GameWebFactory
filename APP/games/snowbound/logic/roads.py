@@ -6,11 +6,10 @@ mirrors it), and Heated roads never get snowed over in blizzards (survival.dust)
 Road Graders and Jet Blower beams leave Track; players lay roads at any level on reached lots
 (not the cabin) and upgrade them, paying the difference between the level costs (lay()).
 
-Route fields (Field): for every road lot connected to a source through road lots, the travel cost
+Route field (Field): for every road lot connected to a source through road lots, the travel cost
 to the nearest source (in lots at a machine's off-road speed: an edge costs the mean of
-1 / unit-speed of its two lots) and the next lot toward it. Network keeps two:
-    drop:   sources = the cabin's lots, Snow Depots and Old Rail Stations (snow drop points)
-    market: sources = the cabin's lots and Old Rail Stations (where goods sell)
+1 / unit-speed of its two lots) and the next lot toward it. Network keeps one, drop: sources =
+the cabin's lots, Snow Depots and Old Rail Stations (snow drop points).
 Laying roads and adding sources only make costs go down, so those changes are relaxed
 incrementally (a lazy Dijkstra kept in a heap) with at most BUDGET lots settled per field per tick
 (Network.update, called every tick). Demolishing a road or a depot can make costs go up, so it
@@ -146,30 +145,23 @@ class Field:
 
 
 class Network:
-    """The two route fields (drop points, markets) and their upkeep."""
+    """The route field to the drop points and its upkeep."""
 
     def __init__(self, world):
         self.world = world
         self.drops = [i for i in range(world.w * world.h) if world.kind[i] == "cabin"]
-        self.markets = list(self.drops)
         self.stale = False
         self.cooldown = 0
         self._build()
 
     def _build(self):
         self.drop = Field(self.world)
-        self.market = Field(self.world)
         for i in self.drops:
             self.drop.add_source(i)
-        for i in self.markets:
-            self.market.add_source(i)
 
-    def add_drop(self, i, market=False):
+    def add_drop(self, i):
         self.drops.append(i)
         self.drop.add_source(i)
-        if market:
-            self.markets.append(i)
-            self.market.add_source(i)
 
     def remove_drop(self, i):
         if i in self.drops:
@@ -186,10 +178,8 @@ class Network:
         if world.road_changed:
             for i in world.road_changed:
                 self.drop.touch(i)
-                self.market.touch(i)
             world.road_changed = []
         self.drop.run()
-        self.market.run()
 
 
 def nearest_road(field, x, y, radius):

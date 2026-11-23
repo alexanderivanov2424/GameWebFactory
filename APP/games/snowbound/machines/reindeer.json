@@ -1,14 +1,14 @@
 {
   "order": 104,
-  "name": "Reindeer Team",
+  "name": "Reindeer Plough",
   "icon": "🦌",
-  "kind": "sled",
+  "kind": "worker",
   "cost": 1,
-  "rate": 1,
+  "rate": 150,
   "speed": 9,
-  "reach": 0,
+  "reach": 1,
   "diesel": 0,
-  "carry": 800,
+  "carry": 6000,
   "unique": true,
-  "text": "A lightning-fast Cargo Sled: hauls 800 goods at a time from your processors to the cabin."
+  "text": "A team of reindeer with a snow plough: digs near the rally point and gallops its loads home."
 }

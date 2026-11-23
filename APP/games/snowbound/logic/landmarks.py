@@ -13,8 +13,8 @@ When the last of its lots is reached (Match.found(pid, "site", i)), the team get
     placed: a unique placed machine (Ice Factory, Snow Cone Stand, Hot Spring) is built on the
             site's centre lot;
     team:   an effect for everyone (EFFECTS), stored in Match.effects:
-            market       an Old Rail Station: a drop point for snow and a market for goods on the
-                         site's centre lot (roads.Network sources);
+            market       an Old Rail Station: a drop point for snow (roads.Network sources) and a
+                         market where conveyors sell goods, on the site's centre lot;
             forecast     blizzard warnings come FORECAST_WARNING s ahead and blizzards last
                          FORECAST_SHORTER as long (survival.Weather);
             observatory  every landmark shows on the map, golden snowflakes come twice as often.
@@ -96,7 +96,7 @@ def found(match, pid, i):
         match.effects.add(reward["effect"])
         if reward["effect"] == "market":
             match.markets.append(middle)
-            match.roads.add_drop(middle, market=True)
+            match.roads.add_drop(middle)
         elif reward["effect"] == "forecast":
             match.weather.forecast()
     else:

@@ -4,9 +4,10 @@ Match(names, settings, colors, rng). Players are public ids ("p1"); no lobby cod
 step(dt) advances everything (called TICK_RATE times a second by server.py):
 weather -> once a second (blizzard snowfall or deliveries) -> golden snowflakes -> stove and
 needs (survival.py) -> characters walk and shovel (avatars.py) -> route fields (roads.py) ->
-units (units.py, hauling.py, factory.py) -> swing budgets -> goal check.
+units (units.py, hauling.py, factory.py) -> conveyors (conveyors.py) -> swing budgets -> goal check.
 Player actions raise LobbyError when refused: dig (one swing), buy, upgrade, supply, rally,
-build_hut, build_depot (hauling.py), lay_road (roads.py), demolish (demolish.py); set_input
+build_hut, build_depot (hauling.py), lay_road (roads.py), lay_belt (conveyors.py), demolish
+(demolish.py); set_input
 stores held controls.
 Everything bought belongs to the team (economy.Stores): machines, upgrades, cash, diesel,
 rations. Units keep the id of the player who bought them (pid) only for credit in the log and
@@ -24,7 +25,7 @@ import random
 
 from gamekit import LobbyError
 
-from . import avatars, demolish, hauling, landmarks, roads, survival, units
+from . import avatars, conveyors, demolish, hauling, landmarks, roads, survival, units
 from .content import MACHINES, UPGRADES
 from .economy import CLICKS_PER_SECOND, MAX_OWNED, PRICES, Player, Stores
 from .world import World
@@ -58,6 +59,8 @@ class Match:
         self.roads = roads.Network(w)
         self.depots = []            # Snow Depot lots
         self.markets = []           # Old Rail Station lots
+        self.belts = {}             # lot -> conveyors.Belt
+        self.belt_order = None      # belt lots downstream first (None: rebuild)
         self.effects = set()        # team effects from landmarks
         self.players = {}
         self.stores = Stores()      # the team's shared cash, diesel and rations
@@ -133,9 +136,10 @@ class Match:
         return next(iter(self.players.values())).diesel_use() if self.players else 0.0
 
     def occupied(self, i):
-        """Is something built on lot i (a placed machine, depot, rail station or hut)?"""
+        """Is something built on lot i (a placed machine, depot, rail station, hut or conveyor)?"""
         x, y = self.world.xy(i)
-        return units.placed_at(self, i) or i in self.depots or i in self.markets or (x, y) in self.huts
+        return (units.placed_at(self, i) or i in self.depots or i in self.markets or (x, y) in self.huts
+                or i in self.belts)
 
     # --- time ------------------------------------------------------------------------
 
@@ -162,6 +166,7 @@ class Match:
         avatars.step(self, dt)
         self.roads.update()
         units.step(self, dt)
+        conveyors.step(self, dt)
         for key in [k for k, b in self.beams.items() if b["left"] <= dt]:
             del self.beams[key]
         for b in self.beams.values():
@@ -357,8 +362,11 @@ class Match:
     def lay_road(self, pid, lots, level):
         return roads.lay(self, pid, lots, level)
 
-    def demolish(self, pid, lots, roads_only=False):
-        return demolish.demolish(self, pid, lots, roads_only)
+    def lay_belt(self, pid, lots):
+        return conveyors.lay(self, pid, lots)
+
+    def demolish(self, pid, lots, lines_only=False):
+        return demolish.demolish(self, pid, lots, lines_only)
 
     def remove(self, pid):
         p = self.players.pop(pid, None)

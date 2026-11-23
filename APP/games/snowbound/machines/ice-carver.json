@@ -9,7 +9,7 @@
   "reach": 0,
   "diesel": 0,
   "placed": true,
-  "text": "Placed next to an Ice Press: pulls its blocks and carves 5 into an Ice Sculpture ($750).",
+  "text": "Placed next to an Ice Press (or at the end of a conveyor of blocks): carves 5 blocks into an Ice Sculpture ($750).",
   "recipe": {
     "in": "ice",
     "per": 5,

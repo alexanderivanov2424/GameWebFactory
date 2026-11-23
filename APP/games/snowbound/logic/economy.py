@@ -11,7 +11,7 @@ unloaded at a drop point for hauling machines (hauling.py), and processed snow p
 sell (factory.py).
 
 Player fields: name, color, stores (the team's Stores), cleared (snow this player and their
-machines ever cleared), goods_sold ($ this player's sleds made from goods),
+machines ever cleared), goods_sold ($ from goods: conveyors credit any player, so team-wide in practice),
 food 0-100,
 warmth 0-100, frostbite / starving (bool), frenzy (seconds left of x FRENZY), clicks (swing
 budget, refilled CLICKS_PER_SECOND per second).
@@ -117,8 +117,7 @@ class Player:
         mult = 1.0
         for uid in self.upgrades:
             u = UPGRADES[uid]
-            if u["kind"] == "carry_mult" and u["machine"] in (None, mid) and (
-                    u["machine"] or MACHINES[mid]["kind"] != "sled"):
+            if u["kind"] == "carry_mult" and u["machine"] in (None, mid):
                 mult *= u["value"]
         return mult
 

@@ -9,7 +9,7 @@
   "reach": 0,
   "diesel": 3,
   "placed": true,
-  "text": "Placed where you stand. Squeezes 25 snow into an Ice Block ($50). Burns diesel.",
+  "text": "Placed where you stand. Squeezes 25 snow into an Ice Block ($50). Burns diesel. Put a conveyor beside it to carry the blocks away.",
   "recipe": {
     "in": "snow",
     "per": 25,

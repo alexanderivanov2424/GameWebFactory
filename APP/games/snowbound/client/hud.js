@@ -6,7 +6,7 @@
  *   SB.hud.toggle(name)    open/close the side panel: "machines" | "upgrades" | "team" | null (close)
  *   SB.hud.buildHut(), buildDepot(), follow(), anywhere()   hotbar actions (also keys H, Q, F, R)
  *   SB.hud.roadTool(level)  show the road tool box with that level picked (0 hides it; input.js owns the tool)
- *   SB.hud.demolishTool(on) light the Demolish button
+ *   SB.hud.demolishTool(on) light the Demolish button; SB.hud.beltTool(on) the Conveyors button and its hint box
  * Buttons are built once and updated in place (machines, supplies) or rebuilt only when their list
  * changes (upgrades), so a click never lands on a button that was just replaced.
  *   SB.fmt(n)   short number: 9.5, 950, 1.2k, 3.4M, 5.6B
@@ -46,6 +46,12 @@
   hud.buildHut = () => lobby.sendGame({ action: "hut" });
   hud.buildDepot = () => lobby.sendGame({ action: "depot" });
   hud.demolishTool = (on) => $("demolishTool").classList.toggle("on", on);
+  hud.beltTool = (on) => {
+    $("beltTool").classList.toggle("on", on);
+    $("hudBelts").hidden = !on;
+    const game = lobby && lobby.state && lobby.state.game;
+    if (on && game) $("beltCost").textContent = money(game.beltCost);
+  };
   let roadButtons = null;
   hud.roadTool = (level) => {
     const box = $("hudRoads");
@@ -72,7 +78,6 @@
       const out = goods[d.recipe.out];
       return `${fmt(d.recipe.per)} ${name(d.recipe.in)} → ${out.icon} ${out.name} (${money(out.value)})`;
     }
-    if (d.kind === "sled") return `Carries ${fmt(d.carry)} goods`;
     if (d.carry) return `Hauls ${fmt(d.carry)} snow per load`;
     return "";
   }
@@ -167,11 +172,15 @@
     const placed = mine && mine.units ? Object.values(mine.units).find((u) => u.f && Math.floor(u.x) === x && Math.floor(u.y) === y) : null;
     if (placed) {
       const d = game.defs.machines[placed.m], out = game.defs.goods[d.recipe.out];
-      parts[0] = `${d.icon} ${d.name}: input ${Math.round(placed.f[0] * 100)}% · ${placed.f[1]} ${out.icon} waiting${placed.s === "full" ? " · FULL: needs a sled" : ""}`;
+      parts[0] = `${d.icon} ${d.name}: input ${Math.round(placed.f[0] * 100)}% · ${placed.f[1]} ${out.icon} waiting${placed.s === "full" ? " · FULL: put a conveyor beside it" : ""}`;
     }
+    const belt = SB.input.beltAt(x, y);
+    if (belt) parts.push(`Conveyor ${"→↓←↑"[belt[0]]}` + (belt[2] ? ` · ${belt[2]} ${game.defs.goods[belt[1]].icon}` : " · empty"));
     if (road) parts.push(`${game.roadLevels[road].name} road`);
     if (snow) parts.push(`~${fmt(snow)} snow`);
-    if (SB.input.demolish) {
+    if (SB.input.belt) {
+      parts.push(belt ? "click: turn it" : SB.input.canBelt(x, y) ? `click or drag: conveyor ${money(game.beltCost)}` : "can't lay a conveyor here");
+    } else if (SB.input.demolish) {
       parts.push(demolishText(game, mine, x, y, at, placed || placedAt(mine, x, y), road));
     } else if (SB.input.road) {
       const lv = game.roadLevels[SB.input.road];
@@ -196,6 +205,7 @@
     }
     if (at(game.depots)) return `click: tear down depot (+${money(game.refunds.depot)})`;
     if (at(game.huts)) return `click: tear down hut (+${money(game.refunds.hut)})`;
+    if (SB.input.beltAt(x, y)) return `click or drag: remove conveyor (+${money(game.refunds.belt)}, its goods are lost)`;
     if (road) return `click or drag: remove road (+up to ${money(share * game.roadLevels[road].cost)})`;
     return "nothing to tear down";
   }
@@ -249,7 +259,7 @@
     const haul = [];
     if (mine.carried) haul.push(`🛒 ${fmt(mine.carried)} snow on the way`);
     if (mine.waiting) haul.push(`🏭 ${money(mine.waiting)} goods waiting`);
-    if (mine.cargo) haul.push(`🛷 ${money(mine.cargo)} on sleds`);
+    if (mine.onBelts) haul.push(`➡️ ${money(mine.onBelts)} on conveyors`);
     $("haul").textContent = haul.join(" · ");
     const notes = [];
     if (me.status === "frostbite") notes.push("🥶 Frostbite! You can't shovel. Get to the cabin or a hut.");
@@ -294,6 +304,7 @@
     $("buildDepot").addEventListener("click", hud.buildDepot);
     $("roadTool").addEventListener("click", () => SB.input.setRoad(SB.input.road ? 0 : 1));
     $("demolishTool").addEventListener("click", () => SB.input.setDemolish(!SB.input.demolish));
+    $("beltTool").addEventListener("click", () => SB.input.setBelt(!SB.input.belt));
     $("follow").addEventListener("click", hud.follow);
     $("anywhere").addEventListener("click", hud.anywhere);
     for (const button of document.querySelectorAll(".sb-supply button")) {

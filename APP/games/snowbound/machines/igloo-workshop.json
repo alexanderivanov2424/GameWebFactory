@@ -9,7 +9,7 @@
   "reach": 0,
   "diesel": 0,
   "placed": true,
-  "text": "Placed next to a Brick Press: pulls its bricks and builds an Igloo Kit ($180) from 6.",
+  "text": "Placed next to a Brick Press (or at the end of a conveyor of bricks): builds an Igloo Kit ($180) from 6 bricks.",
   "recipe": {
     "in": "brick",
     "per": 6,

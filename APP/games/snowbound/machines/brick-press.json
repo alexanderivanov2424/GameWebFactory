@@ -9,7 +9,7 @@
   "reach": 0,
   "diesel": 0,
   "placed": true,
-  "text": "Placed where you stand. Your machines drop snow here; it presses 10 snow into a Snow Brick ($15). Cargo Sleds take bricks to the cabin.",
+  "text": "Placed where you stand. Your machines drop snow here; it presses 10 snow into a Snow Brick ($15). Put a conveyor beside it to carry the bricks to the cabin.",
   "recipe": {
     "in": "snow",
     "per": 10,

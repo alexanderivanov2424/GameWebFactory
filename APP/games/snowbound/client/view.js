@@ -8,7 +8,7 @@
  *   SB.view.zoomBy(factor), SB.view.puff(x, y, amount)   zoom; a snow puff (+amount) at world x, y
  *   SB.view.drawMinimap(canvas)   the minimap (called by hud.js)
  * Draw order: lots (SB.grid.image scaled up) -> snow bank edges, sparkles, features, road markings ->
- * landmarks (ruins) -> heat glow, cabin, huts, depots, rail stations -> rally flag, golden snowflake -> units (placed ones glow; load bars, processor gauges) -> jet beams -> characters -> aim box -> particles ->
+ * conveyors (belt, moving chevrons, goods) -> landmarks (ruins) -> heat glow, cabin, huts, depots, rail stations -> rally flag, golden snowflake -> units (placed ones glow; load bars, processor gauges) -> jet beams -> characters -> aim box -> particles ->
  * weather -> off-screen arrows (snowflake, cabin) -> frost vignette when you're cold.
  */
 (() => {
@@ -106,6 +106,38 @@
           if (f === "t" || f === "h" || f === "g") { ctx.fillStyle = "rgba(245,249,255,0.45)"; ctx.fillRect(px, py + z * 0.55, z, z * 0.45); }
         }
       }
+    }
+  }
+
+  const BELT_DIRS = [[1, 0], [0, 1], [-1, 0], [0, -1]];
+
+  function drawBelt(px, py, z, dir, now, alpha) {
+    const [dx, dy] = BELT_DIRS[dir];
+    ctx.globalAlpha = alpha;
+    ctx.fillStyle = "#3b4048"; ctx.fillRect(px + z * 0.08, py + z * 0.08, z * 0.84, z * 0.84);
+    ctx.strokeStyle = "#c9a24a"; ctx.lineWidth = Math.max(1.5, z * 0.06);
+    const shift = ((now / 600) % 1) / 2;  // chevrons slide along the belt
+    for (const k of [0, 0.5]) {
+      const t = (k + shift) % 1 - 0.5, cx = px + z / 2 + dx * t * z * 0.8, cy = py + z / 2 + dy * t * z * 0.8, s = z * 0.16;
+      ctx.beginPath();
+      ctx.moveTo(cx - dx * s - dy * s, cy - dy * s - dx * s);
+      ctx.lineTo(cx, cy);
+      ctx.lineTo(cx - dx * s + dy * s, cy - dy * s + dx * s);
+      ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  function drawBelts(game, now) {
+    const z = Z(), w = game.w, goods = game.defs.goods;
+    const x0 = cam.x - canvas.width / 2 / z - 1, x1 = cam.x + canvas.width / 2 / z + 1;
+    const y0 = cam.y - canvas.height / 2 / z - 1, y1 = cam.y + canvas.height / 2 / z + 1;
+    for (const [key, [dir, good, count]] of Object.entries(game.belts || {})) {
+      const i = Number(key), x = i % w, y = Math.floor(i / w);
+      if (x < x0 || x > x1 || y < y0 || y > y1) continue;
+      const px = sx(x), py = sy(y);
+      drawBelt(px, py, z, dir, now, 1);
+      if (count && goods[good]) emoji(goods[good].icon, px + z / 2, py + z / 2, z * (0.35 + 0.05 * Math.min(count, 8)));
     }
   }
 
@@ -226,8 +258,7 @@
       if (u.s === "charging") emoji("⚡", x + z * 0.4, y - z * 0.5, z * 0.35);
       if (u.s === "idle") emoji("💤", x + z * 0.4, y - z * 0.5, z * 0.35);
       if (u.l) {
-        bar(x, y - z * 0.62 * big, u.l, d.kind === "sled" ? "#ffd54f" : "#ffffff");
-        if (d.kind === "sled") emoji("📦", x - z * 0.4, y - z * 0.45, z * 0.35);
+        bar(x, y - z * 0.62 * big, u.l, "#ffffff");
       }
       if (u.s === "working" && Math.random() < 0.08) {
         particles.push({ kind: "puff", x: u.x + (Math.random() - 0.5), y: u.y + (Math.random() - 0.5), vx: (Math.random() - 0.5), vy: -Math.random(), t: now });
@@ -267,6 +298,13 @@
       ctx.lineWidth = Math.max(2, z * 0.06); ctx.strokeStyle = "rgba(255,90,90,0.9)";
       ctx.beginPath(); ctx.moveTo(sx(x) + z * 0.2, sy(y) + z * 0.2); ctx.lineTo(sx(x) + z * 0.8, sy(y) + z * 0.8);
       ctx.moveTo(sx(x) + z * 0.8, sy(y) + z * 0.2); ctx.lineTo(sx(x) + z * 0.2, sy(y) + z * 0.8); ctx.stroke();
+      return;
+    }
+    if (SB.input.belt) {
+      const here = SB.input.beltAt(x, y);
+      if (here || SB.input.canBelt(x, y)) drawBelt(sx(x), sy(y), z, here ? (here[0] + 1) % 4 : SB.input.beltDir, performance.now(), 0.6);
+      ctx.lineWidth = Math.max(2, z * 0.05); ctx.strokeStyle = here || SB.input.canBelt(x, y) ? "#ffd54f" : "rgba(255,90,90,0.8)";
+      ctx.strokeRect(sx(x) + 1, sy(y) + 1, z - 2, z - 2);
       return;
     }
     if (SB.input.road) {
@@ -379,6 +417,7 @@
     ctx.fillStyle = "#1b232c"; ctx.fillRect(0, 0, canvas.width, canvas.height);
     ctx.textAlign = "center"; ctx.textBaseline = "middle";
     drawLots(game, now);
+    drawBelts(game, now);
     drawLandmarks(game);
     drawHeat(game, now);
     if (Array.isArray(game.rally)) emoji("🚩", sx(game.rally[0] + 0.5), sy(game.rally[1] + 0.3), Z() * 0.9);

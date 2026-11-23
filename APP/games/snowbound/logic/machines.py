@@ -35,14 +35,14 @@ grader   (Road Grader) digs workable lots next to a road (any workable lot if th
 jet      (Jet Blower) drives to the frontier near the rally point; every params.cooldown s it fires
          a beam straight away from the cabin: every lot within params.range loses up to rate snow
          (World.melt, paid) and becomes road. long-throw: double range, LONG_COOLDOWN s.
-processor, sled: factory.py. mammoth, spirit, bernard, golem, spring (landmark rewards): uniques.py.
+processor: factory.py. mammoth, spirit, bernard, golem, spring (landmark rewards): uniques.py.
 Snow removed is paid through units.collect(): hauling machines carry it home first (hauling.py).
 """
 
 import math
 
 from .content import MACHINES
-from .factory import processor, sled
+from .factory import processor
 from .uniques import bernard, golem, mammoth, spirit, spring
 from .units import collect, move_toward, work
 
@@ -363,5 +363,5 @@ def jet(ctx, unit, player, rate):
 
 STEPS = {"worker": worker, "dog": dog, "sweeper": sweeper, "brazier": brazier, "buddy": buddy,
          "dozer": dozer, "auger": auger, "still": still, "grader": grader, "jet": jet,
-         "processor": processor, "sled": sled, "mammoth": mammoth, "spirit": spirit, "bernard": bernard,
+         "processor": processor, "mammoth": mammoth, "spirit": spirit, "bernard": bernard,
          "golem": golem, "spring": spring}

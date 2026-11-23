@@ -1,0 +1,9 @@
+{
+  "name": "Express Belts",
+  "cost": 2000000,
+  "text": "Conveyors move goods twice as fast again.",
+  "effect": {
+    "kind": "belt_mult",
+    "value": 2
+  }
+}

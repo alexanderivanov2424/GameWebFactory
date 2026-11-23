@@ -1,16 +1,17 @@
 """Demolishing: tearing down what the team built for REFUND of what it cost.
 
-demolish(match, pid, lots, roads_only): for each [x, y] lot, takes away the first of these found:
+demolish(match, pid, lots, lines_only): for each [x, y] lot, takes away the first of these found:
     a placed machine     refund REFUND x what that copy cost (content.machine_cost at one fewer
                          owned); the team owns one fewer, so the next one costs that again. A
                          processor's stored input and goods are lost. Landmark buildings (unique
                          machines) can't be torn down.
     a Snow Depot         REFUND x the price of the last depot; next depots cost less again.
     a warming hut        REFUND x the price of the last hut.
+    a conveyor           REFUND x conveyors.BELT_COST; the goods on it are lost.
     a road               removed entirely; REFUND x the cost of the level players paid for
                          (World.paid: tracks dug by machines and Snow Golem upgrades refund nothing).
-roads_only: only roads are taken (a drag with the demolish tool), so a drag never flattens
-buildings. The cabin and Old Rail Stations can't be demolished. Demolishing a depot or a road
+lines_only: only conveyors and roads are taken (a drag with the demolish tool), so a drag never
+flattens buildings. The cabin and Old Rail Stations can't be demolished. Demolishing a depot or a road
 marks the route fields stale (roads.Network rebuilds them). Raises LobbyError when nothing on
 the given lots could be demolished. Returns the refund.
 """
@@ -19,6 +20,7 @@ import math
 
 from gamekit import LobbyError
 
+from . import conveyors
 from .content import MACHINES, machine_cost
 from .hauling import DEPOT_COST, DEPOT_GROWTH
 from .roads import LEVELS, MAX_LOTS
@@ -31,7 +33,7 @@ def refunds(match):
     from .match import HUT_COST, HUT_GROWTH  # match imports this module
     hut = REFUND * HUT_COST * HUT_GROWTH ** (len(match.huts) - 1) if match.huts else 0
     depot = REFUND * DEPOT_COST * DEPOT_GROWTH ** (len(match.depots) - 1) if match.depots else 0
-    return {"share": REFUND, "hut": round(hut), "depot": round(depot)}
+    return {"share": REFUND, "hut": round(hut), "depot": round(depot), "belt": round(REFUND * conveyors.BELT_COST)}
 
 
 def machine_refund(match, mid):
@@ -39,7 +41,7 @@ def machine_refund(match, mid):
     return round(REFUND * machine_cost(mid, owned - 1)) if owned else 0
 
 
-def demolish(match, pid, lots, roads_only=False):
+def demolish(match, pid, lots, lines_only=False):
     p = match.player(pid)
     world = match.world
     total, done, refused = 0.0, 0, None
@@ -47,7 +49,7 @@ def demolish(match, pid, lots, roads_only=False):
         i = world.index(x, y)
         if i is None:
             continue
-        got, why = (_road(match, i) if roads_only else _one(match, p, i))
+        got, why = (_line(match, i) if lines_only else _one(match, p, i))
         if why:
             refused = why
             continue
@@ -89,11 +91,15 @@ def _one(match, p, i):
         match.huts.remove(xy)
         match.say(f"{p.name} tore down a warming hut (+${got:,}).")
         return got, None
-    return _road(match, i)
+    return _line(match, i)
 
 
-def _road(match, i):
+def _line(match, i):
+    """A conveyor, else a road, on lot i."""
     world = match.world
+    if i in match.belts:
+        conveyors.remove(match, i)
+        return REFUND * conveyors.BELT_COST, None
     if not world.road[i]:
         return None, None
     got = math.floor(REFUND * LEVELS[world.paid[i]]["cost"])

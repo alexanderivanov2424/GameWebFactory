@@ -270,7 +270,7 @@ Summary:
    collision), full-screen canvas with a HUD, every machine its own unit with its own behaviour
    (`logic/machines.py`), behaviour-flag upgrades, per-player area-of-interest unit sync, survival near heat,
    machines hauling snow to drop points over a player-built road network (levelled roads, incremental route
-   fields), processors chained side by side and sleds selling goods, hidden one-of-a-kind landmarks with
+   fields), processors chained side by side and conveyor belts carrying goods, hidden one-of-a-kind landmarks with
    unique rewards.
    `games/motorways/` ("Metro Lanes", `RealtimeGame`, `logic/` modules): co-op Mini Motorways in one shared
    city: players draw road tiles they own (8-direction links, bridges/tunnels, motorways, roundabouts,

@@ -75,12 +75,11 @@ def snow_room(proc):
     return m["params"].get("buffer", 0) - proc.inbox
 
 
-def plan_home(match, unit, player, procs=True, goods=False):
-    """Choose where unit unloads and its route there: sets trip "home", dest and path.
-    goods: a sled heading for a market instead of a drop point."""
+def plan_home(match, unit, player, procs=True):
+    """Choose where unit unloads and its route there: sets trip "home", dest and path."""
     world = match.world
-    field = match.roads.market if goods else match.roads.drop
-    sources = set(match.roads.markets if goods else match.roads.drops)  # (a demolished depot may linger in a field)
+    field = match.roads.drop
+    sources = set(match.roads.drops)  # (a demolished depot may linger in the field until it's rebuilt)
     ux, uy = unit.x - 0.5, unit.y - 0.5
     best, dest, path = INF, None, []
     for s in sources:
@@ -92,7 +91,7 @@ def plan_home(match, unit, player, procs=True, goods=False):
         c = d + field.cost[j]
         if c < best - 1e-9 and field.src[j] in sources:
             best, dest, path = c, ("drop", field.src[j]), field.chain(j)[::-1]
-    if procs and not goods:
+    if procs:
         near, near_d = None, best * PREFER
         for proc in match.units.values():
             if proc.home is not None and snow_room(proc) >= unit.load:

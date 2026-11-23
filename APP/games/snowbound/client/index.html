@@ -58,6 +58,7 @@
     #hudBar button { font-size: 13px; padding: 6px 10px; }
     .hud kbd { background: #33414f; border-radius: 3px; padding: 0 4px; font-size: 11px; margin-right: 4px; color: #fff; }
     #hudBar button.on { outline: 2px solid #ffd54f; }
+    #hudBelts { bottom: 104px; left: 50%; transform: translateX(-50%); }
     #hudRoads { bottom: 104px; left: 50%; transform: translateX(-50%); text-align: center; }
     #roadLevels { display: flex; gap: 6px; margin-top: 4px; }
     #roadLevels button.on { outline: 2px solid #ffd54f; }
@@ -113,8 +114,8 @@
           <li>Deep snow is a wall. Stand next to it and <b>hold the mouse</b> (or Space) on it to shovel, or click fast. Every unit of snow you shovel pays you $1.</li>
           <li>Buy helpers and machines (<b>B</b>): each one works its own way. Kids shovel, dogs tunnel roads, sweepers clean up after blizzards, braziers melt a ring and keep you warm, dozers shove drifts outward, augers drill the deepest snow, stills turn snow into diesel, graders widen roads, and jet blowers fire beams. <b>Shift+click</b> sets where the team's machines work, <b>F</b> makes them follow you.</li>
           <li>Digging machines carry their snow back and are paid when they unload it at the cabin or a <b>Snow Depot</b> (<b>Q</b>, built where you stand, shared). Lay and upgrade <b>roads</b> (<b>G</b>, then click or drag): machines follow the road network and move much faster on it.</li>
-          <li>Factories: place a Brick Press or Ice Press and your machines drop snow there instead; it turns it into goods worth more. Place an Igloo Workshop or Ice Carver right next to them to refine further. Cargo Sleds and Freight Trucks carry goods to the cabin to sell.</li>
-          <li><b>Demolish</b> (<b>X</b>, then click) tears down a placed machine, depot, hut or road for 25% of what it cost; drag to clear a stretch of road.</li>
+          <li>Factories: place a Brick Press or Ice Press and your machines drop snow there instead; it turns it into goods worth more. Place an Igloo Workshop or Ice Carver right next to them to refine further. Lay <b>conveyors</b> (<b>C</b>, drag) from beside a processor into the cabin to sell its goods, or into another processor to feed it.</li>
+          <li><b>Demolish</b> (<b>X</b>, then click) tears down a placed machine, depot, hut, conveyor or road for 25% of what it cost; drag to clear a stretch of conveyor or road.</li>
           <li>Ruins are hidden in the drifts. Clear every lot of one to claim it: a unique helper, a unique building or a perk for the whole team.</li>
           <li>Everything belongs to the team: one wallet, diesel tank and ration supply, every machine and upgrade (it doesn't matter who buys), the factories and one rally point anyone can set. Shovel Buddies spread out over the players.</li>
           <li>Upgrades (<b>U</b>) make everything faster. Snow gets deeper the further you go.</li>
@@ -172,6 +173,7 @@
         <button id="buildHut"><kbd>H</kbd>Hut</button>
         <button id="buildDepot"><kbd>Q</kbd>Depot</button>
         <button id="roadTool"><kbd>G</kbd>Roads</button>
+        <button id="beltTool"><kbd>C</kbd>Conveyors</button>
         <button id="demolishTool"><kbd>X</kbd>Demolish</button>
         <button id="follow"><kbd>F</kbd>Follow me</button>
         <button id="anywhere"><kbd>R</kbd>Work anywhere</button>
@@ -181,6 +183,10 @@
       <div id="hudRoads" class="hud" hidden>
         <div><b>Road tool</b> <span class="muted">· click or drag on cleared ground · <kbd>1</kbd>-<kbd>4</kbd> level · <kbd>Esc</kbd> done</span></div>
         <div id="roadLevels"></div>
+      </div>
+
+      <div id="hudBelts" class="hud" hidden>
+        <b>Conveyors</b> <span class="muted">· <span id="beltCost"></span> each · drag to lay them pointing the way you drag · click one to turn it · <kbd>Esc</kbd> done</span>
       </div>
 
       <div id="hudPanel" class="hud" hidden>

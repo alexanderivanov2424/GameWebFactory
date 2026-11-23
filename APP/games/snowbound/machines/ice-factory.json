@@ -10,7 +10,7 @@
   "diesel": 0,
   "placed": true,
   "unique": true,
-  "text": "An old factory, working again: turns 40 snow into Crystal Ice ($140). Needs no fuel.",
+  "text": "An old factory, working again: turns 40 snow into Crystal Ice ($140). Needs no fuel. Put a conveyor beside it.",
   "recipe": {
     "in": "snow",
     "per": 40,

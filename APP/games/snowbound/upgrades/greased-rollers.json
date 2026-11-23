@@ -1,0 +1,9 @@
+{
+  "name": "Greased Rollers",
+  "cost": 20000,
+  "text": "Conveyors move goods twice as fast.",
+  "effect": {
+    "kind": "belt_mult",
+    "value": 2
+  }
+}

@@ -10,12 +10,12 @@ Machine file <id>.json:
     per second while it exists (0 = none); placed: built on the lot the buyer stands on, bought
     one at a time, never moves; params: numbers the kind reads (see machines.py).
     carry: snow one load holds (hauling.py: dug snow is carried to a drop point and paid there;
-    0 = paid on the spot), or goods for kind "sled". recipe (kind "processor", factory.py):
+    0 = paid on the spot). recipe (kind "processor", factory.py):
     {"in": "snow" | good id, "per": input per output, "out": good id}. unique: never sold in the
     shop; only a landmark gives one (landmarks.py).
 
 Goods file <id>.json: {"order": 1, "name": "Snow Brick", "icon": "🧱", "value": 15}
-    value: $ each when sold at a market (the cabin, or an Old Rail Station).
+    value: $ each when a conveyor delivers it to a market (the cabin, or an Old Rail Station).
 
 Landmark file <id>.json:
     {"order": 1, "name": "Mammoth Cave", "icon": "🦣", "size": 3, "band": [0.3, 0.7], "max": 1,
@@ -34,7 +34,7 @@ Upgrade file <id>.json:
     (x warmth lost), stove (x logs burned, shared), dust (x blizzard snow on cleared ground,
     shared), flake (x golden snowflake rewards), wade (you can walk on snow up to this level),
     machine_mult (x that machine's rate), carry_mult (x loads: that machine, or with no machine
-    every snow-hauling machine), goods_mult (x what your goods sell for), flag (a rule change checked by id in code:
+    every snow-hauling machine), goods_mult (x what goods sell for), belt_mult (x conveyor speed), flag (a rule change checked by id in code:
     Player.has(id) / Match.team_has(id)).
 Upgrades without a machine show up once the team has earned UNLOCK_SHARE of their cost.
 """
@@ -50,9 +50,9 @@ ROOT = Path(__file__).resolve().parent.parent
 UNLOCK_SHARE = 0.25
 GROWTH = 1.15  # each machine of a kind costs 15% more than the last
 KINDS = {"worker", "dog", "sweeper", "brazier", "buddy", "dozer", "auger", "still", "grader", "jet",
-         "processor", "sled", "mammoth", "spirit", "bernard", "golem", "spring"}
+         "processor", "mammoth", "spirit", "bernard", "golem", "spring"}
 EFFECTS = {"click_mult", "click_pct", "auto", "food_drain", "warm_loss", "stove", "dust", "flake",
-           "wade", "machine_mult", "carry_mult", "goods_mult", "flag"}
+           "wade", "machine_mult", "carry_mult", "goods_mult", "belt_mult", "flag"}
 REWARDS = {"unit", "placed", "team"}
 AUTO = {"rations", "diesel", "logs"}
 
@@ -143,7 +143,7 @@ def parse_landmark(lid, data):
 def nominal(m):
     """About how much snow per second one machine clears (for display and income-based bonuses)."""
     p = m["params"]
-    if m["kind"] in ("processor", "sled", "bernard", "golem"):
+    if m["kind"] in ("processor", "bernard", "golem"):
         return 0
     if m["kind"] == "spring":
         return m["rate"] * 48        # lots within 4

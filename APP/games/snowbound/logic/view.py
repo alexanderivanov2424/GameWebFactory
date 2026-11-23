@@ -12,7 +12,9 @@ public(match):
      "depots": {"<n>": [x, y]} (Snow Depots), "depotCost": $, "markets": {"<n>": [x, y]} (Old Rail
      Stations), "landmarks": landmarks.public(), "effects": [team effect ids from landmarks],
      "roadLevels": [{"name", "cost", "unit", "walk"}] (roads.LEVELS; index = level),
-     "refunds": {"share", "hut", "depot"} (what demolishing gives back, demolish.refunds()),
+     "refunds": {"share", "hut", "depot", "belt"} (what demolishing gives back, demolish.refunds()),
+     "belts": {"<lot>": [dir 0-3 (right, down, left, up), front good id | "", goods]} (conveyors.py),
+     "beltCost": $ per conveyor tile,
      "weather": {"kind": clear|warning|blizzard, "left": s}, "woodpile": logs,
      "stove": {"lit": bool, "burn": logs per minute}, "flake"?: {"x", "y", "left"},
      "progress": {"reached" (clear now), "dusted" (reached, snowed on again), "total", "goal": %},
@@ -26,13 +28,13 @@ private(match, pid): your shop, supplies and the units near you
      "machines": {id: {"owned", "cost1", "cost10", "rate", "refund" (demolishing one)}}, "upgrades": [visible ids by cost],
      "owned": [the team's upgrade ids], "auto": [delivered items],
      "carried": snow the team's machines are carrying, "waiting": $ of goods waiting in processors,
-     "cargo": $ of goods on sleds (all team-wide),
+     "onBelts": $ of goods on conveyors (all team-wide),
      "units": {uid: {"x", "y", "m", "p", "s": idle|moving|working|hauling|full|stalled|unlit|charging,
                      "l"?: load 0-1, "f"?: [processor input 0-1, goods waiting]}}}
 spectator(match): {"units": ...} near any character (spectators follow a player).
 """
 
-from . import avatars, demolish, hauling, landmarks, survival, units
+from . import avatars, conveyors, demolish, hauling, landmarks, survival, units
 from .content import GOODS, MACHINES, UPGRADES, defs, machine_cost
 from .economy import PRICES
 from .roads import LEVELS
@@ -77,7 +79,7 @@ def public(match):
         "depotCost": hauling.depot_cost(match),
         "markets": {str(k): list(world.xy(i)) for k, i in enumerate(match.markets)},
         "landmarks": landmarks.public(match), "effects": sorted(match.effects), "roadLevels": LEVELS,
-        "refunds": demolish.refunds(match),
+        "refunds": demolish.refunds(match), "belts": conveyors.public(match), "beltCost": conveyors.BELT_COST,
         "weather": match.weather.public(), "woodpile": round(match.woodpile, 1),
         "stove": {"lit": match.woodpile > 0, "burn": round(survival.stove_burn(match) * 60, 1)},
         "progress": {"reached": world.cleared(), "dusted": len(world.dusted), "total": world.w * world.h,
@@ -104,12 +106,11 @@ def private(match, pid):
     visible = sorted((uid for uid in UPGRADES if p.upgrade_visible(uid)),
                      key=lambda uid: UPGRADES[uid]["cost"])
     power, reach, splash = match.shovel(p)
-    carried = waiting = cargo = 0.0
+    carried = waiting = 0.0
     for u in match.units.values():
         carried += u.load
         if u.outbox:
             waiting += u.outbox * GOODS[MACHINES[u.mid]["recipe"]["out"]]["value"]
-        cargo += sum(n * GOODS[g]["value"] for g, n in u.cargo.items())
     return {
         "click": round(power, 2), "reach": reach, "splash": splash, "wade": p.wade_level(),
         "rations": p.rations, "diesel": round(p.diesel, 1),
@@ -120,7 +121,7 @@ def private(match, pid):
                            "refund": demolish.machine_refund(match, mid)} for mid in MACHINES},
         "upgrades": visible, "owned": sorted(p.upgrades),
         "auto": sorted(item for item in ("rations", "diesel", "logs") if p.has_auto(item)),
-        "carried": int(carried), "waiting": int(waiting), "cargo": int(cargo),
+        "carried": int(carried), "waiting": int(waiting), "onBelts": int(conveyors.value_on_belts(match)),
         "units": units.visible(match, [(p.x, p.y)], VIEW),
     }
 
