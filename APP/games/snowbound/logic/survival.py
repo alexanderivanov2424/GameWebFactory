@@ -18,8 +18,8 @@ Food: drops FOOD_DRAIN/s and CLICK_FOOD per click (x setting, x Big Thermos). At
 EAT_AT a ration is eaten automatically (+RATION_FOOD).
 Needs: warmth 0 -> frostbite (can't shovel, walk slowly) until warmth is back to THAW_AT;
 food 0 -> starving (shoveling at 20%, slower, colder).
-Deliveries (upgrades, 25% fee, not in blizzards): rations kept at 5, a minute of diesel when
-under 30 s, the woodpile kept at 20 logs.
+Deliveries (upgrades, 25% fee, not in blizzards, paid from the shared cash): the shared rations
+kept at 5 per player, a minute of the team's diesel when under 30 s, the woodpile kept at 20 logs.
 """
 
 import math
@@ -175,9 +175,10 @@ def dust(match):
 def deliveries(match):
     """Once a second outside blizzards: automatic purchases from delivery upgrades."""
     for p in match.players.values():
-        if p.has_auto("rations") and p.rations < 5:
-            _try(p.buy_supply, "rations", 5 - p.rations)
-        use = p.diesel_use()
+        want = 5 * len(match.players)
+        if p.has_auto("rations") and p.rations < want:
+            _try(p.buy_supply, "rations", want - p.rations)
+        use = match.diesel_use()
         if p.has_auto("diesel") and use > 0 and p.diesel < 30 * use:
             _try(p.buy_supply, "diesel", round(60 * use - p.diesel, 1))
         if p.has_auto("logs") and match.woodpile < 20:

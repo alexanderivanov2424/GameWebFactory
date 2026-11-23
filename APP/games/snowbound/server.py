@@ -15,7 +15,7 @@ are paid only when they unload it at a drop point: the cabin, a Snow Depot (buil
 used by everyone) or an Old Rail Station. Roads (Track, Gravel, Paved, Heated: laid and upgraded
 by players on cleared ground, Track also left by dogs, graders and jets) make machines and people
 faster, and machines route along the road network (logic/roads.py, logic/hauling.py).
-Factory: processors (placed) take snow from your own haulers and turn it into goods worth more
+Factory (shared by the team): processors (placed) take snow from anyone's haulers and turn it into goods worth more
 (Brick Press -> Snow Bricks, Ice Press -> Ice Blocks); a processor placed next to another one pulls
 its goods (Igloo Workshop next to a Brick Press, Ice Carver next to an Ice Press). Cargo Sleds and
 Freight Trucks fetch goods and sell them at a market: the cabin or an Old Rail Station
@@ -26,7 +26,8 @@ Reindeer Team, Snow Golem, Old Snowcat), a unique building (Ice Factory, Snow Co
 Spring) or a team perk (Old Rail Station, Weather Station, Observatory) (logic/landmarks.py). Upgrades mostly change how one machine works (Snow Angels, Sled
 Harness, Corkscrew, Long Throw...), plus shovel, survival, delivery and shared team upgrades;
 Snowshoes let you walk over deeper snow. Snow gets deeper the further you get from
-the cabin. Each player has their own wallet, machines and upgrades.
+the cabin. The team shares one wallet, one diesel tank and one ration supply (and the woodpile);
+each player has their own machines, upgrades and rally point.
 Lots hide things: forests (logs for the stove), buried cabins (cash), gas stations (diesel),
 supply caches and lost skiers (free helpers). Golden snowflakes appear near players now and then:
 the first to walk into one gets a x5 Frenzy or a lump of cash.

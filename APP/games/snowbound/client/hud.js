@@ -146,7 +146,7 @@
       return el("li", { title: "Click to follow (spectators)", onclick: () => { SB.view.spectate = pid; } },
         el("span", { className: "sb-dot", style: `background:${p.color}` }), el("b", {}, p.name + (pid === state.you ? " (you)" : "")),
         statusChip(p),
-        el("div", { className: "muted" }, `${money(p.cash)} · ${fmt(p.rate)} snow/s · ${units} units · cleared ${fmt(p.cleared)}` +
+        el("div", { className: "muted" }, `${fmt(p.rate)} snow/s · ${units} units · cleared ${fmt(p.cleared)}` +
           (p.goods ? ` · goods ${money(p.goods)}` : "")),
         el("div", { className: "muted" }, `🍲 ${p.food}  🌡️ ${p.warmth}`));
     }));
@@ -220,6 +220,7 @@
       return;
     }
     $("cash").textContent = money(me.cash);
+    $("cash").title = "Team cash: shared by every player (so are diesel and rations)";
     $("rates").textContent = `Machines ${fmt(me.rate)} snow/s · Shovel ${fmt(mine.click)}/swing`;
     const haul = [];
     if (mine.carried) haul.push(`🛒 ${fmt(mine.carried)} snow on the way`);
@@ -230,7 +231,7 @@
     if (me.status === "frostbite") notes.push("🥶 Frostbite! You can't shovel. Get to the cabin or a hut.");
     if (me.status === "starving") notes.push("🍽️ Starving: weak and slow. Buy rations!");
     if (mine.frenzy) notes.push(`⚡ Frenzy x5 for ${mine.frenzy}s`);
-    if (mine.dieselUse > 0 && mine.diesel <= 0) notes.push("⛽ Out of diesel: your machines stopped.");
+    if (mine.dieselUse > 0 && mine.diesel <= 0) notes.push("⛽ The team is out of diesel: machines stopped.");
     if (!game.stove.lit) notes.push("🪵 The woodpile is empty: no heat anywhere!");
     fill($("status"), notes.map((n) => el("div", {}, n)));
 

@@ -2,14 +2,14 @@
 
 processor (placed; content recipe {"in", "per", "out"}, params buffer / store / sell):
     unit.inbox holds input (up to params.buffer), unit.outbox finished goods (up to params.store).
-    Snow comes from its owner's hauling machines (hauling.py). A processor whose input is a good
-    pulls it from its owner's processors next to it (within CHAIN_REACH, diagonals too) that make
+    The factory is shared: snow comes from anyone's hauling machines (hauling.py), and a processor
+    whose input is a good pulls it from any processor next to it (within CHAIN_REACH, diagonals too) that make
     that good, so chains are built by placing them side by side (Brick Press -> Igloo Workshop).
     Each second it turns up to `rate` input (x machine_mult upgrades) into outputs, `per` input
     each. params.sell: outputs are sold on the spot instead of stored (Snow Cone Stand).
     States: working | idle (no input) | full (outbox full) | stalled (no diesel, units.step).
 sled (Cargo Sled, Freight Truck, Reindeer Team): carries up to `carry` goods
-    (x Player.carry_mult). Picks its owner's processor with the most goods waiting (not one that
+    (x Player.carry_mult). Picks the processor (anyone's) with the most goods waiting (not one that
     feeds a processor next to it, and not one other sleds already cover), fetches them (trip
     "fetch"), then takes them to the nearest market (trip "home": the cabin or an Old Rail
     Station) and sells them for their value x Player.goods_mult. Routes as in hauling.py.
@@ -31,13 +31,13 @@ def recipe(unit):
 
 
 def neighbours(ctx, unit):
-    """Placed units of the same owner next to unit's lot."""
+    """Placed units next to unit's lot (anyone's)."""
     world = ctx.world
     x, y = world.xy(unit.home)
     for dx, dy in AROUND:
         j = world.index(x + dx, y + dy)
         other = ctx.placed.get(j) if j is not None else None
-        if other is not None and other.pid == unit.pid:
+        if other is not None:
             yield other
 
 
@@ -84,7 +84,7 @@ def _pick(ctx, unit, player, room):
     """The processor this sled should fetch from, or None."""
     best, best_score = None, 0.0
     for proc in ctx.match.units.values():
-        if proc.pid != unit.pid or proc.home is None or recipe(proc) is None or proc.outbox < 1:
+        if proc.home is None or recipe(proc) is None or proc.outbox < 1:
             continue
         store = MACHINES[proc.mid]["params"].get("store", 100)
         need = max(1, min(room, store * PICKUP_SHARE))
@@ -112,7 +112,7 @@ def sled(ctx, unit, player, rate):
         return
     if unit.trip == "fetch":
         proc = match.units.get(unit.dest[1])
-        if proc is None or proc.pid != unit.pid:
+        if proc is None:
             unit.trip, unit.dest, unit.path = None, None, []
             return
         unit.state = "moving"

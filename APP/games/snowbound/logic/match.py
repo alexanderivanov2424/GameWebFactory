@@ -21,7 +21,7 @@ from gamekit import LobbyError
 
 from . import avatars, hauling, landmarks, roads, survival, units
 from .content import MACHINES, UPGRADES
-from .economy import CLICKS_PER_SECOND, MAX_OWNED, PRICES, Player
+from .economy import CLICKS_PER_SECOND, MAX_OWNED, PRICES, Player, Stores
 from .world import World
 
 SIZES = {"small": 96, "medium": 160, "large": 256, "huge": 384}
@@ -55,10 +55,11 @@ class Match:
         self.markets = []           # Old Rail Station lots
         self.effects = set()        # team effects from landmarks
         self.players = {}
+        self.stores = Stores()      # the team's shared cash, diesel and rations
         for k, (pid, name) in enumerate(names.items()):
             angle = 2 * math.pi * k / max(1, len(names))
             self.players[pid] = Player(pid, name, colors.get(pid, "#4fc3f7"),
-                                       w.cx + 0.5 + 1.2 * math.cos(angle), w.cy + 0.5 + 1.2 * math.sin(angle))
+                                       w.cx + 0.5 + 1.2 * math.cos(angle), w.cy + 0.5 + 1.2 * math.sin(angle), self.stores)
         self.names = dict(names)
         self.goal = settings.get("goal", 75) / 100
         self.harshness = survival.HARSHNESS.get(settings.get("survival"), 1.0)
@@ -119,6 +120,10 @@ class Match:
 
     def hut_cost(self):
         return round(HUT_COST * HUT_GROWTH ** len(self.huts))
+
+    def diesel_use(self):
+        """Litres per second every machine in the valley burns from the shared tank."""
+        return sum(p.diesel_use() for p in self.players.values())
 
     def occupied(self, i):
         """Is something built on lot i (a placed machine, depot, rail station or hut)?"""
@@ -214,7 +219,7 @@ class Match:
             p.earned += bonus
             self.say(f"{p.name} dug out a buried cabin and found ${bonus:,} inside.")
         elif kind == "gas":
-            fuel = round(max(300, 120 * p.diesel_use()))
+            fuel = round(max(300, 120 * self.diesel_use()))
             p.diesel += fuel
             self.say(f"{p.name} reached an old gas station: +{fuel:,} L diesel.")
         elif kind == "cache":

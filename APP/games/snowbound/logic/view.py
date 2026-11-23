@@ -3,9 +3,10 @@
 public(match):
     {"w", "h", "cabin": [x, y] (lot), "time": s, "rows": World.rows(), "defs": content.defs(),
      "players": {pid: {"name", "color", "x", "y" (world coordinates), "swing": bool,
-                       "cash", "cleared", "rate" (machine snow/s now), "food", "warmth",
+                       "cash" (the team's), "cleared", "rate" (machine snow/s now), "food", "warmth",
                        "status": "ok" | "frenzy" | "starving" | "frostbite",
                        "rally"?: [x, y] lot | "follow", "owned": {machine id: n}, "goods": $ from goods}},
+     "team": {"cash", "diesel", "rations", "dieselUse"} (shared by every player),
      "huts": {"<n>": [x, y]}, "hutCost": $, "heat": {"cabin": lots, "hut": lots},
      "depots": {"<n>": [x, y]} (Snow Depots), "depotCost": $, "markets": {"<n>": [x, y]} (Old Rail
      Stations), "landmarks": landmarks.public(), "effects": [team effect ids from landmarks],
@@ -19,11 +20,11 @@ public(match):
      (move: the character rules client/grid.js needs to predict your walking)
 private(match, pid): your shop, supplies and the units near you
     {"click": snow per swing, "reach": lots, "splash": share hitting the 4 lots around (Shovel
-     Buddy), "wade": deepest snow level you can walk on, "rations", "diesel", "dieselUse": L/s, "frenzy": s,
+     Buddy), "wade": deepest snow level you can walk on, "rations", "diesel", "dieselUse": L/s (team's), "frenzy": s,
      "machines": {id: {"owned", "cost1", "cost10", "rate"}}, "upgrades": [visible ids by cost],
      "owned": [your upgrade ids], "auto": [delivered items],
-     "carried": snow your machines are carrying, "waiting": $ of goods waiting in your processors,
-     "cargo": $ of goods on your sleds,
+     "carried": snow the team's machines are carrying, "waiting": $ of goods waiting in processors,
+     "cargo": $ of goods on sleds (all team-wide),
      "units": {uid: {"x", "y", "m", "p", "s": idle|moving|working|hauling|full|stalled|unlit|charging,
                      "l"?: load 0-1, "f"?: [processor input 0-1, goods waiting]}}}
 spectator(match): {"units": ...} near any character (spectators follow a player).
@@ -70,6 +71,8 @@ def public(match):
     state = {
         "w": world.w, "h": world.h, "cabin": [world.cx, world.cy], "time": int(match.time),
         "rows": world.rows(), "defs": _DEFS, "players": players,
+        "team": {"cash": int(match.stores.cash), "diesel": round(match.stores.diesel, 1),
+                 "rations": match.stores.rations, "dieselUse": round(match.diesel_use(), 2)},
         "huts": {str(k): list(xy) for k, xy in enumerate(match.huts)}, "hutCost": match.hut_cost(),
         "heat": {"cabin": survival.CABIN_HEAT, "hut": survival.HUT_HEAT},
         "depots": {str(k): list(world.xy(i)) for k, i in enumerate(match.depots)},
@@ -100,7 +103,7 @@ def private(match, pid):
     power, reach, splash = match.shovel(p)
     carried = waiting = cargo = 0.0
     for u in match.units.values():
-        if u.pid == pid:
+        if u.pid in match.players:
             carried += u.load
             if u.outbox:
                 waiting += u.outbox * GOODS[MACHINES[u.mid]["recipe"]["out"]]["value"]
@@ -108,7 +111,7 @@ def private(match, pid):
     return {
         "click": round(power, 2), "reach": reach, "splash": splash, "wade": p.wade_level(),
         "rations": p.rations, "diesel": round(p.diesel, 1),
-        "dieselUse": round(p.diesel_use(), 2), "frenzy": int(p.frenzy),
+        "dieselUse": round(match.diesel_use(), 2), "frenzy": int(p.frenzy),
         "machines": {mid: {"owned": p.owned[mid], "cost1": machine_cost(mid, p.owned[mid]),
                            "cost10": machine_cost(mid, p.owned[mid], 10),
                            "rate": round(p.machine_rate(mid), 1)} for mid in MACHINES},

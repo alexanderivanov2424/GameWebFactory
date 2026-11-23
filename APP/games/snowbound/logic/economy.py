@@ -1,14 +1,16 @@
-"""Snowbound economy: one Player per seat (wallet, machines, upgrades, supplies, needs).
+"""Snowbound economy: one Player per seat (machines, upgrades, needs) and the team's shared Stores.
 
-Every player has their own cash, machines and upgrades; snow anyone clears pays whoever
-cleared it ($1 per unit of snow): at once for your shovel and machines that don't haul, when it is
+The team shares one Stores: cash, earned (cash ever earned: unlocks upgrades), diesel (one tank
+for every machine) and rations (whoever gets hungry eats from it). Player.cash / earned / diesel /
+rations read and write the team's Stores. Each player still has their own machines (and their
+machine price curve), upgrades, rally point, food and warmth. Snow pays the team $1 per unit: at once for your shovel and machines that don't haul, when it is
 unloaded at a drop point for hauling machines (hauling.py), and processed snow pays when its goods
 sell (factory.py). Shared upgrades (content.UPGRADES[...]["shared"]) are bought
 once for the whole team and stored on the Match, not here.
 
-Player fields: name, color, cash, earned (cash ever earned), cleared (snow ever cleared),
-goods_sold ($ ever made from goods),
-owned {machine id: count}, upgrades (set of ids), rations, diesel (litres), food 0-100,
+Player fields: name, color, stores (the team's Stores), cleared (snow this player and their
+machines ever cleared), goods_sold ($ this player's sleds made from goods),
+owned {machine id: count}, upgrades (set of ids), food 0-100,
 warmth 0-100, frostbite / starving (bool), frenzy (seconds left of x FRENZY), clicks (swing
 budget, refilled CLICKS_PER_SECOND per second).
 Character (avatars.py): x, y (world coordinates), keys (held: up/down/left/right), aim (lot
@@ -29,8 +31,28 @@ MAX_OWNED = 250
 START = {"cash": 0, "rations": 3, "diesel": 20}
 
 
+class Stores:
+    """What the whole team shares. Each Player adds its START rations and diesel."""
+
+    def __init__(self):
+        self.cash = 0.0
+        self.earned = 0.0
+        self.diesel = 0.0
+        self.rations = 0
+
+
+def _shared(name):
+    return property(lambda self: getattr(self.stores, name), lambda self, value: setattr(self.stores, name, value))
+
+
 class Player:
-    def __init__(self, pid, name, color, x=0.0, y=0.0):
+    cash = _shared("cash")
+    earned = _shared("earned")
+    diesel = _shared("diesel")
+    rations = _shared("rations")
+
+    def __init__(self, pid, name, color, x=0.0, y=0.0, stores=None):
+        self.stores = stores if stores is not None else Stores()
         self.id = pid
         self.x = x
         self.y = y
@@ -42,14 +64,13 @@ class Player:
         self.rally = None
         self.name = name
         self.color = color
-        self.cash = START["cash"]
-        self.earned = 0.0
+        self.cash += START["cash"]
         self.cleared = 0.0
         self.goods_sold = 0.0
         self.owned = {mid: 0 for mid in MACHINES}
         self.upgrades = set()
-        self.rations = START["rations"]
-        self.diesel = float(START["diesel"])
+        self.rations += START["rations"]
+        self.diesel += float(START["diesel"])
         self.food = 100.0
         self.warmth = 100.0
         self.frostbite = False
@@ -117,7 +138,7 @@ class Player:
         return mult
 
     def diesel_use(self):
-        """Litres per second the machines burn."""
+        """Litres per second this player's machines burn (from the team's tank)."""
         return sum(n * MACHINES[mid]["diesel"] for mid, n in self.owned.items())
 
     def click_power(self):

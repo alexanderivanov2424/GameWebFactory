@@ -61,6 +61,9 @@ Tests: `tests/` (`python3 -I tools/run_tests.py snowbound`).
   rule on a class overrides the `hidden` attribute: add `[hidden] { display: none }`.
 - Machine speed/reach/collision changes on the server must be mirrored in `client/grid.js`
   (`move` rules are sent in `state.game.move`, including walk speed per road level).
+- Cash, earned, diesel and rations live in the team's `economy.Stores` (`Match.stores`); `Player.cash`
+  etc. are properties onto it, so per-player code reads the shared value. Sum diesel use with
+  `Match.diesel_use()`, not one player's. Processors and sleds serve everyone (no owner checks).
 - Pay machine snow through `units.collect()`, never `player.earn()`: hauling machines must carry it.
   The player's own shovel is still paid at once.
 - Route fields assume roads are never removed or downgraded and drop points never go away. If
