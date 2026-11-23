@@ -1,0 +1,15 @@
+{
+  "order": 3,
+  "name": "Dust Sweeper",
+  "icon": "🧹",
+  "kind": "sweeper",
+  "cost": 400,
+  "rate": 30,
+  "speed": 4.0,
+  "reach": 1.0,
+  "diesel": 0,
+  "text": "Races to snow that blizzards dropped on cleared ground. Between storms it skims shallow edges.",
+  "params": {
+    "shallow": 30
+  }
+}

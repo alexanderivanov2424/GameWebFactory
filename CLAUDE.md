@@ -265,6 +265,15 @@ Summary:
    ending a mission early once every task is secured (tasks flag `can_fail_when_done` by hand),
    mission and task cards as JSON (3 mission decks), and a run (ship resources, missions played)
    saved for the host with `save_data` and continued from a later game (`lobby_game_state` shows it).
+   `games/snowbound/` (`RealtimeGame`, `logic/` modules): a co-op idle game on a huge grid (up to 384x384
+   lots as dirty row strings): you walk a character (client-side prediction mirroring the server's
+   collision), full-screen canvas with a HUD, every machine its own unit with its own behaviour
+   (`logic/machines.py`), behaviour-flag upgrades, per-player area-of-interest unit sync, survival near heat.
+   `games/motorways/` ("Metro Lanes", `RealtimeGame`, `logic/` modules): co-op Mini Motorways in one shared
+   city: players draw road tiles they own (8-direction links, bridges/tunnels, motorways, roundabouts,
+   lights) from their own stock, cars route over the graph with lanes and junction capacity, each trip's
+   points split by who built the road, the same weekly offers for everyone during a shared pick pause,
+   and a shared loss when any shop overflows.
 
 ## Lobby model (shared by all games)
 - Every connected tab is a **member**: a **spectator** until it joins, then a **player**. Players join and leave explicitly, and only in the lobby phase.

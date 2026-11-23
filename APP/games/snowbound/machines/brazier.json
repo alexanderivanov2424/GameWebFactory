@@ -1,0 +1,17 @@
+{
+  "order": 4,
+  "name": "Brazier",
+  "icon": "🪔",
+  "kind": "brazier",
+  "cost": 1000,
+  "rate": 1.5,
+  "speed": 0,
+  "reach": 0,
+  "diesel": 0,
+  "text": "Placed where you stand. Melts every lot within 2 a little each second and keeps you warm. Burns logs.",
+  "placed": true,
+  "params": {
+    "radius": 2,
+    "logs": 0.033
+  }
+}

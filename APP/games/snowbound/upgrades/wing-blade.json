@@ -1,0 +1,9 @@
+{
+  "name": "Wing Blade",
+  "cost": 5000000,
+  "text": "Road Graders clear the two lots beside their target at the same time.",
+  "effect": {
+    "kind": "flag"
+  },
+  "machine": "grader"
+}

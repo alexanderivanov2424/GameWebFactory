@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Metro Lanes</title>
+  <!-- Metro Lanes page: lobby, then the full-screen city (view.js) with the HUD (hud.js) on top. -->
+
+  <!-- Shared components: keep these, in this order. theme.js isn't deferred (no unstyled flash). -->
+  <script src="/shared/theme.js"></script>
+  <script src="/shared/home.js" defer></script>
+  <script src="/shared/settings.js" defer></script>
+  <script src="/shared/chat.js" defer></script>
+  <script src="/gamekit/dom.js" defer></script>
+  <script src="/gamekit/room.js" defer></script>
+  <script src="/gamekit/lobby.js" defer></script>
+  <script src="/gamekit/lobby-ui.js" defer></script>
+  <script src="/gamekit/realtime.js" defer></script>
+  <script src="city.js" defer></script>
+  <script src="view.js" defer></script>
+  <script src="input.js" defer></script>
+  <script src="hud.js" defer></script>
+  <script src="game.js" defer></script>
+
+  <style>
+    body.ml-playing { overflow: hidden; }
+    body.ml-playing main > h1, body.ml-playing #connection { display: none; }
+    #map { position: fixed; inset: 0; width: 100vw; height: 100vh; display: block; background: #2b2f36; cursor: crosshair; z-index: 0; }
+    .hud { position: fixed; z-index: 10; background: rgba(255, 255, 255, 0.92); color: #2b2f36; border-radius: 10px;
+           padding: 8px 12px; font-size: 13px; box-shadow: 0 2px 10px rgba(0,0,0,0.25); }
+    .hud[hidden] { display: none; }
+    .hud h3 { margin: 0 0 6px; font-size: 14px; }
+    #hudTop { top: 12px; left: 50%; transform: translateX(-50%); display: flex; gap: 12px; align-items: center;
+              width: min(560px, calc(100vw - 420px)); }
+    .ml-week { font-weight: 700; white-space: nowrap; }
+    .ml-clock { flex: 1; height: 10px; background: #e3e0d8; border-radius: 5px; overflow: hidden; }
+    .ml-clock > div { height: 100%; background: #5b6470; }
+    .ml-trips { font-weight: 700; white-space: nowrap; }
+    #paused { color: #c2255c; font-weight: 700; white-space: nowrap; }
+    #hudPlayers { top: 64px; right: 16px; width: 210px; }
+    #hudPlayers ul { list-style: none; padding: 0; margin: 0; }
+    #hudPlayers li { display: flex; gap: 6px; align-items: center; margin: 4px 0; }
+    #hudPlayers li.gone { opacity: 0.45; }
+    #hudPlayers li .pts { margin-left: auto; font-weight: 700; }
+    .ml-dot { display: inline-block; width: 11px; height: 11px; border-radius: 50%; flex: none; }
+    #hudTools { bottom: 16px; left: 50%; transform: translateX(-50%); display: flex; gap: 6px; align-items: center; }
+    #hudTools button { font-size: 13px; padding: 6px 10px; display: flex; gap: 5px; align-items: center; }
+    #hudTools button.on { outline: 3px solid #f0b429; }
+    #hudTools button:disabled { opacity: 0.45; }
+    #hudTools .count { font-weight: 800; min-width: 1.4em; }
+    #hudTools .sep { width: 1px; align-self: stretch; background: #d4d0c6; margin: 0 4px; }
+    #hudTools .spans { font-size: 12px; white-space: nowrap; }
+    .hud kbd { background: #e7e3da; border-radius: 3px; padding: 0 4px; font-size: 11px; color: #444; }
+    #hint { position: fixed; bottom: 74px; left: 50%; transform: translateX(-50%); z-index: 10; font-size: 12px;
+            color: #fff; text-shadow: 0 1px 3px #000; pointer-events: none; white-space: nowrap; }
+    #pick { top: 64px; left: 50%; transform: translateX(-50%); z-index: 20; padding: 16px 20px; width: min(520px, 90vw); }
+    #pick .offers { display: flex; gap: 10px; margin: 10px 0; }
+    #pick .offers button { flex: 1; text-align: left; padding: 12px; font-size: 14px; }
+    #pick .offers button b { display: block; font-size: 16px; margin-bottom: 4px; }
+    #pick .offers button.chosen { outline: 3px solid #f0b429; }
+    #result { top: 50%; left: 50%; transform: translate(-50%, -50%); min-width: 340px; z-index: 20; padding: 18px 22px; }
+    #result li { margin: 3px 0; }
+    #error { position: fixed; top: 52px; left: 50%; transform: translateX(-50%); z-index: 30; }
+    .ml-rules li { margin: 3px 0; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Metro Lanes</h1>
+    <p id="connection" class="muted">Connecting…</p>
+    <div id="error" hidden></div>
+
+    <section id="lobby" hidden>
+      <div class="card">
+        <div class="row" style="margin-bottom: 8px">
+          <h2 style="margin: 0">Players</h2>
+          <span class="spacer"></span>
+          <button id="join" class="green" hidden>Join game</button>
+          <button id="ready" class="green" hidden>Ready</button>
+          <button id="leave" class="red" hidden>Leave game</button>
+        </div>
+        <ul id="players"></ul>
+        <div id="start"></div>
+        <p id="spectators" class="muted"></p>
+      </div>
+      <div class="card">
+        <h2>Game settings</h2>
+        <div id="settings"></div>
+        <h3>How to play</h3>
+        <ul class="ml-rules">
+          <li>Everyone builds roads in the <b>same city</b>. Houses and shops pop up in colours; cars drive from houses to shops of the same colour.</li>
+          <li><b>Drag</b> to draw roads (diagonals too); <b>right-drag</b> to erase. Each player has their own pieces, and you can only erase your own.</li>
+          <li>Drag straight into water or a mountain to build a <b>bridge</b> or <b>tunnel</b>. Motorways, roundabouts and traffic lights are tools on the bottom bar.</li>
+          <li>Each trip a car makes is worth 10 points, shared by whoever built the road it drove on.</li>
+          <li>Every week everyone gets 20 roads and picks one of the same two upgrades (the city pauses while you pick).</li>
+          <li>Shops pile up pins when nobody serves them. If a shop's timer fills up, <b>everyone loses</b>.</li>
+        </ul>
+      </div>
+    </section>
+
+    <section id="game" hidden>
+      <canvas id="map"></canvas>
+
+      <div id="hudTop" class="hud">
+        <span class="ml-week" id="week"></span>
+        <div class="ml-clock"><div id="clockFill"></div></div>
+        <span id="paused" hidden>Paused: picking upgrades</span>
+        <span class="ml-trips" id="trips"></span>
+      </div>
+
+      <div id="hudPlayers" class="hud">
+        <h3>Players</h3>
+        <ul id="scores"></ul>
+      </div>
+
+      <div id="hint"></div>
+      <div id="hudTools" class="hud">
+        <button data-tool="road"><kbd>1</kbd>🛣️ Road <span class="count" data-item="roads"></span></button>
+        <button data-tool="motorway"><kbd>2</kbd>🛤️ Motorway <span class="count" data-item="motorways"></span></button>
+        <button data-tool="roundabout"><kbd>3</kbd>⭕ Roundabout <span class="count" data-item="roundabouts"></span></button>
+        <button data-tool="light"><kbd>4</kbd>🚦 Light <span class="count" data-item="lights"></span></button>
+        <span class="sep"></span>
+        <span class="spans">🌉 <b data-item="bridges"></b> · ⛰️ <b data-item="tunnels"></b></span>
+      </div>
+
+      <div id="pick" class="hud" hidden>
+        <h3 id="pickTitle"></h3>
+        <div class="offers" id="offers"></div>
+        <div id="pickStatus" class="muted small"></div>
+      </div>
+
+      <div id="result" class="hud" hidden>
+        <div id="resultBody"></div>
+        <button id="back" hidden>Back to lobby</button>
+      </div>
+    </section>
+  </main>
+</body>
+</html>

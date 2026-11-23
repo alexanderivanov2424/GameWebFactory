@@ -1,0 +1,15 @@
+{
+  "order": 6,
+  "name": "Blade Dozer",
+  "icon": "🚜",
+  "kind": "dozer",
+  "cost": 10000,
+  "rate": 300,
+  "speed": 2.0,
+  "reach": 1.5,
+  "diesel": 1.0,
+  "text": "Shoves snow off the frontier onto the lots beyond. Advances fast, but only 40% of the snow is paid; the rest piles up further out.",
+  "params": {
+    "paid": 0.4
+  }
+}

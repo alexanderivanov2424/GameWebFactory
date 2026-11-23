@@ -1,0 +1,12 @@
+{
+  "order": 1,
+  "name": "Neighbour Kid",
+  "icon": "🧒",
+  "kind": "worker",
+  "cost": 15,
+  "rate": 0.3,
+  "speed": 2.5,
+  "reach": 1.0,
+  "diesel": 0,
+  "text": "Shovels the nearest snow near your rally point."
+}

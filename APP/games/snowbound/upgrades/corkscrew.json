@@ -1,0 +1,9 @@
+{
+  "name": "Corkscrew",
+  "cost": 250000,
+  "text": "Deep Augers drill any deep drift near your rally point, even far past the frontier; a drilled-out lot opens new cleared ground there.",
+  "effect": {
+    "kind": "flag"
+  },
+  "machine": "auger"
+}

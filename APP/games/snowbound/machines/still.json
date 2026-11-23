@@ -1,0 +1,17 @@
+{
+  "order": 8,
+  "name": "Snow Still",
+  "icon": "⚗️",
+  "kind": "still",
+  "cost": 250000,
+  "rate": 1500,
+  "speed": 0,
+  "reach": 6.0,
+  "diesel": 0,
+  "text": "Placed where you stand. Pulls snow from the nearest lots within 6 and distils it: pays cash and fills your diesel tank (1 L per 20 snow).",
+  "placed": true,
+  "params": {
+    "lots": 3,
+    "diesel_per": 20
+  }
+}

@@ -1,0 +1,9 @@
+{
+  "name": "Thermal Suit",
+  "cost": 5000,
+  "text": "You lose warmth half as fast away from heat.",
+  "effect": {
+    "kind": "warm_loss",
+    "value": 0.5
+  }
+}
