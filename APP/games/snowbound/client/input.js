@@ -7,6 +7,7 @@
  *   SB.input.aim           [x, y] lot under the mouse (or null); SB.input.inReach(x, y)
  *   SB.input.reset()       new game
  *   SB.input.road          road tool level 1-4 (0 = off); SB.input.setRoad(level) (0 turns it off)
+ *   SB.input.demolish      demolish tool on; SB.input.setDemolish(on) (the two tools turn each other off)
  *   SB.input.canRoad(x, y) can the selected road level be laid on that lot (cleared, not the cabin, not that good yet)
  * Input sent ({keys, aim, dig}, see server.py): whenever keys or the dig button change, and when
  * the aimed lot changes (at most every AIM_EVERY ms, the last one always sent).
@@ -15,6 +16,7 @@
  * Keys: WASD/arrows walk; hold mouse or Space to shovel the lot under the mouse; Shift+click sets
  * the team's rally point; B machines, U upgrades, T team, H build a hut, Q build a Snow Depot,
  * G road tool (1-4 pick the level; click or drag to lay road, sent in batches every ROAD_EVERY ms),
+ * X demolish tool (click tears down what's on a lot; dragging on from there only takes roads),
  * F follow me, R units work anywhere, Esc closes panels and the road tool; wheel zooms.
  */
 (() => {
@@ -26,7 +28,7 @@
   const ROAD_EVERY = 120;
   const SNAP = 1.5;
 
-  const input = (SB.input = { me: null, aim: null, road: 0 });
+  const input = (SB.input = { me: null, aim: null, road: 0, demolish: false });
   let lobby = null;
   const held = new Set();
   let mouseDig = false, spaceDig = false, mouse = null;
@@ -58,21 +60,29 @@
     return !!me && Math.hypot(x + 0.5 - me.x, y + 0.5 - me.y) <= reach;
   };
 
-  input.reset = () => { input.me = null; held.clear(); mouseDig = spaceDig = false; sent = { keys: "", aim: "", dig: false }; input.setRoad(0); };
+  input.reset = () => { input.me = null; held.clear(); mouseDig = spaceDig = false; sent = { keys: "", aim: "", dig: false }; input.setRoad(0); input.setDemolish(false); };
 
   input.setRoad = (level) => {
     input.road = level;
-    if (level) lastRoadLevel = level;
+    if (level) { lastRoadLevel = level; if (input.demolish) input.setDemolish(false); }
     roadDrag = null;
     if (SB.hud) SB.hud.roadTool(level);
+  };
+
+  input.setDemolish = (on) => {
+    input.demolish = on;
+    if (on && input.road) input.setRoad(0);
+    roadDrag = null;
+    if (SB.hud) SB.hud.demolishTool(on);
   };
 
   input.canRoad = (x, y) => SB.grid.reached(x, y) && SB.grid.feat(x, y) !== "X" && SB.grid.road(x, y) < input.road;
 
   function flushRoad() {
     roadTimer = null;
-    if (!roadQueue.length || !playing()) { roadQueue = []; return; }
-    lobby.sendGame({ action: "road", level: input.road, lots: roadQueue.splice(0, 200) });
+    if (!roadQueue.length || !playing() || (!input.road && !input.demolish)) { roadQueue = []; return; }
+    if (input.demolish) lobby.sendGame({ action: "demolish", roads: true, lots: roadQueue.splice(0, 200) });
+    else lobby.sendGame({ action: "road", level: input.road, lots: roadQueue.splice(0, 200) });
     if (roadQueue.length) roadTimer = setTimeout(flushRoad, ROAD_EVERY);
   }
 
@@ -83,7 +93,7 @@
     for (let k = 0; k <= n; k++) {
       const x = Math.round(from[0] + ((lot[0] - from[0]) * k) / (n || 1)), y = Math.round(from[1] + ((lot[1] - from[1]) * k) / (n || 1));
       const key = x + "," + y;
-      if (roadDrag.seen.has(key) || !input.canRoad(x, y)) continue;
+      if (roadDrag.seen.has(key) || !(input.demolish ? SB.grid.road(x, y) > 0 : input.canRoad(x, y))) continue;
       roadDrag.seen.add(key);
       roadQueue.push([x, y]);
     }
@@ -139,6 +149,11 @@
       if (ev.button !== 0 || !playing()) return;
       if (ev.shiftKey) { lobby.sendGame({ action: "rally", x: lot[0], y: lot[1] }); return; }
       if (input.road) { roadDrag = { seen: new Set(), last: null }; roadAt(lot); return; }
+      if (input.demolish) {
+        lobby.sendGame({ action: "demolish", lots: [lot] });
+        roadDrag = { seen: new Set([lot.join(",")]), last: lot };
+        return;
+      }
       swingAt(lot);
       mouseDig = true;
       send(true);
@@ -168,7 +183,8 @@
       if (digit && input.road) { ev.preventDefault(); input.setRoad(digit); return; }
       const hud = {
         KeyB: () => SB.hud.toggle("machines"), KeyU: () => SB.hud.toggle("upgrades"), KeyT: () => SB.hud.toggle("team"),
-        Escape: () => { SB.hud.toggle(null); input.setRoad(0); }, KeyH: () => SB.hud.buildHut(), KeyQ: () => SB.hud.buildDepot(),
+        Escape: () => { SB.hud.toggle(null); input.setRoad(0); input.setDemolish(false); },
+        KeyX: () => input.setDemolish(!input.demolish), KeyH: () => SB.hud.buildHut(), KeyQ: () => SB.hud.buildDepot(),
         KeyG: () => input.setRoad(input.road ? 0 : lastRoadLevel), KeyF: () => SB.hud.follow(), KeyR: () => SB.hud.anywhere(),
       }[ev.code];
       if (hud) { ev.preventDefault(); hud(); }

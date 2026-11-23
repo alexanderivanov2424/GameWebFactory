@@ -33,6 +33,8 @@ Shovel Buddies spread out over the players. Each player only has their own chara
 Lots hide things: forests (logs for the stove), buried cabins (cash), gas stations (diesel),
 supply caches and lost skiers (free helpers). Golden snowflakes appear near players now and then:
 the first to walk into one gets a x5 Frenzy or a lump of cash.
+Demolish: placed machines, Snow Depots, warming huts and roads can be torn down for 25% of what
+they cost (roads: of what players paid; landmark buildings, rail stations and the cabin stay).
 Survival: the cabin stove and warming huts (bought, built where you stand) burn logs from a shared
 woodpile. Near a lit one you warm up; anywhere else you get colder, and at 0 warmth you get
 frostbite (can't shovel, walk slowly) until you warm up. Food drops over time and with each
@@ -60,6 +62,8 @@ Game messages (players only):
                  {"action": "depot"}                            build a Snow Depot where you stand
                  {"action": "road", "level": 1-4, "lots": [[x, y], ...]}   lay or upgrade road
                      (at most 200 lots; pays the difference per lot; lots already that good are skipped)
+                 {"action": "demolish", "lots": [[x, y], ...], "roads": bool}   tear down what's on
+                     each lot for 25% back (roads: true only takes roads; see logic/demolish.py)
 Public / private state: logic/view.py (spectators get the units near any character).
 Result:          {"reason": str, "cleared": {pid: snow}}
 """
@@ -84,6 +88,14 @@ def _xy(data):
     return x, y
 
 
+def _lots(data):
+    lots = data.get("lots")
+    if not isinstance(lots, list) or not 0 < len(lots) <= MAX_ROAD_LOTS or not all(
+            isinstance(lot, list) and len(lot) == 2 and all(type(v) is int for v in lot) for lot in lots):
+        raise LobbyError("Bad lots.")
+    return lots
+
+
 def _name(data, key):
     value = data.get(key)
     return value if isinstance(value, str) else None
@@ -102,7 +114,7 @@ class Game(RealtimeGame):
                            options={"easy": "Easy", "normal": "Normal", "harsh": "Harsh"}),
     }
     ACTIONS = {"dig": "dig", "buy": "buy", "upgrade": "upgrade", "supply": "supply",
-               "rally": "rally", "hut": "hut", "depot": "depot", "road": "road"}
+               "rally": "rally", "hut": "hut", "depot": "depot", "road": "road", "demolish": "demolish"}
 
     def __init__(self, room):
         super().__init__(room)
@@ -190,13 +202,13 @@ class Game(RealtimeGame):
         self.match.build_depot(member.id)
 
     def road(self, member, data):
-        level, lots = data.get("level"), data.get("lots")
+        level = data.get("level")
         if type(level) is not int:
             raise LobbyError("Unknown road level.")
-        if not isinstance(lots, list) or not 0 < len(lots) <= MAX_ROAD_LOTS or not all(
-                isinstance(lot, list) and len(lot) == 2 and all(type(v) is int for v in lot) for lot in lots):
-            raise LobbyError("Bad lots.")
-        self.match.lay_road(member.id, lots, level)
+        self.match.lay_road(member.id, _lots(data), level)
+
+    def demolish(self, member, data):
+        self.match.demolish(member.id, _lots(data), data.get("roads") is True)
 
     def on_player_removed(self, member):
         if self.match is not None:

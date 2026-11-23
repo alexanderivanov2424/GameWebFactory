@@ -6,7 +6,8 @@ weather -> once a second (blizzard snowfall or deliveries) -> golden snowflakes 
 needs (survival.py) -> characters walk and shovel (avatars.py) -> route fields (roads.py) ->
 units (units.py, hauling.py, factory.py) -> swing budgets -> goal check.
 Player actions raise LobbyError when refused: dig (one swing), buy, upgrade, supply, rally,
-build_hut, build_depot (hauling.py), lay_road (roads.py); set_input stores held controls.
+build_hut, build_depot (hauling.py), lay_road (roads.py), demolish (demolish.py); set_input
+stores held controls.
 Everything bought belongs to the team (economy.Stores): machines, upgrades, cash, diesel,
 rations. Units keep the id of the player who bought them (pid) only for credit in the log and
 their colour; they stay when that player leaves. The team has one rally point (rally_spot: None,
@@ -23,7 +24,7 @@ import random
 
 from gamekit import LobbyError
 
-from . import avatars, hauling, landmarks, roads, survival, units
+from . import avatars, demolish, hauling, landmarks, roads, survival, units
 from .content import MACHINES, UPGRADES
 from .economy import CLICKS_PER_SECOND, MAX_OWNED, PRICES, Player, Stores
 from .world import World
@@ -355,6 +356,9 @@ class Match:
 
     def lay_road(self, pid, lots, level):
         return roads.lay(self, pid, lots, level)
+
+    def demolish(self, pid, lots, roads_only=False):
+        return demolish.demolish(self, pid, lots, roads_only)
 
     def remove(self, pid):
         p = self.players.pop(pid, None)

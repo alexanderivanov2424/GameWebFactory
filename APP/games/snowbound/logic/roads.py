@@ -11,9 +11,11 @@ to the nearest source (in lots at a machine's off-road speed: an edge costs the 
 1 / unit-speed of its two lots) and the next lot toward it. Network keeps two:
     drop:   sources = the cabin's lots, Snow Depots and Old Rail Stations (snow drop points)
     market: sources = the cabin's lots and Old Rail Stations (where goods sell)
-Roads only ever get added or faster and sources only get added, so costs only go down: changes
-are relaxed incrementally (a lazy Dijkstra kept in a heap) with at most BUDGET lots settled per
-field per tick (Network.update, called every tick). Following next pointers always lowers the
+Laying roads and adding sources only make costs go down, so those changes are relaxed
+incrementally (a lazy Dijkstra kept in a heap) with at most BUDGET lots settled per field per tick
+(Network.update, called every tick). Demolishing a road or a depot can make costs go up, so it
+marks the network stale and the fields are rebuilt from their sources (at most once per
+REBUILD_TICKS ticks, then spread over ticks by the same budget). Following next pointers always lowers the
 cost, so a route can't loop. hauling.py uses the fields to plan trips (straight off-road,
 then along the road network).
 """
@@ -36,6 +38,7 @@ TOP = len(LEVELS) - 1
 HEATED = 4
 MAX_LOTS = 200      # lots per lay() call
 BUDGET = 2000       # lots settled per field per tick
+REBUILD_TICKS = 10  # at most one rebuild per this many ticks
 INF = float("inf")
 
 
@@ -66,6 +69,7 @@ def lay(match, pid, lots, level):
             break
         p.cash -= cost
         world.make_road(i, level)
+        world.paid[i] = level
         done += 1
     if not done and broke:
         raise LobbyError(f"Not enough cash for {LEVELS[level]['name']} road.")
@@ -146,20 +150,39 @@ class Network:
 
     def __init__(self, world):
         self.world = world
-        self.drop = Field(world)
-        self.market = Field(world)
-        for i in range(world.w * world.h):
-            if world.kind[i] == "cabin":
-                self.drop.add_source(i)
-                self.market.add_source(i)
+        self.drops = [i for i in range(world.w * world.h) if world.kind[i] == "cabin"]
+        self.markets = list(self.drops)
+        self.stale = False
+        self.cooldown = 0
+        self._build()
+
+    def _build(self):
+        self.drop = Field(self.world)
+        self.market = Field(self.world)
+        for i in self.drops:
+            self.drop.add_source(i)
+        for i in self.markets:
+            self.market.add_source(i)
 
     def add_drop(self, i, market=False):
+        self.drops.append(i)
         self.drop.add_source(i)
         if market:
+            self.markets.append(i)
             self.market.add_source(i)
+
+    def remove_drop(self, i):
+        if i in self.drops:
+            self.drops.remove(i)
+            self.stale = True
 
     def update(self):
         world = self.world
+        self.cooldown -= 1
+        if self.stale and self.cooldown <= 0:
+            self.stale, self.cooldown = False, REBUILD_TICKS
+            world.road_changed = []
+            self._build()
         if world.road_changed:
             for i in world.road_changed:
                 self.drop.touch(i)

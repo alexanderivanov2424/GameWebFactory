@@ -42,7 +42,8 @@ Tests: `tests/` (`python3 -I tools/run_tests.py snowbound`).
   dusting, `nearest_target(..., ok=filter)`, row strings.
 - `logic/hauling.py`: trips home / back, unloading, Snow Depots. `logic/roads.py`: levels, `lay()`,
   route fields. `logic/factory.py`: processors and sleds. `logic/uniques.py`: landmark helpers.
-  `logic/landmarks.py`: placement, rewards, team effects (`Match.effects`).
+  `logic/landmarks.py`: placement, rewards, team effects (`Match.effects`). `logic/demolish.py`:
+  tearing things down for 25% back.
 - `logic/economy.py`: `Player`. `logic/survival.py`: weather, heat sources (cabin, huts,
   braziers), food/warmth, deliveries. `logic/view.py`: the client contract.
 - `client/`: `game.js` wiring, `grid.js` rows + walking rules, `view.js` canvas, `input.js`
@@ -70,8 +71,12 @@ Tests: `tests/` (`python3 -I tools/run_tests.py snowbound`).
   Processors and sleds serve everyone (no owner checks).
 - Pay machine snow through `units.collect()`, never `player.earn()`: hauling machines must carry it.
   The player's own shovel is still paid at once.
-- Route fields assume roads are never removed or downgraded and drop points never go away. If
-  that ever changes, the fields need a full rebuild (costs can only go down incrementally).
+- Route fields only relax incrementally when costs go down (roads laid, drop points added). Anything
+  that can make a route longer (demolishing a road or depot: `logic/demolish.py`) must set
+  `Network.stale` / call `remove_drop()` so the fields are rebuilt; until then a field may still lead
+  to a removed depot, so trips check `Network.drops` (hauling.dest_lot / plan_home).
+- Demolish refunds roads only for the level players paid (`World.paid`), so machine-made tracks
+  and Snow Golem upgrades can't be farmed for cash.
 - Landmark lots are kind `"site"`: nothing can be built on them (placed rewards take the centre lot).
 - Unique machines still count in `Player.owned` (so their rate and diesel count) but are hidden
   from the shop and refused by `buy_machine`.

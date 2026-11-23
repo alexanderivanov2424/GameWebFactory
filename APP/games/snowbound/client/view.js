@@ -262,6 +262,13 @@
     const aim = SB.input.aim;
     if (!aim || !SB.input.me) return;
     const [x, y] = aim, z = Z();
+    if (SB.input.demolish) {
+      ctx.fillStyle = "rgba(255,70,70,0.3)"; ctx.fillRect(sx(x), sy(y), z, z);
+      ctx.lineWidth = Math.max(2, z * 0.06); ctx.strokeStyle = "rgba(255,90,90,0.9)";
+      ctx.beginPath(); ctx.moveTo(sx(x) + z * 0.2, sy(y) + z * 0.2); ctx.lineTo(sx(x) + z * 0.8, sy(y) + z * 0.8);
+      ctx.moveTo(sx(x) + z * 0.8, sy(y) + z * 0.2); ctx.lineTo(sx(x) + z * 0.2, sy(y) + z * 0.8); ctx.stroke();
+      return;
+    }
     if (SB.input.road) {
       const ok = SB.input.canRoad(x, y);
       ctx.fillStyle = ok ? "rgba(120,220,120,0.35)" : "rgba(255,90,90,0.3)";

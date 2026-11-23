@@ -80,16 +80,17 @@ def plan_home(match, unit, player, procs=True, goods=False):
     goods: a sled heading for a market instead of a drop point."""
     world = match.world
     field = match.roads.market if goods else match.roads.drop
+    sources = set(match.roads.markets if goods else match.roads.drops)  # (a demolished depot may linger in a field)
     ux, uy = unit.x - 0.5, unit.y - 0.5
     best, dest, path = INF, None, []
-    for s in field.sources:
+    for s in sources:
         sx, sy = world.xy(s)
         d = math.hypot(sx - ux, sy - uy)
         if d < best:
             best, dest = d, ("drop", s)
     for j, d in nearest_road(field, ux, uy, ACCESS):
         c = d + field.cost[j]
-        if c < best - 1e-9:
+        if c < best - 1e-9 and field.src[j] in sources:
             best, dest, path = c, ("drop", field.src[j]), field.chain(j)[::-1]
     if procs and not goods:
         near, near_d = None, best * PREFER
@@ -121,7 +122,7 @@ def dest_lot(match, unit):
     """The lot unit's dest is on (None if that processor is gone)."""
     kind, ref = unit.dest
     if kind == "drop":
-        return ref
+        return ref if ref in match.roads.drops else None
     proc = match.units.get(ref)
     return proc.home if proc is not None else None
 
@@ -198,7 +199,7 @@ def build_depot(match, pid):
         raise LobbyError("Build depots on cleared ground (not the cabin or ruins).")
     if match.occupied(i):
         raise LobbyError("Something is already built on this spot.")
-    for s in match.roads.drop.sources:
+    for s in match.roads.drops:
         sx, sy = w.xy(s)
         if math.hypot(x - sx, y - sy) < DEPOT_SPACING:
             raise LobbyError(f"Too close to the cabin or another drop point (keep {DEPOT_SPACING} lots apart).")

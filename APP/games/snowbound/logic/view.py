@@ -12,6 +12,7 @@ public(match):
      "depots": {"<n>": [x, y]} (Snow Depots), "depotCost": $, "markets": {"<n>": [x, y]} (Old Rail
      Stations), "landmarks": landmarks.public(), "effects": [team effect ids from landmarks],
      "roadLevels": [{"name", "cost", "unit", "walk"}] (roads.LEVELS; index = level),
+     "refunds": {"share", "hut", "depot"} (what demolishing gives back, demolish.refunds()),
      "weather": {"kind": clear|warning|blizzard, "left": s}, "woodpile": logs,
      "stove": {"lit": bool, "burn": logs per minute}, "flake"?: {"x", "y", "left"},
      "progress": {"reached" (clear now), "dusted" (reached, snowed on again), "total", "goal": %},
@@ -22,7 +23,7 @@ public(match):
 private(match, pid): your shop, supplies and the units near you
     {"click": snow per swing, "reach": lots, "splash": share hitting the 4 lots around (Shovel
      Buddy), "wade": deepest snow level you can walk on, "rations", "diesel", "dieselUse": L/s (team's), "frenzy": s,
-     "machines": {id: {"owned", "cost1", "cost10", "rate"}}, "upgrades": [visible ids by cost],
+     "machines": {id: {"owned", "cost1", "cost10", "rate", "refund" (demolishing one)}}, "upgrades": [visible ids by cost],
      "owned": [the team's upgrade ids], "auto": [delivered items],
      "carried": snow the team's machines are carrying, "waiting": $ of goods waiting in processors,
      "cargo": $ of goods on sleds (all team-wide),
@@ -31,7 +32,7 @@ private(match, pid): your shop, supplies and the units near you
 spectator(match): {"units": ...} near any character (spectators follow a player).
 """
 
-from . import avatars, hauling, landmarks, survival, units
+from . import avatars, demolish, hauling, landmarks, survival, units
 from .content import GOODS, MACHINES, UPGRADES, defs, machine_cost
 from .economy import PRICES
 from .roads import LEVELS
@@ -76,6 +77,7 @@ def public(match):
         "depotCost": hauling.depot_cost(match),
         "markets": {str(k): list(world.xy(i)) for k, i in enumerate(match.markets)},
         "landmarks": landmarks.public(match), "effects": sorted(match.effects), "roadLevels": LEVELS,
+        "refunds": demolish.refunds(match),
         "weather": match.weather.public(), "woodpile": round(match.woodpile, 1),
         "stove": {"lit": match.woodpile > 0, "burn": round(survival.stove_burn(match) * 60, 1)},
         "progress": {"reached": world.cleared(), "dusted": len(world.dusted), "total": world.w * world.h,
@@ -114,7 +116,8 @@ def private(match, pid):
         "dieselUse": round(match.diesel_use(), 2), "frenzy": int(p.frenzy),
         "machines": {mid: {"owned": p.owned[mid], "cost1": machine_cost(mid, p.owned[mid]),
                            "cost10": machine_cost(mid, p.owned[mid], 10),
-                           "rate": round(p.machine_rate(mid), 1)} for mid in MACHINES},
+                           "rate": round(p.machine_rate(mid), 1),
+                           "refund": demolish.machine_refund(match, mid)} for mid in MACHINES},
         "upgrades": visible, "owned": sorted(p.upgrades),
         "auto": sorted(item for item in ("rations", "diesel", "logs") if p.has_auto(item)),
         "carried": int(carried), "waiting": int(waiting), "cargo": int(cargo),

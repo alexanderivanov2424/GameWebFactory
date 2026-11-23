@@ -11,6 +11,7 @@ Modules:
     hauling.py   Haulers carry dug snow to drop points (cabin, Snow Depots, rail stations, processors); trips, depots
     roads.py     Road levels and laying them; route fields over the road network (incremental, budgeted)
     factory.py   Processors (snow -> goods, chained side by side) and sleds selling goods at a market
+    demolish.py  Tearing down placed machines, depots, huts and roads for a partial refund
     landmarks.py Hidden one-of-a-kind ruins: placement, rewards when fully cleared, team effects
     survival.py  Weather, stove/huts and the woodpile, food and warmth near heat, blizzard snowfall, deliveries
     content.py   Loads machines/, upgrades/, goods/ and landmarks/ (*.json), machine prices

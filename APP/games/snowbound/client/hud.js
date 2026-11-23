@@ -6,6 +6,7 @@
  *   SB.hud.toggle(name)    open/close the side panel: "machines" | "upgrades" | "team" | null (close)
  *   SB.hud.buildHut(), buildDepot(), follow(), anywhere()   hotbar actions (also keys H, Q, F, R)
  *   SB.hud.roadTool(level)  show the road tool box with that level picked (0 hides it; input.js owns the tool)
+ *   SB.hud.demolishTool(on) light the Demolish button
  * Buttons are built once and updated in place (machines, supplies) or rebuilt only when their list
  * changes (upgrades), so a click never lands on a button that was just replaced.
  *   SB.fmt(n)   short number: 9.5, 950, 1.2k, 3.4M, 5.6B
@@ -44,6 +45,7 @@
   };
   hud.buildHut = () => lobby.sendGame({ action: "hut" });
   hud.buildDepot = () => lobby.sendGame({ action: "depot" });
+  hud.demolishTool = (on) => $("demolishTool").classList.toggle("on", on);
   let roadButtons = null;
   hud.roadTool = (level) => {
     const box = $("hudRoads");
@@ -169,11 +171,33 @@
     }
     if (road) parts.push(`${game.roadLevels[road].name} road`);
     if (snow) parts.push(`~${fmt(snow)} snow`);
-    if (SB.input.road) {
+    if (SB.input.demolish) {
+      parts.push(demolishText(game, mine, x, y, at, placed || placedAt(mine, x, y), road));
+    } else if (SB.input.road) {
       const lv = game.roadLevels[SB.input.road];
       parts.push(SB.input.canRoad(x, y) ? `click: ${lv.name} ${money(lv.cost - game.roadLevels[road].cost)}` : "can't lay road here");
     } else if (workable) parts.push(SB.input.inReach(x, y) ? "hold to shovel" : "walk closer to shovel");
     return parts.join(" · ");
+  }
+
+  function placedAt(mine, x, y) {
+    return mine && mine.units ? Object.values(mine.units).find((u) => Math.floor(u.x) === x && Math.floor(u.y) === y &&
+      lobby.state.game.defs.machines[u.m].placed) : null;
+  }
+
+  function demolishText(game, mine, x, y, at, placed, road) {
+    // What a click would tear down (the server decides; this mirrors logic/demolish.py's order).
+    const share = game.refunds.share;
+    if (SB.grid.feat(x, y) === "X" || at(game.markets)) return "can't be torn down";
+    if (placed) {
+      const d = game.defs.machines[placed.m];
+      if (d.unique) return "landmark building: can't be torn down";
+      return `click: tear down ${d.name} (+${money(mine.machines ? mine.machines[placed.m].refund : 0)})`;
+    }
+    if (at(game.depots)) return `click: tear down depot (+${money(game.refunds.depot)})`;
+    if (at(game.huts)) return `click: tear down hut (+${money(game.refunds.hut)})`;
+    if (road) return `click or drag: remove road (+up to ${money(share * game.roadLevels[road].cost)})`;
+    return "nothing to tear down";
   }
 
   hud.refresh = (state) => {
@@ -269,6 +293,7 @@
     $("buildHut").addEventListener("click", hud.buildHut);
     $("buildDepot").addEventListener("click", hud.buildDepot);
     $("roadTool").addEventListener("click", () => SB.input.setRoad(SB.input.road ? 0 : 1));
+    $("demolishTool").addEventListener("click", () => SB.input.setDemolish(!SB.input.demolish));
     $("follow").addEventListener("click", hud.follow);
     $("anywhere").addEventListener("click", hud.anywhere);
     for (const button of document.querySelectorAll(".sb-supply button")) {
