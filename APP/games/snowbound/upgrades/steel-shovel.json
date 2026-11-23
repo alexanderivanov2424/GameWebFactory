@@ -1,7 +1,7 @@
 {
   "name": "Steel Shovel",
   "cost": 100,
-  "text": "Everyone's shovel clears 2x snow.",
+  "text": "Your shovel clears 2x snow.",
   "effect": {
     "kind": "click_mult",
     "value": 2

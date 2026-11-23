@@ -69,6 +69,7 @@ def lay(match, pid, lots, level):
         p.cash -= cost
         world.make_road(i, level)
         world.paid[i] = level
+        world.road_by[i] = pid
         done += 1
     if not done and broke:
         raise LobbyError(f"Not enough cash for {LEVELS[level]['name']} road.")

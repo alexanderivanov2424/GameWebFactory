@@ -1,9 +1,10 @@
 {
   "name": "Snow Fences",
   "cost": 1000000,
-  "text": "Blizzards drop half as much snow back on cleared ground.",
+  "text": "Everyone: blizzards drop half as much snow back on cleared ground.",
   "effect": {
     "kind": "dust",
     "value": 0.5
-  }
+  },
+  "shared": true
 }

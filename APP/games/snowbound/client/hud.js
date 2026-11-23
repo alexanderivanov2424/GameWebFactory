@@ -128,14 +128,15 @@
       upgradeKey = key;
       upgradeButtons = mine.upgrades.map((id) => {
         const u = defs[id];
-        const b = el("button", { className: "sb-upgrade", title: u.text + " (for the whole team)",
+        const b = el("button", { className: "sb-upgrade", title: u.text + (u.shared ? " (for the whole team)" : ""),
           onclick: () => lobby.sendGame({ action: "upgrade", upgrade: id }) },
-        u.name, el("small", {}, `${money(u.cost)} · ${u.text}`));
+        `${u.shared ? "🤝 " : ""}${u.name}`, el("small", {}, `${money(u.cost)} · ${u.text}`));
         b.dataset.cost = u.cost;
         return b;
       });
+      const shared = Object.keys(game.shared).length;
       fill($("upgrades"), upgradeButtons.length ? upgradeButtons : el("span", { className: "muted" }, "Nothing new yet: earn more or buy machines."),
-        el("div", { className: "muted", style: "width:100%" }, `The team owns ${mine.owned.length} upgrades (they apply to everyone)`));
+        el("div", { className: "muted", style: "width:100%" }, `Owned: ${mine.owned.length} yours, ${shared} shared`));
     }
     for (const b of upgradeButtons) b.disabled = me.cash < Number(b.dataset.cost);
   }
@@ -148,10 +149,11 @@
   function renderTeam(game, state) {
     if (panel !== "team") return;
     fill($("team"), Object.entries(game.players).map(([pid, p]) => {
+      const units = Object.values(p.owned).reduce((a, b) => a + b, 0);
       return el("li", { title: "Click to follow (spectators)", onclick: () => { SB.view.spectate = pid; } },
         el("span", { className: "sb-dot", style: `background:${p.color}` }), el("b", {}, p.name + (pid === state.you ? " (you)" : "")),
         statusChip(p),
-        el("div", { className: "muted" }, `cleared ${fmt(p.cleared)}` +
+        el("div", { className: "muted" }, `${money(p.cash)} · ${fmt(p.rate)} snow/s · ${units} units · cleared ${fmt(p.cleared)}` +
           (p.goods ? ` · goods ${money(p.goods)}` : "")),
         el("div", { className: "muted" }, `🍲 ${p.food}  🌡️ ${p.warmth}`));
     }));
@@ -175,11 +177,12 @@
       parts[0] = `${d.icon} ${d.name}: input ${Math.round(placed.f[0] * 100)}% · ${placed.f[1]} ${out.icon} waiting${placed.s === "full" ? " · FULL: put a conveyor beside it" : ""}`;
     }
     const belt = SB.input.beltAt(x, y);
-    if (belt) parts.push(`Conveyor ${"→↓←↑"[belt[0]]}` + (belt[2] ? ` · ${belt[2]} ${game.defs.goods[belt[1]].icon}` : " · empty"));
+    if (belt) parts.push(`${belt[3] === lobby.state.you ? "Your conveyor" : `${(game.players[belt[3]] || {}).name || "Someone"}'s conveyor`} ${"→↓←↑"[belt[0]]}` +
+      (belt[2] ? ` · ${belt[2]} ${game.defs.goods[belt[1]].icon}` : " · empty"));
     if (road) parts.push(`${game.roadLevels[road].name} road`);
     if (snow) parts.push(`~${fmt(snow)} snow`);
     if (SB.input.belt) {
-      parts.push(belt ? "click: turn it" : SB.input.canBelt(x, y) ? `click or drag: conveyor ${money(game.beltCost)}` : "can't lay a conveyor here");
+      parts.push(SB.input.myBelt(x, y) ? "click: turn it" : belt ? "not yours" : SB.input.canBelt(x, y) ? `click or drag: conveyor ${money(game.beltCost)}` : "can't lay a conveyor here");
     } else if (SB.input.demolish) {
       parts.push(demolishText(game, mine, x, y, at, placed || placedAt(mine, x, y), road));
     } else if (SB.input.road) {
@@ -201,11 +204,14 @@
     if (placed) {
       const d = game.defs.machines[placed.m];
       if (d.unique) return "landmark building: can't be torn down";
+      if (placed.p !== lobby.state.you) return `${(game.players[placed.p] || {}).name || "Someone"}'s ${d.name}`;
       return `click: tear down ${d.name} (+${money(mine.machines ? mine.machines[placed.m].refund : 0)})`;
     }
     if (at(game.depots)) return `click: tear down depot (+${money(game.refunds.depot)})`;
     if (at(game.huts)) return `click: tear down hut (+${money(game.refunds.hut)})`;
-    if (SB.input.beltAt(x, y)) return `click or drag: remove conveyor (+${money(game.refunds.belt)}, its goods are lost)`;
+    const belt = SB.input.beltAt(x, y);
+    if (belt && belt[3] !== lobby.state.you && game.players[belt[3]]) return `${game.players[belt[3]].name}'s conveyor`;
+    if (belt) return `click or drag: remove conveyor (+${money(game.refunds.belt)}, its goods are lost)`;
     if (road) return `click or drag: remove road (+up to ${money(share * game.roadLevels[road].cost)})`;
     return "nothing to tear down";
   }
@@ -252,10 +258,7 @@
       return;
     }
     $("cash").textContent = money(me.cash);
-    $("cash").title = "Team cash: shared by every player (so are diesel and rations)";
-    const follow = game.rally && game.rally.follow;
-    $("rates").textContent = `Team machines ${fmt(me.rate)} snow/s · Shovel ${fmt(mine.click)}/swing` +
-      (follow ? ` · following ${follow === state.you ? "you" : (game.players[follow] || {}).name}` : "");
+    $("rates").textContent = `Machines ${fmt(me.rate)} snow/s · Shovel ${fmt(mine.click)}/swing`;
     const haul = [];
     if (mine.carried) haul.push(`🛒 ${fmt(mine.carried)} snow on the way`);
     if (mine.waiting) haul.push(`🏭 ${money(mine.waiting)} goods waiting`);
@@ -265,7 +268,7 @@
     if (me.status === "frostbite") notes.push("🥶 Frostbite! You can't shovel. Get to the cabin or a hut.");
     if (me.status === "starving") notes.push("🍽️ Starving: weak and slow. Buy rations!");
     if (mine.frenzy) notes.push(`⚡ Frenzy x5 for ${mine.frenzy}s`);
-    if (mine.dieselUse > 0 && mine.diesel <= 0) notes.push("⛽ The team is out of diesel: machines stopped.");
+    if (mine.dieselUse > 0 && mine.diesel <= 0) notes.push("⛽ Out of diesel: your machines stopped.");
     if (!game.stove.lit) notes.push("🪵 The woodpile is empty: no heat anywhere!");
     fill($("status"), notes.map((n) => el("div", {}, n)));
 
@@ -289,8 +292,8 @@
     $("buildDepot").innerHTML = "";
     $("buildDepot").append(el("kbd", {}, "Q"), `Depot ${money(game.depotCost)}`);
     $("buildDepot").disabled = me.cash < game.depotCost;
-    $("follow").classList.toggle("on", !!(game.rally && game.rally.follow === state.you));
-    $("anywhere").classList.toggle("on", game.rally === undefined);
+    $("follow").classList.toggle("on", me.rally === "follow");
+    $("anywhere").classList.toggle("on", me.rally === undefined);
     renderMachines(game, mine, me);
     renderUpgrades(game, mine, me);
   };

@@ -158,8 +158,7 @@ class RulesTests(unittest.TestCase):
         a.cash = a.earned = b.earned = 10 ** 6
         match.upgrade("p1", "road-salt")
         self.assertEqual(match.shared_upgrades, {"road-salt": "p1"})
-        self.assertFalse(b.upgrade_visible("road-salt"))
-        self.assertTrue(b.has("road-salt"))
+        self.assertFalse(b.upgrade_visible("road-salt", match.shared_upgrades))
 
     def test_dog_tunnels_and_leaves_road(self):
         match = new_match()

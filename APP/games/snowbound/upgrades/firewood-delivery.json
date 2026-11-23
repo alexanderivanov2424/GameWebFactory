@@ -1,7 +1,7 @@
 {
   "name": "Firewood Delivery",
   "cost": 1500,
-  "text": "Keeps the woodpile at 20 logs, paid from team cash (25% fee). No deliveries in blizzards.",
+  "text": "Keeps the shared woodpile at 20 logs, paid by you (25% fee). No deliveries in blizzards.",
   "effect": {
     "kind": "auto",
     "value": "logs"

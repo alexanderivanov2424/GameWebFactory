@@ -4,7 +4,7 @@ A hauling machine digs as usual (units.collect() adds the snow to unit.load and 
 cleared) until its load is full (carry x Player.carry_mult), or it has snow and nothing left to
 dig. Then it goes home (trip "home") to the best drop point:
     - the cabin, a Snow Depot or an Old Rail Station: the snow sells for $1 a unit;
-    - a processor (anyone's: the factory is shared) that takes snow and has room for the whole load (factory.py),
+    - one of its owner's processors that takes snow and has room for the whole load (factory.py),
       chosen while it is at most PREFER x as far as the best drop point (processing pays more).
 After unloading it goes back (trip "back") to the lot where it filled up and carries on.
 Changing your rally point cancels trips back.
@@ -94,7 +94,7 @@ def plan_home(match, unit, player, procs=True):
     if procs:
         near, near_d = None, best * PREFER
         for proc in match.units.values():
-            if proc.home is not None and snow_room(proc) >= unit.load:
+            if proc.pid == unit.pid and proc.home is not None and snow_room(proc) >= unit.load:
                 d = math.hypot(proc.x - unit.x, proc.y - unit.y)
                 if d <= near_d:
                     near, near_d = proc, d
@@ -123,14 +123,14 @@ def dest_lot(match, unit):
     if kind == "drop":
         return ref if ref in match.roads.drops else None
     proc = match.units.get(ref)
-    return proc.home if proc is not None else None
+    return proc.home if proc is not None and proc.pid == unit.pid else None
 
 
 def unload(match, unit, player):
     kind, ref = unit.dest
     if kind == "proc":
         proc = match.units.get(ref)
-        if proc is not None:
+        if proc is not None and proc.pid == unit.pid:
             put = max(0.0, min(snow_room(proc), unit.load))
             proc.inbox += put
             unit.load -= put
@@ -204,6 +204,7 @@ def build_depot(match, pid):
             raise LobbyError(f"Too close to the cabin or another drop point (keep {DEPOT_SPACING} lots apart).")
     p.pay(depot_cost(match))
     match.depots.append(i)
+    match.builders[("depot", i)] = pid
     match.roads.add_drop(i)
     match.say(f"{p.name} built a Snow Depot.")
 

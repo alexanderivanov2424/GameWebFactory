@@ -9,7 +9,7 @@
  *   SB.input.road          road tool level 1-4 (0 = off); SB.input.setRoad(level) (0 turns it off)
  *   SB.input.demolish      demolish tool on; SB.input.setDemolish(on)
  *   SB.input.belt          conveyor tool on; SB.input.setBelt(on); SB.input.beltDir (0-3: right, down, left, up)
- *   SB.input.beltAt(x, y)  the conveyor on a lot ([dir, good, count]) or undefined
+ *   SB.input.beltAt(x, y)  the conveyor on a lot ([dir, good, count, owner pid]) or undefined; SB.input.myBelt(x, y)
  *   (one build tool at a time: picking one turns the others off)
  *   SB.input.canRoad(x, y) can the selected road level be laid on that lot (cleared, not the cabin, not that good yet)
  * Input sent ({keys, aim, dig}, see server.py): whenever keys or the dig button change, and when
@@ -17,7 +17,7 @@
  * Prediction: you move locally with SB.grid.move and the same speed rules; the server's position
  * corrects it (snap when more than SNAP lots apart, drift toward it while standing still).
  * Keys: WASD/arrows walk; hold mouse or Space to shovel the lot under the mouse; Shift+click sets
- * the team's rally point; B machines, U upgrades, T team, H build a hut, Q build a Snow Depot,
+ * your units' rally point; B machines, U upgrades, T team, H build a hut, Q build a Snow Depot,
  * G road tool (1-4 pick the level; click or drag to lay road, sent in batches every ROAD_EVERY ms),
  * C conveyor tool (drag to lay belts pointing the way you drag; click a belt to turn it),
  * X demolish tool (click tears down what's on a lot; dragging on from there only takes belts and roads),
@@ -81,7 +81,8 @@
 
   input.canRoad = (x, y) => SB.grid.reached(x, y) && SB.grid.feat(x, y) !== "X" && SB.grid.road(x, y) < input.road;
   input.beltAt = (x, y) => { const game = lobby.state && lobby.state.game, w = game ? game.w : 0; return game && game.belts && x >= 0 && y >= 0 && x < w ? game.belts[String(y * w + x)] : undefined; };
-  input.canBelt = (x, y) => SB.grid.reached(x, y) && !["X", "S"].includes(SB.grid.feat(x, y));
+  input.myBelt = (x, y) => { const b = input.beltAt(x, y); return b && b[3] === lobby.state.you ? b : undefined; };
+  input.canBelt = (x, y) => SB.grid.reached(x, y) && !["X", "S"].includes(SB.grid.feat(x, y)) && !input.beltAt(x, y);
 
   function flush() {
     queueTimer = null;
@@ -115,14 +116,14 @@
           if (dir >= 0) { input.beltDir = dir; if (drag.laid.has(prev.join(","))) queue.push([prev[0], prev[1], dir]); }
         }
         drag.last = [x, y];
-        if (drag.seen.has(key) || !input.canBelt(x, y)) continue;
+        if (drag.seen.has(key) || !(input.canBelt(x, y) || input.myBelt(x, y))) continue;
         drag.seen.add(key);
         drag.laid.add(key);
         queue.push([x, y, input.beltDir]);
         continue;
       }
       drag.last = [x, y];
-      const ok = input.demolish ? SB.grid.road(x, y) > 0 || input.beltAt(x, y) : input.canRoad(x, y);
+      const ok = input.demolish ? SB.grid.road(x, y) > 0 || input.myBelt(x, y) : input.canRoad(x, y);
       if (drag.seen.has(key) || !ok) continue;
       drag.seen.add(key);
       queue.push([x, y]);
@@ -179,8 +180,8 @@
       if (ev.shiftKey) { lobby.sendGame({ action: "rally", x: lot[0], y: lot[1] }); return; }
       if (input.road) { drag = { seen: new Set(), last: null }; dragTo(lot); return; }
       if (input.belt) {
-        const here = input.beltAt(lot[0], lot[1]);
-        if (here) {  // clicking a conveyor turns it clockwise; dragging on from it lays more
+        const here = input.myBelt(lot[0], lot[1]);
+        if (here) {  // clicking your conveyor turns it clockwise; dragging on from it lays more
           input.beltDir = (here[0] + 1) % 4;
           lobby.sendGame({ action: "belt", lots: [[lot[0], lot[1], input.beltDir]] });
           drag = { seen: new Set([lot.join(",")]), laid: new Set([lot.join(",")]), last: lot };

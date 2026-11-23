@@ -66,13 +66,10 @@ Tests: `tests/` (`python3 -I tools/run_tests.py snowbound`).
   rule on a class overrides the `hidden` attribute: add `[hidden] { display: none }`.
 - Machine speed/reach/collision changes on the server must be mirrored in `client/grid.js`
   (`move` rules are sent in `state.game.move`, including walk speed per road level).
-- The team owns everything: cash, earned, diesel, rations, machine counts (`owned`) and upgrades live
-  in `economy.Stores` (`Match.stores`); `Player.cash`, `.owned`, `.upgrades`... are properties onto it,
-  so any Player gives the same rates, prices and upgrade checks. Never loop over players to add up
-  team values (diesel use, deliveries): do it once (`Match.diesel_use()`). `unit.pid` is only the
-  buyer (log credit, colour); units outlive their buyer, so machine code gets the buyer's Player or
-  any player. One rally point (`Match.rally_spot`); Shovel Buddies follow `units.buddy_leaders()`.
-  Processors and conveyors serve everyone (no owner checks).
+- Everything is per player: cash, diesel, rations, machines, upgrades (except "shared" ones), rally
+  points, processors and conveyors (`Belt.pid`; goods only move between one owner's belts and
+  processors). Depots, huts and roads are used by everyone but remember who paid (`Match.builders`,
+  `World.road_by`): only they can demolish them while they're still playing.
 - Drags with the build tools (`client/input.js`) step through 4-connected lots: roads and belts
   only connect through edges, never corners.
 - Pay machine snow through `units.collect()`, never `player.earn()`: hauling machines must carry it.

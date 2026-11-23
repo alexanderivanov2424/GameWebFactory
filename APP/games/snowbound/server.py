@@ -8,34 +8,32 @@ snow its own way (logic/machines.py): Neighbour Kids shovel, Drift Dogs tunnel s
 become roads, Dust Sweepers clean up blizzard snow, Braziers (placed where you stand) melt a ring
 and keep you warm, Shovel Buddies follow you and boost your shovel, Blade Dozers shove drifts
 outward, Deep Augers drill the deepest snow, Snow Stills (placed) turn snow into diesel, Road
-Graders widen roads, Jet Blowers fire beams. Mobile ones work near the team's rally point if one is set
-(a spot, or "follow" a player).
+Graders widen roads, Jet Blowers fire beams. Mobile ones work near your rally point if you set one
+(a spot, or "follow me").
 Hauling: digging machines (kids, dogs, sweepers, dozers, augers, graders) carry what they dig and
 are paid only when they unload it at a drop point: the cabin, a Snow Depot (built where you stand,
 used by everyone) or an Old Rail Station. Roads (Track, Gravel, Paved, Heated: laid and upgraded
 by players on cleared ground, Track also left by dogs, graders and jets) make machines and people
 faster, and machines route along the road network (logic/roads.py, logic/hauling.py).
-Factory (shared by the team): processors (placed) take snow from anyone's haulers and turn it into goods worth more
+Factory: processors (placed) take snow from your own haulers and turn it into goods worth more
 (Brick Press -> Snow Bricks, Ice Press -> Ice Blocks); a processor placed next to another one pulls
 its goods (Igloo Workshop next to a Brick Press, Ice Carver next to an Ice Press). Conveyors (laid
-on cleared ground, each pointing one way) carry goods from the processors beside them to a market
-(a belt pointing into the cabin or an Old Rail Station sells them) or into another processor
-(logic/factory.py, logic/conveyors.py).
-Landmarks: a few one-of-a-kind ruins are hidden in each valley (landmarks/*.json). Clearing the
-last of a ruin's lots gives the team its reward: a unique helper (Woolly Mammoth, Snow Spirit, St. Bernard,
+on cleared ground, each pointing one way, each player's own) carry goods from their owner's processors
+beside them to a market
+(a belt pointing into the cabin or an Old Rail Station sells them) or into another of their owner's
+processors; goods never cross onto someone else's belt (logic/factory.py, logic/conveyors.py).
+Landmarks: a few one-of-a-kind ruins are hidden in each valley (landmarks/*.json). Whoever clears
+the last of a ruin's lots gets its reward: a unique helper (Woolly Mammoth, Snow Spirit, St. Bernard,
 Reindeer Plough, Snow Golem, Old Snowcat), a unique building (Ice Factory, Snow Cone Stand, Hot
 Spring) or a team perk (Old Rail Station, Weather Station, Observatory) (logic/landmarks.py). Upgrades mostly change how one machine works (Snow Angels, Sled
-Harness, Corkscrew, Long Throw...), plus shovel, survival, delivery and weather upgrades;
+Harness, Corkscrew, Long Throw...), plus shovel, survival, delivery and shared team upgrades;
 Snowshoes let you walk over deeper snow. Snow gets deeper the further you get from
-the cabin. Everything is the team's: one wallet, one diesel tank, one ration supply, the woodpile, one fleet
-of machines (one price curve, whoever pays; they stay if their buyer leaves), upgrades (bought
-once, for everyone) and one rally point anyone sets ("follow me" follows whoever pressed it).
-Shovel Buddies spread out over the players. Each player only has their own character.
+the cabin. Each player has their own wallet, machines and upgrades.
 Lots hide things: forests (logs for the stove), buried cabins (cash), gas stations (diesel),
 supply caches and lost skiers (free helpers). Golden snowflakes appear near players now and then:
 the first to walk into one gets a x5 Frenzy or a lump of cash.
-Demolish: placed machines, Snow Depots, warming huts, conveyors and roads can be torn down for 25% of what
-they cost (roads: of what players paid; landmark buildings, rail stations and the cabin stay).
+Demolish: your own placed machines, Snow Depots, warming huts, conveyors and roads can be torn down
+for 25% of what they cost (roads: of what players paid; landmark buildings, rail stations and the cabin stay).
 Survival: the cabin stove and warming huts (bought, built where you stand) burn logs from a shared
 woodpile. Near a lit one you warm up; anywhere else you get colder, and at 0 warmth you get
 frostbite (can't shovel, walk slowly) until you warm up. Food drops over time and with each
@@ -58,7 +56,7 @@ Game messages (players only):
                  {"action": "supply", "item": "rations" | "diesel" | "logs", "qty": number > 0}
                      (logs go to the shared woodpile; diesel and logs can't be bought in a blizzard)
                  {"action": "rally", "x": int, "y": int} | {"action": "rally", "follow": true}
-                     | {"action": "rally"}   where the team's units look for work first (none: anywhere)
+                     | {"action": "rally"}   where your units look for work first (none: anywhere)
                  {"action": "hut"}                              build a warming hut where you stand
                  {"action": "depot"}                            build a Snow Depot where you stand
                  {"action": "road", "level": 1-4, "lots": [[x, y], ...]}   lay or upgrade road

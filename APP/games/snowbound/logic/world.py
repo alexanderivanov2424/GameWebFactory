@@ -20,7 +20,7 @@ road char: the lot's road level "0"-"4" (roads.LEVELS).
 - road[i]: road level 0-4 (0 = none). Drift Dogs, Road Graders and Jet Blower beams make level 1;
   players lay and upgrade roads (roads.py). road_changed: lots whose level went up since roads.py
   last looked (it keeps the route fields up to date). paid[i]: the highest level players paid for
-  (demolish refunds only that). remove_road() takes a road away (roads.Network then rebuilds).
+  and road_by[i] the player who paid for it last (demolish refunds only that, to them). remove_road() takes a road away (roads.Network then rebuilds).
 - site[i]: landmark number for landmark lots (landmarks.py places them); sites[n]["left"] counts
   its lots not reached yet.
 """
@@ -73,6 +73,7 @@ class World:
         self.road_count = 0
         self.road_changed = []
         self.paid = bytearray(n)
+        self.road_by = {}
         self.site = {}
         self.sites = []
         self.reached_list = []
@@ -200,6 +201,7 @@ class World:
         if self.road[i]:
             self.road[i] = 0
             self.paid[i] = 0
+            self.road_by.pop(i, None)
             self.road_count -= 1
             self.dirty.add(i // self.w)
 

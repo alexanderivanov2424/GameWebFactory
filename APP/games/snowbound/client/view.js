@@ -15,7 +15,6 @@
   const SB = (window.SB = window.SB || {});
   const { $ } = AppDom;
   const FEATURE_EMOJI = { t: "🌲", T: "🌲", h: "🏚️", H: "🏚️", g: "⛽", G: "⛽", C: "📦", K: "⛷️" };
-  const TEAM = { color: "#d8e2ec" };
   const FACES = { ok: "🙂", frostbite: "🥶", starving: "😫", frenzy: "🤩" };
 
   const view = (SB.view = { spectate: null });
@@ -132,11 +131,13 @@
     const z = Z(), w = game.w, goods = game.defs.goods;
     const x0 = cam.x - canvas.width / 2 / z - 1, x1 = cam.x + canvas.width / 2 / z + 1;
     const y0 = cam.y - canvas.height / 2 / z - 1, y1 = cam.y + canvas.height / 2 / z + 1;
-    for (const [key, [dir, good, count]] of Object.entries(game.belts || {})) {
+    for (const [key, [dir, good, count, pid]] of Object.entries(game.belts || {})) {
       const i = Number(key), x = i % w, y = Math.floor(i / w);
       if (x < x0 || x > x1 || y < y0 || y > y1) continue;
       const px = sx(x), py = sy(y);
       drawBelt(px, py, z, dir, now, 1);
+      const owner = game.players[pid];
+      if (owner) { ctx.strokeStyle = owner.color; ctx.lineWidth = Math.max(1, z * 0.04); ctx.strokeRect(px + z * 0.1, py + z * 0.1, z * 0.8, z * 0.8); }
       if (count && goods[good]) emoji(goods[good].icon, px + z / 2, py + z / 2, z * (0.35 + 0.05 * Math.min(count, 8)));
     }
   }
@@ -242,9 +243,9 @@
   function drawUnits(game, now) {
     const z = Z(), defs = game.defs.machines;
     for (const u of unitPositions(now)) {
-      const owner = game.players[u.p] || TEAM;  // the team's machines: coloured by who bought them, if still here
+      const owner = game.players[u.p];
       const d = defs[u.m];
-      if (!d) continue;
+      if (!owner || !d) continue;
       if (d.placed) { drawPlaced(u, d, owner, now); continue; }
       const big = d.kind === "worker" || d.kind === "dog" || d.kind === "buddy" ? 0.75 : 1.05;
       const bob = u.s === "moving" ? Math.abs(Math.sin(now / 90 + u.x * 3)) * z * 0.08 : 0;
@@ -301,7 +302,7 @@
       return;
     }
     if (SB.input.belt) {
-      const here = SB.input.beltAt(x, y);
+      const here = SB.input.myBelt(x, y);
       if (here || SB.input.canBelt(x, y)) drawBelt(sx(x), sy(y), z, here ? (here[0] + 1) % 4 : SB.input.beltDir, performance.now(), 0.6);
       ctx.lineWidth = Math.max(2, z * 0.05); ctx.strokeStyle = here || SB.input.canBelt(x, y) ? "#ffd54f" : "rgba(255,90,90,0.8)";
       ctx.strokeRect(sx(x) + 1, sy(y) + 1, z - 2, z - 2);
@@ -420,7 +421,8 @@
     drawBelts(game, now);
     drawLandmarks(game);
     drawHeat(game, now);
-    if (Array.isArray(game.rally)) emoji("🚩", sx(game.rally[0] + 0.5), sy(game.rally[1] + 0.3), Z() * 0.9);
+    const mine = game.players[state.you];
+    if (mine && Array.isArray(mine.rally)) emoji("🚩", sx(mine.rally[0] + 0.5), sy(mine.rally[1] + 0.3), Z() * 0.9);
     if (game.flake) {
       const fx = sx(game.flake.x + 0.5), fy = sy(game.flake.y + 0.5), r = Z() * (0.9 + 0.15 * Math.sin(now / 150));
       const glow = ctx.createRadialGradient(fx, fy, 0, fx, fy, r * 1.8);
@@ -451,7 +453,8 @@
     for (const [mx, my] of Object.values(game.markets || {})) dot(mx + 0.5, my + 0.5, 3.5, "#ffd54f");
     for (const lm of Object.values(game.landmarks || {})) dot(lm.x + lm.size / 2, lm.y + lm.size / 2, 3, lm.found ? "#ffd700" : "#c0a0ff");
     if (game.flake) dot(game.flake.x + 0.5, game.flake.y + 0.5, 4, "#ffd700");
-    if (Array.isArray(game.rally)) dot(game.rally[0] + 0.5, game.rally[1] + 0.5, 3, "#ff3b3b");
+    const me = game.players[state.you];
+    if (me && Array.isArray(me.rally)) dot(me.rally[0] + 0.5, me.rally[1] + 0.5, 3, "#ff3b3b");
     for (const [pid, p] of Object.entries(game.players)) {
       const pos = pid === state.you && SB.input.me ? SB.input.me : p;
       c.strokeStyle = "#fff"; c.lineWidth = 1.5;

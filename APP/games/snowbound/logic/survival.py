@@ -18,8 +18,8 @@ Food: drops FOOD_DRAIN/s and CLICK_FOOD per click (x setting, x Big Thermos). At
 EAT_AT a ration is eaten automatically (+RATION_FOOD).
 Needs: warmth 0 -> frostbite (can't shovel, walk slowly) until warmth is back to THAW_AT;
 food 0 -> starving (shoveling at 20%, slower, colder).
-Deliveries (upgrades, 25% fee, not in blizzards, paid from the shared cash): the shared rations
-kept at 5 per player, a minute of the team's diesel when under 30 s, the woodpile kept at 20 logs.
+Deliveries (upgrades, 25% fee, not in blizzards): rations kept at 5, a minute of diesel when
+under 30 s, the woodpile kept at 20 logs.
 """
 
 import math
@@ -93,7 +93,7 @@ class Weather:
 
 def shared_mult(match, kind):
     value = 1.0
-    for uid in match.stores.upgrades:
+    for uid in match.shared_upgrades:
         if UPGRADES[uid]["kind"] == kind:
             value *= UPGRADES[uid]["value"]
     return value
@@ -103,8 +103,8 @@ def stove_burn(match):
     burn = STOVE_BURN * (1 + 0.5 * (len(match.players) - 1)) * (1 + HUT_BURN * len(match.huts))
     for u in match.units.values():
         m = MACHINES[u.mid]
-        if m["kind"] == "brazier":
-            burn += m["params"].get("logs", 0) * (0.5 if match.team_has("bellows") else 1)
+        if m["kind"] == "brazier" and u.pid in match.players:
+            burn += m["params"].get("logs", 0) * (0.5 if match.players[u.pid].has("bellows") else 1)
     burn *= shared_mult(match, "stove")
     return burn * (BLIZZARD_BURN if match.weather.blizzard else 1)
 
@@ -114,9 +114,9 @@ def step(match, dt):
     blizzard = match.weather.blizzard
     match.woodpile = max(0.0, match.woodpile - stove_burn(match) * dt)
     lit = match.woodpile > 0
-    match.stores.diesel = max(0.0, match.stores.diesel - match.diesel_use() * dt)
     for p in match.players.values():
         p.frenzy = max(0.0, p.frenzy - dt)
+        p.diesel = max(0.0, p.diesel - p.diesel_use() * dt)
         p.food = max(0.0, p.food - FOOD_DRAIN * harsh * p.effect("food_drain") * dt)
         if p.food <= EAT_AT and p.rations > 0:
             p.rations -= 1
@@ -174,17 +174,14 @@ def dust(match):
 
 def deliveries(match):
     """Once a second outside blizzards: automatic purchases from delivery upgrades."""
-    if not match.players:
-        return
-    p = next(iter(match.players.values()))  # the team's upgrades and stores: any player will do
-    want = 5 * len(match.players)
-    if p.has_auto("rations") and p.rations < want:
-        _try(p.buy_supply, "rations", want - p.rations)
-    use = match.diesel_use()
-    if p.has_auto("diesel") and use > 0 and p.diesel < 30 * use:
-        _try(p.buy_supply, "diesel", round(60 * use - p.diesel, 1))
-    if p.has_auto("logs") and match.woodpile < 20:
-        match.woodpile += _try(p.buy_supply, "logs", 20 - int(match.woodpile))
+    for p in match.players.values():
+        if p.has_auto("rations") and p.rations < 5:
+            _try(p.buy_supply, "rations", 5 - p.rations)
+        use = p.diesel_use()
+        if p.has_auto("diesel") and use > 0 and p.diesel < 30 * use:
+            _try(p.buy_supply, "diesel", round(60 * use - p.diesel, 1))
+        if p.has_auto("logs") and match.woodpile < 20:
+            match.woodpile += _try(p.buy_supply, "logs", 20 - int(match.woodpile))
 
 
 def _try(buy, item, qty):

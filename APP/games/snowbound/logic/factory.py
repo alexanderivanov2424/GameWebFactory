@@ -2,8 +2,8 @@
 
 processor (placed; content recipe {"in", "per", "out"}, params buffer / store / sell):
     unit.inbox holds input (up to params.buffer), unit.outbox finished goods (up to params.store).
-    The factory is shared: snow comes from anyone's hauling machines (hauling.py), and a processor
-    whose input is a good pulls it from any processor next to it (within CHAIN_REACH, diagonals too) that make
+    Snow comes from its owner's hauling machines (hauling.py). A processor whose input is a good
+    pulls it from its owner's processors next to it (within CHAIN_REACH, diagonals too) that make
     that good, so chains are built by placing them side by side (Brick Press -> Igloo Workshop).
     Each second it turns up to `rate` input (x machine_mult upgrades) into outputs, `per` input
     each. params.sell: outputs are sold on the spot instead of stored (Snow Cone Stand).
@@ -28,13 +28,13 @@ def recipe(unit):
 
 
 def neighbours(ctx, unit):
-    """Placed units next to unit's lot (anyone's)."""
+    """Placed units of the same owner next to unit's lot."""
     world = ctx.world
     x, y = world.xy(unit.home)
     for dx, dy in AROUND:
         j = world.index(x + dx, y + dy)
         other = ctx.placed.get(j) if j is not None else None
-        if other is not None:
+        if other is not None and other.pid == unit.pid:
             yield other
 
 

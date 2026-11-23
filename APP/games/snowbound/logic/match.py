@@ -7,12 +7,7 @@ needs (survival.py) -> characters walk and shovel (avatars.py) -> route fields (
 units (units.py, hauling.py, factory.py) -> conveyors (conveyors.py) -> swing budgets -> goal check.
 Player actions raise LobbyError when refused: dig (one swing), buy, upgrade, supply, rally,
 build_hut, build_depot (hauling.py), lay_road (roads.py), lay_belt (conveyors.py), demolish
-(demolish.py); set_input
-stores held controls.
-Everything bought belongs to the team (economy.Stores): machines, upgrades, cash, diesel,
-rations. Units keep the id of the player who bought them (pid) only for credit in the log and
-their colour; they stay when that player leaves. The team has one rally point (rally_spot: None,
-a lot, or ("follow", pid)) that any player sets.
+(demolish.py); set_input stores held controls.
 The valley also holds hidden landmarks (landmarks.py; effects: the team effects found so far,
 markets: Old Rail Station lots; depots: Snow Depot lots). swing() is quiet for lots you can't dig (the snow
 may simply have been cleared a moment ago).
@@ -27,7 +22,7 @@ from gamekit import LobbyError
 
 from . import avatars, conveyors, demolish, hauling, landmarks, roads, survival, units
 from .content import MACHINES, UPGRADES
-from .economy import CLICKS_PER_SECOND, MAX_OWNED, PRICES, Player, Stores
+from .economy import CLICKS_PER_SECOND, MAX_OWNED, PRICES, Player
 from .world import World
 
 SIZES = {"small": 96, "medium": 160, "large": 256, "huge": 384}
@@ -60,21 +55,20 @@ class Match:
         self.depots = []            # Snow Depot lots
         self.markets = []           # Old Rail Station lots
         self.belts = {}             # lot -> conveyors.Belt
+        self.builders = {}          # ("hut", (x, y)) | ("depot", lot) -> pid who paid for it
         self.belt_order = None      # belt lots downstream first (None: rebuild)
         self.effects = set()        # team effects from landmarks
         self.players = {}
-        self.stores = Stores()      # the team's shared cash, diesel and rations
         for k, (pid, name) in enumerate(names.items()):
             angle = 2 * math.pi * k / max(1, len(names))
             self.players[pid] = Player(pid, name, colors.get(pid, "#4fc3f7"),
-                                       w.cx + 0.5 + 1.2 * math.cos(angle), w.cy + 0.5 + 1.2 * math.sin(angle), self.stores)
+                                       w.cx + 0.5 + 1.2 * math.cos(angle), w.cy + 0.5 + 1.2 * math.sin(angle))
         self.names = dict(names)
         self.goal = settings.get("goal", 75) / 100
         self.harshness = survival.HARSHNESS.get(settings.get("survival"), 1.0)
         self.weather = survival.Weather(self.rng)
         self.woodpile = float(survival.START_LOGS)
-        self.shared_upgrades = {}   # upgrade id -> pid who bought it (for the HUD; the team owns them all)
-        self.rally_spot = None      # None | lot | ("follow", pid): where the team's units look for work
+        self.shared_upgrades = {}   # upgrade id -> pid who bought it
         self.units = {}             # uid -> units.Unit
         self.unit_counter = 0
         self.huts = []              # [(x, y)] lots
@@ -106,8 +100,8 @@ class Match:
         return self.world.cleared() / (self.world.w * self.world.h)
 
     def team_has(self, uid):
-        """Has the team bought upgrade uid?"""
-        return uid in self.stores.upgrades
+        """Has anyone bought shared upgrade uid?"""
+        return uid in self.shared_upgrades
 
     def beam(self, x0, y0, x1, y1, color):
         self.beam_count += 1
@@ -115,9 +109,8 @@ class Match:
                                             "y1": round(y1, 2), "c": color, "left": 1.5}
 
     def buddies_near(self, p):
-        """How many of the Shovel Buddies following p are close enough to help."""
-        leaders = units.buddy_leaders(self)
-        near = [u for u in self.units.values() if leaders.get(u.id) == p.id
+        """How many of p's Shovel Buddies are close enough to help."""
+        near = [u for u in self.units.values() if u.pid == p.id and MACHINES[u.mid]["kind"] == "buddy"
                 and math.hypot(u.x - p.x, u.y - p.y) <= MACHINES[u.mid]["params"].get("near", 2)]
         return len(near), (MACHINES[near[0].mid]["params"].get("boost", 0.5) if near else 0)
 
@@ -130,10 +123,6 @@ class Match:
 
     def hut_cost(self):
         return round(HUT_COST * HUT_GROWTH ** len(self.huts))
-
-    def diesel_use(self):
-        """Litres per second the team's machines burn from the shared tank."""
-        return next(iter(self.players.values())).diesel_use() if self.players else 0.0
 
     def occupied(self, i):
         """Is something built on lot i (a placed machine, depot, rail station, hut or conveyor)?"""
@@ -231,7 +220,7 @@ class Match:
             p.earned += bonus
             self.say(f"{p.name} dug out a buried cabin and found ${bonus:,} inside.")
         elif kind == "gas":
-            fuel = round(max(300, 120 * self.diesel_use()))
+            fuel = round(max(300, 120 * p.diesel_use()))
             p.diesel += fuel
             self.say(f"{p.name} reached an old gas station: +{fuel:,} L diesel.")
         elif kind == "cache":
@@ -301,13 +290,15 @@ class Match:
         p = self.player(pid)
         if uid not in UPGRADES:
             raise LobbyError("Unknown upgrade.")
-        if not p.upgrade_visible(uid):
+        if not p.upgrade_visible(uid, self.shared_upgrades):
             raise LobbyError("That upgrade isn't available.")
         u = UPGRADES[uid]
         p.pay(u["cost"])
-        p.upgrades.add(uid)
-        self.shared_upgrades[uid] = pid
-        self.say(f"{p.name} bought {u['name']} for the team.")
+        if u["shared"]:
+            self.shared_upgrades[uid] = pid
+            self.say(f"{p.name} bought {u['name']} for everyone.")
+        else:
+            p.upgrades.add(uid)
 
     def supply(self, pid, item, qty):
         p = self.player(pid)
@@ -322,20 +313,19 @@ class Match:
             self.woodpile += qty
 
     def rally(self, pid, where):
-        """Where the team's units look for work: None (anywhere), "follow" (follow pid) or lot [x, y]."""
-        self.player(pid)
-        if where is None:
-            self.rally_spot = None
-        elif where == "follow":
-            self.rally_spot = ("follow", pid)
+        """Where pid's units look for work: None, "follow" (you) or lot [x, y]."""
+        p = self.player(pid)
+        if where is None or where == "follow":
+            p.rally = where
         else:
             i = self.world.index(*where)
             if i is None:
                 raise LobbyError("That's off the map.")
-            self.rally_spot = i
+            p.rally = i
         for u in self.units.values():
-            u.target = None
-            hauling.cancel_back(u)
+            if u.pid == pid:
+                u.target = None
+                hauling.cancel_back(u)
 
     def build_hut(self, pid):
         """A warming hut on the lot pid stands on (paid by pid; heats everyone)."""
@@ -354,6 +344,7 @@ class Match:
             raise LobbyError(f"Too close to the cabin or another hut (keep {HUT_SPACING} lots apart).")
         p.pay(self.hut_cost())
         self.huts.append((x, y))
+        self.builders[("hut", (x, y))] = pid
         self.say(f"{p.name} built a warming hut.")
 
     def build_depot(self, pid):
@@ -372,8 +363,8 @@ class Match:
         p = self.players.pop(pid, None)
         if p is None:
             return
-        if self.rally_spot == ("follow", pid):
-            self.rally_spot = None
-        self.say(f"{p.name} left the valley. The team keeps their machines.")
+        units.remove_player(self, pid)
+        conveyors.remove_player(self, pid)
+        self.say(f"{p.name} left the valley.")
         if not self.players and self.result is None:
             self.result = {"reason": "Everyone left.", "cleared": {}}

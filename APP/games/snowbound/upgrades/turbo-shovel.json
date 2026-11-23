@@ -1,7 +1,7 @@
 {
   "name": "Turbo Shovel",
   "cost": 500000,
-  "text": "Each swing also clears 2% of the team's machines' snow per second.",
+  "text": "Each swing also clears 2% of your machines' snow per second.",
   "effect": {
     "kind": "click_pct",
     "value": 2
