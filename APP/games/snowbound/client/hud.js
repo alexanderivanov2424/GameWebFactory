@@ -258,7 +258,7 @@
       return;
     }
     $("cash").textContent = money(me.cash);
-    $("rates").textContent = `Machines ${fmt(me.rate)} snow/s · Shovel ${fmt(mine.click)}/swing`;
+    $("rates").textContent = `Machines ${fmt(me.rate)} snow/s · Shovel ${fmt(mine.dig)}/s`;
     const haul = [];
     if (mine.carried) haul.push(`🛒 ${fmt(mine.carried)} snow on the way`);
     if (mine.waiting) haul.push(`🏭 ${money(mine.waiting)} goods waiting`);

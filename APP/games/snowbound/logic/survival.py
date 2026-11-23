@@ -14,7 +14,7 @@ burn logs: machines.py) warms WARM_UP/s; so does being within params.heat of a H
 St. Bernard (landmark rewards, no logs needed). Anywhere else (or with
 no logs) they lose COLD/s (BLIZZARD_COLD in a blizzard; x the survival setting and Thermal Suit),
 STARVING_COLD more while starving.
-Food: drops FOOD_DRAIN/s and CLICK_FOOD per click (x setting, x Big Thermos). At or below
+Food: drops FOOD_DRAIN/s, SHOVEL_FOOD/s more while shoveling (x setting, x Big Thermos). At or below
 EAT_AT a ration is eaten automatically (+RATION_FOOD).
 Needs: warmth 0 -> frostbite (can't shovel, walk slowly) until warmth is back to THAW_AT;
 food 0 -> starving (shoveling at 20%, slower, colder).
@@ -49,7 +49,7 @@ COLD = 0.35
 BLIZZARD_COLD = 1.0
 STARVING_COLD = 0.3
 FOOD_DRAIN = 0.25
-CLICK_FOOD = 0.02
+SHOVEL_FOOD = 0.12
 EAT_AT = 70
 RATION_FOOD = 30
 THAW_AT = 20
@@ -154,8 +154,9 @@ def near_heat(match, x, y, lit=True):
     return False
 
 
-def clicked(match, player):
-    player.food = max(0.0, player.food - CLICK_FOOD * match.harshness * player.effect("food_drain"))
+def shoveled(match, player, dt):
+    """dt seconds of holding the shovel on snow (avatars.step)."""
+    player.food = max(0.0, player.food - SHOVEL_FOOD * dt * match.harshness * player.effect("food_drain"))
 
 
 def dust(match):

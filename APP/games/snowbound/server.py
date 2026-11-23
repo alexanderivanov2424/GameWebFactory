@@ -2,7 +2,7 @@
 
 1-8 players each walk a character around one snowed-in valley (a grid of lots, up to 384 x 384)
 with a cabin in the middle; the camera follows you. Deep snow is a wall: stand next to it and hold
-the mouse on it (or click fast) to shovel; every unit of snow you clear pays you $1. Spend it on
+the mouse (or Space) on it to shovel (holding is the only way); every unit of snow you clear pays you $1. Spend it on
 machines (each kind costs 15% more per copy). Every machine is its own unit and each kind clears
 snow its own way (logic/machines.py): Neighbour Kids shovel, Drift Dogs tunnel straight lines that
 become roads, Dust Sweepers clean up blizzard snow, Braziers (placed where you stand) melt a ring
@@ -36,8 +36,8 @@ Demolish: your own placed machines, Snow Depots, warming huts, conveyors and roa
 for 25% of what they cost (roads: of what players paid; landmark buildings, rail stations and the cabin stay).
 Survival: the cabin stove and warming huts (bought, built where you stand) burn logs from a shared
 woodpile. Near a lit one you warm up; anywhere else you get colder, and at 0 warmth you get
-frostbite (can't shovel, walk slowly) until you warm up. Food drops over time and with each
-swing; rations are eaten automatically; at 0 food you shovel weakly, walk slower and get colder.
+frostbite (can't shovel, walk slowly) until you warm up. Food drops over time, faster while
+shoveling; rations are eaten automatically; at 0 food you shovel weakly, walk slower and get colder.
 Machines burn diesel and stop when your tank is empty. Blizzards (with a 20 s warning) slow
 machines, burn logs fast, chill you faster, stop deliveries and drop snow back on cleared ground.
 The game is won when the goal share of the valley is clear (or ended with the End game vote).
@@ -47,9 +47,9 @@ Player options:  none
 Settings:        {"mapSize": "small" | "medium" | "large" | "huge", "goal": 10-100 (%),
                   "survival": "easy" | "normal" | "harsh"}
 Input messages:  {"type": "input", "keys": [up/down/left/right held], "aim": [x, y] | null
-                  (lot under the mouse), "dig": bool (dig button held: swings at the aimed lot)}
+                  (lot under the mouse), "dig": bool (dig button held: the only way to
+                  shovel, avatars.SWING_RATE swings a second at the aimed lot)}
 Game messages (players only):
-                 {"action": "dig", "x": int, "y": int}         one swing now (a click)
                  {"action": "buy", "machine": id, "count": 1 | 10}   (placed machines: 1, built on the
                      cleared lot you stand on, one per lot)
                  {"action": "upgrade", "upgrade": id}
@@ -114,7 +114,7 @@ class Game(RealtimeGame):
         "survival": Choice("Survival", default="normal",
                            options={"easy": "Easy", "normal": "Normal", "harsh": "Harsh"}),
     }
-    ACTIONS = {"dig": "dig", "buy": "buy", "upgrade": "upgrade", "supply": "supply",
+    ACTIONS = {"buy": "buy", "upgrade": "upgrade", "supply": "supply",
                "rally": "rally", "hut": "hut", "depot": "depot", "road": "road", "belt": "belt", "demolish": "demolish"}
 
     def __init__(self, room):
@@ -164,10 +164,6 @@ class Game(RealtimeGame):
         if not member.playing or member.id not in self.match.players:
             raise LobbyError("Join the game to dig.")
         await self.dispatch(member, data)
-
-    def dig(self, member, data):
-        self.match.dig(member.id, *_xy(data))
-        self.check_over()
 
     def buy(self, member, data):
         machine = one_of(_name(data, "machine"), MACHINES, "Unknown machine.")

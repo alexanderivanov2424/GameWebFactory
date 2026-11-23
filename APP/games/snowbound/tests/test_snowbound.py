@@ -33,27 +33,27 @@ def stand_next_to(match, pid, i):
 
 
 class RulesTests(unittest.TestCase):
-    def test_click_digs_and_pays(self):
+    def test_swing_digs_and_pays(self):
         match = new_match()
         world, p = match.world, match.players["p1"]
         i = frontier_lot(match)
         stand_next_to(match, "p1", i)
         before = world.snow[i]
-        removed = match.dig("p1", *world.xy(i))
+        removed = match.swing("p1", *world.xy(i))
         self.assertEqual(removed, 1)
         self.assertAlmostEqual(world.snow[i], before - 1)
         self.assertEqual(p.cash, 1)
 
-    def test_click_far_from_cleared_ground_does_nothing(self):
+    def test_swing_far_from_cleared_ground_does_nothing(self):
         match = new_match()
-        self.assertEqual(match.dig("p1", 0, 0), 0)
+        self.assertEqual(match.swing("p1", 0, 0), 0)
         self.assertEqual(match.players["p1"].cash, 0)
 
     def test_cannot_shovel_out_of_reach(self):
         match = new_match()
         i = frontier_lot(match)
         match.players["p1"].x += 20
-        self.assertEqual(match.dig("p1", *match.world.xy(i)), 0)
+        self.assertEqual(match.swing("p1", *match.world.xy(i)), 0)
 
     def test_deep_snow_blocks_walking(self):
         match = new_match()
@@ -95,7 +95,7 @@ class RulesTests(unittest.TestCase):
         i = frontier_lot(match)
         world.snow[i] = 0.5
         stand_next_to(match, "p1", i)
-        match.dig("p1", *world.xy(i))
+        match.swing("p1", *world.xy(i))
         self.assertTrue(world.reached[i])
         self.assertNotIn(i, world.targets)
         for j in world.neighbours(i):
@@ -124,15 +124,16 @@ class RulesTests(unittest.TestCase):
         self.assertEqual(next(iter(match.units.values())).state, "stalled")
         self.assertEqual(p.cleared, 0)
 
-    def test_cold_stove_gives_frostbite_and_stops_clicking(self):
+    def test_cold_stove_gives_frostbite_and_stops_shoveling(self):
         match = new_match()
         p = match.players["p1"]
         match.woodpile = 0
         p.warmth = 0.01
         match.step(0.1)
         self.assertTrue(p.frostbite)
-        with self.assertRaises(LobbyError):
-            match.dig("p1", *match.world.xy(frontier_lot(match)))
+        i = frontier_lot(match)
+        stand_next_to(match, "p1", i)
+        self.assertEqual(match.swing("p1", *match.world.xy(i)), 0)
 
     def test_ration_eaten_when_hungry(self):
         match = new_match()
@@ -219,7 +220,7 @@ class LobbyTests(unittest.TestCase):
     def test_spectator_cannot_dig_and_gets_no_shop(self):
         sim = Sim(GAME, players=1, settings={"mapSize": "small"})
         s = sim.spectator()
-        sim.fails(s, {"action": "dig", "x": 1, "y": 1}, "not playing")
+        sim.fails(s, {"action": "rally", "x": 1, "y": 1}, "not playing")
         sim.tick(1)
         self.assertNotIn("machines", sim.state(s)["private"])
         self.assertIn("machines", sim.state(0)["private"])
@@ -228,7 +229,7 @@ class LobbyTests(unittest.TestCase):
         sim = Sim(GAME, players=1, settings={"mapSize": "small"})
         sim.fails(0, {"action": "buy", "machine": ["x"], "count": 1}, "Unknown machine")
         sim.fails(0, {"action": "buy", "machine": "kid", "count": 3}, "Buy 1 or 10")
-        sim.fails(0, {"action": "dig", "x": "1", "y": 2}, "Bad lot")
+        sim.fails(0, {"action": "rally", "x": "1", "y": 2}, "Bad lot")
         self.assertIn("Bad keys", sim.input(0, {"keys": ["jump"]}))
         sim.fails(0, {"action": "supply", "item": "logs", "qty": 1.5}, "whole number")
 

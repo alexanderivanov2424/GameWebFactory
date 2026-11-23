@@ -16,7 +16,8 @@
  * the aimed lot changes (at most every AIM_EVERY ms, the last one always sent).
  * Prediction: you move locally with SB.grid.move and the same speed rules; the server's position
  * corrects it (snap when more than SNAP lots apart, drift toward it while standing still).
- * Keys: WASD/arrows walk; hold mouse or Space to shovel the lot under the mouse; Shift+click sets
+ * Keys: WASD/arrows walk; hold mouse or Space to shovel the lot under the mouse (holding is the only way
+ * to shovel; snow puffs show every PUFF_EVERY s while you do); Shift+click sets
  * your units' rally point; B machines, U upgrades, T team, H build a hut, Q build a Snow Depot,
  * G road tool (1-4 pick the level; click or drag to lay road, sent in batches every ROAD_EVERY ms),
  * C conveyor tool (drag to lay belts pointing the way you drag; click a belt to turn it),
@@ -31,13 +32,14 @@
   const AIM_EVERY = 100;
   const ROAD_EVERY = 120;
   const SNAP = 1.5;
+  const PUFF_EVERY = 0.25;
 
   const input = (SB.input = { me: null, aim: null, road: 0, belt: false, demolish: false, beltDir: 0 });
   let lobby = null;
   const held = new Set();
   let mouseDig = false, spaceDig = false, mouse = null;
   let sent = { keys: "", aim: "", dig: false }, aimSentAt = 0, aimTimer = null;
-  let stillFor = 0;
+  let stillFor = 0, puffIn = 0;
   let drag = null, queue = [], queueTimer = null, lastRoadLevel = 1;
 
   const playing = () => lobby && lobby.state && lobby.state.phase === "playing" && lobby.me()?.player && lobby.state.game;
@@ -154,16 +156,19 @@
       const key = lot.join(",");
       if (!input.aim || key !== input.aim.join(",")) { input.aim = lot; send(false); if (drag) dragTo(lot); }
     }
+    puffIn -= dt;
+    if ((mouseDig || spaceDig) && puffIn <= 0 && puffAt(input.aim, PUFF_EVERY)) puffIn = PUFF_EVERY;
   };
 
-  function swingAt(lot) {
-    if (!lot || !playing() || !SB.grid.workable(lot[0], lot[1]) || !input.inReach(lot[0], lot[1])) return;
-    lobby.sendGame({ action: "dig", x: lot[0], y: lot[1] });
+  // Snow puffs (with "+snow" for secs of digging) on the lot you hold the shovel on; the server does the digging.
+  function puffAt(lot, secs) {
     const mine = lobby.state.private;
-    SB.view.puff(lot[0] + 0.5, lot[1] + 0.5, mine ? mine.click : 0);
-    if (mine && mine.splash) {
+    if (!lot || !mine || !(mine.dig > 0) || !SB.grid.workable(lot[0], lot[1]) || !input.inReach(lot[0], lot[1])) return false;
+    SB.view.puff(lot[0] + 0.5, lot[1] + 0.5, mine.dig * secs);
+    if (mine.splash) {
       for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) SB.view.puff(lot[0] + dx + 0.5, lot[1] + dy + 0.5, 0);
     }
+    return true;
   }
 
   input.init = (lobbyRef) => {
@@ -196,8 +201,8 @@
         drag = { seen: new Set([lot.join(",")]), last: lot };
         return;
       }
-      swingAt(lot);
       mouseDig = true;
+      puffIn = 0;
       send(true);
     });
     window.addEventListener("mouseup", (ev) => {
@@ -217,8 +222,7 @@
       if (ev.repeat) return;
       if (ev.code === "Space") {
         ev.preventDefault();
-        if (input.aim) swingAt(input.aim);
-        spaceDig = true; send(true);
+        spaceDig = true; puffIn = 0; send(true);
         return;
       }
       const digit = { Digit1: 1, Digit2: 2, Digit3: 3, Digit4: 4 }[ev.code];

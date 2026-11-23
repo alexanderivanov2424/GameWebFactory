@@ -9,13 +9,14 @@ prediction: keep them in sync.
 Speed: WALK_SPEED lots/s, x DUSTED_SLOW on a reached lot with snow on it (else x the road level's
 "walk" on a road, roads.LEVELS), x FROSTBITE_SLOW with
 frostbite, x STARVING_SLOW while starving.
-Shoveling: a swing digs Player.click_power() from a workable lot whose centre is within REACH
-of you. Swings come from clicks (actions) and from holding the dig button (input "dig"), at most
-SWING_RATE a second while held; both use the click budget (economy.CLICKS_PER_SECOND).
+Shoveling: only by holding the dig button (input "dig", the mouse or Space) on a workable lot whose
+centre is within REACH of you: SWING_RATE swings a second, dug smoothly every tick (Match.swing with
+SWING_RATE * dt swings), each swing worth Player.click_power(). There is no click-to-swing.
 """
 
 import math
 
+from . import survival
 from .roads import LEVELS
 from .world import WADE_LEVEL
 
@@ -25,7 +26,7 @@ DUSTED_SLOW = 0.6
 FROSTBITE_SLOW = 0.4
 STARVING_SLOW = 0.7
 REACH = 2.2
-SWING_RATE = 6
+SWING_RATE = 60  # 10x the old held rate of 6 a second
 KEYS = {"up": (0, -1), "down": (0, 1), "left": (-1, 0), "right": (1, 0)}
 
 
@@ -85,8 +86,6 @@ def step(match, dt):
     """Walk everyone and run held-down shoveling."""
     for p in match.players.values():
         walk(match.world, p, dt)
-        p.swing_cd = max(0.0, p.swing_cd - dt)
         p.swinging = max(0.0, p.swinging - dt)
-        if p.dig and p.aim is not None and p.swing_cd <= 0:
-            if match.swing(p.id, *p.aim):
-                p.swing_cd = 1 / SWING_RATE
+        if p.dig and p.aim is not None and match.swing(p.id, *p.aim, SWING_RATE * dt):
+            survival.shoveled(match, p, dt)

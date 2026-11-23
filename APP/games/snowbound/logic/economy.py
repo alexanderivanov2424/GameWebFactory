@@ -9,10 +9,9 @@ once for the whole team and stored on the Match, not here.
 Player fields: name, color, cash, earned (cash ever earned), cleared (snow ever cleared),
 goods_sold ($ ever made from goods),
 owned {machine id: count}, upgrades (set of ids), rations, diesel (litres), food 0-100,
-warmth 0-100, frostbite / starving (bool), frenzy (seconds left of x FRENZY), clicks (swing
-budget, refilled CLICKS_PER_SECOND per second).
+warmth 0-100, frostbite / starving (bool), frenzy (seconds left of x FRENZY).
 Character (avatars.py): x, y (world coordinates), keys (held: up/down/left/right), aim (lot
-[x, y] under the mouse or None), dig (dig button held), swing_cd, swinging (s left of the swing
+[x, y] under the mouse or None), dig (dig button held), swinging (s left of the swing
 animation), rally (None, a lot index, or "follow": where your units look for work first).
 """
 
@@ -24,7 +23,6 @@ from .world import WADE_LEVEL
 PRICES = {"rations": 12, "diesel": 1.5, "logs": 8}
 DELIVERY_FEE = 1.25
 FRENZY = 5
-CLICKS_PER_SECOND = 15
 MAX_OWNED = 250
 START = {"cash": 0, "rations": 3, "diesel": 20}
 
@@ -37,7 +35,6 @@ class Player:
         self.keys = ()
         self.aim = None
         self.dig = False
-        self.swing_cd = 0.0
         self.swinging = 0.0
         self.rally = None
         self.name = name
@@ -55,7 +52,6 @@ class Player:
         self.frostbite = False
         self.starving = False
         self.frenzy = 0.0
-        self.clicks = CLICKS_PER_SECOND
 
     # --- multipliers -----------------------------------------------------------------
 

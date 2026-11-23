@@ -4,8 +4,8 @@ Match(names, settings, colors, rng). Players are public ids ("p1"); no lobby cod
 step(dt) advances everything (called TICK_RATE times a second by server.py):
 weather -> once a second (blizzard snowfall or deliveries) -> golden snowflakes -> stove and
 needs (survival.py) -> characters walk and shovel (avatars.py) -> route fields (roads.py) ->
-units (units.py, hauling.py, factory.py) -> conveyors (conveyors.py) -> swing budgets -> goal check.
-Player actions raise LobbyError when refused: dig (one swing), buy, upgrade, supply, rally,
+units (units.py, hauling.py, factory.py) -> conveyors (conveyors.py) -> goal check.
+Player actions raise LobbyError when refused: buy, upgrade, supply, rally,
 build_hut, build_depot (hauling.py), lay_road (roads.py), lay_belt (conveyors.py), demolish
 (demolish.py); set_input stores held controls.
 The valley also holds hidden landmarks (landmarks.py; effects: the team effects found so far,
@@ -22,7 +22,7 @@ from gamekit import LobbyError
 
 from . import avatars, conveyors, demolish, hauling, landmarks, roads, survival, units
 from .content import MACHINES, UPGRADES
-from .economy import CLICKS_PER_SECOND, MAX_OWNED, PRICES, Player
+from .economy import MAX_OWNED, PRICES, Player
 from .world import World
 
 SIZES = {"small": 96, "medium": 160, "large": 256, "huge": 384}
@@ -160,8 +160,6 @@ class Match:
             del self.beams[key]
         for b in self.beams.values():
             b["left"] -= dt
-        for p in self.players.values():
-            p.clicks = min(CLICKS_PER_SECOND, p.clicks + CLICKS_PER_SECOND * dt)
         if self.progress() >= self.goal - 1e-9:
             self.result = {"reason": f"The valley is dug out: {round(self.progress() * 100)}% cleared "
                                      f"in {int(self.time // 60)} min {int(self.time % 60)} s.",
@@ -239,18 +237,16 @@ class Match:
         p = self.player(pid)
         p.keys, p.aim, p.dig = tuple(keys), aim, dig
 
-    def swing(self, pid, x, y):
-        """One swing of pid's shovel at lot (x, y). Returns the snow removed (0 if nothing)."""
+    def swing(self, pid, x, y, swings=1.0):
+        """swings (may be a fraction) of pid's shovel at lot (x, y), from holding the dig button
+        (avatars.step). Returns the snow removed (0 if nothing)."""
         p = self.player(pid)
         i = self.world.index(x, y)
         power, reach, splash = self.shovel(p)
-        if i is None or not self.world.workable(i) or not avatars.in_reach(p, x, y, reach) or p.clicks < 1:
+        if i is None or not self.world.workable(i) or not avatars.in_reach(p, x, y, reach) or p.frostbite:
             return 0.0
-        if p.frostbite:
-            return 0.0
-        p.clicks -= 1
+        power *= swings
         p.swinging = 0.3
-        survival.clicked(self, p)
         hits = [(i, power)] + [(j, power * splash) for j in self.world.neighbours(i)] if splash else [(i, power)]
         total = 0.0
         for j, amount in hits:
@@ -260,12 +256,6 @@ class Match:
             if found:
                 self.found(pid, found, j)
         return total
-
-    def dig(self, pid, x, y):
-        """A click: one swing now (refused with a message only for frostbite)."""
-        if self.player(pid).frostbite:
-            raise LobbyError("Your hands are frozen! Warm up by the stove or a hut first.")
-        return self.swing(pid, x, y)
 
     def buy(self, pid, mid, count):
         p = self.player(pid)

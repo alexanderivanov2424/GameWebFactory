@@ -21,7 +21,7 @@ public(match):
      "beams": {"<n>": {"x0", "y0", "x1", "y1", "c"}} (Jet Blower shots, kept 1.5 s)}
      (move: the character rules client/grid.js needs to predict your walking)
 private(match, pid): your shop, supplies and the units near you
-    {"click": snow per swing, "reach": lots, "splash": share hitting the 4 lots around (Shovel
+    {"dig": snow per second while holding the shovel, "reach": lots, "splash": share hitting the 4 lots around (Shovel
      Buddy), "wade": deepest snow level you can walk on, "rations", "diesel", "dieselUse": L/s, "frenzy": s,
      "machines": {id: {"owned", "cost1", "cost10", "rate", "refund" (demolishing one)}}, "upgrades": [visible ids by cost],
      "owned": [your upgrade ids], "auto": [delivered items],
@@ -109,7 +109,7 @@ def private(match, pid):
             if u.outbox:
                 waiting += u.outbox * GOODS[MACHINES[u.mid]["recipe"]["out"]]["value"]
     return {
-        "click": round(power, 2), "reach": reach, "splash": splash, "wade": p.wade_level(),
+        "dig": round(power * avatars.SWING_RATE, 2), "reach": reach, "splash": splash, "wade": p.wade_level(),
         "rations": p.rations, "diesel": round(p.diesel, 1),
         "dieselUse": round(p.diesel_use(), 2), "frenzy": int(p.frenzy),
         "machines": {mid: {"owned": p.owned[mid], "cost1": machine_cost(mid, p.owned[mid]),
