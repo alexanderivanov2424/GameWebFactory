@@ -2,7 +2,7 @@
 
 Every player has their own stock (roads, bridges, tunnels, motorways, roundabouts, lights) and
 gets the same weekly delivery and the same two upgrade offers as everyone else. Points come from
-cars driving on roads you built (traffic.py credits them).
+cars driving over road tiles you built, 1 per car per tile (traffic.py credits them).
 """
 
 from gamekit import LobbyError
@@ -17,7 +17,7 @@ class Player:
         self.name = name
         self.color = color
         self.stock = dict(START_STOCK)
-        self.points = 0.0
+        self.points = 0         # 1 per car passing one of your road tiles (traffic.py)
         self.trips = 0          # trips that used at least one of your tiles
         self.picked = None      # index of this week's chosen offer (None: not chosen yet)
         self.gone = False       # left the game (their roads stay)

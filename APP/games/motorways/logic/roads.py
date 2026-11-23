@@ -316,17 +316,23 @@ class RoadNet:
         self.mway_at.pop(t, None)
         self.version += 1
 
+    def step_owner(self, u, v):
+        """Who gets the points for a car driving u -> v: (pid, points) or None. The road tile v
+        earns its builder 1 point; a motorway link earns its builder its length in tiles."""
+        if self.length(u, v) > 1.5:
+            for mid in self.mway_at.get(u, ()):
+                mw = self.motorways[mid]
+                if v in (mw["a"], mw["b"]):
+                    return mw["owner"], round(self.length(u, v))
+            return None
+        road = self.roads.get(v)
+        return (road.owner, 1) if road is not None else None
+
     def owner_shares(self, path):
-        """Who built the road a car drove along `path`: {pid: tiles} (motorways count their length)."""
+        """Who built the road a car drove along `path`: {pid: points} (see step_owner)."""
         shares = {}
         for u, v in zip(path, path[1:]):
-            road = self.roads.get(v)
-            if self.length(u, v) > 1.5:
-                for mid in self.mway_at.get(u, ()):
-                    mw = self.motorways[mid]
-                    if v in (mw["a"], mw["b"]):
-                        shares[mw["owner"]] = shares.get(mw["owner"], 0) + self.length(u, v)
-                        break
-            elif road is not None:
-                shares[road.owner] = shares.get(road.owner, 0) + 1
+            got = self.step_owner(u, v)
+            if got is not None:
+                shares[got[0]] = shares.get(got[0], 0) + got[1]
         return shares

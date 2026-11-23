@@ -6,7 +6,7 @@ Modules:
     roads.py     RoadNet: road tiles and links by owner, bridges/tunnels, motorways, roundabouts and
                  lights, erasing with refunds, buildings' driveways, routes (Dijkstra trees).
     city.py      City: houses and shops appearing, shop demand (pins), the overflow timer.
-    traffic.py   Traffic: cars dispatched to pins, lanes, junction capacity, points per trip.
+    traffic.py   Traffic: cars dispatched to pins, lanes, junction capacity, points per tile passed.
     players.py   Player: each player's stock of pieces, points and weekly pick.
     upgrades.py  The weekly delivery and the upgrade offers.
     view.py      What clients see (the contract with client/*.js).

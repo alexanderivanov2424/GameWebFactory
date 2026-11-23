@@ -6,8 +6,9 @@ take it. Each player has their own stock of pieces (30 roads and 1 bridge to sta
 (drag to draw, 8 directions), bridges and tunnels (drawn straight across water / mountains),
 motorways (fast links between two road tiles), roundabouts and traffic lights (busier
 junctions). You can erase only what you built (refunded). Everyone may link onto anyone's road.
-Points: every trip (a car reaching a shop) is worth 10, split between the players whose tiles
-the car drove on, by tiles. The team's trips are the shared score.
+Points: every time a car drives over a road tile (bridges and tunnels too, either way), whoever
+built that tile gets 1 point; a motorway gives its builder its length in tiles. The team's trips
+(cars reaching a shop) are the shared score.
 Weeks: every `weekLength` seconds the city limits grow, every player gets 20 roads, and the
 game pauses while each player picks one of the same two upgrades (time limit `pickTime`; the
 first offer if you don't pick). Building works during the pause.

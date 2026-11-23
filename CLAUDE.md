@@ -271,8 +271,8 @@ Summary:
    (`logic/machines.py`), behaviour-flag upgrades, per-player area-of-interest unit sync, survival near heat.
    `games/motorways/` ("Metro Lanes", `RealtimeGame`, `logic/` modules): co-op Mini Motorways in one shared
    city: players draw road tiles they own (8-direction links, bridges/tunnels, motorways, roundabouts,
-   lights) from their own stock, cars route over the graph with lanes and junction capacity, each trip's
-   points split by who built the road, the same weekly offers for everyone during a shared pick pause,
+   lights) from their own stock, cars route over the graph with lanes and junction capacity, each road
+   tile scoring 1 point for its builder per car that drives over it, the same weekly offers for everyone during a shared pick pause,
    and a shared loss when any shop overflows.
 
 ## Lobby model (shared by all games)
