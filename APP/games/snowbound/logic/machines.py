@@ -16,7 +16,7 @@ sweeper  (Dust Sweeper) digs only lots a blizzard snowed over, or with at most p
 brazier  (Brazier, placed) while the woodpile has logs: melts rate from every lot with snow within
          params.radius (any lot, frontier or not), paid; it is a heat source within
          survival.BRAZIER_HEAT; burns params.logs logs/s (survival.stove_burn). bellows: radius +1, half the logs.
-buddy    (Shovel Buddy) follows its owner and digs workable lots within its reach at rate; while
+buddy    (Shovel Buddy) follows its player (units.buddy_leaders spreads them out) and digs workable lots within its reach at rate; while
          within params.near of you it boosts your shovel (Match.buddy_boost).
 dozer    (Blade Dozer) digs the nearest frontier lot at rate, but only params.paid of it is paid
          (windrow-pay: all of it); the other part is shoved onto the next unreached lot further from
@@ -185,6 +185,7 @@ def brazier(ctx, unit, player, rate):
 def buddy(ctx, unit, player, rate):
     world = ctx.world
     m = MACHINES[unit.mid]
+    player = ctx.match.players.get(ctx.leaders.get(unit.id), player)
     if math.hypot(player.x - unit.x, player.y - unit.y) > 1.2:
         move_toward(world, unit, player.x, player.y, max(m["speed"], 5.0), ctx.dt, 1.0)
         unit.state = "moving"
@@ -212,7 +213,7 @@ def dozer(ctx, unit, player, rate):
 def auger(ctx, unit, player, rate):
     world, p = ctx.world, _params(unit)
     least, reach = p.get("min", 200), p.get("range", 15)
-    rally = ctx.rallies.get(unit.pid)
+    rally = ctx.rally
     cx, cy = rally if rally is not None else (unit.x - 0.5, unit.y - 0.5)
     anywhere = player.has("corkscrew")
     i = unit.target

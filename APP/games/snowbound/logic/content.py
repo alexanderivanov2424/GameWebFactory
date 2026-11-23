@@ -26,8 +26,9 @@ Landmark file <id>.json:
 
 Upgrade file <id>.json:
     {"name": "...", "cost": 100, "text": "...", "effect": {"kind": ..., "value"?: ...},
-     "shared": true?, "machine": id?}
-    shared: one purchase covers the whole team. machine: only shown once you own that machine.
+     "machine": id?}
+    Every upgrade is bought once for the whole team and applies to everyone (economy.Stores).
+    machine: only shown once the team owns that machine.
     Effect kinds: click_mult (x shovel), click_pct (swings also clear value% of your machines'
     rate), auto ("rations" | "diesel" | "logs": deliveries), food_drain (x hunger), warm_loss
     (x warmth lost), stove (x logs burned, shared), dust (x blizzard snow on cleared ground,
@@ -35,7 +36,7 @@ Upgrade file <id>.json:
     machine_mult (x that machine's rate), carry_mult (x loads: that machine, or with no machine
     every snow-hauling machine), goods_mult (x what your goods sell for), flag (a rule change checked by id in code:
     Player.has(id) / Match.team_has(id)).
-Upgrades without a machine show up once a player has earned UNLOCK_SHARE of their cost.
+Upgrades without a machine show up once the team has earned UNLOCK_SHARE of their cost.
 """
 
 import logging
@@ -110,7 +111,7 @@ def parse_upgrade(uid, data):
         raise ValueError("machine_mult needs a machine")
     return {"id": uid, "name": text(data, "name", 30, required=True), "text": text(data, "text", 200),
             "cost": number(data, "cost", 1, 1e15), "kind": kind, "value": value,
-            "shared": data.get("shared") is True, "machine": machine}
+            "machine": machine}
 
 
 def parse_good(gid, data):
@@ -178,7 +179,7 @@ def defs():
         "machines": {mid: {k: m[k] for k in ("order", "name", "icon", "kind", "text", "nominal", "diesel", "placed",
                                              "reach", "carry", "recipe", "unique")}
                      for mid, m in MACHINES.items()},
-        "upgrades": {uid: {k: u[k] for k in ("name", "text", "cost", "shared")} for uid, u in UPGRADES.items()},
+        "upgrades": {uid: {k: u[k] for k in ("name", "text", "cost")} for uid, u in UPGRADES.items()},
         "goods": {gid: {k: g[k] for k in ("order", "name", "icon", "value")} for gid, g in GOODS.items()},
         "landmarks": {lid: {k: lm[k] for k in ("name", "icon", "text", "size")} for lid, lm in LANDMARKS.items()},
     }

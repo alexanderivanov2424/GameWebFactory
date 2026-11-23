@@ -1,7 +1,7 @@
 {
   "name": "Pantry Delivery",
   "cost": 800,
-  "text": "Keeps you stocked with 5 rations (25% fee). No deliveries in blizzards.",
+  "text": "Keeps 5 rations per player in stock (25% fee). No deliveries in blizzards.",
   "effect": {
     "kind": "auto",
     "value": "rations"

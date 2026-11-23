@@ -1,9 +1,8 @@
 {
   "name": "Road Salt",
   "cost": 5000,
-  "text": "Everyone: blizzards never snow over roads.",
+  "text": "Blizzards never snow over roads.",
   "effect": {
     "kind": "flag"
-  },
-  "shared": true
+  }
 }

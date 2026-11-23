@@ -13,7 +13,7 @@
  * Prediction: you move locally with SB.grid.move and the same speed rules; the server's position
  * corrects it (snap when more than SNAP lots apart, drift toward it while standing still).
  * Keys: WASD/arrows walk; hold mouse or Space to shovel the lot under the mouse; Shift+click sets
- * your units' rally point; B machines, U upgrades, T team, H build a hut, Q build a Snow Depot,
+ * the team's rally point; B machines, U upgrades, T team, H build a hut, Q build a Snow Depot,
  * G road tool (1-4 pick the level; click or drag to lay road, sent in batches every ROAD_EVERY ms),
  * F follow me, R units work anywhere, Esc closes panels and the road tool; wheel zooms.
  */

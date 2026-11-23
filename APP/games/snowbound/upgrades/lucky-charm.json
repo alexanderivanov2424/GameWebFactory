@@ -1,7 +1,7 @@
 {
   "name": "Lucky Charm",
   "cost": 77777,
-  "text": "Golden snowflakes you catch give twice as much.",
+  "text": "Golden snowflakes give twice as much.",
   "effect": {
     "kind": "flake",
     "value": 2

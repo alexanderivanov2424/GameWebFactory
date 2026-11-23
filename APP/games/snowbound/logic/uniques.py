@@ -4,10 +4,11 @@ STEPS[kind](ctx, unit, player, rate) like machines.py.
 mammoth  (Woolly Mammoth, unique) digs like a worker, and every dig also hits the 8 lots around it.
 spirit   (Snow Spirit, unique, params.fly) digs snowed-over lots, else lots with at most
          params.shallow snow, anywhere in the valley (ignores the rally point).
-bernard  (St. Bernard, unique) follows its owner; anyone within params.heat of it stays warm
-         (survival.near_heat) and its owner eats params.food/s while below params.hungry food.
+bernard  (St. Bernard, unique) follows the coldest player; anyone within params.heat of it stays
+         warm (survival.near_heat) and the player it's with eats params.food/s while below
+         params.hungry food.
 golem    (Snow Golem, unique) every params.every s walks to the lowest road below params.max
-         within params.range of its owner's rally point (or itself) and raises it one level, free.
+         within params.range of the team's rally point (or itself) and raises it one level, free.
 spring   (Hot Spring, unique, placed) melts rate from every lot within params.radius (paid) and
          warms anyone within params.heat (survival.near_heat). Burns nothing.
 """
@@ -50,6 +51,7 @@ def spirit(ctx, unit, player, rate):
 
 def bernard(ctx, unit, player, rate):
     p = _params(unit)
+    player = min(ctx.match.players.values(), key=lambda q: (q.warmth, q.food))
     near = math.hypot(player.x - unit.x, player.y - unit.y)
     if near > 1.2:
         move_toward(ctx.world, unit, player.x, player.y, max(MACHINES[unit.mid]["speed"], 5.0), ctx.dt, 1.0)
@@ -70,7 +72,7 @@ def golem(ctx, unit, player, rate):
         if unit.cd > 0:
             unit.state = "idle"
             return
-        rally = ctx.rallies.get(unit.pid)
+        rally = ctx.rally
         cx, cy = rally if rally is not None else (math.floor(unit.x), math.floor(unit.y))
         r = int(p.get("range", 14))
         best, best_key = None, None

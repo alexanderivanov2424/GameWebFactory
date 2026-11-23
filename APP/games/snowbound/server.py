@@ -8,8 +8,8 @@ snow its own way (logic/machines.py): Neighbour Kids shovel, Drift Dogs tunnel s
 become roads, Dust Sweepers clean up blizzard snow, Braziers (placed where you stand) melt a ring
 and keep you warm, Shovel Buddies follow you and boost your shovel, Blade Dozers shove drifts
 outward, Deep Augers drill the deepest snow, Snow Stills (placed) turn snow into diesel, Road
-Graders widen roads, Jet Blowers fire beams. Mobile ones work near your rally point if you set one
-(a spot, or "follow me").
+Graders widen roads, Jet Blowers fire beams. Mobile ones work near the team's rally point if one is set
+(a spot, or "follow" a player).
 Hauling: digging machines (kids, dogs, sweepers, dozers, augers, graders) carry what they dig and
 are paid only when they unload it at a drop point: the cabin, a Snow Depot (built where you stand,
 used by everyone) or an Old Rail Station. Roads (Track, Gravel, Paved, Heated: laid and upgraded
@@ -20,14 +20,16 @@ Factory (shared by the team): processors (placed) take snow from anyone's hauler
 its goods (Igloo Workshop next to a Brick Press, Ice Carver next to an Ice Press). Cargo Sleds and
 Freight Trucks fetch goods and sell them at a market: the cabin or an Old Rail Station
 (logic/factory.py).
-Landmarks: a few one-of-a-kind ruins are hidden in each valley (landmarks/*.json). Whoever clears
-the last of a ruin's lots gets its reward: a unique helper (Woolly Mammoth, Snow Spirit, St. Bernard,
+Landmarks: a few one-of-a-kind ruins are hidden in each valley (landmarks/*.json). Clearing the
+last of a ruin's lots gives the team its reward: a unique helper (Woolly Mammoth, Snow Spirit, St. Bernard,
 Reindeer Team, Snow Golem, Old Snowcat), a unique building (Ice Factory, Snow Cone Stand, Hot
 Spring) or a team perk (Old Rail Station, Weather Station, Observatory) (logic/landmarks.py). Upgrades mostly change how one machine works (Snow Angels, Sled
-Harness, Corkscrew, Long Throw...), plus shovel, survival, delivery and shared team upgrades;
+Harness, Corkscrew, Long Throw...), plus shovel, survival, delivery and weather upgrades;
 Snowshoes let you walk over deeper snow. Snow gets deeper the further you get from
-the cabin. The team shares one wallet, one diesel tank and one ration supply (and the woodpile);
-each player has their own machines, upgrades and rally point.
+the cabin. Everything is the team's: one wallet, one diesel tank, one ration supply, the woodpile, one fleet
+of machines (one price curve, whoever pays; they stay if their buyer leaves), upgrades (bought
+once, for everyone) and one rally point anyone sets ("follow me" follows whoever pressed it).
+Shovel Buddies spread out over the players. Each player only has their own character.
 Lots hide things: forests (logs for the stove), buried cabins (cash), gas stations (diesel),
 supply caches and lost skiers (free helpers). Golden snowflakes appear near players now and then:
 the first to walk into one gets a x5 Frenzy or a lump of cash.
@@ -53,7 +55,7 @@ Game messages (players only):
                  {"action": "supply", "item": "rations" | "diesel" | "logs", "qty": number > 0}
                      (logs go to the shared woodpile; diesel and logs can't be bought in a blizzard)
                  {"action": "rally", "x": int, "y": int} | {"action": "rally", "follow": true}
-                     | {"action": "rally"}   where your units look for work first (none: anywhere)
+                     | {"action": "rally"}   where the team's units look for work first (none: anywhere)
                  {"action": "hut"}                              build a warming hut where you stand
                  {"action": "depot"}                            build a Snow Depot where you stand
                  {"action": "road", "level": 1-4, "lots": [[x, y], ...]}   lay or upgrade road

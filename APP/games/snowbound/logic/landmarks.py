@@ -7,11 +7,11 @@ cabin is within its band (shares of half the map), apart from the cabin and the 
 Site lots hold SITE_SNOW x the normal snow and look like plain snow until reached. The client
 only sees a landmark once one of its lots is reached (or every landmark after the Observatory).
 
-When the last of its lots is reached (Match.found(pid, "site", i)), whoever cleared it gets the
-reward (grant):
-    unit:   a unique machine (machines/*.json "unique") joins the finder's crew at the site;
-    placed: a unique placed machine (Ice Factory, Snow Cone Stand, Hot Spring) is built for the
-            finder on the site's centre lot;
+When the last of its lots is reached (Match.found(pid, "site", i)), the team gets the reward
+(whoever cleared it is credited in the log):
+    unit:   a unique machine (machines/*.json "unique") joins the team at the site;
+    placed: a unique placed machine (Ice Factory, Snow Cone Stand, Hot Spring) is built on the
+            site's centre lot;
     team:   an effect for everyone (EFFECTS), stored in Match.effects:
             market       an Old Rail Station: a drop point for snow and a market for goods on the
                          site's centre lot (roads.Network sources);
@@ -107,7 +107,7 @@ def found(match, pid, i):
         else:
             units.add(match, pid, mid, 1, x + 0.5, y + 0.5)
     what = MACHINES[reward["machine"]]["name"] if reward["kind"] != "team" else None
-    match.say(f"{p.name} dug out the {lm['name']}! " + (f"The {what} is theirs. " if what else "") + lm["text"])
+    match.say(f"{p.name} dug out the {lm['name']}! " + (f"The {what} joins the team. " if what else "") + lm["text"])
 
 
 def public(match):

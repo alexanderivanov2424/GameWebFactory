@@ -1,21 +1,23 @@
-"""Snowbound economy: one Player per seat (machines, upgrades, needs) and the team's shared Stores.
+"""Snowbound economy: one Player per seat (a character and its needs) and the team's shared Stores.
 
 The team shares one Stores: cash, earned (cash ever earned: unlocks upgrades), diesel (one tank
-for every machine) and rations (whoever gets hungry eats from it). Player.cash / earned / diesel /
-rations read and write the team's Stores. Each player still has their own machines (and their
-machine price curve), upgrades, rally point, food and warmth. Snow pays the team $1 per unit: at once for your shovel and machines that don't haul, when it is
+for every machine), rations (whoever gets hungry eats from it), owned (the team's machines: one
+fleet and one price curve, whoever pays) and upgrades (bought once, they apply to everyone).
+Player.cash / earned / diesel / rations / owned / upgrades read and write the team's Stores, so
+every rate, price and upgrade check is the same whichever player asks. Each player keeps only
+their character: position, controls, food, warmth, frostbite/frenzy and their own stats.
+Snow pays the team $1 per unit: at once for your shovel and machines that don't haul, when it is
 unloaded at a drop point for hauling machines (hauling.py), and processed snow pays when its goods
-sell (factory.py). Shared upgrades (content.UPGRADES[...]["shared"]) are bought
-once for the whole team and stored on the Match, not here.
+sell (factory.py).
 
 Player fields: name, color, stores (the team's Stores), cleared (snow this player and their
 machines ever cleared), goods_sold ($ this player's sleds made from goods),
-owned {machine id: count}, upgrades (set of ids), food 0-100,
+food 0-100,
 warmth 0-100, frostbite / starving (bool), frenzy (seconds left of x FRENZY), clicks (swing
 budget, refilled CLICKS_PER_SECOND per second).
 Character (avatars.py): x, y (world coordinates), keys (held: up/down/left/right), aim (lot
 [x, y] under the mouse or None), dig (dig button held), swing_cd, swinging (s left of the swing
-animation), rally (None, a lot index, or "follow": where your units look for work first).
+animation).
 """
 
 from gamekit import LobbyError
@@ -39,6 +41,8 @@ class Stores:
         self.earned = 0.0
         self.diesel = 0.0
         self.rations = 0
+        self.owned = {mid: 0 for mid in MACHINES}
+        self.upgrades = set()
 
 
 def _shared(name):
@@ -50,6 +54,8 @@ class Player:
     earned = _shared("earned")
     diesel = _shared("diesel")
     rations = _shared("rations")
+    owned = _shared("owned")
+    upgrades = _shared("upgrades")
 
     def __init__(self, pid, name, color, x=0.0, y=0.0, stores=None):
         self.stores = stores if stores is not None else Stores()
@@ -61,14 +67,11 @@ class Player:
         self.dig = False
         self.swing_cd = 0.0
         self.swinging = 0.0
-        self.rally = None
         self.name = name
         self.color = color
         self.cash += START["cash"]
         self.cleared = 0.0
         self.goods_sold = 0.0
-        self.owned = {mid: 0 for mid in MACHINES}
-        self.upgrades = set()
         self.rations += START["rations"]
         self.diesel += float(START["diesel"])
         self.food = 100.0
@@ -81,11 +84,11 @@ class Player:
     # --- multipliers -----------------------------------------------------------------
 
     def effect(self, kind, default=1):
-        """Product of this player's own upgrades of a kind (multipliers)."""
+        """Product of the team's upgrades of a kind (multipliers)."""
         value = default
         for uid in self.upgrades:
             u = UPGRADES[uid]
-            if u["kind"] == kind and not u["shared"]:
+            if u["kind"] == kind:
                 value *= u["value"]
         return value
 
@@ -138,7 +141,7 @@ class Player:
         return mult
 
     def diesel_use(self):
-        """Litres per second this player's machines burn (from the team's tank)."""
+        """Litres per second the team's machines burn."""
         return sum(n * MACHINES[mid]["diesel"] for mid, n in self.owned.items())
 
     def click_power(self):
@@ -185,9 +188,9 @@ class Player:
         self.pay(machine_cost(mid, self.owned[mid], count))
         self.owned[mid] += count
 
-    def upgrade_visible(self, uid, shared_owned):
+    def upgrade_visible(self, uid):
         u = UPGRADES[uid]
-        if uid in self.upgrades or uid in shared_owned:
+        if uid in self.upgrades:
             return False
         if u["machine"]:
             return self.owned[u["machine"]] >= 1

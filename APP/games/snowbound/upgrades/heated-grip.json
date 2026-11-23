@@ -1,7 +1,7 @@
 {
   "name": "Heated Grip",
   "cost": 15000,
-  "text": "Each Shovel Buddy near you adds +100% shovel power, and splashes hit at full power.",
+  "text": "Each Shovel Buddy near its player adds +100% shovel power, and splashes hit at full power.",
   "effect": {
     "kind": "flag"
   },

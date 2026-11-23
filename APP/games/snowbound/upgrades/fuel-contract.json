@@ -1,7 +1,7 @@
 {
   "name": "Fuel Contract",
   "cost": 2000,
-  "text": "Keeps a minute of diesel in your tank (25% fee). No deliveries in blizzards.",
+  "text": "Keeps a minute of diesel in the team's tank (25% fee). No deliveries in blizzards.",
   "effect": {
     "kind": "auto",
     "value": "diesel"

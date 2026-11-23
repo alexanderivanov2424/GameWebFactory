@@ -12,11 +12,15 @@ on (units never get stuck; params.fly ignores that), x the road level's speed on
 (lot_mult, roads.LEVELS).
 Pay: collect() is how machine code is paid for snow it removed: hauling machines (content
 "carry") add it to their load (sold when they unload, hauling.py), others are paid at once.
+Units belong to the team (Match docstring): pid is only who bought it (credit and colour), and
+the Player passed to machine code is the buyer if still playing, else any player (team stores,
+upgrades and rates are the same through every Player). Shovel Buddies spread over the players
+(buddy_leaders).
 Targets (Ctx.pick): the nearest workable lot passing the kind's filter and not claimed by
 another unit, looked for around the unit first (LOCAL lots past its reach); then a full
-search from the owner's rally point (a lot, or the owner with "follow"; else the unit), at
+search from the team's rally point (a lot, or the followed player; else the unit), at
 most SEARCHES_PER_TICK full searches per tick (the rest wait a tick). A unit further than
-RALLY_NEAR from its owner's rally point heads back there first.
+RALLY_NEAR from the rally point heads back there first.
 work(): dig the target while in reach, else move toward it; leftover work moves on to the next
 target in reach within the same tick (big machines clear many lots a second).
 Diesel machines stop ("stalled") while their owner's tank is empty.
@@ -71,9 +75,14 @@ def add(match, pid, mid, count, x=None, y=None, home=None):
         match.units[uid] = Unit(uid, pid, mid, ux, uy, home)
 
 
-def remove_player(match, pid):
-    for uid in [uid for uid, u in match.units.items() if u.pid == pid]:
-        del match.units[uid]
+def buddy_leaders(match):
+    """{buddy unit id: pid it follows}: Shovel Buddies spread evenly over the players."""
+    pids = list(match.players)
+    if not pids:
+        return {}
+    buddies = sorted((u.id for u in match.units.values() if MACHINES[u.mid]["kind"] == "buddy"),
+                     key=lambda uid: int(uid[1:]))
+    return {uid: pids[k % len(pids)] for k, uid in enumerate(buddies)}
 
 
 def placed_at(match, i):
@@ -100,12 +109,14 @@ def lot_mult(world, i, fly=False):
     return roads.unit_speed(world, i)
 
 
-def rally_point(match, player):
-    """Lot coordinates (x, y) where a player's units look for work, or None."""
-    if player.rally == "follow":
-        return math.floor(player.x), math.floor(player.y)
-    if player.rally is not None:
-        return match.world.xy(player.rally)
+def rally_point(match):
+    """Lot coordinates (x, y) where the team's units look for work, or None."""
+    spot = match.rally_spot
+    if isinstance(spot, tuple):
+        p = match.players.get(spot[1])
+        return (math.floor(p.x), math.floor(p.y)) if p is not None else None
+    if spot is not None:
+        return match.world.xy(spot)
     return None
 
 
@@ -130,7 +141,8 @@ class Ctx:
         self.dt = dt
         self.searches = SEARCHES_PER_TICK
         self.claimed = {u.target: u.id for u in match.units.values() if u.target is not None}
-        self.rallies = {pid: rally_point(match, p) for pid, p in match.players.items()}
+        self.rally = rally_point(match)
+        self.leaders = buddy_leaders(match)
         self.placed = {u.home: u for u in match.units.values() if u.home is not None}
         self.fetching = {}
         for u in match.units.values():
@@ -154,7 +166,7 @@ class Ctx:
 
     def pick(self, unit, reach, ok=None, local_only=False, anywhere=False):
         world = self.world
-        rally = None if anywhere else self.rallies.get(unit.pid)
+        rally = None if anywhere else self.rally
         ux, uy = unit.x - 0.5, unit.y - 0.5
         near_rally = rally is None or math.hypot(ux - rally[0], uy - rally[1]) <= RALLY_NEAR
         if near_rally or local_only:
@@ -210,12 +222,15 @@ def work(ctx, unit, player, amount, ok=None, on_dig=None, local_only=False, pay=
 def step(match, dt):
     from .hauling import haul  # both import this module
     from .machines import STEPS
+    if not match.players:
+        return
     ctx = Ctx(match, dt)
     blizzard = match.weather.blizzard
+    anyone = next(iter(match.players.values()))
     for unit in list(match.units.values()):  # finds can add units (rescued skiers)
-        player = match.players.get(unit.pid)
-        if player is None or unit.id not in match.units:
+        if unit.id not in match.units:
             continue
+        player = match.players.get(unit.pid, anyone)
         m = MACHINES[unit.mid]
         if m["diesel"] and player.diesel <= 0:
             unit.state = "stalled"
@@ -232,10 +247,10 @@ def visible(match, centres, radius):
     "f": [input fill 0-1, goods waiting] for processors."""
     from .hauling import capacity
     out = {}
+    if not match.players:
+        return out
+    p = next(iter(match.players.values()))  # loads and rates are the team's: any player will do
     for u in match.units.values():
-        p = match.players.get(u.pid)
-        if p is None:
-            continue
         if any(abs(u.x - cx) <= radius and abs(u.y - cy) <= radius for cx, cy in centres):
             entry = {"x": round(u.x, 2), "y": round(u.y, 2), "m": u.mid, "p": u.pid, "s": u.state}
             m = MACHINES[u.mid]

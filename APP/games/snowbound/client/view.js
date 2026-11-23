@@ -15,6 +15,7 @@
   const SB = (window.SB = window.SB || {});
   const { $ } = AppDom;
   const FEATURE_EMOJI = { t: "🌲", T: "🌲", h: "🏚️", H: "🏚️", g: "⛽", G: "⛽", C: "📦", K: "⛷️" };
+  const TEAM = { color: "#d8e2ec" };
   const FACES = { ok: "🙂", frostbite: "🥶", starving: "😫", frenzy: "🤩" };
 
   const view = (SB.view = { spectate: null });
@@ -209,9 +210,9 @@
   function drawUnits(game, now) {
     const z = Z(), defs = game.defs.machines;
     for (const u of unitPositions(now)) {
-      const owner = game.players[u.p];
+      const owner = game.players[u.p] || TEAM;  // the team's machines: coloured by who bought them, if still here
       const d = defs[u.m];
-      if (!owner || !d) continue;
+      if (!d) continue;
       if (d.placed) { drawPlaced(u, d, owner, now); continue; }
       const big = d.kind === "worker" || d.kind === "dog" || d.kind === "buddy" ? 0.75 : 1.05;
       const bob = u.s === "moving" ? Math.abs(Math.sin(now / 90 + u.x * 3)) * z * 0.08 : 0;
@@ -373,8 +374,7 @@
     drawLots(game, now);
     drawLandmarks(game);
     drawHeat(game, now);
-    const mine = game.players[state.you];
-    if (mine && Array.isArray(mine.rally)) emoji("🚩", sx(mine.rally[0] + 0.5), sy(mine.rally[1] + 0.3), Z() * 0.9);
+    if (Array.isArray(game.rally)) emoji("🚩", sx(game.rally[0] + 0.5), sy(game.rally[1] + 0.3), Z() * 0.9);
     if (game.flake) {
       const fx = sx(game.flake.x + 0.5), fy = sy(game.flake.y + 0.5), r = Z() * (0.9 + 0.15 * Math.sin(now / 150));
       const glow = ctx.createRadialGradient(fx, fy, 0, fx, fy, r * 1.8);
@@ -405,8 +405,7 @@
     for (const [mx, my] of Object.values(game.markets || {})) dot(mx + 0.5, my + 0.5, 3.5, "#ffd54f");
     for (const lm of Object.values(game.landmarks || {})) dot(lm.x + lm.size / 2, lm.y + lm.size / 2, 3, lm.found ? "#ffd700" : "#c0a0ff");
     if (game.flake) dot(game.flake.x + 0.5, game.flake.y + 0.5, 4, "#ffd700");
-    const me = game.players[state.you];
-    if (me && Array.isArray(me.rally)) dot(me.rally[0] + 0.5, me.rally[1] + 0.5, 3, "#ff3b3b");
+    if (Array.isArray(game.rally)) dot(game.rally[0] + 0.5, game.rally[1] + 0.5, 3, "#ff3b3b");
     for (const [pid, p] of Object.entries(game.players)) {
       const pos = pid === state.you && SB.input.me ? SB.input.me : p;
       c.strokeStyle = "#fff"; c.lineWidth = 1.5;

@@ -5,7 +5,8 @@ public(match):
      "players": {pid: {"name", "color", "x", "y" (world coordinates), "swing": bool,
                        "cash" (the team's), "cleared", "rate" (machine snow/s now), "food", "warmth",
                        "status": "ok" | "frenzy" | "starving" | "frostbite",
-                       "rally"?: [x, y] lot | "follow", "owned": {machine id: n}, "goods": $ from goods}},
+                       "owned": {machine id: n} (the team's), "goods": $ from goods}},
+     "rally"?: [x, y] lot | {"follow": pid} (the team's rally point; none: anywhere),
      "team": {"cash", "diesel", "rations", "dieselUse"} (shared by every player),
      "huts": {"<n>": [x, y]}, "hutCost": $, "heat": {"cabin": lots, "hut": lots},
      "depots": {"<n>": [x, y]} (Snow Depots), "depotCost": $, "markets": {"<n>": [x, y]} (Old Rail
@@ -14,7 +15,7 @@ public(match):
      "weather": {"kind": clear|warning|blizzard, "left": s}, "woodpile": logs,
      "stove": {"lit": bool, "burn": logs per minute}, "flake"?: {"x", "y", "left"},
      "progress": {"reached" (clear now), "dusted" (reached, snowed on again), "total", "goal": %},
-     "shared": {upgrade id: pid}, "log": {"<n>": text}, "logCount": n, "prices": {item: $},
+     "shared": {upgrade id: pid who bought it} (every upgrade is the team's), "log": {"<n>": text}, "logCount": n, "prices": {item: $},
      "move": {"radius", "speed", "dusted", "road": [walk x per road level], "frostbite", "starving", "wade", "reach"},
      "beams": {"<n>": {"x0", "y0", "x1", "y1", "c"}} (Jet Blower shots, kept 1.5 s)}
      (move: the character rules client/grid.js needs to predict your walking)
@@ -22,7 +23,7 @@ private(match, pid): your shop, supplies and the units near you
     {"click": snow per swing, "reach": lots, "splash": share hitting the 4 lots around (Shovel
      Buddy), "wade": deepest snow level you can walk on, "rations", "diesel", "dieselUse": L/s (team's), "frenzy": s,
      "machines": {id: {"owned", "cost1", "cost10", "rate"}}, "upgrades": [visible ids by cost],
-     "owned": [your upgrade ids], "auto": [delivered items],
+     "owned": [the team's upgrade ids], "auto": [delivered items],
      "carried": snow the team's machines are carrying, "waiting": $ of goods waiting in processors,
      "cargo": $ of goods on sleds (all team-wide),
      "units": {uid: {"x", "y", "m", "p", "s": idle|moving|working|hauling|full|stalled|unlit|charging,
@@ -63,10 +64,6 @@ def public(match):
                  "rate": round(p.base_rate() * p.work_mult(blizzard), 1), "food": int(p.food),
                  "warmth": int(p.warmth), "status": _status(p),
                  "owned": {mid: n for mid, n in p.owned.items() if n}, "goods": int(p.goods_sold)}
-        if p.rally == "follow":
-            entry["rally"] = "follow"
-        elif p.rally is not None:
-            entry["rally"] = list(world.xy(p.rally))
         players[pid] = entry
     state = {
         "w": world.w, "h": world.h, "cabin": [world.cx, world.cy], "time": int(match.time),
@@ -88,6 +85,10 @@ def public(match):
         "prices": PRICES, "move": _MOVE,
         "beams": {k: {key: v for key, v in b.items() if key != "left"} for k, b in match.beams.items()},
     }
+    if isinstance(match.rally_spot, tuple):
+        state["rally"] = {"follow": match.rally_spot[1]}
+    elif match.rally_spot is not None:
+        state["rally"] = list(world.xy(match.rally_spot))
     if match.flake is not None:
         x, y = world.xy(match.flake["i"])
         state["flake"] = {"x": x, "y": y, "left": int(match.flake["left"])}
@@ -98,16 +99,15 @@ def private(match, pid):
     p = match.players.get(pid)
     if p is None:
         return None
-    visible = sorted((uid for uid in UPGRADES if p.upgrade_visible(uid, match.shared_upgrades)),
+    visible = sorted((uid for uid in UPGRADES if p.upgrade_visible(uid)),
                      key=lambda uid: UPGRADES[uid]["cost"])
     power, reach, splash = match.shovel(p)
     carried = waiting = cargo = 0.0
     for u in match.units.values():
-        if u.pid in match.players:
-            carried += u.load
-            if u.outbox:
-                waiting += u.outbox * GOODS[MACHINES[u.mid]["recipe"]["out"]]["value"]
-            cargo += sum(n * GOODS[g]["value"] for g, n in u.cargo.items())
+        carried += u.load
+        if u.outbox:
+            waiting += u.outbox * GOODS[MACHINES[u.mid]["recipe"]["out"]]["value"]
+        cargo += sum(n * GOODS[g]["value"] for g, n in u.cargo.items())
     return {
         "click": round(power, 2), "reach": reach, "splash": splash, "wade": p.wade_level(),
         "rations": p.rations, "diesel": round(p.diesel, 1),

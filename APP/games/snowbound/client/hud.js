@@ -121,15 +121,14 @@
       upgradeKey = key;
       upgradeButtons = mine.upgrades.map((id) => {
         const u = defs[id];
-        const b = el("button", { className: "sb-upgrade", title: u.text + (u.shared ? " (for the whole team)" : ""),
+        const b = el("button", { className: "sb-upgrade", title: u.text + " (for the whole team)",
           onclick: () => lobby.sendGame({ action: "upgrade", upgrade: id }) },
-        `${u.shared ? "🤝 " : ""}${u.name}`, el("small", {}, `${money(u.cost)} · ${u.text}`));
+        u.name, el("small", {}, `${money(u.cost)} · ${u.text}`));
         b.dataset.cost = u.cost;
         return b;
       });
-      const shared = Object.keys(game.shared).length;
       fill($("upgrades"), upgradeButtons.length ? upgradeButtons : el("span", { className: "muted" }, "Nothing new yet: earn more or buy machines."),
-        el("div", { className: "muted", style: "width:100%" }, `Owned: ${mine.owned.length} yours, ${shared} shared`));
+        el("div", { className: "muted", style: "width:100%" }, `The team owns ${mine.owned.length} upgrades (they apply to everyone)`));
     }
     for (const b of upgradeButtons) b.disabled = me.cash < Number(b.dataset.cost);
   }
@@ -142,11 +141,10 @@
   function renderTeam(game, state) {
     if (panel !== "team") return;
     fill($("team"), Object.entries(game.players).map(([pid, p]) => {
-      const units = Object.values(p.owned).reduce((a, b) => a + b, 0);
       return el("li", { title: "Click to follow (spectators)", onclick: () => { SB.view.spectate = pid; } },
         el("span", { className: "sb-dot", style: `background:${p.color}` }), el("b", {}, p.name + (pid === state.you ? " (you)" : "")),
         statusChip(p),
-        el("div", { className: "muted" }, `${fmt(p.rate)} snow/s · ${units} units · cleared ${fmt(p.cleared)}` +
+        el("div", { className: "muted" }, `cleared ${fmt(p.cleared)}` +
           (p.goods ? ` · goods ${money(p.goods)}` : "")),
         el("div", { className: "muted" }, `🍲 ${p.food}  🌡️ ${p.warmth}`));
     }));
@@ -221,7 +219,9 @@
     }
     $("cash").textContent = money(me.cash);
     $("cash").title = "Team cash: shared by every player (so are diesel and rations)";
-    $("rates").textContent = `Machines ${fmt(me.rate)} snow/s · Shovel ${fmt(mine.click)}/swing`;
+    const follow = game.rally && game.rally.follow;
+    $("rates").textContent = `Team machines ${fmt(me.rate)} snow/s · Shovel ${fmt(mine.click)}/swing` +
+      (follow ? ` · following ${follow === state.you ? "you" : (game.players[follow] || {}).name}` : "");
     const haul = [];
     if (mine.carried) haul.push(`🛒 ${fmt(mine.carried)} snow on the way`);
     if (mine.waiting) haul.push(`🏭 ${money(mine.waiting)} goods waiting`);
@@ -255,8 +255,8 @@
     $("buildDepot").innerHTML = "";
     $("buildDepot").append(el("kbd", {}, "Q"), `Depot ${money(game.depotCost)}`);
     $("buildDepot").disabled = me.cash < game.depotCost;
-    $("follow").classList.toggle("on", me.rally === "follow");
-    $("anywhere").classList.toggle("on", me.rally === undefined);
+    $("follow").classList.toggle("on", !!(game.rally && game.rally.follow === state.you));
+    $("anywhere").classList.toggle("on", game.rally === undefined);
     renderMachines(game, mine, me);
     renderUpgrades(game, mine, me);
   };
