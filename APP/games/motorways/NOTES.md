@@ -21,10 +21,10 @@ the same weekly rewards for all, points by road ownership, shared loss on overfl
 ## Map
 - `logic/match.py`: `Match.step(dt)`: pick countdown (pauses everything else) -> `city.step`
   (spawns, pins, overflow timers) -> `traffic.step` -> loss -> new week (area grows, deliveries, offers).
-- `logic/roads.py`: `RoadNet`: `draw` (roads, driveways, `_span` for bridges/tunnels), `motorway`,
+- `logic/roads.py`: `RoadNet`: `draw` (roads, driveways, `_span` for bridges/tunnels),
   `place` (roundabout/light), `erase` (refunds, also to other owners), `edges`/`junction`/`tree`/`route`,
-  `step_owner` (who scores a car's step: 1 per road tile, a motorway its length), `owner_shares`.
-- `logic/city.py`: houses/shops, spawn placement, demand, overflow. `logic/grid.py`: tiles, terrain
+  `step_owner` (who scores a car's step: 1 per road tile), `owner_shares`.
+- `logic/city.py`: houses/shops, spawn placement (houses in clusters: `grow_cluster`), demand, overflow. `logic/grid.py`: tiles, terrain
   generation, the area. `logic/players.py`: stock. `logic/upgrades.py`: offers. `logic/view.py`: client contract.
 - `client/`: `game.js` wiring, `city.js` lookups + mirrored rules, `view.js` canvas, `input.js` tools and
   strokes, `hud.js` boxes (top clock, players, tool bar, pick dialog, result).

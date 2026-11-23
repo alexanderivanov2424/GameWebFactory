@@ -12,7 +12,7 @@
   holds 4 at full speed. A car stuck for GIVE_UP s squeezes through (no permanent gridlock).
 - At the shop the car takes a pin (one trip), parks PARK_TIME s and drives home.
   Points: every time a car passes a road tile (either way, out or home), whoever built that tile
-  gets 1 point; a motorway gives its builder its length in tiles (roads.RoadNet.step_owner).
+  gets 1 point (roads.RoadNet.step_owner).
   A trip (car reaching its shop) counts for each player whose tiles it drove on to get there.
 - When roads change, cars take the new best route from their next tile; a car whose link was
   erased, or that can no longer reach where it's going, is sent straight home (its pin waits

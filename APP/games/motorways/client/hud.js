@@ -14,7 +14,6 @@
   let lastScores = "", lastPick = "", lastResult = "";
   const HINTS = {
     road: "Drag to draw roads · straight into water/mountains for a bridge/tunnel · right-drag to erase · O: owners",
-    motorway: "Click a road tile, then another 3-14 tiles away · Esc: back to roads",
     roundabout: "Click a junction to put a roundabout on it · right-click to take yours back",
     light: "Click a junction to put traffic lights on it · right-click to take yours back",
   };

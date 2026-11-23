@@ -8,12 +8,12 @@ public(match):
      "players": {pid: {"name", "color", "points", "trips", "stock": {item: n},
                        "picked"?: 0 | 1, "gone"?: true, "cur"?: [x, y]}},
      "roads": {"<t>": {"o": pid, "k": "r" | "b" | "t", "f"?: "roundabout" | "light", "fo"?: pid}},
-     "links": {"<a>,<b>": 1} (a < b), "motorways": {id: {"a", "b", "o"}},
+     "links": {"<a>,<b>": 1} (a < b),
      "houses": {id: {"t", "door", "c", "home": cars at home}},
      "shops": {id: {"t": top-left tile, "node", "door", "c", "pins", "timer": 0-1, "parked"}},
      "cars": {id: {"x", "y", "c"}} (cars on the road; tile units, centre of tile (x, y) is x+0.5),
      "pick"?: {"offers": [{"id", "name", "text"}, ...], "left": s},
-     "rules": {"weekly", "span": {"b", "t"}, "motorway": [min, max]}}
+     "rules": {"weekly", "span": {"b", "t"}}}
 Tiles are t = y * w + x.
 """
 
@@ -22,10 +22,10 @@ import math
 from gamekit.sync import quantize
 
 from .city import COLOR_NAMES, COLORS, FULL_PINS
-from .roads import MAX_SPAN, MOTORWAY_MAX, MOTORWAY_MIN
+from .roads import MAX_SPAN
 from .upgrades import UPGRADES, WEEKLY
 
-_RULES = {"weekly": WEEKLY["roads"], "span": dict(MAX_SPAN), "motorway": [MOTORWAY_MIN, MOTORWAY_MAX]}
+_RULES = {"weekly": WEEKLY["roads"], "span": dict(MAX_SPAN)}
 
 
 def _player(p):
@@ -56,7 +56,6 @@ def public(m):
         "players": {pid: _player(p) for pid, p in m.players.items()},
         "roads": {str(t): _road(r) for t, r in net.roads.items()},
         "links": {f"{a},{b}": 1 for a, linked in net.links.items() for b in linked if a < b},
-        "motorways": {mid: {"a": mw["a"], "b": mw["b"], "o": mw["owner"]} for mid, mw in net.motorways.items()},
         "houses": {h.id: {"t": h.node, "door": h.door, "c": h.color, "home": h.home} for h in city.houses.values()},
         "shops": {s.id: {"t": s.tiles[0], "node": s.node, "door": s.door, "c": s.color, "pins": s.pins,
                          "timer": quantize(min(1.0, s.timer / m.overflow), 0.01), "parked": traffic.parked(s)}

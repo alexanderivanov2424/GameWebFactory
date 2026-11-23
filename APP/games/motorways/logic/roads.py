@@ -7,12 +7,10 @@ Pieces (each owned by the player who built it):
 - Bridges / tunnels: drawing from land straight (not diagonally) into water / a mountain builds a
   whole span across it (at most MAX_SPAN tiles) and the road where it lands. Costs 1 bridge /
   tunnel (plus 1 road for each new land tile). Span tiles link only along the span.
-- Motorways: a fast link between two road tiles MOTORWAY_MIN..MOTORWAY_MAX tiles apart, passing
-  over everything. Cars join and leave only at its ends.
 - Roundabouts and traffic lights: placed on a road tile (anyone's), they make that junction
   carry more traffic (traffic.py).
-Erasing: your own road tile (refunds 1 road; its links, motorways ending there and features on
-it go, refunded to whoever owned them), a whole bridge/tunnel of yours (refunds it), or a
+Erasing: your own road tile (refunds 1 road; its links and features on it
+go, refunded to whoever owned them), a whole bridge/tunnel of yours (refunds it), or a
 roundabout/light you placed (erased first if the tile has one of yours).
 
 Buildings (city.py) occupy tiles (`blocked`) and hang off the network by a fixed driveway: a
@@ -27,9 +25,7 @@ from gamekit import LobbyError
 
 ROAD, BRIDGE, TUNNEL = "r", "b", "t"
 MAX_SPAN = {BRIDGE: 4, TUNNEL: 5}
-MOTORWAY_MIN, MOTORWAY_MAX = 3, 14
 ROAD_SPEED = 2.0          # tiles per second
-MOTORWAY_SPEED = 4.5
 JUNCTION_COST = 0.4       # extra seconds a route counts for a junction without a roundabout
 FEATURES = {"roundabout": "roundabouts", "light": "lights"}   # feature -> stock item
 
@@ -51,8 +47,6 @@ class RoadNet:
         self.players = players     # pid -> Player (for costs and refunds)
         self.roads = {}            # tile -> Road
         self.links = {}            # tile -> set of linked neighbour tiles
-        self.motorways = {}        # id -> {"a", "b", "owner"}
-        self.mway_at = {}          # tile -> set of motorway ids ending there
         self.spans = {}            # id -> {"tiles": [...], "owner", "kind"}
         self.blocked = set()       # tiles covered by buildings
         self.doors = {}            # building node tile -> its door tile
@@ -68,9 +62,6 @@ class RoadNet:
         """Tiles a car can drive to from n."""
         for m in self.links.get(n, ()):
             yield m
-        for mid in self.mway_at.get(n, ()):
-            mw = self.motorways[mid]
-            yield mw["b"] if mw["a"] == n else mw["a"]
         if n in self.roads:
             yield from self.attached.get(n, ())
         door = self.doors.get(n)
@@ -91,7 +82,7 @@ class RoadNet:
         return self.grid.dist(u, v)
 
     def speed(self, u, v):
-        return MOTORWAY_SPEED if self.length(u, v) > 1.5 else ROAD_SPEED
+        return ROAD_SPEED
 
     def tree(self, target):
         """{node: (seconds to target, next node towards target)} for every node that can reach it."""
@@ -233,26 +224,6 @@ class RoadNet:
         for u, v in zip(chain, chain[1:]):
             self._link(u, v)
 
-    def motorway(self, pid, a, b):
-        g = self.grid
-        if not (g.valid(a) and g.valid(b)):
-            raise LobbyError("Pick two road tiles.")
-        for t in (a, b):
-            road = self.roads.get(t)
-            if road is None or road.kind != ROAD:
-                raise LobbyError("A motorway must start and end on a road.")
-        d = g.dist(a, b)
-        if d < MOTORWAY_MIN or d > MOTORWAY_MAX:
-            raise LobbyError(f"A motorway must be {MOTORWAY_MIN} to {MOTORWAY_MAX} tiles long.")
-        if any(self.motorways[m]["a"] in (a, b) and self.motorways[m]["b"] in (a, b) for m in self.mway_at.get(a, ())):
-            raise LobbyError("There's already a motorway there.")
-        self.players[pid].spend("motorways")
-        mid = self._id()
-        self.motorways[mid] = {"a": a, "b": b, "owner": pid}
-        self.mway_at.setdefault(a, set()).add(mid)
-        self.mway_at.setdefault(b, set()).add(mid)
-        self.version += 1
-
     def place(self, pid, t, feature):
         road = self.roads.get(t) if self.grid.valid(t) else None
         if road is None or road.kind != ROAD:
@@ -308,23 +279,11 @@ class RoadNet:
             self._drop_feature(road)
         for m in self.links.pop(t, ()):
             self.links[m].discard(t)
-        for mid in list(self.mway_at.get(t, ())):
-            mw = self.motorways.pop(mid)
-            for end in (mw["a"], mw["b"]):
-                self.mway_at[end].discard(mid)
-            self.players[mw["owner"]].refund("motorways")
-        self.mway_at.pop(t, None)
         self.version += 1
 
     def step_owner(self, u, v):
         """Who gets the points for a car driving u -> v: (pid, points) or None. The road tile v
-        earns its builder 1 point; a motorway link earns its builder its length in tiles."""
-        if self.length(u, v) > 1.5:
-            for mid in self.mway_at.get(u, ()):
-                mw = self.motorways[mid]
-                if v in (mw["a"], mw["b"]):
-                    return mw["owner"], round(self.length(u, v))
-            return None
+        earns its builder 1 point."""
         road = self.roads.get(v)
         return (road.owner, 1) if road is not None else None
 

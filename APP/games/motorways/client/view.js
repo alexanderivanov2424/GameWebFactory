@@ -5,14 +5,14 @@
  *   ML.view.toTile(clientX, clientY) -> [x, y] in tile units (floats; Math.floor for the tile)
  *   ML.view.owners            show who built each road (thin stripe in their colour); O toggles it
  * Draw order: terrain -> outside the city limits (shaded) -> roads (links, bridges, tunnels, owner
- * stripes, driveways) -> roundabouts and lights -> motorways -> houses, shops (pins, timer ring)
+ * stripes, driveways) -> roundabouts and lights -> houses, shops (pins, timer ring)
  * -> cars (interpolated by rt.sample) -> ML.input's preview -> other players' cursors.
  */
 (() => {
   const ML = (window.ML = window.ML || {});
   const { $ } = AppDom;
   const C = { land: "#f2eee4", landOut: "#d9d4c8", water: "#9ccbe8", mountain: "#c8b59a", peak: "#a8927a",
-              road: "#6c717a", bridge: "#8a6b4b", tunnel: "#4a4f57", motorway: "#3b4049", grid: "rgba(0,0,0,0.035)" };
+              road: "#6c717a", bridge: "#8a6b4b", tunnel: "#4a4f57", grid: "rgba(0,0,0,0.035)" };
   const SIDE = { N: [0, -1], S: [0, 1], E: [1, 0], W: [-1, 0] };
   const MARGIN = { left: 16, right: 240, top: 60, bottom: 84 };
 
@@ -141,19 +141,6 @@
     }
   }
 
-  function drawMotorways(game) {
-    ctx.lineCap = "round";
-    for (const mw of Object.values(game.motorways)) {
-      line(mw.a, mw.b, "rgba(0,0,0,0.25)", z * 0.8);
-      line(mw.a, mw.b, C.motorway, z * 0.62);
-      line(mw.a, mw.b, "#f5f5f0", Math.max(1, z * 0.06), [z * 0.3, z * 0.25]);
-      if (view.owners) {
-        const color = (game.players[mw.o] || {}).color || "#999";
-        for (const t of [mw.a, mw.b]) { ctx.fillStyle = color; ctx.beginPath(); ctx.arc(cx(t), cy(t), z * 0.16, 0, Math.PI * 2); ctx.fill(); }
-      }
-    }
-  }
-
   function roundRect(x, y, w, h, r) {
     ctx.beginPath();
     ctx.roundRect ? ctx.roundRect(x, y, w, h, r) : ctx.rect(x, y, w, h);
@@ -236,10 +223,6 @@
     }
     ctx.lineCap = "round";
     for (const [a, b] of p.pending || []) line(a, b, "rgba(108,113,122,0.6)", z * 0.56);
-    if (p.motorway) {
-      const [a, b, ok] = p.motorway;
-      line(a, b, ok ? "rgba(59,64,73,0.6)" : "rgba(200,40,40,0.55)", z * 0.62);
-    }
   }
 
   function drawCursors(game) {
@@ -268,7 +251,6 @@
       ctx.fillRect(0, 0, canvas.width, canvas.height);
       drawTerrain(game);
       drawRoads(game);
-      drawMotorways(game);
       drawBuildings(game, now);
       drawCars(game);
       drawPreview(game);

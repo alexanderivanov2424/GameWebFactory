@@ -3,7 +3,7 @@
 Modules:
     match.py     Match: one game in progress: players, week clock and weekly picks, tick order.
     grid.py      Grid: tiles, terrain from a seed (river, mountains), the area that grows weekly.
-    roads.py     RoadNet: road tiles and links by owner, bridges/tunnels, motorways, roundabouts and
+    roads.py     RoadNet: road tiles and links by owner, bridges/tunnels, roundabouts and
                  lights, erasing with refunds, buildings' driveways, routes (Dijkstra trees).
     city.py      City: houses and shops appearing, shop demand (pins), the overflow timer.
     traffic.py   Traffic: cars dispatched to pins, lanes, junction capacity, points per tile passed.

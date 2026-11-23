@@ -1,13 +1,13 @@
 """Metro Lanes players: each player's own stock of road pieces, points and weekly pick.
 
-Every player has their own stock (roads, bridges, tunnels, motorways, roundabouts, lights) and
+Every player has their own stock (roads, bridges, tunnels, roundabouts, lights) and
 gets the same weekly delivery and the same two upgrade offers as everyone else. Points come from
 cars driving over road tiles you built, 1 per car per tile (traffic.py credits them).
 """
 
 from gamekit import LobbyError
 
-START_STOCK = {"roads": 30, "bridges": 1, "tunnels": 0, "motorways": 0, "roundabouts": 0, "lights": 0}
+START_STOCK = {"roads": 10, "bridges": 1, "tunnels": 0, "roundabouts": 0, "lights": 0}
 ITEMS = tuple(START_STOCK)
 
 

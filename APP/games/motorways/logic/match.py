@@ -107,9 +107,6 @@ class Match:
     def erase(self, pid, t):
         self.net.erase(pid, t)
 
-    def motorway(self, pid, a, b):
-        self.net.motorway(pid, a, b)
-
     def place(self, pid, t, feature):
         if feature not in FEATURES:
             raise LobbyError("Unknown piece.")
