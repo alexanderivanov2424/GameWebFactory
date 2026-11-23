@@ -1,5 +1,14 @@
 <!doctype html>
-<!-- Food list (/food-list/): a shared shopping list for phones. Not linked from anywhere.
+<!-- Food list (/food-list/): shared shopping lists for phones. Not linked from anywhere.
+     Two screens: one list (the title button opens the other) and the lists screen: a stack of lists
+     (New list on top, then Global = every saved item, then each list with Edit and, on templates, Copy),
+     then New tag and every tag with Edit (a small popup: name, colour, delete).
+     body.global = the Global list is open: no checking off, clearing or adding; each item has Delete,
+     which marks it (red) until the bar at the top confirms or cancels; the editor has no Remove
+     (.item-only) and its amount is the default. body.copy = a copy of a template is open: its
+     template's name under the title, and Delete list instead of Clear checked / Clear all.
+     The list has two modes (the small button next to the title; body.viewing = view mode):
+     edit shows the add row and each item's Edit button; view shows the tag filter row instead.
      Logic in app.js; data and pictures are kept by ../server.py (API at /food-list/api/).
      nginx sends a strict Content-Security-Policy for this folder, so no inline scripts. -->
 <html lang="en">
@@ -22,6 +31,7 @@
     }
   }
   * { box-sizing: border-box; }
+  [hidden] { display: none !important; }  /* hidden always wins over display rules below */
   html { -webkit-text-size-adjust: 100%; }
   body {
     margin: 0; background: var(--bg); color: var(--text);
@@ -45,15 +55,103 @@
   .bar { display: flex; align-items: center; gap: 8px; }
   .bar h1 { font-size: 20px; margin: 0; flex: 1; min-width: 0; }
   .bar button { padding: 0 10px; font-size: 14px; }
-  #add { display: flex; gap: 8px; margin-top: 10px; }
-  #add input { flex: 1; min-width: 0; }
+  .bar .title {
+    flex: 1; min-width: 0; justify-content: flex-start; padding: 0 4px; margin-left: -4px;
+    border: 0; background: none; font-size: 20px; font-weight: 700;
+  }
+  .title #listName { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+  .title .chevron { color: var(--muted); font-size: 14px; }
+  .add { display: flex; gap: 8px; margin-top: 10px; }
+  .add input { flex: 1; min-width: 0; }
+  .lower { text-transform: lowercase; }
+  #suggest {
+    list-style: none; margin: 6px 0 0; padding: 0; overflow: hidden;
+    border: 1px solid var(--line); border-radius: 10px; background: var(--card);
+  }
+  #suggest button {
+    width: 100%; justify-content: flex-start; border: 0; border-radius: 0; background: none;
+    border-top: 1px solid var(--line); overflow: hidden; text-overflow: ellipsis;
+  }
+  #suggest li:first-child button { border-top: 0; }
+  #suggest .suggest-name { min-width: 0; flex: 0 1 auto; overflow: hidden; text-overflow: ellipsis; margin-right: 4px; }
+  .hint { font-size: 13px; color: var(--muted); margin-top: 4px; }
+  .hint.bad { color: var(--danger); }
+  .bar .mode { min-height: 34px; padding: 0 10px; font-size: 13px; }
+  body.viewing .bar .mode { border-color: var(--accent); }
+  body.viewing #add, body.viewing #suggest, body.viewing .item .edit, body.viewing #clearAll { display: none; }
+  body:not(.viewing) #filters { display: none; }
+  body.global .check, body.global #clearChecked, body.global #clearAll, body.global #add,
+  body.global #suggest, body.global .item-only { display: none; }
+  body.copy #clearChecked, body.copy #clearAll, body:not(.copy) #deleteListTop, body.global #deleteListTop { display: none; }
+  .sub { font-size: 13px; color: var(--muted); margin: -2px 0 0 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .qty { font-weight: 500; color: var(--muted); margin-left: 6px; white-space: nowrap; }
+  .item.doomed { border-color: var(--danger); background: color-mix(in srgb, var(--danger) 14%, var(--card)); }
+  .item.doomed .name { color: var(--danger); }
+  body:not(.global) #doomBar { display: none; }
+  .doombar { display: flex; align-items: center; gap: 8px; margin-top: 10px; padding: 8px 10px; border-radius: 10px;
+    border: 1px solid var(--danger); background: color-mix(in srgb, var(--danger) 10%, var(--card)); }
+  .doombar span { flex: 1; min-width: 0; font-size: 14px; }
+  .danger-fill { background: var(--danger); color: #fff; border-color: var(--danger); }
+  .section { font-size: 16px; margin: 24px 0 10px; color: var(--muted); font-weight: 600; }
+  #tagEditor { width: min(400px, calc(100vw - 24px)); }
+  .swatches { display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; margin-top: 4px; }
+  .swatch {
+    min-height: 40px; padding: 0; border-radius: 10px; border: 2px solid transparent;
+    background: hsl(var(--h) 60% 55%);
+  }
+  .swatch[aria-pressed="true"] { border-color: var(--text); box-shadow: inset 0 0 0 2px var(--card); }
+  #tagHue {
+    -webkit-appearance: none; appearance: none; width: 100%; height: 16px; margin: 14px 0 4px; border-radius: 8px;
+    background: linear-gradient(to right, hsl(0 60% 55%), hsl(60 60% 55%), hsl(120 60% 55%), hsl(180 60% 55%),
+      hsl(240 60% 55%), hsl(300 60% 55%), hsl(360 60% 55%));
+  }
+  #tagHue::-webkit-slider-thumb {
+    -webkit-appearance: none; width: 26px; height: 26px; border-radius: 50%;
+    background: var(--card); border: 2px solid var(--text); cursor: pointer;
+  }
+  #tagHue::-moz-range-thumb { width: 22px; height: 22px; border-radius: 50%; background: var(--card); border: 2px solid var(--text); cursor: pointer; }
+  .preview { margin-top: 12px; }
+  .pair { display: flex; gap: 8px; }
+  .pair > div { flex: 1; min-width: 0; }
+  input[type=number] {
+    width: 100%; min-height: 44px; padding: 10px 12px; border-radius: 10px;
+    border: 1px solid var(--line); background: var(--card);
+  }
+  .wide { width: 100%; margin-bottom: 10px; }
+  .badge {
+    display: inline-block; margin-left: 6px; padding: 0 7px; border-radius: 999px; vertical-align: 2px;
+    font-size: 12px; font-weight: 500; color: var(--muted); border: 1px solid var(--line);
+  }
+  .checkline { display: flex; align-items: center; gap: 10px; margin-top: 14px; cursor: pointer; }
+  .checkline input { width: 22px; height: 22px; margin: 0; accent-color: var(--accent); flex: none; }
+  /* Tags: --h is the tag's hue, set from the page script. */
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .chips:empty { display: none; }
+  .tag {
+    --h: 0; display: inline-flex; align-items: center; gap: 4px; padding: 1px 9px; border-radius: 999px;
+    font-size: 13px; line-height: 20px; white-space: nowrap;
+    background: hsl(var(--h) 75% 91%); color: hsl(var(--h) 60% 27%); border: 1px solid hsl(var(--h) 50% 78%);
+  }
+  button.tag { min-height: 36px; padding: 0 12px; border-radius: 999px; font-size: 14px; }
+  .tag.plain { background: var(--card); color: var(--text); border-color: var(--line); }
+  .tag.new { border-style: dashed; }
+  .tag[aria-pressed="true"] { background: hsl(var(--h) 55% 38%); color: #fff; border-color: hsl(var(--h) 55% 38%); }
+  .tag.plain[aria-pressed="true"] { background: var(--text); color: var(--bg); border-color: var(--text); }
+  @media (prefers-color-scheme: dark) {
+    .tag { background: hsl(var(--h) 35% 23%); color: hsl(var(--h) 75% 82%); border-color: hsl(var(--h) 30% 34%); }
+    .tag[aria-pressed="true"] { background: hsl(var(--h) 60% 62%); color: #111; border-color: hsl(var(--h) 60% 62%); }
+  }
+  #filters { margin-top: 10px; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; padding-bottom: 2px; }
+  .info .chips { margin-top: 5px; }
+  #editTags { margin-bottom: 8px; }
+  #tagChoices { margin-top: 8px; }
   input[type=text], textarea {
     width: 100%; min-height: 44px; padding: 10px 12px; border-radius: 10px;
     border: 1px solid var(--line); background: var(--card);
   }
   textarea { resize: vertical; min-height: 90px; }
   main { max-width: 640px; margin: 0 auto; padding: 12px; }
-  #list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+  #list, #lists, #tagRows { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
   .item {
     display: flex; align-items: flex-start; gap: 10px; padding: 10px;
     background: var(--card); border: 1px solid var(--line); border-radius: 12px;
@@ -67,6 +165,7 @@
   .thumbs img { width: 64px; height: 64px; object-fit: cover; border-radius: 8px; border: 1px solid var(--line); cursor: zoom-in; display: block; }
   .item.done .name { text-decoration: line-through; color: var(--done); }
   .item.done .notes, .item.done .thumbs { opacity: .55; }
+  .item.current { border-color: var(--accent); box-shadow: inset 3px 0 0 var(--accent); }
   .edit { flex: none; min-height: 36px; padding: 0 10px; font-size: 14px; }
   .empty { text-align: center; color: var(--muted); padding: 40px 0; }
   #msg {
@@ -102,30 +201,79 @@
 <script src="/food-list/app.js" defer></script>
 </head>
 <body>
+<div id="listView">
 <header>
   <div class="bar">
-    <h1>Food list</h1>
+    <button type="button" id="listButton" class="title" aria-label="All lists"><span id="listName">Food list</span><span class="chevron" aria-hidden="true">▾</span></button>
+    <button type="button" id="modeButton" class="mode">Edit</button>
     <button type="button" id="clearChecked">Clear checked</button>
     <button type="button" id="clearAll" class="danger">Clear all</button>
+    <button type="button" id="deleteListTop" class="danger">Delete list</button>
   </div>
-  <form id="add" autocomplete="off">
-    <input type="text" id="addName" maxlength="80" placeholder="Add an item…" enterkeyhint="done" aria-label="New item">
+  <div class="sub" id="listSub" hidden></div>
+  <form id="add" class="add" autocomplete="off">
+    <input type="text" id="addName" class="lower" maxlength="80" placeholder="Add an item…" enterkeyhint="done" autocapitalize="none" aria-label="New item">
     <button type="submit" class="primary">Add</button>
   </form>
+  <ul id="suggest" hidden></ul>
+  <div id="filters" class="chips" role="group" aria-label="Show only items with a tag"></div>
+  <div id="doomBar" class="doombar" hidden>
+    <span id="doomText"></span>
+    <button type="button" id="doomCancel">Cancel</button>
+    <button type="button" id="doomConfirm" class="danger-fill">Delete</button>
+  </div>
 </header>
 
 <main>
   <ul id="list"></ul>
   <p class="empty" id="empty" hidden>The list is empty.</p>
 </main>
+</div>
+
+<div id="listsView" hidden>
+<header>
+  <div class="bar">
+    <h1>Lists</h1>
+    <button type="button" id="closeLists">Done</button>
+  </div>
+</header>
+
+<main>
+  <button type="button" id="newListButton" class="primary wide">+ New list</button>
+  <ul id="lists"></ul>
+  <h2 class="section">Tags</h2>
+  <button type="button" id="newTagButton" class="wide">+ New tag</button>
+  <ul id="tagRows"></ul>
+  <p class="empty" id="noTags" hidden>No tags yet. Add them when editing an item.</p>
+</main>
+</div>
 
 <dialog id="editor">
   <form method="dialog" id="editForm" autocomplete="off">
     <h2>Edit item</h2>
     <label class="field" for="editName">Name</label>
-    <input type="text" id="editName" maxlength="80" required>
+    <input type="text" id="editName" class="lower" maxlength="80" autocapitalize="none" required>
+    <div class="hint">Everything here except the amount is the same on every list.</div>
+    <div class="pair">
+      <div>
+        <label class="field" for="editAmount" id="amountLabel">Amount</label>
+        <input type="number" id="editAmount" inputmode="decimal" min="0" max="9999" step="any" placeholder="—">
+      </div>
+      <div>
+        <label class="field" for="editUnit">Unit</label>
+        <input type="text" id="editUnit" maxlength="16" placeholder="dozen, lb, pack…">
+      </div>
+    </div>
     <label class="field" for="editNotes">Notes</label>
-    <textarea id="editNotes" maxlength="500" placeholder="Brand, size, how many…"></textarea>
+    <textarea id="editNotes" maxlength="500" placeholder="Brand, size…"></textarea>
+    <label class="field" for="tagInput">Tags</label>
+    <div class="chips" id="editTags"></div>
+    <div class="add">
+      <input type="text" id="tagInput" class="lower" maxlength="24" placeholder="Add or make a tag…" autocapitalize="none" enterkeyhint="done">
+      <button type="button" id="addTag">Add</button>
+    </div>
+    <div class="hint" id="tagHint">Letters and spaces only. Tags stay with the item on every list.</div>
+    <div class="chips" id="tagChoices"></div>
     <label class="field">Pictures</label>
     <div class="pics" id="editPics"></div>
     <div class="upload">
@@ -133,11 +281,61 @@
       <label class="btn">🖼️ Choose image<input type="file" id="choosePhoto" accept="image/*" multiple></label>
     </div>
     <div id="busy"></div>
+    <div class="hint bad" id="editError"></div>
     <div class="actions">
-      <button type="button" id="deleteItem" class="danger">Delete</button>
+      <button type="button" id="deleteItem" class="danger item-only">Remove</button>
       <span class="grow"></span>
       <button type="button" id="cancelEdit">Close</button>
       <button type="submit" id="saveEdit" class="primary">Save</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="listEditor">
+  <form method="dialog" id="listForm" autocomplete="off">
+    <h2>Edit list</h2>
+    <label class="field" for="listNameInput">Name</label>
+    <input type="text" id="listNameInput" maxlength="40" required>
+    <label class="checkline"><input type="checkbox" id="listTemplate"> Template</label>
+    <div class="hint bad" id="listError"></div>
+    <div class="actions">
+      <button type="button" id="deleteList" class="danger">Delete</button>
+      <span class="grow"></span>
+      <button type="button" id="cancelList">Close</button>
+      <button type="submit" class="primary">Save</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="tagEditor">
+  <form method="dialog" id="tagForm" autocomplete="off">
+    <h2 id="tagTitle">Edit tag</h2>
+    <label class="field" for="tagNameInput">Name</label>
+    <input type="text" id="tagNameInput" class="lower" maxlength="24" autocapitalize="none" required>
+    <label class="field">Colour</label>
+    <div class="swatches" id="swatches"></div>
+    <input type="range" id="tagHue" min="0" max="359" step="1" aria-label="Colour (hue)">
+    <div class="preview"><span class="tag" id="tagPreview">tag</span></div>
+    <div class="hint bad" id="tagError"></div>
+    <div class="actions">
+      <button type="button" id="deleteTag" class="danger">Delete</button>
+      <span class="grow"></span>
+      <button type="button" id="cancelTag">Close</button>
+      <button type="submit" class="primary">Save</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="nameDialog">
+  <form method="dialog" id="nameForm" autocomplete="off">
+    <h2 id="nameTitle">New list</h2>
+    <label class="field" for="nameInput">Name</label>
+    <input type="text" id="nameInput" maxlength="40" required>
+    <div class="hint bad" id="nameError"></div>
+    <div class="actions">
+      <span class="grow"></span>
+      <button type="button" id="cancelName">Cancel</button>
+      <button type="submit" class="primary" id="nameOk">Create</button>
     </div>
   </form>
 </dialog>

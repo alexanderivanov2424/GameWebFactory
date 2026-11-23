@@ -1,0 +1,9 @@
+{
+  "name": "Ember Pack",
+  "cost": 3000,
+  "text": "Every 10 lots your Dust Sweepers clear adds a log to the woodpile.",
+  "effect": {
+    "kind": "flag"
+  },
+  "machine": "sweeper"
+}

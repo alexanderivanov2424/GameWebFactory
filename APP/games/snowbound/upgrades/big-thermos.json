@@ -1,0 +1,9 @@
+{
+  "name": "Big Thermos",
+  "cost": 3000,
+  "text": "You get hungry 40% slower.",
+  "effect": {
+    "kind": "food_drain",
+    "value": 0.6
+  }
+}

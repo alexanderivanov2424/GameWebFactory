@@ -1,0 +1,16 @@
+{
+  "order": 10,
+  "name": "Jet Blower",
+  "icon": "🚀",
+  "kind": "jet",
+  "cost": 10000000,
+  "rate": 30000,
+  "speed": 2.0,
+  "reach": 1.5,
+  "diesel": 120,
+  "text": "Parks at the frontier and every 20 s fires a beam straight outward: each lot on the beam loses up to 30k snow and becomes road.",
+  "params": {
+    "range": 12,
+    "cooldown": 20
+  }
+}

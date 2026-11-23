@@ -1,0 +1,9 @@
+{
+  "name": "Snowshoes",
+  "cost": 1500,
+  "text": "Walk over snow up to about 30 deep instead of only shallow dustings.",
+  "effect": {
+    "kind": "wade",
+    "value": 20
+  }
+}

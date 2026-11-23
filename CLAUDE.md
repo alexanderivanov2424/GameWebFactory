@@ -159,7 +159,13 @@ AdditionalPages/        Extra standalone pages served with the games site but ne
                         run in gwf-app next to the game server; its data goes in $SITE_DATA =
                         ExternalWrite/AdditionalPages/<id>/). They don't use theme/settings/chat or gamekit.
                         Phone support is wanted here. startup.sh and shutdown.sh start and stop them with the site.
-  food-list/            Secret shared shopping list (/food-list): items with checkbox, name, notes, photos.
+  food-list/            Secret shared shopping lists (/food-list). Everything about an item (name, tags, notes, unit,
+                        photos) is saved once for all lists and kept after it leaves a list (names lowercase and unique,
+                        suggested when adding); a list entry has only its checkmark and amount. The title opens the
+                        lists screen: New list, a Global list of every saved item (edit everything, default amounts,
+                        delete items for good), then each list with Edit (name, template, delete) and, on templates,
+                        Copy (amounts copied; copies show their template's name), then New tag and every tag with Edit (name,
+                        colour, delete). Coloured tags; edit/view modes, where view mode filters by tags (items having all the selected ones).
                         Photos are decoded in the browser and sent as raw RGB; images.py writes a fresh PNG from them.
 ExternalWrite/          Everything the running site writes; the only writable mount (git-ignored, owner gwf):
   Accounts/             Account files (never edited by hand while the site runs)
@@ -259,6 +265,15 @@ Summary:
    ending a mission early once every task is secured (tasks flag `can_fail_when_done` by hand),
    mission and task cards as JSON (3 mission decks), and a run (ship resources, missions played)
    saved for the host with `save_data` and continued from a later game (`lobby_game_state` shows it).
+   `games/snowbound/` (`RealtimeGame`, `logic/` modules): a co-op idle game on a huge grid (up to 384x384
+   lots as dirty row strings): you walk a character (client-side prediction mirroring the server's
+   collision), full-screen canvas with a HUD, every machine its own unit with its own behaviour
+   (`logic/machines.py`), behaviour-flag upgrades, per-player area-of-interest unit sync, survival near heat.
+   `games/motorways/` ("Metro Lanes", `RealtimeGame`, `logic/` modules): co-op Mini Motorways in one shared
+   city: players draw road tiles they own (8-direction links, bridges/tunnels, motorways, roundabouts,
+   lights) from their own stock, cars route over the graph with lanes and junction capacity, each trip's
+   points split by who built the road, the same weekly offers for everyone during a shared pick pause,
+   and a shared loss when any shop overflows.
 
 ## Lobby model (shared by all games)
 - Every connected tab is a **member**: a **spectator** until it joins, then a **player**. Players join and leave explicitly, and only in the lobby phase.
