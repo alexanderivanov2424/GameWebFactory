@@ -10,9 +10,7 @@ WEEKLY = {"roads": 5}
 UPGRADES = {
     "roads": {"name": "+5 roads", "text": "Five more road tiles.", "gives": {"roads": 5}},
     "bridge": {"name": "Bridge", "text": "Cross up to 4 water tiles in a straight line.", "gives": {"bridges": 1}},
-    "tunnel": {"name": "Tunnel", "text": "Dig through up to 5 mountain tiles in a straight line.", "gives": {"tunnels": 1}},
-    "motorway": {"name": "Motorway", "text": "A fast road between two road tiles 3-14 tiles apart, over anything.",
-                 "gives": {"motorways": 1}},
+    "tunnel": {"name": "Tunnel", "text": "Dig straight through a mountain, however wide.", "gives": {"tunnels": 1}},
     "roundabout": {"name": "Roundabout", "text": "A junction that lets 4 cars through at once at full speed.",
                    "gives": {"roundabouts": 1}},
     "lights": {"name": "2 traffic lights", "text": "A junction that lets 2 cars through at once, one direction at a time.",

@@ -1,14 +1,13 @@
 """Metro Lanes: real-time co-op road building in one shared city (after Mini Motorways).
 
-1-6 players build roads in the same growing city. Houses and shops appear over time in colours;
-shops make demand (pins) and cars from houses of the same colour drive there along the roads to
+1-6 players build roads in the same growing city. Houses (in clusters of up to 4) and shops appear
+over time in colours; shops make demand (pins) and cars from houses of the same colour drive there along the roads to
 take it. Each player has their own stock of pieces (15 roads for the whole team, split
 between the players, and 1 bridge each to start): road tiles
 (drag to draw, 8 directions), bridges and tunnels (drawn straight across water / mountains),
-motorways (fast links between two road tiles), roundabouts and traffic lights (busier
-junctions). You can erase only what you built (refunded). Everyone may link onto anyone's road.
-Points: every trip (a car reaching a shop) is worth 10, split between the players whose tiles
-the car drove on, by tiles. The team's trips are the shared score.
+roundabouts and traffic lights (busier junctions). You can erase only what you built (refunded). Everyone may link onto anyone's road.
+Points: every time a car drives over a road tile (bridges and tunnels too, either way), whoever
+built that tile gets 1 point. The team's trips (cars reaching a shop) are the shared score.
 Weeks: every `weekLength` seconds the city limits grow, every player gets 5 roads, and the
 game pauses while each player picks one of the same two upgrades (time limit `pickTime`; the
 first offer if you don't pick). Building works during the pause.
@@ -24,7 +23,6 @@ Game messages (players only, during play):
                  {"action": "road", "a": t, "b": t}       draw from tile a to the neighbouring tile b
                                                           (into water/mountain: a bridge/tunnel)
                  {"action": "erase", "t": t}              your piece on that tile
-                 {"action": "motorway", "a": t, "b": t}
                  {"action": "place", "t": t, "item": "roundabout" | "light"}
                  {"action": "pick", "option": 0 | 1}      this week's upgrade
 Public state:    logic/view.py (no private state).
@@ -59,7 +57,7 @@ class Game(RealtimeGame):
         "overflow": Int("Overflow time", default=60, low=10, high=300, suffix=" s"),
         "pickTime": Int("Upgrade pick time", default=30, low=5, high=120, suffix=" s"),
     }
-    ACTIONS = {"road": "road", "erase": "erase", "motorway": "motorway", "place": "place", "pick": "pick"}
+    ACTIONS = {"road": "road", "erase": "erase", "place": "place", "pick": "pick"}
 
     def __init__(self, room):
         super().__init__(room)
@@ -112,9 +110,6 @@ class Game(RealtimeGame):
 
     def erase(self, member, data):
         self.match.erase(member.id, _tile(data, "t"))
-
-    def motorway(self, member, data):
-        self.match.motorway(member.id, _tile(data, "a"), _tile(data, "b"))
 
     def place(self, member, data):
         item = data.get("item")

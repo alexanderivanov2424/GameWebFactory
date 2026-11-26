@@ -11,8 +11,9 @@
   (horizontal and vertical alternate every LIGHT_PHASE s, all lights in step); a roundabout
   holds 4 at full speed. A car stuck for GIVE_UP s squeezes through (no permanent gridlock).
 - At the shop the car takes a pin (one trip), parks PARK_TIME s and drives home.
-  Each trip is worth TRIP_POINTS, split between the players who built the tiles it drove on
-  to the shop (by tiles; motorways count their length).
+  Points: every time a car passes a road tile (either way, out or home), whoever built that tile
+  gets 1 point (roads.RoadNet.step_owner).
+  A trip (car reaching its shop) counts for each player whose tiles it drove on to get there.
 - When roads change, cars take the new best route from their next tile; a car whose link was
   erased, or that can no longer reach where it's going, is sent straight home (its pin waits
   for another car).
@@ -28,7 +29,6 @@ LIGHT_PHASE = 4.0
 GIVE_UP = 6.0
 PARK_TIME = 1.2
 DISPATCH_EVERY = 0.5
-TRIP_POINTS = 10
 LANE_OFFSET = 0.16        # keep right: tiles from the road's centre line
 
 
@@ -38,7 +38,7 @@ class Car:
         self.state = "home"      # home | out | park | back
         self.shop = None
         self.path, self.k, self.d = None, 0, 0.0
-        self.driven = []         # tiles passed on the way to the shop (for points)
+        self.driven = []         # tiles passed on the way to the shop (for trips)
         self.held = set()        # junctions this car holds
         self.wait = 0.0
         self.park_left = 0.0
@@ -145,6 +145,7 @@ class Traffic:
                 nxt.append(car)
                 car.k += 1
                 car.d = 0.0
+                self._credit_step(u, v)
                 if car.state == "out":
                     car.driven.append(v)
                 ghost, moved = False, True
@@ -207,7 +208,7 @@ class Traffic:
             shop.pins = max(0, shop.pins - 1)
             shop.assigned -= 1
             self.trips += 1
-            self._credit(car.driven + [shop.node])
+            self._count_trip(car.driven)
             car.state, car.park_left = "park", PARK_TIME
         else:
             car.state, car.shop = "home", None
@@ -230,13 +231,17 @@ class Traffic:
             car.state, car.shop = "home", None
             car.house.home += 1
 
-    def _credit(self, path):
-        shares = self.net.owner_shares(path)
-        total = sum(shares.values())
-        for pid, share in shares.items():
+    def _credit_step(self, u, v):
+        """A car just drove u -> v and moves on: the builder of what it drove on scores."""
+        got = self.net.step_owner(u, v)
+        player = self.players.get(got[0]) if got else None
+        if player is not None:
+            player.points += got[1]
+
+    def _count_trip(self, path):
+        for pid in self.net.owner_shares(path):
             player = self.players.get(pid)
-            if player is not None and total > 0:
-                player.points += TRIP_POINTS * share / total
+            if player is not None:
                 player.trips += 1
 
     # --- drawing ----------------------------------------------------------------------

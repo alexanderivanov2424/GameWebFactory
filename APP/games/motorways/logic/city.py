@@ -4,7 +4,9 @@
   They make demand ("pins") over time, faster each week. A car from a house of the same colour
   drives there to take one pin away (traffic.py).
 - Houses are 1 tile with a driveway, in one colour, each with CARS_PER_HOUSE cars. They appear
-  near shops of their colour until each colour has HOUSES_PER_SHOP houses per shop.
+  until each colour has HOUSES_PER_SHOP houses per shop, in clusters: a new house joins a cluster
+  of its colour with fewer than CLUSTER_SIZE houses (within CLUSTER_GAP tiles of one of its
+  houses); when none has room, it starts a new cluster HOUSE_RADIUS tiles from a shop of its colour.
 - A new colour unlocks every 2 weeks (up to MAX_COLORS); a new shop appears every SHOP_EVERY
   seconds (scaled by growth), using a colour without a shop first.
 - Overflow: while a shop has FULL_PINS or more pins its timer runs; below that it drains
@@ -27,12 +29,15 @@ FULL_PINS = 6
 MAX_PINS = 12
 TIMER_RECOVER = 2.0
 SHOP_SPACING = 4         # shops' corners at least this far apart (tiles, either axis)
-HOUSE_RADIUS = (2, 6)    # houses appear this far (tiles) from a shop of their colour
+HOUSE_RADIUS = (3, 8)    # a new cluster starts this far (tiles) from a shop of its colour
+CLUSTER_SIZE = 4         # houses in a cluster before the next house starts a new one
+CLUSTER_GAP = 2          # a cluster's new house is at most this far (tiles) from one of its houses
 
 
 class House:
-    def __init__(self, hid, color, node, door, side):
+    def __init__(self, hid, color, node, door, side, cluster=None):
         self.id, self.color, self.node, self.door, self.side = hid, color, node, door, side
+        self.cluster = cluster or hid    # id of the cluster's first house
         self.home = CARS_PER_HOUSE   # cars parked at home
 
 
@@ -67,9 +72,11 @@ class City:
     # --- growth -----------------------------------------------------------------------
 
     def start(self):
-        """The first shop and two houses of its colour. Returns the new houses."""
+        """The first shop and a cluster of two houses of its colour. Returns the new houses."""
         shop = self.spawn_shop(0)
-        return [h for h in (self.spawn_house(0, near=shop), self.spawn_house(0, near=shop)) if h]
+        first = self.spawn_house(0, near=shop)
+        second = self.spawn_house(0, cluster=first.cluster) if first else None
+        return [h for h in (first, second) if h]
 
     def step(self, dt, week, limit):
         """Advance spawning, demand and timers. Returns (new houses, shop that overflowed or None)."""
@@ -83,8 +90,7 @@ class City:
             self.house_clock -= HOUSE_EVERY
             color = self._house_color()
             if color is not None:
-                shops = self.shops_of(color)
-                house = self.spawn_house(color, near=self.rng.choice(shops))
+                house = self.grow_cluster(color) or self.spawn_house(color, near=self.rng.choice(self.shops_of(color)))
                 if house:
                     new.append(house)
         rate = self.demand * (1 + PIN_SPEEDUP * week) / PIN_EVERY
@@ -137,10 +143,31 @@ class City:
         self.rng.shuffle(sides)
         return sides
 
-    def spawn_house(self, color, near=None):
+    def grow_cluster(self, color):
+        """A new house next to a cluster of `color` that has room (fullest first), or None."""
+        sizes = {}
+        for h in self.houses_of(color):
+            sizes[h.cluster] = sizes.get(h.cluster, 0) + 1
+        for cluster in sorted((c for c, n in sizes.items() if n < CLUSTER_SIZE), key=lambda c: (-sizes[c], int(c))):
+            house = self.spawn_house(color, cluster=cluster)
+            if house:
+                return house
+        return None
+
+    def spawn_house(self, color, near=None, cluster=None):
+        """A house near the shop `near` (a new cluster), inside `cluster` (None if it has no room),
+        or anywhere in the area."""
         g, rng = self.grid, self.rng
+        members = [h for h in self.houses.values() if h.cluster == cluster] if cluster else []
         for attempt in range(120):
-            if near is not None and attempt < 80:
+            if members:
+                if attempt >= 60:
+                    return None
+                hx, hy = g.xy(rng.choice(members).node)
+                x, y = hx + rng.randint(-CLUSTER_GAP, CLUSTER_GAP), hy + rng.randint(-CLUSTER_GAP, CLUSTER_GAP)
+                if not g.on_map(x, y):
+                    continue
+            elif near is not None and attempt < 80:
                 nx, ny = g.xy(near.tiles[0])
                 lo, hi = HOUSE_RADIUS
                 x, y = nx + rng.randint(-hi, hi), ny + rng.randint(-hi, hi)
@@ -154,7 +181,7 @@ class City:
             for side in self._sides():
                 door = _beside(g, t, side)
                 if self._door_ok(door):
-                    house = House(self._id(), color, t, door, side)
+                    house = House(self._id(), color, t, door, side, cluster)
                     self.houses[house.id] = house
                     self.net.add_building([t], t, door)
                     return house

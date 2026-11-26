@@ -2,16 +2,16 @@
  * Metro Lanes controls: mouse tools -> game actions, keyboard shortcuts, and your cursor as
  * real-time input (the others see it).
  *   ML.input.init(lobby, showError)   once
- *   ML.input.tool                     "road" | "motorway" | "roundabout" | "light"; ML.input.setTool(name)
- *   ML.input.preview()                what view.js draws: {tile, ok, pending: [[a, b]], motorway?: [a, b, ok]}
+ *   ML.input.tool                     "road" | "roundabout" | "light"; ML.input.setTool(name)
+ *   ML.input.preview()                what view.js draws: {tile, ok, pending: [[a, b]]}
  *   ML.input.reset()                  new game
  * Road tool: drag to draw; the stroke steps tile by tile (8 directions) toward the mouse and sends
  * {"action": "road", a, b} per step. Stepping straight into water/a mountain sends one step that
  * builds a whole bridge/tunnel and continues from where it lands; stepping onto an existing one
  * skips over it. A diagonal step that's blocked tries the two straight steps instead. Into a
  * building: only through its driveway, and the stroke ends there.
- * Right-drag (any tool): erase your pieces under the mouse. Motorway: click a road tile, then
- * another. Roundabout / Light: click a road tile. Keys 1-4 pick tools, Esc cancels, O toggles owner stripes.
+ * Right-drag (any tool): erase your pieces under the mouse. Roundabout / Light: click a road
+ * tile. Keys 1-3 pick tools, Esc cancels, O toggles owner stripes.
  * Local checks (area, buildings, stock) stop a stroke instead of sending moves the server refuses.
  */
 (() => {
@@ -23,7 +23,6 @@
   let lobby, showError;
   let drag = null;           // {last: t, button: 0 | 2, erased: Set}
   let mouse = null;          // [x, y] tile floats
-  let anchor = null;         // motorway start tile
   let pending = [];          // [[a, b, time]] steps sent, drawn until the server's state has them
   let spent = 0, spentAt = 0;
   let cursorAt = 0, cursorTimer = null;
@@ -41,29 +40,20 @@
   const stock = (item) => (me() ? me().stock[item] : 0);
   const roadsLeft = () => stock("roads") - (performance.now() - spentAt < 600 ? spent : 0);
 
-  input.setTool = (tool) => { input.tool = tool; anchor = null; drag = null; ML.hud && ML.hud.refreshTools(); };
-  input.reset = () => { drag = null; anchor = null; pending = []; input.tool = "road"; };
+  input.setTool = (tool) => { input.tool = tool; drag = null; ML.hud && ML.hud.refreshTools(); };
+  input.reset = () => { drag = null; pending = []; input.tool = "road"; };
 
   input.preview = () => {
     const now = performance.now();
     pending = pending.filter(([a, b, t]) => now - t < 800 && !ML.city.linked(a, b));
     const tile = tileAt(mouse);
     const out = { tile, pending };
-    if (input.tool === "motorway" && anchor !== null && tile !== null) out.motorway = [anchor, tile, motorwayOk(anchor, tile)];
     if ((input.tool === "roundabout" || input.tool === "light") && tile !== null) {
       const r = ML.city.road(tile);
       out.ok = !!r && r.k === "r" && !r.f;
     }
     return out;
   };
-
-  function motorwayOk(a, b) {
-    const ra = ML.city.road(a), rb = ML.city.road(b);
-    if (!ra || !rb || ra.k !== "r" || rb.k !== "r") return false;
-    const [ax, ay] = ML.city.xy(a), [bx, by] = ML.city.xy(b), d = Math.hypot(ax - bx, ay - by);
-    const [lo, hi] = game().rules.motorway;
-    return d >= lo && d <= hi;
-  }
 
   function fail(message) {
     showError(message);
@@ -182,7 +172,6 @@
       const t = tileAt(mouse);
       if (!playing() || t === null) return;
       if (ev.button === 2) {
-        anchor = null;
         drag = { button: 2, erased: new Set() };
         eraseAt(t);
         return;
@@ -191,18 +180,6 @@
       const tool = input.tool;
       if (tool === "road") {
         drag = { button: 0, last: t };
-      } else if (tool === "motorway") {
-        if (stock("motorways") < 1) return showError("You have no motorways left.");
-        if (anchor === null) {
-          const r = ML.city.road(t);
-          if (!r || r.k !== "r") return showError("A motorway must start and end on a road.");
-          anchor = t;
-        } else if (t === anchor) {
-          anchor = null;
-        } else {
-          lobby.sendGame({ action: "motorway", a: anchor, b: t });
-          anchor = null;
-        }
       } else {
         const item = tool === "roundabout" ? "roundabouts" : "lights";
         if (stock(item) < 1) return showError(`You have no ${item} left.`);
@@ -212,7 +189,7 @@
     window.addEventListener("mouseup", () => { drag = null; });
     window.addEventListener("keydown", (ev) => {
       if (typing(ev) || $("game").hidden || ev.repeat) return;
-      const tools = { Digit1: "road", Digit2: "motorway", Digit3: "roundabout", Digit4: "light" };
+      const tools = { Digit1: "road", Digit2: "roundabout", Digit3: "light" };
       if (tools[ev.code]) { input.setTool(tools[ev.code]); ev.preventDefault(); }
       else if (ev.code === "Escape") { input.setTool("road"); }
       else if (ev.code === "KeyO") { ML.view.owners = !ML.view.owners; }

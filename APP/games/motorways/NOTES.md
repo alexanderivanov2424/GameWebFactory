@@ -21,12 +21,12 @@ the same weekly rewards for all, points by road ownership, shared loss on overfl
 ## Map
 - `logic/match.py`: `Match.step(dt)`: pick countdown (pauses everything else) -> `city.step`
   (spawns, pins, overflow timers) -> `traffic.step` -> loss -> new week (area grows, deliveries, offers).
-- `logic/roads.py`: `RoadNet`: `draw` (roads, driveways, `_span` for bridges/tunnels), `motorway`,
+- `logic/roads.py`: `RoadNet`: `draw` (roads, driveways, `_span` for bridges/tunnels),
   `place` (roundabout/light), `erase` (refunds, also to other owners), `edges`/`junction`/`tree`/`route`,
-  `owner_shares` (who gets a trip's points).
-- `logic/city.py`: houses/shops, spawn placement, demand, overflow. `logic/grid.py`: tiles, terrain
+  `step_owner` (who scores a car's step: 1 per road tile), `owner_shares`.
+- `logic/city.py`: houses/shops, spawn placement (houses in clusters: `grow_cluster`), demand, overflow. `logic/grid.py`: tiles, terrain
   generation, the area. `logic/players.py`: stock. `logic/upgrades.py`: offers. `logic/view.py`: client contract.
-- `client/`: `game.js` wiring, `city.js` lookups + mirrored rules, `view.js` canvas, `input.js` tools and
+- `client/`: `game.js` wiring, `city.js` lookups + mirrored rules, `view.js` canvas (incl. the "+1" pops in the builder's colour, worked out client-side from car positions), `input.js` tools and
   strokes, `hud.js` boxes (top clock, players, tool bar, pick dialog, result).
 
 ## Pitfalls seen here
@@ -34,6 +34,7 @@ the same weekly rewards for all, points by road ownership, shared loss on overfl
   road (`RoadNet.edges`). Drawing into a building is only allowed from its door, and just puts a road there.
 - A car waiting at the end of its lane (d == length) must retry the lane change every tick before
   the "can't move" check, or it never leaves (`Traffic._drive` handles the node first).
-- `Car.driven` (tiles actually passed, after re-routes) decides the points, not the first route.
+- Points are credited live in `Traffic._drive` as a car leaves each tile (`_credit_step`), both ways;
+  `Car.driven` (tiles actually passed to the shop, after re-routes) only decides whose `trips` count.
 - Spans (bridges/tunnels) are road tiles with kind "b"/"t" that only link along the span; both the
   server and `city.js` refuse other links to them.
