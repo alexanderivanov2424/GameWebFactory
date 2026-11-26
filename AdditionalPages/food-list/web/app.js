@@ -1,7 +1,7 @@
 // Food list page (/food-list/): shows one shared list (adds/edits/checks items, uploads pictures)
 // and the lists screen (the title button; the phone's Back button closes it): New list, the Global
 // list, then every list with Edit (name, template, delete) and, on templates, Copy (named in a
-// popup, "<name>-<month>/<day>" by default; a copy shows its template's name and has Delete list
+// popup, "<name>-<month>-<day>" by default; a copy shows its template's name and has Delete list
 // instead of the clear buttons). Everything about an item (name, tags, notes, unit, pictures) is
 // saved once for all lists (a "food"); only the amount (any short text) and the checkmark belong to
 // the list. The Global list ("global") holds only the items added to it with the editor's "Add to
@@ -9,7 +9,9 @@
 // edited the same way (its amount is the default new entries start with), nothing checked off or
 // cleared, and Delete marks items (red) for deleting for good once the bar at the top confirms. Below the lists, New tag and every tag with Edit
 // (both in the tag popup: name, colour; Delete takes an existing tag off every item).
-// The open list is remembered in localStorage. While typing a new item, saved names (on any list or in the
+// The address shows the open list: /food-list/<list name> (Global: /food-list/global; list names are
+// letters, digits, - and _ only, and never "global", checked here and by the server); opening such an address opens that list (nginx serves index.html for any path under /food-list/,
+// see startup.sh). The open list is also remembered in localStorage for the bare /food-list/. While typing a new item, saved names (on any list or in the
 // Global list, see ../store.py) that aren't on this list are suggested, with their tags.
 // Item names are lowercase: the server lowercases them too.
 // Tags (coloured by their hue) are set in the item editor, by name: new names make new tags on Save.
@@ -31,8 +33,10 @@
   const CURRENT_KEY = "food-list.current";
   const MODE_KEY = "food-list.mode";
   const HEX_ID = /^[0-9a-f]{16}$/;
-  const GLOBAL = "global";        // the Global list's id (all saved items)
+  const GLOBAL = "global";        // the Global list's id (all saved items) and its name in the address
+  const BASE = "/food-list/";     // the page's address; a list name may follow
   const LIST_NAME_MAX = 40;
+  const LIST_NAME = /^[A-Za-z0-9_-]+$/;  // the server checks the same: the name is the list's address
   const TAG_NAME = /^[\p{L} ]+$/u;  // the server checks the same: letters and spaces
   const TAG_NAME_MAX = 24;
   const MAX_TAGS_PER_ITEM = 10;
@@ -48,6 +52,7 @@
   let viewing = stored(MODE_KEY) === "view";
   let filterTags = new Set();  // view mode shows only items having every one of these tag ids
   let editTagNames = []; // the open editor's tags, saved on Save
+  let wantedName = nameFromPath();  // a list name from the address, until reload() opens it
   let listId = remembered();
   let listName = "";
   let isGlobal = false;
@@ -72,6 +77,44 @@
 
   function remember(id) {
     store(CURRENT_KEY, id);
+  }
+
+  // The list name in the address (/food-list/<name>), or null.
+  function nameFromPath() {
+    const path = location.pathname;
+    if (!path.startsWith(BASE)) return null;
+    try { return decodeURIComponent(path.slice(BASE.length)).trim() || null; } catch (e) { return null; }
+  }
+
+  // Puts the open list's name in the address, so it can be bookmarked or shared.
+  function syncAddress() {
+    if (!isGlobal && !listName) return;  // not loaded yet: keep the address being opened
+    const want = BASE + encodeURIComponent(isGlobal ? GLOBAL : listName);
+    if (location.pathname === want) return;
+    try { history.replaceState(history.state, "", want); } catch (e) { /* fine: the address just stays */ }
+  }
+
+  // Why a list name can't be used, or "" when it's fine (the server checks uniqueness too).
+  function listNameProblem(name) {
+    if (!name) return "Give the list a name.";
+    if (!LIST_NAME.test(name)) return "Letters, digits, - and _ only (no spaces): the name is the list's address.";
+    if (name.toLowerCase() === GLOBAL) return "“" + name + "” is the Global list's address; pick another name.";
+    return "";
+  }
+
+  // Opens the list named in the address (ignoring case), or says there's none.
+  async function openWanted() {
+    const name = wantedName;
+    wantedName = null;
+    const summary = await request("/lists");
+    const found = (summary && Array.isArray(summary.lists) ? summary.lists : [])
+      .find((l) => String(l.name).toLowerCase() === name.toLowerCase());
+    if (found || name.toLowerCase() === GLOBAL) {
+      listId = found ? found.id : GLOBAL;
+      remember(listId);
+    } else {
+      showError(new Error("There's no list called “" + name + "”."));
+    }
   }
 
   // ---- talking to the server ----
@@ -113,6 +156,7 @@
   // Loads the open list (or the first one, when none is open or it was deleted) and the summary.
   async function reload() {
     let data = null;
+    if (wantedName) await openWanted();
     if (listId) {
       try { data = await request(listPath(listId)); } catch (e) { if (e.status !== 404) throw e; }
     }
@@ -188,6 +232,7 @@
   function render() {
     $("listName").textContent = listName;
     document.title = listName || "Food list";
+    syncAddress();
     document.body.classList.toggle("viewing", viewing);
     document.body.classList.toggle("global", isGlobal);
     document.body.classList.toggle("copy", !!copyOf && !isGlobal);
@@ -555,7 +600,10 @@
 
   $("listButton").addEventListener("click", openLists);
   $("closeLists").addEventListener("click", closeLists);
-  window.addEventListener("popstate", () => showScreen(onListsScreen() ? "lists" : "list"));
+  window.addEventListener("popstate", () => {
+    showScreen(onListsScreen() ? "lists" : "list");
+    syncAddress();  // the entry gone back to may show the list that was open before
+  });
 
   // ---- editing a list (name, template, delete) ----
 
@@ -578,7 +626,7 @@
     const l = editingList;
     const name = $("listNameInput").value.trim();
     if (!l) return listEditor.close();
-    if (!name) { $("listError").textContent = "Give the list a name."; return; }
+    if (listNameProblem(name)) { $("listError").textContent = listNameProblem(name); return; }
     try {
       await post("/lists/" + l.id + "/update", { name, template: $("listTemplate").checked });
     } catch (err) { $("listError").textContent = err.message; return; }
@@ -601,7 +649,7 @@
 
   function copyName(name) {
     const now = new Date();
-    const suffix = "-" + (now.getMonth() + 1) + "/" + now.getDate();
+    const suffix = "-" + (now.getMonth() + 1) + "-" + now.getDate();
     return name.slice(0, LIST_NAME_MAX - suffix.length) + suffix;
   }
 
@@ -620,7 +668,7 @@
   $("nameForm").addEventListener("submit", async (e) => {
     e.preventDefault();
     const name = $("nameInput").value.trim();
-    if (!name) { $("nameError").textContent = "Give the list a name."; return; }
+    if (listNameProblem(name)) { $("nameError").textContent = listNameProblem(name); return; }
     let made;
     try {
       made = await post(copyFrom ? "/lists/" + copyFrom.id + "/copy" : "/lists", { name });

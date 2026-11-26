@@ -18,7 +18,9 @@ The data:
   name and hue can be changed (update_tag), and tags made (add_tag) or deleted (delete_tag, which
   takes them off every item), from the lists screen.
 - lists: {id, name, template, copy_of, items}; list names are unique ignoring case and there is
-  always at least one. An entry on a list is {id, food, checked, amount}; a food is on a list at
+  always at least one. A list name is the list's address (/food-list/<name>), so it may only have
+  ASCII letters, digits, "-" and "_", and "global" (the Global list's address) is refused; older
+  names are made to fit when loaded ("Food list" -> "Food-list"). An entry on a list is {id, food, checked, amount}; a food is on a list at
   most once. A template list can be copied: the copy gets the same foods with the template's
   amounts, all unchecked, isn't a template itself, and has copy_of = {id, name} of the template
   (the name follows renames of the template, and stays after it's deleted).
@@ -74,7 +76,9 @@ MAX_IMAGES = 300
 MAX_DATA_BYTES = 200 * 1024 * 1024
 UPLOADS_PER_HOUR = 120
 MAX_DELETE = 500  # foods deleted in one request
-DEFAULT_LIST = "Food list"
+DEFAULT_LIST = "Food-list"
+LIST_NAME = re.compile(r"^[A-Za-z0-9_-]+$")  # works in the address as it is
+RESERVED_LIST_NAMES = {"global"}  # the Global list's address
 
 ID = re.compile(r"^[0-9a-f]{16}$")
 KEEP_FORMAT = {"‍"}  # zero-width joiner: needed by combined emoji
@@ -153,13 +157,21 @@ def saved_amount(value):
         return None
 
 
-def free_name(name, taken, limit=NAME_MAX):
-    """name, or name with " 2", " 3"... added so its lowercase isn't in taken (when loading bad data)."""
+def url_name(text):
+    """A list name from older data made to fit LIST_NAME: accents dropped ("É" -> "E"), every other
+    character becomes "-"."""
+    text = "".join(ch for ch in unicodedata.normalize("NFKD", text) if not unicodedata.combining(ch))
+    return re.sub(r"-{2,}", "-", re.sub(r"[^A-Za-z0-9_-]", "-", text)).strip("-")[:LIST_NAME_MAX]
+
+
+def free_name(name, taken, limit=NAME_MAX, sep=" "):
+    """name, or name with " 2", " 3"... (sep before the number) added so its lowercase isn't in taken
+    (when loading bad data)."""
     n = 1
     candidate = name
     while candidate.lower() in taken:
         n += 1
-        suffix = f" {n}"
+        suffix = f"{sep}{n}"
         candidate = name[:limit - len(suffix)] + suffix
     return candidate
 
@@ -226,6 +238,10 @@ class Store:
                     continue
         if not self.lists:
             self.lists.append(self._new_list(DEFAULT_LIST))
+        names = {lst["id"]: lst["name"] for lst in self.lists}
+        for lst in self.lists:  # a template's name may have been fitted above
+            if lst["copy_of"] and lst["copy_of"]["id"] in names:
+                lst["copy_of"]["name"] = names[lst["copy_of"]["id"]]
         unused = self._unused()
         if unused:
             self._forget(unused)  # their pictures go with the unreferenced files below
@@ -281,8 +297,14 @@ class Store:
         if not has_id(entry) or entry["id"] in seen:
             raise Rejected("bad list")
         seen.add(entry["id"])
-        taken = {lst["name"].lower() for lst in self.lists}
-        name = free_name(clean_text(entry.get("name"), LIST_NAME_MAX) or "List", taken, LIST_NAME_MAX)
+        taken = {lst["name"].lower() for lst in self.lists} | RESERVED_LIST_NAMES
+        try:
+            saved = clean_text(entry.get("name"), LIST_NAME_MAX)
+        except Rejected:
+            saved = ""
+        name = free_name(url_name(saved) or "List", taken, LIST_NAME_MAX, sep="-")
+        if name != saved:
+            self.moved = True  # save the fitted name
         lst = self._new_list(name, template=entry.get("template") is True, entry_id=entry["id"])
         source = entry.get("copy_of")
         if has_id(source):
@@ -443,6 +465,10 @@ class Store:
         name = clean_text(value, LIST_NAME_MAX, label="The list name")
         if not name:
             raise Rejected("Give the list a name.")
+        if not LIST_NAME.match(name):
+            raise Rejected("List names can only have letters, digits, - and _ (no spaces): the name is the list's address.")
+        if name.lower() in RESERVED_LIST_NAMES:
+            raise Rejected(f"“{name}” is the Global list's address; pick another name.")
         if any(lst["name"].lower() == name.lower() for lst in self.lists if lst is not other_than):
             raise Rejected(f"There's already a list called “{name}”.")
         return name

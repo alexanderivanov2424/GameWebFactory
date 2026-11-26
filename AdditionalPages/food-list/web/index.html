@@ -9,7 +9,8 @@
      template's name under the title, and Delete list instead of Clear checked / Clear all.
      The list has two modes (the small button next to the title; body.viewing = view mode):
      edit shows the add row and each item's Edit button; view shows the tag filter row instead.
-     Logic in app.js; data and pictures are kept by ../server.py (API at /food-list/api/).
+     The address is /food-list/<list name> for the open list (nginx serves this page for any path under
+     /food-list/), so every URL here is absolute. Logic in app.js; data and pictures are kept by ../server.py (API at /food-list/api/).
      nginx sends a strict Content-Security-Policy for this folder, so no inline scripts. -->
 <html lang="en">
 <head>
@@ -301,7 +302,8 @@
   <form method="dialog" id="listForm" autocomplete="off">
     <h2>Edit list</h2>
     <label class="field" for="listNameInput">Name</label>
-    <input type="text" id="listNameInput" maxlength="40" required>
+    <input type="text" id="listNameInput" maxlength="40" required autocapitalize="none" spellcheck="false">
+    <div class="hint">Letters, digits, - and _ only. It's the list's address: /food-list/&lt;name&gt;</div>
     <label class="checkline"><input type="checkbox" id="listTemplate"> Template</label>
     <div class="hint bad" id="listError"></div>
     <div class="actions">
@@ -336,7 +338,8 @@
   <form method="dialog" id="nameForm" autocomplete="off">
     <h2 id="nameTitle">New list</h2>
     <label class="field" for="nameInput">Name</label>
-    <input type="text" id="nameInput" maxlength="40" required>
+    <input type="text" id="nameInput" maxlength="40" required autocapitalize="none" spellcheck="false">
+    <div class="hint">Letters, digits, - and _ only. It's the list's address: /food-list/&lt;name&gt;</div>
     <div class="hint bad" id="nameError"></div>
     <div class="actions">
       <span class="grow"></span>

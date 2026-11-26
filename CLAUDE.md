@@ -168,6 +168,9 @@ AdditionalPages/        Extra standalone pages served with the games site but ne
                         Copy (amounts copied; copies show their template's name), then New tag and every tag with Edit (name,
                         colour, delete). Coloured tags; edit/view modes, where view mode filters by tags (items having all the selected ones).
                         Photos are decoded in the browser and sent as raw RGB; images.py writes a fresh PNG from them.
+                        /food-list/<list name> opens that list (/food-list/global the Global list), and the address
+                        follows the open list; list names are letters, digits, - and _ only, never "global". Needs
+                        startup.sh's nginx block to serve index.html for unknown paths under /food-list/.
 ExternalWrite/          Everything the running site writes; the only writable mount (git-ignored, owner gwf):
   Accounts/             Account files (never edited by hand while the site runs)
   Feedback/             Player feedback, <game id, "site" or "new_game">/<uuid>_<name>.txt (the feedback
