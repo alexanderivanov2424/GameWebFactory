@@ -196,6 +196,6 @@ class GroupsMixin:
         new = [food_id for food_id in self.group_foods(group_id) if food_id not in on_list]
         if len(lst["items"]) + len(new) > self.max_items:
             raise Rejected(f"That doesn't fit: a list holds at most {self.max_items} items.", 507)
-        lst["items"].extend({"id": new_id(), "food": food_id, "checked": False} for food_id in new)
+        lst["items"].extend({"id": new_id(), "food": food_id, "checked": False, "pushed": False} for food_id in new)
         self.save()
         return {"added": len(new)}

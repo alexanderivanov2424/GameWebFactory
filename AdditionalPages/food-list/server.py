@@ -7,7 +7,7 @@ By hand: `PORT=8771 SITE_DATA=/some/folder python3 server.py` (default data: ./d
 
 Routes (all JSON unless noted; errors are {"error": message} with a 4xx status). The data model
 (lists, their entries, foods = everything about an item, tags) is described in store.py, groups in groups.py.
-An item as sent: {id, food, name, tags: [tag id], notes, images: [id], global, checked}.
+An item as sent: {id, food, name, tags: [tag id], notes, images: [id], global, checked, pushed}.
     GET  /food-list/api/lists                          summary: {"lists": [{id, name, count, left}], "groups":
                                                                  [{id, name, size (items it adds), groups: [id]}],
                                                                  "foods": [{name, tags, global}],
@@ -19,8 +19,10 @@ An item as sent: {id, food, name, tags: [tag id], notes, images: [id], global, c
     POST /food-list/api/lists/<list>/update            {name?} -> {id, name}
     POST /food-list/api/lists/<list>/delete            (refused for the last list)
     POST /food-list/api/lists/<list>/items             {name} -> the new item
-    POST /food-list/api/lists/<list>/clear             {"which": "checked" | "all"} -> {"removed": n}
-    POST /food-list/api/items/<id>/update              {checked?, and any food field below} -> the item
+    POST /food-list/api/lists/<list>/clear             {"which": "checked" | "all"} -> {"removed": n} ("checked"
+                                                       also unpushes the rest)
+    POST /food-list/api/items/<id>/update              {checked?, pushed?, and any food field below} -> the item
+                                                       (checking unpushes, pushing unchecks)
     POST /food-list/api/items/<id>/delete              takes it off the list (the food stays if it's global or on
                                                        another list)
     POST /food-list/api/foods/<food>/update            {name?, tags?: [tag name], notes?, global? (false refused

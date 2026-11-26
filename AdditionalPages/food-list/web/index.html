@@ -13,7 +13,8 @@
      Add to global (.item-only).
      The list has two modes (the small button next to the title, "Editing" / "Viewing"; body.viewing =
      view mode): editing shows the add row and each item's Edit and Delete buttons; viewing shows the
-     tag filter row and each item's Push button instead.
+     tag filter row and each item's Push button instead. .item.done = checked (struck through, green
+     border); .item.pushed = pushed (greyed, grey border).
      The address is /food-list/<list name> for the open list (nginx serves this page for any path under
      /food-list/), so every URL here is absolute. Logic in app.js; data and pictures are kept by ../server.py (API at /food-list/api/).
      nginx sends a strict Content-Security-Policy for this folder, so no inline scripts. -->
@@ -101,6 +102,7 @@
     border: 1px solid var(--danger); background: color-mix(in srgb, var(--danger) 10%, var(--card)); }
   .doombar span { flex: 1; min-width: 0; font-size: 14px; }
   .danger-fill { background: var(--danger); color: #fff; border-color: var(--danger); }
+  .danger-soft { color: var(--danger); background: color-mix(in srgb, var(--danger) 12%, var(--card)); }
   .section { font-size: 16px; margin: 24px 0 10px; color: var(--muted); font-weight: 600; }
   #tagEditor { width: min(400px, calc(100vw - 24px)); }
   .swatches { display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; margin-top: 4px; }
@@ -161,7 +163,11 @@
   .thumbs { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
   .thumbs img { width: 64px; height: 64px; object-fit: cover; border-radius: 8px; border: 1px solid var(--line); cursor: zoom-in; display: block; }
   .item.done .name { text-decoration: line-through; color: var(--done); }
-  .item.done .notes, .item.done .thumbs { opacity: .55; }
+  .item.done { border-color: var(--accent); }
+  .item.pushed { border-color: var(--done); }
+  .item.pushed .name { color: var(--done); }
+  .item.done .notes, .item.done .thumbs, .item.pushed .notes, .item.pushed .thumbs { opacity: .55; }
+  .push[aria-pressed="true"] { border-color: var(--done); color: var(--done); }
   .item.current { border-color: var(--accent); box-shadow: inset 3px 0 0 var(--accent); }
   .edit, .push { flex: none; min-height: 36px; padding: 0 10px; font-size: 14px; }
   .empty { text-align: center; color: var(--muted); padding: 40px 0; }

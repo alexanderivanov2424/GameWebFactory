@@ -22,7 +22,9 @@
 // Item names are lowercase: the server lowercases them too.
 // Tags (coloured by their hue) are set in the item editor, by name: new names make new tags on Save.
 // Two modes, remembered in localStorage: editing (add row, each item's Edit and Delete buttons) and
-// viewing (each item's Push button, which does nothing yet, and a row of the list's tags that filters
+// viewing (each item's Push / Unpush button: a pushed item is greyed with a grey border and sorts after the
+// others, before the checked ones (green border); checking unpushes and pushing unchecks; Clear checked removes
+// the checked items and unpushes the rest; and a row of the list's tags that filters
 // the items: tap several to show only items having all of them; the filter only applies when viewing).
 // The Global list isn't a real list, just every global item shown like one: always editing (no mode button,
 // no Push, no filter), with Edit and Delete (marks for deleting for good) on each item.
@@ -267,11 +269,11 @@
     document.body.classList.toggle("group", isGroup);
     renderDoomBar();
     $("modeButton").textContent = viewing ? "Viewing" : "Editing";
-    $("modeButton").title = viewing ? "Viewing: tap to edit" : "Editing: tap to view";
     renderFilters();
     const wanted = isViewing() ? Array.from(filterTags) : [];
     const shown = items.filter((i) => wanted.every((id) => (i.tags || []).includes(id)));
-    const sorted = shown.filter((i) => !i.checked).concat(shown.filter((i) => i.checked));
+    const sorted = shown.filter((i) => !i.checked && !i.pushed)
+      .concat(shown.filter((i) => i.pushed && !i.checked), shown.filter((i) => i.checked));
     list.replaceChildren(...sorted.map(row));
     $("empty").hidden = items.length > 0;
     $("empty").textContent = isGlobal ? "Nothing here yet. Edit an item on a list and tap “Add to global”."
@@ -280,7 +282,7 @@
       $("empty").hidden = false;
       $("empty").textContent = "No items have all of these tags.";
     }
-    $("clearChecked").disabled = !items.some((i) => i.checked);
+    $("clearChecked").disabled = !items.some((i) => i.checked || i.pushed);
     $("clearAll").disabled = items.length === 0;
   }
 
@@ -299,7 +301,8 @@
   function row(item) {
     if (item.group) return groupEntryRow(item);
     const doom = isGlobal && doomed.has(item.id);
-    const li = el("li", "item" + (item.checked && kind === "list" ? " done" : "") + (doom ? " doomed" : ""));
+    const state = kind !== "list" ? "" : item.checked ? " done" : item.pushed ? " pushed" : "";
+    const li = el("li", "item" + state + (doom ? " doomed" : ""));
 
     const check = el("label", "check");
     const box = el("input");
@@ -308,6 +311,7 @@
     box.setAttribute("aria-label", "Got " + item.name);
     box.addEventListener("change", () => {
       item.checked = box.checked;
+      if (box.checked) item.pushed = false;
       render();
       act(() => post("/items/" + item.id + "/update", { checked: box.checked }));
     });
@@ -330,7 +334,7 @@
     }
     info.addEventListener("click", () => { if (!isViewing()) openEditor(item.id); });
 
-    // Editing: Edit and Delete (.edit); viewing: Push (.push, does nothing yet). CSS shows one set.
+    // Editing: Edit and Delete (.edit); viewing: Push / Unpush (.push). CSS shows one set.
     // The Global list and groups have no checkbox or Push: they're always edited.
     const edit = button("Edit", "edit", () => openEditor(item.id));
     const remove = isGlobal
@@ -343,7 +347,14 @@
     if (kind !== "list") {
       li.append(info, edit, remove);
     } else {
-      li.append(check, info, edit, remove, button("Push", "push", () => { /* nothing yet */ }));
+      const push = button(item.pushed ? "Unpush" : "Push", "push", () => {
+        item.pushed = !item.pushed;
+        if (item.pushed) item.checked = false;
+        render();
+        act(() => post("/items/" + item.id + "/update", { pushed: item.pushed }));
+      });
+      push.setAttribute("aria-pressed", String(!!item.pushed));
+      li.append(check, info, edit, remove, push);
     }
     return li;
   }
@@ -498,8 +509,11 @@
 
   $("clearChecked").addEventListener("click", () => {
     const count = items.filter((i) => i.checked).length;
-    if (!count) return;
-    if (confirm("Remove " + plural(count, "checked item") + "?")) {
+    const pushed = items.filter((i) => i.pushed).length;
+    if (!count && !pushed) return;
+    const what = [count ? "remove " + plural(count, "checked item") : "", pushed ? "unpush " + plural(pushed, "pushed item") : ""];
+    const text = what.filter(Boolean).join(" and ");
+    if (confirm(text.charAt(0).toUpperCase() + text.slice(1) + "?")) {
       const id = listId;
       act(() => post("/lists/" + id + "/clear", { which: "checked" }));
     }
@@ -831,6 +845,7 @@
     if (!item) return;
     const pictures = !!(item.images && item.images.length);
     $("globalItem").textContent = item.global ? "Remove from global" : "Add to global";
+    $("globalItem").className = "item-only" + (item.global ? " danger-soft" : "");  // like Remove, lightly filled
     $("globalItem").disabled = item.global && pictures;
     $("globalItem").title = item.global && pictures ? "Items with pictures stay in the Global list" : "";
   }

@@ -20,8 +20,9 @@ The data:
 - lists: {id, name, items}; list names are unique ignoring case and there is always at least one.
   A list name is the list's address (/food-list/<name>), so it may only have ASCII letters, digits,
   "-" and "_", and "global" (the Global list's address) is refused; older names are made to fit when
-  loaded ("Food list" -> "Food-list"). An entry on a list is {id, food, checked}; a food is on a list
-  at most once.
+  loaded ("Food list" -> "Food-list"). An entry on a list is {id, food, checked, pushed}; a food is on a list
+  at most once. checked and pushed exclude each other (setting one clears the other); clearing the
+  checked items also unpushes the rest.
 - groups: {id, name, items}, named sets of items and other groups; see groups.py.
 The page's Global list isn't stored: it's every global food (public_foods).
 Fields from older versions (templates and copies, amounts, units) are ignored when loaded and
@@ -35,7 +36,7 @@ entries move to their food (notes joined, pictures up to the limit).
 Nothing from the browser is trusted. Every value is checked here before it's kept:
 - text: must be a string, normalised (NFC), control/format/private/unassigned characters dropped
   (newlines kept in notes), trimmed, and rejected when longer than the limit;
-- checked and global: must be exactly true or false;
+- checked, pushed and global: must be exactly true or false;
 - ids are made here (random hex) and the browser can only name existing ones; file names are
   only ever built from those ids, never from anything the browser sends;
 - images come in as raw RGB and go out as a PNG written by images.py.
@@ -242,7 +243,8 @@ class Store(GroupsMixin):
                 if len(joined) <= NOTES_MAX:
                     food["notes"] = joined
             self._take_images(food, entry.get("images"), seen)
-        return {"id": entry["id"], "food": food_id, "checked": entry.get("checked") is True}
+        checked = entry.get("checked") is True
+        return {"id": entry["id"], "food": food_id, "checked": checked, "pushed": not checked and entry.get("pushed") is True}
 
     def save(self):
         data = json.dumps({
@@ -309,7 +311,7 @@ class Store(GroupsMixin):
                 "images": list(food["images"]), "global": food["global"]}
 
     def public_item(self, item):
-        return dict(self.public_food(item["food"]), id=item["id"], checked=item["checked"])
+        return dict(self.public_food(item["food"]), id=item["id"], checked=item["checked"], pushed=item["pushed"])
 
     def public_list(self, list_id):
         """One list with its items, plus the summary."""
@@ -392,7 +394,7 @@ class Store(GroupsMixin):
         if len(lst["items"]) >= MAX_ITEMS:
             raise Rejected(f"The list is full ({MAX_ITEMS} items).", 507)
         food_id = self._food_for_name(data.get("name"), [item["food"] for item in lst["items"]], "on this list")
-        item = {"id": new_id(), "food": food_id, "checked": False}
+        item = {"id": new_id(), "food": food_id, "checked": False, "pushed": False}
         lst["items"].append(item)
         self.save()
         return self.public_item(item)
@@ -413,15 +415,22 @@ class Store(GroupsMixin):
         return food_id
 
     def update(self, item_id, data):
-        """Change an entry: checked is the entry's own; the rest goes to its food."""
+        """Change an entry: checked and pushed are the entry's own (setting one clears the other); the rest
+        goes to its food."""
         _, item = self.find(item_id)
-        checked = item["checked"]
-        if "checked" in data:
-            checked = data["checked"]
-            if not isinstance(checked, bool):
-                raise Rejected("Bad checked value.")
+        state = {}
+        for key in ("checked", "pushed"):
+            if key in data:
+                if not isinstance(data[key], bool):
+                    raise Rejected(f"Bad {key} value.")
+                state[key] = data[key]
+        if state.get("checked") and state.get("pushed"):
+            raise Rejected("An item can't be checked and pushed at once.")
         self._food_changes(item["food"], data)()
-        item["checked"] = checked
+        for key, value in state.items():
+            item[key] = value
+            if value:
+                item["pushed" if key == "checked" else "checked"] = False
         self.save()
         return self.public_item(item)
 
@@ -432,11 +441,14 @@ class Store(GroupsMixin):
         self._tidy()
 
     def clear(self, list_id, which):
+        """Remove the checked items ("checked", which also unpushes the rest) or all of them ("all")."""
         lst = self.find_list(list_id)
         if which not in ("checked", "all"):
             raise Rejected("Bad clear request.")
         before = len(lst["items"])
         lst["items"] = [item for item in lst["items"] if which == "checked" and not item["checked"]]
+        for item in lst["items"]:
+            item["pushed"] = False
         self._tidy()
         return before - len(lst["items"])
 
