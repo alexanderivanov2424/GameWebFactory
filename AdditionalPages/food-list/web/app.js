@@ -627,10 +627,9 @@
 
   function renderTagRows() {
     $("tagRows").replaceChildren(...tags.map((t) => {
-      const used = foods.filter((f) => (f.tags || []).includes(t.id)).length;
       const li = el("li", "item");
       const info = el("div", "info");
-      info.append(tagChip(t), el("div", "notes", used ? plural(used, "item") : "Not on any item"));
+      info.append(tagChip(t));
       info.addEventListener("click", () => openTagEditor(t));
       li.append(info, button("Edit", "edit", () => openTagEditor(t)));
       return li;
@@ -687,9 +686,7 @@
   $("deleteTag").addEventListener("click", () => {
     const t = editingTag;
     if (!t) return;
-    const used = foods.filter((f) => (f.tags || []).includes(t.id)).length;
-    const what = used ? " It comes off " + plural(used, "item") + "." : "";
-    if (!confirm("Delete the tag “" + t.name + "” for good?" + what)) return;
+    if (!confirm("Delete the tag “" + t.name + "” for good? It comes off every item.")) return;
     tagEditor.close();
     act(() => post("/tags/" + t.id + "/delete"));
   });
