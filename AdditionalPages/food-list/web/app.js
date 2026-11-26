@@ -17,6 +17,8 @@
 // Two modes, remembered in localStorage: editing (add row, each item's Edit and Delete buttons) and
 // viewing (each item's Push button, which does nothing yet, and a row of the list's tags that filters
 // the items: tap several to show only items having all of them; the filter only applies when viewing).
+// The Global list isn't a real list, just every global item shown like one: always editing (no mode button,
+// no Push, no filter), with Edit and Delete (marks for deleting for good) on each item.
 // Pictures are decoded and scaled down here, then sent as raw RGB pixels only (4-byte size header
 // + width*height*3 bytes, see ../images.py); the server writes its own PNG from them.
 // Everything shown comes from the server and is put on the page as text (textContent), never HTML.
@@ -225,17 +227,22 @@
     return tags.filter((t) => own.has(t.id));
   }
 
+  // Viewing mode applies to real lists only; the Global list is always edited.
+  function isViewing() {
+    return viewing && !isGlobal;
+  }
+
   function render() {
     $("listName").textContent = listName;
     setTitle();
     syncAddress();
-    document.body.classList.toggle("viewing", viewing);
+    document.body.classList.toggle("viewing", isViewing());
     document.body.classList.toggle("global", isGlobal);
     renderDoomBar();
     $("modeButton").textContent = viewing ? "Viewing" : "Editing";
     $("modeButton").title = viewing ? "Viewing: tap to edit" : "Editing: tap to view";
     renderFilters();
-    const wanted = viewing ? Array.from(filterTags) : [];
+    const wanted = isViewing() ? Array.from(filterTags) : [];
     const shown = items.filter((i) => wanted.every((id) => (i.tags || []).includes(id)));
     const sorted = shown.filter((i) => !i.checked).concat(shown.filter((i) => i.checked));
     list.replaceChildren(...sorted.map(row));
@@ -280,9 +287,10 @@
       thumbs.append(...item.images.map(thumb));
       info.append(thumbs);
     }
-    info.addEventListener("click", () => { if (!viewing) openEditor(item.id); });
+    info.addEventListener("click", () => { if (!isViewing()) openEditor(item.id); });
 
     // Editing: Edit and Delete (.edit); viewing: Push (.push, does nothing yet). CSS shows one set.
+    // The Global list has no Push: it's always edited.
     const edit = button("Edit", "edit", () => openEditor(item.id));
     const remove = isGlobal
       ? button(doom ? "Keep" : "Delete", "edit danger", () => {
@@ -291,9 +299,11 @@
         render();
       })
       : button("Delete", "edit danger", () => removeItem(item));
-    const push = button("Push", "push", () => { /* nothing yet */ });
-    if (!isGlobal) li.append(check);
-    li.append(info, edit, remove, push);
+    if (isGlobal) {
+      li.append(info, edit, remove);
+    } else {
+      li.append(check, info, edit, remove, button("Push", "push", () => { /* nothing yet */ }));
+    }
     return li;
   }
 

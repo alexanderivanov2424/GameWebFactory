@@ -4,7 +4,8 @@
      (/food-list/, Done goes back to the open list): a stack of lists
      (New List on top, then Global = the items added to it, then each list with Edit),
      then New Tag and every tag with Edit (a small popup: name, colour, delete).
-     body.global = the Global list is open: no checking off, clearing or adding; an item's Delete
+     body.global = the Global list is open (always editing: no mode button, Push or filter; never
+     body.viewing): no checking off, clearing or adding; an item's Delete
      marks it (red) until the bar at the top confirms or cancels; the editor has no Remove or
      Add to global (.item-only).
      The list has two modes (the small button next to the title, "Editing" / "Viewing"; body.viewing =
@@ -84,7 +85,7 @@
   body:not(.viewing) #list .push { display: none; }
   body:not(.viewing) #filters { display: none; }
   body.global .check, body.global #clearChecked, body.global #clearAll, body.global #add,
-  body.global #suggest, body.global .item-only { display: none; }
+  body.global #suggest, body.global .item-only, body.global #modeButton { display: none; }
   .item.doomed { border-color: var(--danger); background: color-mix(in srgb, var(--danger) 14%, var(--card)); }
   .item.doomed .name { color: var(--danger); }
   body:not(.global) #doomBar { display: none; }
