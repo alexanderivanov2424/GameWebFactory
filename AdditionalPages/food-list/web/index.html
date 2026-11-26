@@ -2,8 +2,11 @@
 <!-- Food list (/food-list/): shared shopping lists for phones. Not linked from anywhere.
      Two screens: one list (/food-list/<name>; the title button opens the other) and the lists screen
      (/food-list/, Done goes back to the open list): a stack of lists
-     (New List on top, then Global = the items added to it, then each list with Edit),
-     then New Tag and every tag with Edit (a small popup: name, colour, delete).
+     (New List on top, then Global = the items added to it, then each list with Edit), then New Group and
+     every group with Edit, then New Tag and every tag with Edit (a small popup: name, colour, delete).
+     The list and name popups serve lists and groups alike (app.js sets their title and hint).
+     body.group = a group is open (/food-list/group/<name>): shown like a list but always editing, no
+     checkboxes, mode button, clear buttons or Push; groups inside it show a Group badge.
      body.global = the Global list is open (always editing: no mode button, Push or filter; never
      body.viewing): no checking off, clearing or adding; an item's Delete
      marks it (red) until the bar at the top confirms or cancels; the editor has no Remove or
@@ -58,12 +61,12 @@
   .bar { display: flex; align-items: center; gap: 8px; }
   .bar h1 { font-size: 20px; margin: 0; flex: 1; min-width: 0; }
   .bar button { padding: 0 10px; font-size: 14px; }
+  .bar .grow { flex: 1; }
   .bar .title {
-    flex: 1; min-width: 0; justify-content: flex-start; padding: 0 4px; margin-left: -4px;
+    flex: 0 1 auto; min-width: 0; justify-content: flex-start; padding: 0 4px; margin-left: -4px;
     border: 0; background: none; font-size: 20px; font-weight: 700;
   }
   .title #listName { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
-  .title .chevron { color: var(--muted); font-size: 14px; }
   .add { display: flex; gap: 8px; margin-top: 10px; }
   .add input { flex: 1; min-width: 0; }
   .lower { text-transform: lowercase; }
@@ -85,7 +88,12 @@
   body:not(.viewing) #list .push { display: none; }
   body:not(.viewing) #filters { display: none; }
   body.global .check, body.global #clearChecked, body.global #clearAll, body.global #add,
-  body.global #suggest, body.global .item-only, body.global #modeButton { display: none; }
+  body.global #suggest, body.global .item-only, body.global #modeButton,
+  body.group #clearChecked, body.group #clearAll, body.group #modeButton { display: none; }
+  .badge {
+    display: inline-block; margin-left: 6px; padding: 0 7px; border-radius: 999px; vertical-align: 2px;
+    font-size: 12px; font-weight: 500; color: var(--muted); border: 1px solid var(--line);
+  }
   .item.doomed { border-color: var(--danger); background: color-mix(in srgb, var(--danger) 14%, var(--card)); }
   .item.doomed .name { color: var(--danger); }
   body:not(.global) #doomBar { display: none; }
@@ -140,7 +148,7 @@
   }
   textarea { resize: vertical; min-height: 90px; }
   main { max-width: 640px; margin: 0 auto; padding: 12px; }
-  #list, #lists, #tagRows { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+  #list, #lists, #groupRows, #tagRows { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
   .item {
     display: flex; align-items: flex-start; gap: 10px; padding: 10px;
     background: var(--card); border: 1px solid var(--line); border-radius: 12px;
@@ -193,8 +201,9 @@
 <div id="listView">
 <header>
   <div class="bar">
-    <button type="button" id="listButton" class="title" aria-label="All lists"><span id="listName">Food list</span><span class="chevron" aria-hidden="true">▾</span></button>
+    <button type="button" id="listButton" class="title" aria-label="All lists"><span id="listName">Food list</span></button>
     <button type="button" id="modeButton" class="mode">Editing</button>
+    <span class="grow"></span>
     <button type="button" id="clearChecked">Clear checked</button>
     <button type="button" id="clearAll" class="danger">Clear all</button>
   </div>
@@ -228,6 +237,10 @@
 <main>
   <button type="button" id="newListButton" class="primary wide">+ New List</button>
   <ul id="lists"></ul>
+  <h2 class="section">Groups</h2>
+  <button type="button" id="newGroupButton" class="primary wide">+ New Group</button>
+  <ul id="groupRows"></ul>
+  <p class="empty" id="noGroups" hidden>No groups yet. A group is a set of items (and other groups) to add to a list at once.</p>
   <h2 class="section">Tags</h2>
   <button type="button" id="newTagButton" class="primary wide">+ New Tag</button>
   <ul id="tagRows"></ul>
@@ -271,10 +284,10 @@
 
 <dialog id="listEditor">
   <form method="dialog" id="listForm" autocomplete="off">
-    <h2>Edit list</h2>
+    <h2 id="listEditorTitle">Edit list</h2>
     <label class="field" for="listNameInput">Name</label>
     <input type="text" id="listNameInput" maxlength="40" required autocapitalize="none" spellcheck="false">
-    <div class="hint">Letters, digits, - and _ only. It's the list's address: /food-list/&lt;name&gt;</div>
+    <div class="hint" id="listNameHint"></div>
     <div class="hint bad" id="listError"></div>
     <div class="actions">
       <button type="button" id="deleteList" class="danger">Delete</button>
@@ -309,7 +322,7 @@
     <h2 id="nameTitle">New list</h2>
     <label class="field" for="nameInput">Name</label>
     <input type="text" id="nameInput" maxlength="40" required autocapitalize="none" spellcheck="false">
-    <div class="hint">Letters, digits, - and _ only. It's the list's address: /food-list/&lt;name&gt;</div>
+    <div class="hint" id="nameHint"></div>
     <div class="hint bad" id="nameError"></div>
     <div class="actions">
       <span class="grow"></span>

@@ -1,16 +1,16 @@
-"""Food list: several shopping lists plus every item ever added, kept in <data>/lists.json, with
-the pictures in <data>/images/<id>.png.
+"""Food list: several shopping lists, groups of items and every saved item, kept in <data>/lists.json,
+with the pictures in <data>/images/<id>.png. Value checks are in checks.py, groups in groups.py.
 
 The data:
-- foods: every item on a list or in the Global list, so the page can suggest it when adding:
+- foods: every item on a list, in a group or in the Global list, so the page can suggest it when adding:
   {id, name, tags: [tag id], notes, images: [image id], global}. Everything about an item lives
   here, once, whichever list it's on. global (false for new foods) says it's in the Global list, set
   with "Add to global" in the item editor; a food with pictures is always global (adding one sets it,
-  and it can't be unset); a food that isn't global is deleted as soon as it's on no list. Foods saved
+  and it can't be unset); a food that isn't global is deleted as soon as it's on no list and in no group. Foods saved
   before the flag existed load as global.
   Names are lowercase (whatever is typed is lowercased; symbols, spaces and digits are fine) and
   unique: adding a name that's already a food reuses it, and a rename to another food's name is
-  refused. Deleting a food (only from the Global list) takes it off every list and deletes its
+  refused. Deleting a food (only from the Global list) takes it off every list and group and deletes its
   pictures.
 - tags: every tag ever made ({id, name, hue}), kept forever. Names are lowercase letters and
   single spaces only, and unique; hue (0-359) is the tag's colour, picked at random when it's made
@@ -22,6 +22,7 @@ The data:
   "-" and "_", and "global" (the Global list's address) is refused; older names are made to fit when
   loaded ("Food list" -> "Food-list"). An entry on a list is {id, food, checked}; a food is on a list
   at most once.
+- groups: {id, name, items}, named sets of items and other groups; see groups.py.
 The page's Global list isn't stored: it's every global food (public_foods).
 Fields from older versions (templates and copies, amounts, units) are ignored when loaded and
 dropped at the next save.
@@ -38,7 +39,7 @@ Nothing from the browser is trusted. Every value is checked here before it's kep
 - ids are made here (random hex) and the browser can only name existing ones; file names are
   only ever built from those ids, never from anything the browser sends;
 - images come in as raw RGB and go out as a PNG written by images.py.
-Limits (lists, items per list, foods, tags, pictures per item and in all, total data size, uploads
+Limits (lists, items per list, groups and their entries, foods, tags, pictures per item and in all, total data size, uploads
 per hour) keep a stranger who finds the page from filling the disk. lists.json is checked the
 same way when it's loaded, and image files nobody refers to are removed then.
 
@@ -47,18 +48,16 @@ Files are written to a temporary name and renamed, so a crash never leaves a hal
 
 import json
 import os
-import re
 import secrets
 import time
-import unicodedata
 from collections import deque
 from pathlib import Path
 
 import images
+from checks import (ID, LIST_NAME_MAX, Rejected, address_name, clean_text, food_name, free_name, has_id, new_id,
+                    tag_name, url_name)
+from groups import GroupsMixin
 
-NAME_MAX = 80
-LIST_NAME_MAX = 40
-TAG_NAME_MAX = 24
 NOTES_MAX = 500
 MAX_LISTS = 30
 MAX_ITEMS = 300  # per list
@@ -72,86 +71,7 @@ MAX_DATA_BYTES = 200 * 1024 * 1024
 UPLOADS_PER_HOUR = 120
 MAX_DELETE = 500  # foods deleted in one request
 DEFAULT_LIST = "Food-list"
-LIST_NAME = re.compile(r"^[A-Za-z0-9_-]+$")  # works in the address as it is
 RESERVED_LIST_NAMES = {"global"}  # the Global list's address
-
-ID = re.compile(r"^[0-9a-f]{16}$")
-KEEP_FORMAT = {"‍"}  # zero-width joiner: needed by combined emoji
-
-
-class Rejected(Exception):
-    """A request we refuse; the message is shown to the user."""
-
-    def __init__(self, message, status=400):
-        super().__init__(message)
-        self.status = status
-
-
-def new_id():
-    return secrets.token_hex(8)
-
-
-def clean_text(value, limit, multiline=False, label="Text"):
-    """Return safe text from an untrusted value, or raise Rejected."""
-    if value is None:
-        return ""
-    if not isinstance(value, str):
-        raise Rejected(f"{label} must be text.")
-    if len(value) > limit * 4:
-        raise Rejected(f"{label} is too long (at most {limit} characters).")
-    kept = []
-    for ch in unicodedata.normalize("NFC", value):
-        if ch == "\n" and multiline:
-            kept.append(ch)
-        elif ch in "\t\r\n":
-            kept.append(" ")
-        elif unicodedata.category(ch) in ("Cc", "Cf", "Cs", "Co", "Cn") and ch not in KEEP_FORMAT:
-            continue
-        else:
-            kept.append(ch)
-    text = "".join(kept)
-    if multiline:
-        text = re.sub(r"\n{3,}", "\n\n", "\n".join(line.strip() for line in text.split("\n")))
-    else:
-        text = re.sub(r" {2,}", " ", text)
-    text = text.strip()
-    if len(text) > limit:
-        raise Rejected(f"{label} is too long (at most {limit} characters).")
-    return text
-
-
-def food_name(value):
-    """An item name as it's kept: cleaned text, lowercase."""
-    return clean_text(value, NAME_MAX, label="The name").lower()[:NAME_MAX]
-
-
-def tag_name(value):
-    """A tag name as it's kept: lowercase letters and single spaces, or Rejected."""
-    name = clean_text(value, TAG_NAME_MAX, label="A tag").lower()[:TAG_NAME_MAX]
-    if not name:
-        raise Rejected("Give the tag a name.")
-    if not all(ch.isalpha() or ch == " " for ch in name):
-        raise Rejected("Tags can only have letters and spaces.")
-    return name
-
-
-def url_name(text):
-    """A list name from older data made to fit LIST_NAME: accents dropped ("É" -> "E"), every other
-    character becomes "-"."""
-    text = "".join(ch for ch in unicodedata.normalize("NFKD", text) if not unicodedata.combining(ch))
-    return re.sub(r"-{2,}", "-", re.sub(r"[^A-Za-z0-9_-]", "-", text)).strip("-")[:LIST_NAME_MAX]
-
-
-def free_name(name, taken, limit=NAME_MAX, sep=" "):
-    """name, or name with " 2", " 3"... (sep before the number) added so its lowercase isn't in taken
-    (when loading bad data)."""
-    n = 1
-    candidate = name
-    while candidate.lower() in taken:
-        n += 1
-        suffix = f"{sep}{n}"
-        candidate = name[:limit - len(suffix)] + suffix
-    return candidate
 
 
 def write_atomic(path, data):
@@ -174,17 +94,16 @@ def read_json(path):
     return data if isinstance(data, dict) else None
 
 
-def has_id(entry):
-    return isinstance(entry, dict) and isinstance(entry.get("id"), str) and bool(ID.match(entry["id"]))
+class Store(GroupsMixin):
+    max_items = MAX_ITEMS  # per list (groups.py checks it too)
 
-
-class Store:
     def __init__(self, folder):
         self.folder = Path(folder)
         self.images_dir = self.folder / "images"
         self.data_file = self.folder / "lists.json"
         self.old_file = self.folder / "list.json"  # before there were several lists
         self.lists = []
+        self.groups = []    # see groups.py
         self.foods = {}     # food id -> {"name", "tags", "notes", "images", "global"}
         self.food_ids = {}  # name -> food id
         self.tags = {}      # tag id -> {"name", "hue"}
@@ -216,6 +135,7 @@ class Store:
                     continue
         if not self.lists:
             self.lists.append(self._new_list(DEFAULT_LIST))
+        self._load_groups(raw.get("groups"), seen)
         for food in self.foods.values():
             if food["images"] and not food["global"]:
                 food["global"] = self.moved = True  # foods with pictures are always global
@@ -329,6 +249,7 @@ class Store:
             "tags": [dict(tag, id=tag_id) for tag_id, tag in self.tags.items()],
             "foods": [dict(food, id=food_id) for food_id, food in self.foods.items()],
             "lists": self.lists,
+            "groups": self.groups,
         }, ensure_ascii=False, indent=1)
         write_atomic(self.data_file, data.encode("utf-8"))
 
@@ -339,8 +260,9 @@ class Store:
         return food
 
     def _unused(self):
-        """Ids of the foods on no list and not in the Global list."""
+        """Ids of the foods on no list, in no group and not in the Global list."""
         used = {item["food"] for lst in self.lists for item in lst["items"]}
+        used.update(item["food"] for group in self.groups for item in group["items"] if "food" in item)
         return [food_id for food_id, food in self.foods.items() if not food["global"] and food_id not in used]
 
     def _forget(self, food_ids):
@@ -368,11 +290,12 @@ class Store:
     # ---- reading ----
 
     def summary(self):
-        """Every list (without items), every food's name and tags, and every tag: for the lists screen
-        and the suggestions while typing."""
+        """Every list (without items), every group (groups.py), every food's name and tags, and every
+        tag: for the lists screen and the suggestions while typing."""
         return {
-            "lists": [{"id": lst["id"], "name": lst["name"], "count": len(lst["items"]), "left": sum(not item["checked"] for item in lst["items"])}
-                      for lst in self.lists],
+            "lists": [{"id": lst["id"], "name": lst["name"], "count": len(lst["items"]),
+                       "left": sum(not item["checked"] for item in lst["items"])} for lst in self.lists],
+            "groups": self.group_summaries(),
             "foods": sorted(({"name": food["name"], "tags": list(food["tags"]), "global": food["global"]}
                             for food in self.foods.values()),
                            key=lambda food: food["name"]),
@@ -429,11 +352,7 @@ class Store:
     # ---- lists ----
 
     def _list_name(self, value, other_than=None):
-        name = clean_text(value, LIST_NAME_MAX, label="The list name")
-        if not name:
-            raise Rejected("Give the list a name.")
-        if not LIST_NAME.match(name):
-            raise Rejected("List names can only have letters, digits, - and _ (no spaces): the name is the list's address.")
+        name = address_name(value, "list")
         if name.lower() in RESERVED_LIST_NAMES:
             raise Rejected(f"“{name}” is the Global list's address; pick another name.")
         if any(lst["name"].lower() == name.lower() for lst in self.lists if lst is not other_than):
@@ -472,21 +391,26 @@ class Store:
         lst = self.find_list(list_id)
         if len(lst["items"]) >= MAX_ITEMS:
             raise Rejected(f"The list is full ({MAX_ITEMS} items).", 507)
-        name = food_name(data.get("name"))
+        food_id = self._food_for_name(data.get("name"), [item["food"] for item in lst["items"]], "on this list")
+        item = {"id": new_id(), "food": food_id, "checked": False}
+        lst["items"].append(item)
+        self.save()
+        return self.public_item(item)
+
+    def _food_for_name(self, value, taken, where):
+        """The food called value (made if it's new), refused when it's one of taken (food ids)."""
+        name = food_name(value)
         if not name:
             raise Rejected("Give the item a name.")
         food_id = self.food_ids.get(name)
-        if food_id is not None and any(item["food"] == food_id for item in lst["items"]):
-            raise Rejected(f"“{name}” is already on this list.", 409)
+        if food_id is not None and food_id in taken:
+            raise Rejected(f"“{name}” is already {where}.", 409)
         if food_id is None:
             if len(self.foods) >= MAX_FOODS:
                 raise Rejected(f"There are already {MAX_FOODS} saved items.", 507)
             food_id = new_id()
             self._make_food(food_id, name)
-        item = {"id": new_id(), "food": food_id, "checked": False}
-        lst["items"].append(item)
-        self.save()
-        return self.public_item(item)
+        return food_id
 
     def update(self, item_id, data):
         """Change an entry: checked is the entry's own; the rest goes to its food."""
@@ -560,13 +484,15 @@ class Store:
         return result
 
     def delete_foods(self, food_ids):
-        """Delete foods for good: off every list, pictures deleted. Unknown ids are skipped."""
+        """Delete foods for good: off every list and group, pictures deleted. Unknown ids are skipped."""
         if not isinstance(food_ids, list) or len(food_ids) > MAX_DELETE:
             raise Rejected("Bad delete request.")
         gone = {food_id for food_id in food_ids if isinstance(food_id, str) and food_id in self.foods}
         pictures = self._forget(gone)
         for lst in self.lists:
             lst["items"] = [item for item in lst["items"] if item["food"] not in gone]
+        for group in self.groups:
+            group["items"] = [item for item in group["items"] if item.get("food") not in gone]
         self.save()
         self._remove_files(pictures)
         return len(gone)

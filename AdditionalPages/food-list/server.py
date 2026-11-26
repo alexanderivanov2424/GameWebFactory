@@ -6,9 +6,10 @@ forwards /food-list/api/ here; it listens on 127.0.0.1:$PORT only.
 By hand: `PORT=8771 SITE_DATA=/some/folder python3 server.py` (default data: ./data next to this file).
 
 Routes (all JSON unless noted; errors are {"error": message} with a 4xx status). The data model
-(lists, their entries, foods = everything about an item, tags) is described in store.py.
+(lists, their entries, foods = everything about an item, tags) is described in store.py, groups in groups.py.
 An item as sent: {id, food, name, tags: [tag id], notes, images: [id], global, checked}.
-    GET  /food-list/api/lists                          summary: {"lists": [{id, name, count, left}],
+    GET  /food-list/api/lists                          summary: {"lists": [{id, name, count, left}], "groups":
+                                                                 [{id, name, size (items it adds), groups: [id]}],
                                                                  "foods": [{name, tags, global}],
                                                                  "tags": [{id, name, hue}]}
     GET  /food-list/api/lists/<list>                   summary + {"list": {id, name, items: [item]}}
@@ -24,6 +25,15 @@ An item as sent: {id, food, name, tags: [tag id], notes, images: [id], global, c
                                                        another list)
     POST /food-list/api/foods/<food>/update            {name?, tags?: [tag name], notes?, global? (false refused
                                                        for items with pictures)}
+    GET  /food-list/api/groups/<group>                 summary + {"list": {id, name, group: true, items: [item
+                                                                 without checked, id = entry | {id, group, name,
+                                                                 size}]}}
+    POST /food-list/api/groups                         {name} -> {id, name}
+    POST /food-list/api/groups/<group>/update          {name?} -> {id, name}
+    POST /food-list/api/groups/<group>/delete          (also out of every group holding it)
+    POST /food-list/api/groups/<group>/items           {name} or {"group": id} -> the new entry
+    POST /food-list/api/groups/<group>/entries/<id>/delete
+    POST /food-list/api/lists/<list>/groups            {"group": id} -> {"added": n} (all its items, nested too)
     POST /food-list/api/foods/delete                   {"ids": [food]} -> {"deleted": n} (for good, off every list)
     POST /food-list/api/tags                           {name, hue? (0-359)} -> {id, name, hue}
     POST /food-list/api/tags/<tag>/update              {name?, hue? (0-359)} -> {id, name, hue}
@@ -67,6 +77,12 @@ POST_ROUTES = [
     (re.compile(rf"^/items/{ID}/delete$"), "delete", JSON_TYPE),
     (re.compile(rf"^/foods/{ID}/update$"), "update_food", JSON_TYPE),
     (re.compile(r"^/foods/delete$"), "delete_foods", JSON_TYPE),
+    (re.compile(r"^/groups$"), "add_group", JSON_TYPE),
+    (re.compile(rf"^/groups/{ID}/update$"), "update_group", JSON_TYPE),
+    (re.compile(rf"^/groups/{ID}/delete$"), "delete_group", JSON_TYPE),
+    (re.compile(rf"^/groups/{ID}/items$"), "add_to_group", JSON_TYPE),
+    (re.compile(rf"^/groups/{ID}/entries/{ID}/delete$"), "remove_from_group", JSON_TYPE),
+    (re.compile(rf"^/lists/{ID}/groups$"), "add_group_to_list", JSON_TYPE),
     (re.compile(r"^/tags$"), "add_tag", JSON_TYPE),
     (re.compile(rf"^/tags/{ID}/update$"), "update_tag", JSON_TYPE),
     (re.compile(rf"^/tags/{ID}/delete$"), "delete_tag", JSON_TYPE),
@@ -84,12 +100,19 @@ ACTIONS = {
     "delete": lambda store, ids, data: store.delete(ids[0]) or {"ok": True},
     "update_food": lambda store, ids, data: store.update_food(ids[0], data),
     "delete_foods": lambda store, ids, data: {"deleted": store.delete_foods(data.get("ids"))},
+    "add_group": lambda store, ids, data: store.add_group(data),
+    "update_group": lambda store, ids, data: store.update_group(ids[0], data),
+    "delete_group": lambda store, ids, data: store.delete_group(ids[0]) or {"ok": True},
+    "add_to_group": lambda store, ids, data: store.add_to_group(ids[0], data),
+    "remove_from_group": lambda store, ids, data: store.remove_from_group(ids[0], ids[1]) or {"ok": True},
+    "add_group_to_list": lambda store, ids, data: store.add_group_to_list(ids[0], data),
     "add_tag": lambda store, ids, data: store.add_tag(data),
     "update_tag": lambda store, ids, data: store.update_tag(ids[0], data),
     "delete_tag": lambda store, ids, data: store.delete_tag(ids[0]) or {"ok": True},
     "delete_image": lambda store, ids, data: store.delete_image(ids[0], ids[1]) or {"ok": True},
 }
 LIST_ROUTE = re.compile(rf"^/lists/{ID}$")
+GROUP_ROUTE = re.compile(rf"^/groups/{ID}$")
 IMAGE_ROUTE = re.compile(rf"^/images/{ID}\.png$")
 
 log = logging.getLogger("food-list")
@@ -156,6 +179,9 @@ class Handler(BaseHTTPRequestHandler):
         match = LIST_ROUTE.match(path)
         if match:
             return self.send_json(200, self.store.public_list(match.group(1)))
+        match = GROUP_ROUTE.match(path)
+        if match:
+            return self.send_json(200, self.store.public_group(match.group(1)))
         match = IMAGE_ROUTE.match(path)
         file = self.store.image_path(match.group(1)) if match else None
         if file is None or not file.is_file():

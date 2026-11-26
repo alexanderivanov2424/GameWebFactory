@@ -164,8 +164,12 @@ AdditionalPages/        Extra standalone pages served with the games site but ne
                         entry has only its checkmark. "Add to global" in the item editor puts an item in the Global list
                         (new items aren't; items with photos always are); an item on no list and not global is forgotten.
                         The lists screen: New List, the Global list (every global item shown like a list, always in
-                        editing mode: edit everything, delete items for good), then each
-                        list with Edit (name, delete), then New Tag and every tag with Edit (name, colour, delete).
+                        editing mode: edit everything, delete items for good), then each list with Edit (name, delete),
+                        then New Group and each group, then New Tag and every tag with Edit (name, colour, delete).
+                        Groups (groups.py) are named sets of items and other groups (never inside themselves), with a
+                        page like a list (/food-list/group/<name>, always editing, no checkboxes); they're suggested
+                        when adding, and adding one to a list adds all its items. store.py holds the data, checks.py
+                        the value checks shared with groups.py.
                         Coloured tags; Editing/Viewing modes: editing has Edit and Delete on each item, viewing a Push
                         button (does nothing yet) and filters by tags (items having all the selected ones).
                         Photos are decoded in the browser and sent as raw RGB; images.py writes a fresh PNG from them.

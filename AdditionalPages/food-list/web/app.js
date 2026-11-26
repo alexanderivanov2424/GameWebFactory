@@ -1,7 +1,13 @@
 // Food list page: the lists screen at /food-list/ and one shared list at /food-list/<list name> (adds/edits/checks
 // items, uploads pictures); the list's title button opens the lists screen, and Back/forward move between
-// them. The lists screen: New List, the Global list, then every list with Edit (name, delete), then New Tag
-// and every tag with Edit (both in the tag popup: name, colour; Delete takes an existing tag off every item).
+// them. The lists screen: New List, the Global list, then every list with Edit (name, delete), then New Group
+// and every group with Edit (name, delete), then New Tag and every tag with Edit (both in the tag popup: name,
+// colour; Delete takes an existing tag off every item).
+// Groups (see ../groups.py) are named sets of items and other groups, at /food-list/group/<name>: shown like a
+// list but always editing (no checkboxes, mode button, clear buttons or Push), each entry with Edit (items) or
+// a tap to open it (groups) and Delete. While adding, groups are suggested next to items (with a Group badge):
+// picking one on a list adds every item it holds (nested groups too); on a group it puts that group inside
+// (never one that would end up inside itself). The open page's kind ("list", "global" or "group") is `kind`.
 // Everything about an item (name, tags, notes, pictures) is saved once for all lists (a "food"); only the
 // checkmark belongs to the list. The Global list ("global") holds the items added to it with the editor's
 // "Add to global" button and every item with a picture (those can't be taken out); new items aren't in it,
@@ -10,7 +16,8 @@
 // The address picks the screen (route()): /food-list/ is the lists screen, /food-list/<list name> that list
 // (Global: /food-list/global; list names are letters, digits, - and _ only, and never "global", checked here
 // and by the server; nginx serves index.html for any path under /food-list/, see startup.sh). The address
-// follows renames; an unknown or deleted list goes back to the lists screen. While typing a new item, saved names (on any list or in the
+// follows renames; an unknown or deleted list or group goes back to the lists screen. Removing an item from a
+// list or group never asks first. While typing a new item, saved names (on any list or in the
 // Global list, see ../store.py) that aren't on this list are suggested, with their tags.
 // Item names are lowercase: the server lowercases them too.
 // Tags (coloured by their hue) are set in the item editor, by name: new names make new tags on Save.
@@ -43,16 +50,19 @@
   const list = $("list"), editor = $("editor"), viewer = $("viewer");
   const listEditor = $("listEditor"), nameDialog = $("nameDialog"), tagEditor = $("tagEditor");
   let lists = [];      // [{id, name, count, left}]
+  let groups = [];     // [{id, name, size (items it adds), groups: [ids of the groups directly in it]}]
   let foods = [];      // every saved item: [{name, tags, global}] (sorted by name)
   let tags = [];       // every tag: [{id, name, hue}] (sorted by name)
   let tagsById = new Map();
   let viewing = stored(MODE_KEY) === "view";
   let filterTags = new Set();  // view mode shows only items having every one of these tag ids
   let editTagNames = []; // the open editor's tags, saved on Save
-  let wantedName = null;  // a list name from the address, until reload() opens it
-  let listId = null;      // the open list (kept while the lists screen shows)
+  let wantedName = null;  // the address after /food-list/ ("<list>", "global" or "group/<name>"), until reload() opens it
+  let listId = null;      // the open list or group (kept while the lists screen shows)
   let listName = "";
+  let kind = "list";      // what's open: "list", "global" or "group" (setKind)
   let isGlobal = false;
+  let isGroup = false;
   let doomed = new Set(); // Global list: food ids marked for deleting
   let items = [];
   let editingId = null;
@@ -66,7 +76,13 @@
     try { localStorage.setItem(key, value); } catch (e) { /* private mode: fine */ }
   }
 
-  // The list name in the address (/food-list/<name>), or null.
+  function setKind(k) {
+    kind = k;
+    isGlobal = k === "global";
+    isGroup = k === "group";
+  }
+
+  // The address after /food-list/ ("<list name>", "global" or "group/<name>"), or null on the lists screen.
   function nameFromPath() {
     const path = location.pathname;
     if (!path.startsWith(BASE)) return null;
@@ -76,34 +92,42 @@
   // Puts the open list's current name in the address (after a rename), while it's showing.
   function syncAddress() {
     if (wantedName || !nameFromPath() || (!isGlobal && !listName)) return;  // lists screen, or not loaded yet
-    const want = BASE + encodeURIComponent(openAddressName());
+    const want = addressPath(openAddressName());
     if (location.pathname === want) return;
     try { history.replaceState(history.state, "", want); } catch (e) { /* fine: the address just stays */ }
   }
 
-  // Why a list name can't be used, or "" when it's fine (the server checks uniqueness too).
-  function listNameProblem(name) {
-    if (!name) return "Give the list a name.";
-    if (!LIST_NAME.test(name)) return "Letters, digits, - and _ only (no spaces): the name is the list's address.";
-    if (name.toLowerCase() === GLOBAL) return "“" + name + "” is the Global list's address; pick another name.";
+  // The page's path for an address ("group/<name>" keeps its slash).
+  function addressPath(address) {
+    return BASE + address.split("/").map(encodeURIComponent).join("/");
+  }
+
+  // Why a list or group name can't be used, or "" when it's fine (the server checks uniqueness too).
+  function listNameProblem(name, what) {
+    if (!name) return "Give the " + what + " a name.";
+    if (!LIST_NAME.test(name)) return "Letters, digits, - and _ only (no spaces): the name is the " + what + "'s address.";
+    if (what === "list" && name.toLowerCase() === GLOBAL) return "“" + name + "” is the Global list's address; pick another name.";
     return "";
   }
 
-  // Finds the list named in the address (ignoring case); none: says so and shows the lists screen.
+  // Finds the list or group named in the address (ignoring case); none: says so and shows the lists screen.
   async function openWanted() {
-    const name = wantedName;
+    const address = wantedName;
+    const group = address.toLowerCase().startsWith("group/");
+    const name = (group ? address.slice(6) : address).toLowerCase();
     let found = null;
     try {
       const summary = await request("/lists");
-      found = (summary && Array.isArray(summary.lists) ? summary.lists : [])
-        .find((l) => String(l.name).toLowerCase() === name.toLowerCase());
+      const pool = summary && Array.isArray(group ? summary.groups : summary.lists) ? (group ? summary.groups : summary.lists) : [];
+      found = pool.find((l) => String(l.name).toLowerCase() === name);
     } finally {
-      if (wantedName === name) wantedName = null;
+      if (wantedName === address) wantedName = null;
     }
-    if (found || name.toLowerCase() === GLOBAL) {
+    if (found || (!group && name === GLOBAL)) {
       listId = found ? found.id : GLOBAL;
+      setKind(group ? "group" : found ? "list" : "global");
     } else {
-      showError(new Error("There's no list called “" + name + "”."));
+      showError(new Error("There's no " + (group ? "group" : "list") + " called “" + (group ? address.slice(6) : address) + "”."));
       toListsScreen();
     }
   }
@@ -148,7 +172,7 @@
   }
 
   function listPath(id) {
-    return id === GLOBAL ? "/foods" : "/lists/" + id;
+    return isGlobal ? "/foods" : (isGroup ? "/groups/" : "/lists/") + id;
   }
 
   // Loads the summary and the open list, if any (one deleted meanwhile: back to the lists screen).
@@ -160,7 +184,7 @@
     }
     if (!data) {
       if (nameFromPath()) {
-        if (listId) showError(new Error("That list is gone (someone may have deleted it)."));
+        if (listId) showError(new Error("That " + (isGroup ? "group" : "list") + " is gone (someone may have deleted it)."));
         toListsScreen();
       }
       listId = null;
@@ -168,14 +192,16 @@
     }
     const open = data.list || {};
     lists = Array.isArray(data.lists) ? data.lists : [];
+    groups = Array.isArray(data.groups) ? data.groups : [];
     foods = Array.isArray(data.foods) ? data.foods : [];
     tags = Array.isArray(data.tags) ? data.tags : [];
     tagsById = new Map(tags.map((t) => [t.id, t]));
     items = Array.isArray(open.items) ? open.items : [];
     listName = String(open.name || "");
-    isGlobal = open.global === true;
+    if (data.list) setKind(open.global === true ? "global" : open.group === true ? "group" : "list");
     render();
     renderLists();
+    renderGroupRows();
     renderTagRows();
     renderSuggestions();
     if (editingId) { renderEditorPics(); renderEditorGlobal(); }
@@ -227,9 +253,9 @@
     return tags.filter((t) => own.has(t.id));
   }
 
-  // Viewing mode applies to real lists only; the Global list is always edited.
+  // Viewing mode applies to real lists only; the Global list and groups are always edited.
   function isViewing() {
-    return viewing && !isGlobal;
+    return viewing && kind === "list";
   }
 
   function render() {
@@ -238,6 +264,7 @@
     syncAddress();
     document.body.classList.toggle("viewing", isViewing());
     document.body.classList.toggle("global", isGlobal);
+    document.body.classList.toggle("group", isGroup);
     renderDoomBar();
     $("modeButton").textContent = viewing ? "Viewing" : "Editing";
     $("modeButton").title = viewing ? "Viewing: tap to edit" : "Editing: tap to view";
@@ -247,7 +274,8 @@
     const sorted = shown.filter((i) => !i.checked).concat(shown.filter((i) => i.checked));
     list.replaceChildren(...sorted.map(row));
     $("empty").hidden = items.length > 0;
-    $("empty").textContent = isGlobal ? "Nothing here yet. Edit an item on a list and tap “Add to global”." : "The list is empty.";
+    $("empty").textContent = isGlobal ? "Nothing here yet. Edit an item on a list and tap “Add to global”."
+      : isGroup ? "The group is empty. Add items or other groups above." : "The list is empty.";
     if (items.length && !shown.length) {
       $("empty").hidden = false;
       $("empty").textContent = "No items have all of these tags.";
@@ -256,9 +284,22 @@
     $("clearAll").disabled = items.length === 0;
   }
 
+  // A group inside the open group: tap to open it; Delete takes it out.
+  function groupEntryRow(entry) {
+    const li = el("li", "item");
+    const info = el("div", "info");
+    const name = el("div", "name", entry.name);
+    name.append(el("span", "badge", "Group"));
+    info.append(name, el("div", "notes", plural(Number(entry.size) || 0, "item")));
+    info.addEventListener("click", () => openList(entry.group, entry.name, "group", false));
+    li.append(info, button("Delete", "edit danger", () => removeItem(entry)));
+    return li;
+  }
+
   function row(item) {
+    if (item.group) return groupEntryRow(item);
     const doom = isGlobal && doomed.has(item.id);
-    const li = el("li", "item" + (item.checked && !isGlobal ? " done" : "") + (doom ? " doomed" : ""));
+    const li = el("li", "item" + (item.checked && kind === "list" ? " done" : "") + (doom ? " doomed" : ""));
 
     const check = el("label", "check");
     const box = el("input");
@@ -290,7 +331,7 @@
     info.addEventListener("click", () => { if (!isViewing()) openEditor(item.id); });
 
     // Editing: Edit and Delete (.edit); viewing: Push (.push, does nothing yet). CSS shows one set.
-    // The Global list has no Push: it's always edited.
+    // The Global list and groups have no checkbox or Push: they're always edited.
     const edit = button("Edit", "edit", () => openEditor(item.id));
     const remove = isGlobal
       ? button(doom ? "Keep" : "Delete", "edit danger", () => {
@@ -299,7 +340,7 @@
         render();
       })
       : button("Delete", "edit danger", () => removeItem(item));
-    if (isGlobal) {
+    if (kind !== "list") {
       li.append(info, edit, remove);
     } else {
       li.append(check, info, edit, remove, button("Push", "push", () => { /* nothing yet */ }));
@@ -307,11 +348,11 @@
     return li;
   }
 
-  // Takes an item off the open list; asks first only when that forgets it (not in the Global list).
+  // Takes an item off the open list, or an entry out of the open group (no questions asked).
   function removeItem(item) {
-    if (!item.global && !confirm("Remove “" + item.name + "”? It's not in the Global list, so it's forgotten unless another list has it.")) return;
     if (editor.open) editor.close();
-    act(() => post("/items/" + item.id + "/delete"));
+    const path = isGroup ? "/groups/" + listId + "/entries/" + item.id + "/delete" : "/items/" + item.id + "/delete";
+    act(() => post(path));
   }
 
   // ---- deleting saved items for good (Global list) ----
@@ -368,35 +409,75 @@
 
   // ---- adding items, with suggestions from every name added before ----
 
-  function addItem(name) {
-    const input = $("addName");
-    input.value = "";
+  function clearAddRow() {
+    $("addName").value = "";
     renderSuggestions();
-    const id = listId;
-    act(() => post("/lists/" + id + "/items", { name: name.toLowerCase() }));
   }
 
-  // Names starting with what's typed come first, then names containing it.
+  function addItem(name) {
+    clearAddRow();
+    const path = (isGroup ? "/groups/" : "/lists/") + listId + "/items";
+    act(() => post(path, { name: name.toLowerCase() }));
+  }
+
+  // A group picked from the suggestions: on a list, all its items; on a group, the group itself.
+  function addGroup(group) {
+    clearAddRow();
+    const path = isGroup ? "/groups/" + listId + "/items" : "/lists/" + listId + "/groups";
+    act(() => post(path, { group: group.id }));
+  }
+
+  // The ids of a group and every group inside it (the server keeps loops out, but stay safe anyway).
+  function inside(groupId) {
+    const byId = new Map(groups.map((g) => [g.id, g]));
+    const found = new Set();
+    const todo = [groupId];
+    while (todo.length) {
+      const id = todo.pop();
+      if (found.has(id) || !byId.has(id)) continue;
+      found.add(id);
+      todo.push(...(byId.get(id).groups || []));
+    }
+    return found;
+  }
+
+  // The groups that may be added here: on a group, not itself, not ones it's inside, not ones already in it.
+  function addableGroups() {
+    if (!isGroup) return groups;
+    const already = new Set(items.filter((i) => i.group).map((i) => i.group));
+    return groups.filter((g) => g.id !== listId && !already.has(g.id) && !inside(g.id).has(listId));
+  }
+
+  // Names starting with what's typed come first, then names containing it; groups before items in each.
   function renderSuggestions() {
     const box = $("suggest");
     const typed = $("addName").value.trim().replace(/\s+/g, " ").toLowerCase();
-    const onList = new Set(items.map((i) => i.name));
+    const onList = new Set(items.filter((i) => !i.group).map((i) => i.name));
     const starts = [], contains = [];
+    const consider = (name, entry) => {
+      const at = name.toLowerCase().indexOf(typed);
+      if (at === 0) starts.push(entry);
+      else if (at > 0) contains.push(entry);
+    };
     if (typed && !isGlobal) {
+      for (const g of addableGroups()) consider(g.name, { group: g });
       for (const food of foods) {
-        if (food.name === typed || onList.has(food.name)) continue;
-        const at = food.name.indexOf(typed);
-        if (at === 0) starts.push(food);
-        else if (at > 0) contains.push(food);
+        if (food.name !== typed && !onList.has(food.name)) consider(food.name, { food });
       }
     }
     const shown = starts.concat(contains).slice(0, MAX_SUGGESTIONS);
-    box.replaceChildren(...shown.map((food) => {
+    box.replaceChildren(...shown.map((entry) => {
       const li = el("li");
       const pick = el("button");
       pick.type = "button";
-      pick.append(el("span", "suggest-name", food.name), ...itemTags(food).map((t) => tagChip(t)));
-      pick.addEventListener("click", () => addItem(food.name));
+      if (entry.group) {
+        pick.append(el("span", "suggest-name", entry.group.name), el("span", "badge", "Group"),
+          el("span", "badge", plural(Number(entry.group.size) || 0, "item")));
+        pick.addEventListener("click", () => addGroup(entry.group));
+      } else {
+        pick.append(el("span", "suggest-name", entry.food.name), ...itemTags(entry.food).map((t) => tagChip(t)));
+        pick.addEventListener("click", () => addItem(entry.food.name));
+      }
       li.append(pick);
       return li;
     }));
@@ -456,9 +537,9 @@
     reload().catch(showError);
   }
 
-  // The open list's name in the address ("global" for the Global list).
+  // The open page's address after /food-list/ ("global" for the Global list, "group/<name>" for a group).
   function openAddressName() {
-    return isGlobal ? GLOBAL : listName;
+    return isGlobal ? GLOBAL : isGroup ? "group/" + listName : listName;
   }
 
   // History entries made here say where they came from, so going "back up" uses Back instead of piling up.
@@ -472,20 +553,22 @@
   function closeLists() {
     const from = history.state && history.state.fromList;
     if (typeof from === "string" && from.toLowerCase() === openAddressName().toLowerCase()) history.back();
-    else if (listId) openList(listId, listName);
+    else if (listId) openList(listId, listName, kind);
   }
 
-  function openList(id, name) {
-    if (id !== listId) {
+  // Opens a list, the Global list or a group (k: "list", "global" or "group"); fromLists: false when
+  // opened from another page (a group inside a group), so the title button doesn't go Back to that page.
+  function openList(id, name, k, fromLists = true) {
+    if (id !== listId || k !== kind) {
       listId = id;
       items = [];
-      isGlobal = id === GLOBAL;
+      setKind(k);
       doomed.clear();
       listName = isGlobal ? "Global" : name;
       render();
       renderSuggestions();
     }
-    history.pushState({ fromLists: true }, "", BASE + encodeURIComponent(openAddressName()));
+    history.pushState(fromLists ? { fromLists: true } : null, "", addressPath(openAddressName()));
     route();
   }
 
@@ -507,14 +590,23 @@
 
   function renderLists() {
     const global = listRow(el("div", "name", "Global"),
-      plural(foods.filter((f) => f.global).length, "saved item") + " · names and tags", listId === GLOBAL, () => openList(GLOBAL, "Global"), []);
+      plural(foods.filter((f) => f.global).length, "saved item") + " · names and tags", isGlobal && listId === GLOBAL, () => openList(GLOBAL, "Global", "global"), []);
     $("closeLists").hidden = !listId;  // Done goes back to the open list
     $("lists").replaceChildren(global, ...lists.map((l) => {
       const name = el("div", "name", l.name);
       const counts = l.count ? l.left + " to get · " + plural(l.count, "item") : "Empty";
-      return listRow(name, counts, l.id === listId, () => openList(l.id, l.name),
-        [button("Edit", "edit", () => openListEditor(l))]);
+      return listRow(name, counts, kind === "list" && l.id === listId, () => openList(l.id, l.name, "list"),
+        [button("Edit", "edit", () => openListEditor(l, "list"))]);
     }));
+  }
+
+  // ---- the groups section ----
+
+  function renderGroupRows() {
+    $("groupRows").replaceChildren(...groups.map((g) => listRow(el("div", "name", g.name),
+      g.size ? plural(g.size, "item") : "Empty", isGroup && g.id === listId, () => openList(g.id, g.name, "group"),
+      [button("Edit", "edit", () => openListEditor(g, "group"))])));
+    $("noGroups").hidden = groups.length > 0;
   }
 
   // ---- the tags section and the tag editor ----
@@ -604,16 +696,29 @@
   $("closeLists").addEventListener("click", closeLists);
   window.addEventListener("popstate", route);
 
-  // ---- editing a list (name, delete) ----
+  // ---- editing a list or a group (name, delete) ----
 
   let editingList = null;
+  let editingKind = "list";  // "list" or "group", for the list popup and the name popup
 
-  function openListEditor(l) {
+  function nameHint(what) {
+    return "Letters, digits, - and _ only. It's the " + what + "'s address: /food-list/" + (what === "group" ? "group/" : "") + "<name>";
+  }
+
+  function kindPath(what) {
+    return what === "group" ? "/groups" : "/lists";
+  }
+
+  function openListEditor(l, what) {
     editingList = l;
+    editingKind = what;
+    $("listEditorTitle").textContent = what === "group" ? "Edit group" : "Edit list";
+    $("listNameHint").textContent = nameHint(what);
     $("listNameInput").value = l.name;
     $("listError").textContent = "";
-    $("deleteList").disabled = lists.length < 2;
-    $("deleteList").title = lists.length < 2 ? "The only list can't be deleted" : "";
+    const only = what === "list" && lists.length < 2;
+    $("deleteList").disabled = only;
+    $("deleteList").title = only ? "The only list can't be deleted" : "";
     listEditor.showModal();
   }
 
@@ -624,9 +729,10 @@
     const l = editingList;
     const name = $("listNameInput").value.trim();
     if (!l) return listEditor.close();
-    if (listNameProblem(name)) { $("listError").textContent = listNameProblem(name); return; }
+    const problem = listNameProblem(name, editingKind);
+    if (problem) { $("listError").textContent = problem; return; }
     try {
-      await post("/lists/" + l.id + "/update", { name });
+      await post(kindPath(editingKind) + "/" + l.id + "/update", { name });
     } catch (err) { $("listError").textContent = err.message; return; }
     listEditor.close();
     reload().catch(showError);
@@ -635,33 +741,41 @@
   $("deleteList").addEventListener("click", () => {
     const l = editingList;
     if (!l) return;
-    const what = l.count ? " and its " + plural(l.count, "item") : "";
-    if (!confirm("Delete the list “" + l.name + "”" + what + "? This can't be undone.")) return;
+    const group = editingKind === "group";
+    const what = group ? "" : l.count ? " and its " + plural(l.count, "item") : "";
+    const also = group ? " It's taken out of any group holding it." : "";
+    if (!confirm("Delete the " + editingKind + " “" + l.name + "”" + what + "? This can't be undone." + also)) return;
     listEditor.close();
-    act(() => post("/lists/" + l.id + "/delete"));
+    act(() => post(kindPath(editingKind) + "/" + l.id + "/delete"));
   });
 
-  // ---- naming a new list ----
+  // ---- naming a new list or group ----
 
-  function openNameDialog() {
+  function openNameDialog(what) {
+    editingKind = what;
+    $("nameTitle").textContent = what === "group" ? "New group" : "New list";
+    $("nameHint").textContent = nameHint(what);
     $("nameInput").value = "";
     $("nameError").textContent = "";
     nameDialog.showModal();
   }
 
-  $("newListButton").addEventListener("click", openNameDialog);
+  $("newListButton").addEventListener("click", () => openNameDialog("list"));
+  $("newGroupButton").addEventListener("click", () => openNameDialog("group"));
   $("cancelName").addEventListener("click", () => nameDialog.close());
 
   $("nameForm").addEventListener("submit", async (e) => {
     e.preventDefault();
     const name = $("nameInput").value.trim();
-    if (listNameProblem(name)) { $("nameError").textContent = listNameProblem(name); return; }
+    const what = editingKind;
+    const problem = listNameProblem(name, what);
+    if (problem) { $("nameError").textContent = problem; return; }
     let made;
     try {
-      made = await post("/lists", { name });
+      made = await post(kindPath(what), { name });
     } catch (err) { $("nameError").textContent = err.message; return; }
     nameDialog.close();
-    openList(made.id, made.name);
+    openList(made.id, made.name, what);
   });
 
   // ---- editing one item ----
@@ -710,7 +824,7 @@
     $("editPics").replaceChildren(...pics);
   }
 
-  // The "Add to global" / "Remove from global" button next to Remove (list items only; it saves right
+  // The "Add to global" / "Remove from global" button next to Remove (lists and groups; it saves right
   // away). Items with pictures always stay in the Global list, so it's disabled for them.
   function renderEditorGlobal() {
     const item = current();
@@ -724,7 +838,7 @@
   $("globalItem").addEventListener("click", () => {
     const item = current();
     if (!item || isGlobal) return;
-    act(() => post("/items/" + item.id + "/update", { global: !item.global }));
+    act(() => post("/foods/" + item.food + "/update", { global: !item.global }));
   });
 
   // ---- the editor's tags (sent by name with Save; the server makes new ones) ----
@@ -798,7 +912,7 @@
     if (!name) { showError(new Error("Give the item a name.")); return; }
     if (!addTypedTag()) return;  // a tag typed but not added yet counts
     const change = { name, tags: editTagNames.slice(), notes: $("editNotes").value };
-    const path = isGlobal ? "/foods/" + item.food + "/update" : "/items/" + item.id + "/update";
+    const path = kind !== "list" ? "/foods/" + item.food + "/update" : "/items/" + item.id + "/update";
     editor.close();
     act(() => post(path, change));
   });
