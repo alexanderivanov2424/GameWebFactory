@@ -154,7 +154,9 @@ tools/
   additional_pages.py   Lists and checks AdditionalPages/ for startup.sh and run_tests.py (layout rules in its header)
   tests/                Tests for the tools (run_tests.py runs them too: `run_tests.py tools`)
 AdditionalPages/        Extra standalone pages served with the games site but never linked from it.
-                        <id>/ is served at /<id>/: web/ (static, strict CSP: no inline scripts), optional
+                        <id>/ is served at /<id>/: web/ (static, strict CSP: no inline scripts; every folder in it with
+                        an index.html is a (sub) page, and an address under it that isn't a file shows that index.html,
+                        so pages can have their own addresses with no startup.sh change), optional
                         server.py + site.json (its own stdlib HTTP server for /<id>/api/ on 127.0.0.1:<port>,
                         run in gwf-app next to the game server; its data goes in $SITE_DATA =
                         ExternalWrite/AdditionalPages/<id>/). They don't use theme/settings/chat or gamekit.
@@ -174,8 +176,8 @@ AdditionalPages/        Extra standalone pages served with the games site but ne
                         button (does nothing yet) and filters by tags (items having all the selected ones).
                         Photos are decoded in the browser and sent as raw RGB; images.py writes a fresh PNG from them.
                         /food-list/ is the lists screen and /food-list/<list name> that list (/food-list/global the
-                        Global list; Back/forward move between them); list names are letters, digits, - and _ only, never "global". Needs
-                        startup.sh's nginx block to serve index.html for unknown paths under /food-list/.
+                        Global list; Back/forward move between them); list names are letters, digits, - and _ only,
+                        never "global".
 ExternalWrite/          Everything the running site writes; the only writable mount (git-ignored, owner gwf):
   Accounts/             Account files (never edited by hand while the site runs)
   Feedback/             Player feedback, <game id, "site" or "new_game">/<uuid>_<name>.txt (the feedback

@@ -7,7 +7,12 @@ Prints one line per site, "<id> <port> <max body MB>" ("-" for port and size whe
 static only), or the problems found (exit code 1).
 
 A page is a folder AdditionalPages/<id>/ (id: lowercase letters, digits and "-"), served at /<id>/:
-    web/          static files (must hold index.html), served under /<id>/
+    web/          static files (must hold index.html), served under /<id>/. Every folder in it holding an
+                  index.html is a (sub) page: an address under that folder that isn't a file shows that
+                  folder's index.html (the deepest one wins), so pages can have their own addresses
+                  (e.g. /food-list/<list>). Those folders' names may only have letters, digits, ".", "-"
+                  and "_" (not starting with "."), as they go in the nginx config; with server.py, web/api/
+                  isn't allowed (/<id>/api/ goes to the server).
     server.py     optional: the page's own Python (standard library) HTTP server for /<id>/api/,
                   listening on 127.0.0.1:$PORT and keeping its data in $SITE_DATA (on the host:
                   ExternalWrite/AdditionalPages/<id>/; it runs in the same container as the game server)
@@ -25,6 +30,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 SITES_DIR = ROOT / "AdditionalPages"
 SITE_ID = re.compile(r"^[a-z0-9][a-z0-9-]{0,39}$")
+SUB_PAGE = re.compile(r"^[A-Za-z0-9_][A-Za-z0-9._-]{0,63}$")  # each folder name on the way to a sub page's index.html
 TAKEN_PORTS = {8080, 8765}  # nginx and the game server (same pod, same localhost)
 RESERVED = {"games", "games.json", "ws"}  # added to the web root by the startup script / proxied by nginx
 
@@ -57,6 +63,14 @@ def load_sites(folder=SITES_DIR):
             continue
         if not (path / "web" / "index.html").is_file():
             problems.append(f"{where}: web/index.html is missing")
+            continue
+        bad = sorted(index.parent.relative_to(path / "web").as_posix() for index in (path / "web").rglob("index.html")
+                     if not all(SUB_PAGE.match(part) for part in index.parent.relative_to(path / "web").parts))
+        if bad:
+            problems.append(f"{where}: sub page folder names may only have letters, digits, '.', '-' and '_': {bad[0]}")
+            continue
+        if (path / "server.py").is_file() and (path / "web" / "api").exists():
+            problems.append(f"{where}: web/api can't exist: /{site_id}/api/ goes to its server.py")
             continue
         site = {"id": site_id, "port": None, "max_body_mb": None}
         if (path / "server.py").is_file():
