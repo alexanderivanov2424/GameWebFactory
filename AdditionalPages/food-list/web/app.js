@@ -1,5 +1,5 @@
-// Food list page (/food-list/): shows one shared list (adds/edits/checks items, uploads pictures)
-// and the lists screen (the title button; the phone's Back button closes it): New list, the Global
+// Food list page: the lists screen at /food-list/ and one shared list at /food-list/<list name> (adds/edits/checks
+// items, uploads pictures); the list's title button opens the lists screen, and Back/forward move between them: New list, the Global
 // list, then every list with Edit (name, template, delete) and, on templates, Copy (named in a
 // popup, "<name>-<month>-<day>" by default; a copy shows its template's name and has Delete list
 // instead of the clear buttons). Everything about an item (name, tags, notes, unit, pictures) is
@@ -9,9 +9,10 @@
 // edited the same way (its amount is the default new entries start with), nothing checked off or
 // cleared, and Delete marks items (red) for deleting for good once the bar at the top confirms. Below the lists, New tag and every tag with Edit
 // (both in the tag popup: name, colour; Delete takes an existing tag off every item).
-// The address shows the open list: /food-list/<list name> (Global: /food-list/global; list names are
-// letters, digits, - and _ only, and never "global", checked here and by the server); opening such an address opens that list (nginx serves index.html for any path under /food-list/,
-// see startup.sh). The open list is also remembered in localStorage for the bare /food-list/. While typing a new item, saved names (on any list or in the
+// The address picks the screen (route()): /food-list/ is the lists screen, /food-list/<list name> that list
+// (Global: /food-list/global; list names are letters, digits, - and _ only, and never "global", checked here
+// and by the server; nginx serves index.html for any path under /food-list/, see startup.sh). The address
+// follows renames; an unknown or deleted list goes back to the lists screen. While typing a new item, saved names (on any list or in the
 // Global list, see ../store.py) that aren't on this list are suggested, with their tags.
 // Item names are lowercase: the server lowercases them too.
 // Tags (coloured by their hue) are set in the item editor, by name: new names make new tags on Save.
@@ -30,9 +31,7 @@
   const MAX_FILE = 40e6;          // don't even try to decode files bigger than this
   const REFRESH_MS = 15000;
   const MAX_SUGGESTIONS = 8;
-  const CURRENT_KEY = "food-list.current";
   const MODE_KEY = "food-list.mode";
-  const HEX_ID = /^[0-9a-f]{16}$/;
   const GLOBAL = "global";        // the Global list's id (all saved items) and its name in the address
   const BASE = "/food-list/";     // the page's address; a list name may follow
   const LIST_NAME_MAX = 40;
@@ -52,8 +51,8 @@
   let viewing = stored(MODE_KEY) === "view";
   let filterTags = new Set();  // view mode shows only items having every one of these tag ids
   let editTagNames = []; // the open editor's tags, saved on Save
-  let wantedName = nameFromPath();  // a list name from the address, until reload() opens it
-  let listId = remembered();
+  let wantedName = null;  // a list name from the address, until reload() opens it
+  let listId = null;      // the open list (kept while the lists screen shows)
   let listName = "";
   let isGlobal = false;
   let copyOf = null;     // the template's name when the open list is a copy of one
@@ -70,15 +69,6 @@
     try { localStorage.setItem(key, value); } catch (e) { /* private mode: fine */ }
   }
 
-  function remembered() {
-    const id = stored(CURRENT_KEY);
-    return id && (id === GLOBAL || HEX_ID.test(id)) ? id : null;
-  }
-
-  function remember(id) {
-    store(CURRENT_KEY, id);
-  }
-
   // The list name in the address (/food-list/<name>), or null.
   function nameFromPath() {
     const path = location.pathname;
@@ -86,10 +76,10 @@
     try { return decodeURIComponent(path.slice(BASE.length)).trim() || null; } catch (e) { return null; }
   }
 
-  // Puts the open list's name in the address, so it can be bookmarked or shared.
+  // Puts the open list's current name in the address (after a rename), while it's showing.
   function syncAddress() {
-    if (!isGlobal && !listName) return;  // not loaded yet: keep the address being opened
-    const want = BASE + encodeURIComponent(isGlobal ? GLOBAL : listName);
+    if (wantedName || !nameFromPath() || (!isGlobal && !listName)) return;  // lists screen, or not loaded yet
+    const want = BASE + encodeURIComponent(openAddressName());
     if (location.pathname === want) return;
     try { history.replaceState(history.state, "", want); } catch (e) { /* fine: the address just stays */ }
   }
@@ -102,19 +92,30 @@
     return "";
   }
 
-  // Opens the list named in the address (ignoring case), or says there's none.
+  // Finds the list named in the address (ignoring case); none: says so and shows the lists screen.
   async function openWanted() {
     const name = wantedName;
-    wantedName = null;
-    const summary = await request("/lists");
-    const found = (summary && Array.isArray(summary.lists) ? summary.lists : [])
-      .find((l) => String(l.name).toLowerCase() === name.toLowerCase());
+    let found = null;
+    try {
+      const summary = await request("/lists");
+      found = (summary && Array.isArray(summary.lists) ? summary.lists : [])
+        .find((l) => String(l.name).toLowerCase() === name.toLowerCase());
+    } finally {
+      if (wantedName === name) wantedName = null;
+    }
     if (found || name.toLowerCase() === GLOBAL) {
       listId = found ? found.id : GLOBAL;
-      remember(listId);
     } else {
       showError(new Error("There's no list called “" + name + "”."));
+      toListsScreen();
     }
+  }
+
+  // Shows the lists screen in place of a list that isn't there (the address becomes /food-list/).
+  function toListsScreen() {
+    listId = null;
+    try { history.replaceState(null, "", BASE); } catch (e) { /* fine */ }
+    showScreen("lists");
   }
 
   // ---- talking to the server ----
@@ -153,7 +154,7 @@
     return id === GLOBAL ? "/foods" : "/lists/" + id;
   }
 
-  // Loads the open list (or the first one, when none is open or it was deleted) and the summary.
+  // Loads the summary and the open list, if any (one deleted meanwhile: back to the lists screen).
   async function reload() {
     let data = null;
     if (wantedName) await openWanted();
@@ -161,10 +162,12 @@
       try { data = await request(listPath(listId)); } catch (e) { if (e.status !== 404) throw e; }
     }
     if (!data) {
-      const summary = await request("/lists");
-      const first = summary && Array.isArray(summary.lists) && summary.lists[0];
-      if (!first) throw new Error("There are no lists.");
-      data = await request("/lists/" + first.id);
+      if (nameFromPath()) {
+        if (listId) showError(new Error("That list is gone (someone may have deleted it)."));
+        toListsScreen();
+      }
+      listId = null;
+      data = await request("/lists");
     }
     const open = data.list || {};
     lists = Array.isArray(data.lists) ? data.lists : [];
@@ -175,7 +178,6 @@
     listName = String(open.name || "");
     isGlobal = open.global === true;
     copyOf = typeof open.copy_of === "string" ? open.copy_of : null;
-    if (open.id !== listId) { listId = open.id; remember(listId); }
     render();
     renderLists();
     renderTagRows();
@@ -231,7 +233,7 @@
 
   function render() {
     $("listName").textContent = listName;
-    document.title = listName || "Food list";
+    setTitle();
     syncAddress();
     document.body.classList.toggle("viewing", viewing);
     document.body.classList.toggle("global", isGlobal);
@@ -337,7 +339,7 @@
     if (!confirm("Delete the list “" + listName + "”? This can't be undone.")) return;
     act(async () => {
       await post("/lists/" + id + "/delete");
-      if (listId === id) listId = null;  // reload opens the first list
+      if (listId === id) listId = null;  // reload shows the lists screen
     });
   });
 
@@ -444,43 +446,60 @@
 
   // ---- the lists screen ----
 
+  function setTitle() {
+    document.title = !$("listsView").hidden ? "Food lists" : listName || "Food list";
+  }
+
   function showScreen(screen) {
     const showLists = screen === "lists";
     if ($("listsView").hidden !== showLists) return;
     $("listView").hidden = showLists;
     $("listsView").hidden = !showLists;
+    setTitle();
     window.scrollTo(0, 0);
   }
 
-  function onListsScreen() {
-    return !!(history.state && history.state.screen === "lists");
-  }
-
-  function openLists() {
-    if (!onListsScreen()) history.pushState({ screen: "lists" }, "");
-    showScreen("lists");
+  // Shows the screen the address names (on load and on Back/forward): /food-list/ the lists screen,
+  // /food-list/<name> that list (looked up by reload() unless it's the open one).
+  function route() {
+    const name = nameFromPath();
+    wantedName = name && (!listId || name.toLowerCase() !== openAddressName().toLowerCase()) ? name : null;
+    showScreen(name ? "list" : "lists");
     reload().catch(showError);
   }
 
-  function closeLists() {
-    if (onListsScreen()) history.back();  // popstate shows the list
-    else showScreen("list");
+  // The open list's name in the address ("global" for the Global list).
+  function openAddressName() {
+    return isGlobal ? GLOBAL : listName;
   }
 
-  function openList(id) {
+  // History entries made here say where they came from, so going "back up" uses Back instead of piling up.
+  function openLists() {
+    if (history.state && history.state.fromLists) { history.back(); return; }  // popstate routes
+    history.pushState({ fromList: openAddressName() }, "", BASE);
+    route();
+  }
+
+  // Done: back to the open list (with Back when that's the entry before this one).
+  function closeLists() {
+    const from = history.state && history.state.fromList;
+    if (typeof from === "string" && from.toLowerCase() === openAddressName().toLowerCase()) history.back();
+    else if (listId) openList(listId, listName);
+  }
+
+  function openList(id, name) {
     if (id !== listId) {
       listId = id;
-      remember(id);
       items = [];
       isGlobal = id === GLOBAL;
       copyOf = null;
       doomed.clear();
-      listName = isGlobal ? "Global" : (lists.find((l) => l.id === id) || {}).name || "";
+      listName = isGlobal ? "Global" : name;
       render();
       renderSuggestions();
     }
-    closeLists();
-    reload().catch(showError);
+    history.pushState({ fromLists: true }, "", BASE + encodeURIComponent(openAddressName()));
+    route();
   }
 
   function listRow(name, detail, isCurrent, onOpen, buttons) {
@@ -501,7 +520,8 @@
 
   function renderLists() {
     const global = listRow(el("div", "name", "Global"),
-      plural(foods.filter((f) => f.global).length, "saved item") + " · names and tags", listId === GLOBAL, () => openList(GLOBAL), []);
+      plural(foods.filter((f) => f.global).length, "saved item") + " · names and tags", listId === GLOBAL, () => openList(GLOBAL, "Global"), []);
+    $("closeLists").hidden = !listId;  // Done goes back to the open list
     $("lists").replaceChildren(global, ...lists.map((l) => {
       const name = el("div", "name", l.name);
       if (l.template) name.append(el("span", "badge", "Template"));
@@ -511,7 +531,7 @@
       if (l.template) buttons.push(button("Copy", "edit", () => openNameDialog(l)));
       buttons.push(button("Edit", "edit", () => openListEditor(l)));
       return listRow(name, l.copy_of ? "Copy of " + l.copy_of + " · " + counts : counts,
-        l.id === listId, () => openList(l.id), buttons);
+        l.id === listId, () => openList(l.id, l.name), buttons);
     }));
   }
 
@@ -600,10 +620,7 @@
 
   $("listButton").addEventListener("click", openLists);
   $("closeLists").addEventListener("click", closeLists);
-  window.addEventListener("popstate", () => {
-    showScreen(onListsScreen() ? "lists" : "list");
-    syncAddress();  // the entry gone back to may show the list that was open before
-  });
+  window.addEventListener("popstate", route);
 
   // ---- editing a list (name, template, delete) ----
 
@@ -674,7 +691,7 @@
       made = await post(copyFrom ? "/lists/" + copyFrom.id + "/copy" : "/lists", { name });
     } catch (err) { $("nameError").textContent = err.message; return; }
     nameDialog.close();
-    openList(made.id);
+    openList(made.id, made.name);
   });
 
   // ---- editing one item ----
@@ -911,6 +928,5 @@
   setInterval(refresh, REFRESH_MS);
   document.addEventListener("visibilitychange", refresh);
 
-  showScreen(onListsScreen() ? "lists" : "list");
-  reload().catch(showError);
+  route();
 })();
