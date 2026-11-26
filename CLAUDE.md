@@ -159,14 +159,14 @@ AdditionalPages/        Extra standalone pages served with the games site but ne
                         run in gwf-app next to the game server; its data goes in $SITE_DATA =
                         ExternalWrite/AdditionalPages/<id>/). They don't use theme/settings/chat or gamekit.
                         Phone support is wanted here. startup.sh and shutdown.sh start and stop them with the site.
-  food-list/            Secret shared shopping lists (/food-list). Everything about an item (name, tags, notes, unit,
+  food-list/            Secret shared shopping lists (/food-list). Everything about an item (name, tags, notes,
                         photos) is saved once for all lists (names lowercase and unique, suggested when adding); a list
-                        entry has only its checkmark and amount (any short text). "Add to global" in the item editor puts
-                        an item in the Global list (new items aren't); an item on no list and not global is forgotten. The
-                        title opens the lists screen: New list, the Global list (edit everything, default amounts,
-                        delete items for good), then each list with Edit (name, template, delete) and, on templates,
-                        Copy (amounts copied; copies show their template's name), then New tag and every tag with Edit (name,
-                        colour, delete). Coloured tags; edit/view modes, where view mode filters by tags (items having all the selected ones).
+                        entry has only its checkmark. "Add to global" in the item editor puts an item in the Global list
+                        (new items aren't; items with photos always are); an item on no list and not global is forgotten.
+                        The lists screen: New List, the Global list (edit everything, delete items for good), then each
+                        list with Edit (name, delete), then New Tag and every tag with Edit (name, colour, delete).
+                        Coloured tags; Editing/Viewing modes: editing has Edit and Delete on each item, viewing a Push
+                        button (does nothing yet) and filters by tags (items having all the selected ones).
                         Photos are decoded in the browser and sent as raw RGB; images.py writes a fresh PNG from them.
                         /food-list/ is the lists screen and /food-list/<list name> that list (/food-list/global the
                         Global list; Back/forward move between them); list names are letters, digits, - and _ only, never "global". Needs

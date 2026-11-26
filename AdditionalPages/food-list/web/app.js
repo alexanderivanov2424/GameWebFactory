@@ -1,14 +1,12 @@
 // Food list page: the lists screen at /food-list/ and one shared list at /food-list/<list name> (adds/edits/checks
-// items, uploads pictures); the list's title button opens the lists screen, and Back/forward move between them: New list, the Global
-// list, then every list with Edit (name, template, delete) and, on templates, Copy (named in a
-// popup, "<name>-<month>-<day>" by default; a copy shows its template's name and has Delete list
-// instead of the clear buttons). Everything about an item (name, tags, notes, unit, pictures) is
-// saved once for all lists (a "food"); only the amount (any short text) and the checkmark belong to
-// the list. The Global list ("global") holds only the items added to it with the editor's "Add to
-// global" button (new items aren't; an item in neither the Global list nor any list is forgotten):
-// edited the same way (its amount is the default new entries start with), nothing checked off or
-// cleared, and Delete marks items (red) for deleting for good once the bar at the top confirms. Below the lists, New tag and every tag with Edit
-// (both in the tag popup: name, colour; Delete takes an existing tag off every item).
+// items, uploads pictures); the list's title button opens the lists screen, and Back/forward move between
+// them. The lists screen: New List, the Global list, then every list with Edit (name, delete), then New Tag
+// and every tag with Edit (both in the tag popup: name, colour; Delete takes an existing tag off every item).
+// Everything about an item (name, tags, notes, pictures) is saved once for all lists (a "food"); only the
+// checkmark belongs to the list. The Global list ("global") holds the items added to it with the editor's
+// "Add to global" button and every item with a picture (those can't be taken out); new items aren't in it,
+// and an item in neither the Global list nor any list is forgotten. It's edited the same way, nothing is
+// checked off or cleared, and Delete marks items (red) for deleting for good once the bar at the top confirms.
 // The address picks the screen (route()): /food-list/ is the lists screen, /food-list/<list name> that list
 // (Global: /food-list/global; list names are letters, digits, - and _ only, and never "global", checked here
 // and by the server; nginx serves index.html for any path under /food-list/, see startup.sh). The address
@@ -16,9 +14,9 @@
 // Global list, see ../store.py) that aren't on this list are suggested, with their tags.
 // Item names are lowercase: the server lowercases them too.
 // Tags (coloured by their hue) are set in the item editor, by name: new names make new tags on Save.
-// Two modes, remembered in localStorage: edit (add row, Edit buttons) and view (a row of the list's
-// tags that filters the items: tap several to show only items having all of them; the filter only
-// applies in view mode).
+// Two modes, remembered in localStorage: editing (add row, each item's Edit and Delete buttons) and
+// viewing (each item's Push button, which does nothing yet, and a row of the list's tags that filters
+// the items: tap several to show only items having all of them; the filter only applies when viewing).
 // Pictures are decoded and scaled down here, then sent as raw RGB pixels only (4-byte size header
 // + width*height*3 bytes, see ../images.py); the server writes its own PNG from them.
 // Everything shown comes from the server and is put on the page as text (textContent), never HTML.
@@ -34,17 +32,15 @@
   const MODE_KEY = "food-list.mode";
   const GLOBAL = "global";        // the Global list's id (all saved items) and its name in the address
   const BASE = "/food-list/";     // the page's address; a list name may follow
-  const LIST_NAME_MAX = 40;
   const LIST_NAME = /^[A-Za-z0-9_-]+$/;  // the server checks the same: the name is the list's address
   const TAG_NAME = /^[\p{L} ]+$/u;  // the server checks the same: letters and spaces
   const TAG_NAME_MAX = 24;
   const MAX_TAGS_PER_ITEM = 10;
-  const AMOUNT_MAX = 20;          // characters, like the server
 
   const $ = (id) => document.getElementById(id);
   const list = $("list"), editor = $("editor"), viewer = $("viewer");
   const listEditor = $("listEditor"), nameDialog = $("nameDialog"), tagEditor = $("tagEditor");
-  let lists = [];      // [{id, name, template, count, left}]
+  let lists = [];      // [{id, name, count, left}]
   let foods = [];      // every saved item: [{name, tags, global}] (sorted by name)
   let tags = [];       // every tag: [{id, name, hue}] (sorted by name)
   let tagsById = new Map();
@@ -55,7 +51,6 @@
   let listId = null;      // the open list (kept while the lists screen shows)
   let listName = "";
   let isGlobal = false;
-  let copyOf = null;     // the template's name when the open list is a copy of one
   let doomed = new Set(); // Global list: food ids marked for deleting
   let items = [];
   let editingId = null;
@@ -177,7 +172,6 @@
     items = Array.isArray(open.items) ? open.items : [];
     listName = String(open.name || "");
     isGlobal = open.global === true;
-    copyOf = typeof open.copy_of === "string" ? open.copy_of : null;
     render();
     renderLists();
     renderTagRows();
@@ -237,12 +231,9 @@
     syncAddress();
     document.body.classList.toggle("viewing", viewing);
     document.body.classList.toggle("global", isGlobal);
-    document.body.classList.toggle("copy", !!copyOf && !isGlobal);
-    $("listSub").textContent = copyOf ? "Copy of " + copyOf : "";
-    $("listSub").hidden = !copyOf || isGlobal;
     renderDoomBar();
-    $("modeButton").textContent = viewing ? "View" : "Edit";
-    $("modeButton").title = viewing ? "View mode: tap to edit" : "Edit mode: tap to view";
+    $("modeButton").textContent = viewing ? "Viewing" : "Editing";
+    $("modeButton").title = viewing ? "Viewing: tap to edit" : "Editing: tap to view";
     renderFilters();
     const wanted = viewing ? Array.from(filterTags) : [];
     const shown = items.filter((i) => wanted.every((id) => (i.tags || []).includes(id)));
@@ -276,8 +267,6 @@
 
     const info = el("div", "info");
     const name = el("div", "name", item.name);
-    const qty = quantity(item);
-    if (qty) name.append(el("span", "qty", qty));
     info.append(name);
     const chips = itemTags(item);
     if (chips.length) {
@@ -293,29 +282,26 @@
     }
     info.addEventListener("click", () => { if (!viewing) openEditor(item.id); });
 
-    const edit = el("button", "edit", "Edit");
-    edit.type = "button";
-    edit.addEventListener("click", () => openEditor(item.id));
-
-    if (isGlobal) {
-      const remove = button(doom ? "Keep" : "Delete", "edit danger", () => {
+    // Editing: Edit and Delete (.edit); viewing: Push (.push, does nothing yet). CSS shows one set.
+    const edit = button("Edit", "edit", () => openEditor(item.id));
+    const remove = isGlobal
+      ? button(doom ? "Keep" : "Delete", "edit danger", () => {
         if (doomed.has(item.id)) doomed.delete(item.id);
         else doomed.add(item.id);
         render();
-      });
-      li.append(info, edit, remove);
-    } else {
-      li.append(check, info, edit);
-    }
+      })
+      : button("Delete", "edit danger", () => removeItem(item));
+    const push = button("Push", "push", () => { /* nothing yet */ });
+    if (!isGlobal) li.append(check);
+    li.append(info, edit, remove, push);
     return li;
   }
 
-  // "2 dozen", "×3", "a few", or "" when no amount is set.
-  function quantity(item) {
-    const amount = item.amount === null || item.amount === undefined ? "" : String(item.amount);
-    if (!amount) return "";
-    if (item.unit) return amount + " " + item.unit;
-    return /^\d+([.,]\d+)?$/.test(amount) ? "×" + amount : amount;
+  // Takes an item off the open list; asks first only when that forgets it (not in the Global list).
+  function removeItem(item) {
+    if (!item.global && !confirm("Remove “" + item.name + "”? It's not in the Global list, so it's forgotten unless another list has it.")) return;
+    if (editor.open) editor.close();
+    act(() => post("/items/" + item.id + "/delete"));
   }
 
   // ---- deleting saved items for good (Global list) ----
@@ -334,14 +320,6 @@
     act(() => post("/foods/delete", { ids }));
   });
 
-  $("deleteListTop").addEventListener("click", () => {
-    const id = listId;
-    if (!confirm("Delete the list “" + listName + "”? This can't be undone.")) return;
-    act(async () => {
-      await post("/lists/" + id + "/delete");
-      if (listId === id) listId = null;  // reload shows the lists screen
-    });
-  });
 
   // The view mode's filter row: "All" (clears the selection) plus every tag on this list, each
   // toggled on or off. Selected tags no longer on the list are dropped.
@@ -492,7 +470,6 @@
       listId = id;
       items = [];
       isGlobal = id === GLOBAL;
-      copyOf = null;
       doomed.clear();
       listName = isGlobal ? "Global" : name;
       render();
@@ -524,14 +501,9 @@
     $("closeLists").hidden = !listId;  // Done goes back to the open list
     $("lists").replaceChildren(global, ...lists.map((l) => {
       const name = el("div", "name", l.name);
-      if (l.template) name.append(el("span", "badge", "Template"));
-      if (l.copy_of) name.append(el("span", "badge", "Copy"));
       const counts = l.count ? l.left + " to get · " + plural(l.count, "item") : "Empty";
-      const buttons = [];
-      if (l.template) buttons.push(button("Copy", "edit", () => openNameDialog(l)));
-      buttons.push(button("Edit", "edit", () => openListEditor(l)));
-      return listRow(name, l.copy_of ? "Copy of " + l.copy_of + " · " + counts : counts,
-        l.id === listId, () => openList(l.id, l.name), buttons);
+      return listRow(name, counts, l.id === listId, () => openList(l.id, l.name),
+        [button("Edit", "edit", () => openListEditor(l))]);
     }));
   }
 
@@ -622,14 +594,13 @@
   $("closeLists").addEventListener("click", closeLists);
   window.addEventListener("popstate", route);
 
-  // ---- editing a list (name, template, delete) ----
+  // ---- editing a list (name, delete) ----
 
   let editingList = null;
 
   function openListEditor(l) {
     editingList = l;
     $("listNameInput").value = l.name;
-    $("listTemplate").checked = !!l.template;
     $("listError").textContent = "";
     $("deleteList").disabled = lists.length < 2;
     $("deleteList").title = lists.length < 2 ? "The only list can't be deleted" : "";
@@ -645,7 +616,7 @@
     if (!l) return listEditor.close();
     if (listNameProblem(name)) { $("listError").textContent = listNameProblem(name); return; }
     try {
-      await post("/lists/" + l.id + "/update", { name, template: $("listTemplate").checked });
+      await post("/lists/" + l.id + "/update", { name });
     } catch (err) { $("listError").textContent = err.message; return; }
     listEditor.close();
     reload().catch(showError);
@@ -660,26 +631,15 @@
     act(() => post("/lists/" + l.id + "/delete"));
   });
 
-  // ---- naming a new list or a copy of a template ----
+  // ---- naming a new list ----
 
-  let copyFrom = null;  // the template being copied, or null for a new empty list
-
-  function copyName(name) {
-    const now = new Date();
-    const suffix = "-" + (now.getMonth() + 1) + "-" + now.getDate();
-    return name.slice(0, LIST_NAME_MAX - suffix.length) + suffix;
-  }
-
-  function openNameDialog(template) {
-    copyFrom = template || null;
-    $("nameTitle").textContent = copyFrom ? "Copy “" + copyFrom.name + "”" : "New list";
-    $("nameOk").textContent = copyFrom ? "Copy" : "Create";
-    $("nameInput").value = copyFrom ? copyName(copyFrom.name) : "";
+  function openNameDialog() {
+    $("nameInput").value = "";
     $("nameError").textContent = "";
     nameDialog.showModal();
   }
 
-  $("newListButton").addEventListener("click", () => openNameDialog(null));
+  $("newListButton").addEventListener("click", openNameDialog);
   $("cancelName").addEventListener("click", () => nameDialog.close());
 
   $("nameForm").addEventListener("submit", async (e) => {
@@ -688,7 +648,7 @@
     if (listNameProblem(name)) { $("nameError").textContent = listNameProblem(name); return; }
     let made;
     try {
-      made = await post(copyFrom ? "/lists/" + copyFrom.id + "/copy" : "/lists", { name });
+      made = await post("/lists", { name });
     } catch (err) { $("nameError").textContent = err.message; return; }
     nameDialog.close();
     openList(made.id, made.name);
@@ -706,9 +666,6 @@
     editingId = id;
     $("editName").value = item.name;
     $("editNotes").value = item.notes || "";
-    $("editUnit").value = item.unit || "";
-    $("editAmount").value = item.amount === null || item.amount === undefined ? "" : String(item.amount);
-    $("amountLabel").textContent = isGlobal ? "Default amount" : "Amount";
     $("editError").textContent = "";
     $("busy").textContent = "";
     editTagNames = itemTags(item).map((t) => t.name);
@@ -743,12 +700,15 @@
     $("editPics").replaceChildren(...pics);
   }
 
-  // The "Add to global" / "Remove from global" button (list items only; it saves right away).
+  // The "Add to global" / "Remove from global" button next to Remove (list items only; it saves right
+  // away). Items with pictures always stay in the Global list, so it's disabled for them.
   function renderEditorGlobal() {
     const item = current();
     if (!item) return;
+    const pictures = !!(item.images && item.images.length);
     $("globalItem").textContent = item.global ? "Remove from global" : "Add to global";
-    $("globalHint").textContent = item.global ? "In the Global list." : "Not in the Global list.";
+    $("globalItem").disabled = item.global && pictures;
+    $("globalItem").title = item.global && pictures ? "Items with pictures stay in the Global list" : "";
   }
 
   $("globalItem").addEventListener("click", () => {
@@ -791,7 +751,7 @@
       const tag = byName.get(name);
       const chip = tag ? tagChip(tag, "button", name + " ✕") : el("button", "tag plain new", name + " ✕");
       chip.type = "button";
-      chip.title = tag ? "Remove this tag" : "New tag (made on Save); tap to remove";
+      if (tag) chip.title = "Remove this tag";
       chip.setAttribute("aria-label", "Remove tag " + name);
       chip.addEventListener("click", () => {
         editTagNames = editTagNames.filter((n) => n !== name);
@@ -826,14 +786,8 @@
     if (!item) return editor.close();
     const name = $("editName").value.trim().toLowerCase();
     if (!name) { showError(new Error("Give the item a name.")); return; }
-    const amountText = $("editAmount").value.trim().replace(/\s+/g, " ");
-    const amount = amountText === "" ? null : amountText;
-    if (amountText.length > AMOUNT_MAX) {
-      $("editError").textContent = "The amount can have at most " + AMOUNT_MAX + " characters.";
-      return;
-    }
     if (!addTypedTag()) return;  // a tag typed but not added yet counts
-    const change = { name, tags: editTagNames.slice(), notes: $("editNotes").value, unit: $("editUnit").value, amount };
+    const change = { name, tags: editTagNames.slice(), notes: $("editNotes").value };
     const path = isGlobal ? "/foods/" + item.food + "/update" : "/items/" + item.id + "/update";
     editor.close();
     act(() => post(path, change));
@@ -841,11 +795,7 @@
 
   $("deleteItem").addEventListener("click", () => {
     const item = current();
-    if (!item) return;
-    const after = item.global ? "It stays in the Global list." : "It's not in the Global list, so it's forgotten unless another list has it.";
-    if (!confirm("Remove “" + item.name + "” from this list? " + after)) return;
-    editor.close();
-    act(() => post("/items/" + item.id + "/delete"));
+    if (item) removeItem(item);
   });
 
   // ---- pictures ----

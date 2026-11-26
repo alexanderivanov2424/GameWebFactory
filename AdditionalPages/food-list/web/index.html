@@ -2,14 +2,14 @@
 <!-- Food list (/food-list/): shared shopping lists for phones. Not linked from anywhere.
      Two screens: one list (/food-list/<name>; the title button opens the other) and the lists screen
      (/food-list/, Done goes back to the open list): a stack of lists
-     (New list on top, then Global = the items added to it, then each list with Edit and, on templates, Copy),
-     then New tag and every tag with Edit (a small popup: name, colour, delete).
-     body.global = the Global list is open: no checking off, clearing or adding; each item has Delete,
-     which marks it (red) until the bar at the top confirms or cancels; the editor has no Remove or
-     Add to global (.item-only) and its amount is the default. Amounts are any short text. body.copy = a copy of a template is open: its
-     template's name under the title, and Delete list instead of Clear checked / Clear all.
-     The list has two modes (the small button next to the title; body.viewing = view mode):
-     edit shows the add row and each item's Edit button; view shows the tag filter row instead.
+     (New List on top, then Global = the items added to it, then each list with Edit),
+     then New Tag and every tag with Edit (a small popup: name, colour, delete).
+     body.global = the Global list is open: no checking off, clearing or adding; an item's Delete
+     marks it (red) until the bar at the top confirms or cancels; the editor has no Remove or
+     Add to global (.item-only).
+     The list has two modes (the small button next to the title, "Editing" / "Viewing"; body.viewing =
+     view mode): editing shows the add row and each item's Edit and Delete buttons; viewing shows the
+     tag filter row and each item's Push button instead.
      The address is /food-list/<list name> for the open list (nginx serves this page for any path under
      /food-list/), so every URL here is absolute. Logic in app.js; data and pictures are kept by ../server.py (API at /food-list/api/).
      nginx sends a strict Content-Security-Policy for this folder, so no inline scripts. -->
@@ -80,13 +80,11 @@
   .hint.bad { color: var(--danger); }
   .bar .mode { min-height: 34px; padding: 0 10px; font-size: 13px; }
   body.viewing .bar .mode { border-color: var(--accent); }
-  body.viewing #add, body.viewing #suggest, body.viewing .item .edit, body.viewing #clearAll { display: none; }
+  body.viewing #add, body.viewing #suggest, body.viewing #list .edit, body.viewing #clearAll,
+  body:not(.viewing) #list .push { display: none; }
   body:not(.viewing) #filters { display: none; }
   body.global .check, body.global #clearChecked, body.global #clearAll, body.global #add,
   body.global #suggest, body.global .item-only { display: none; }
-  body.copy #clearChecked, body.copy #clearAll, body:not(.copy) #deleteListTop, body.global #deleteListTop { display: none; }
-  .sub { font-size: 13px; color: var(--muted); margin: -2px 0 0 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .qty { font-weight: 500; color: var(--muted); margin-left: 6px; white-space: nowrap; }
   .item.doomed { border-color: var(--danger); background: color-mix(in srgb, var(--danger) 14%, var(--card)); }
   .item.doomed .name { color: var(--danger); }
   body:not(.global) #doomBar { display: none; }
@@ -113,21 +111,7 @@
   }
   #tagHue::-moz-range-thumb { width: 22px; height: 22px; border-radius: 50%; background: var(--card); border: 2px solid var(--text); cursor: pointer; }
   .preview { margin-top: 12px; }
-  .pair { display: flex; gap: 8px; }
-  .pair > div { flex: 1; min-width: 0; }
-  input[type=number] {
-    width: 100%; min-height: 44px; padding: 10px 12px; border-radius: 10px;
-    border: 1px solid var(--line); background: var(--card);
-  }
   .wide { width: 100%; margin-bottom: 10px; }
-  .badge {
-    display: inline-block; margin-left: 6px; padding: 0 7px; border-radius: 999px; vertical-align: 2px;
-    font-size: 12px; font-weight: 500; color: var(--muted); border: 1px solid var(--line);
-  }
-  .globalrow { display: flex; align-items: center; gap: 10px; margin-top: 10px; }
-  .globalrow .hint { margin-top: 0; }
-  .checkline { display: flex; align-items: center; gap: 10px; margin-top: 14px; cursor: pointer; }
-  .checkline input { width: 22px; height: 22px; margin: 0; accent-color: var(--accent); flex: none; }
   /* Tags: --h is the tag's hue, set from the page script. */
   .chips { display: flex; flex-wrap: wrap; gap: 6px; }
   .chips:empty { display: none; }
@@ -170,7 +154,7 @@
   .item.done .name { text-decoration: line-through; color: var(--done); }
   .item.done .notes, .item.done .thumbs { opacity: .55; }
   .item.current { border-color: var(--accent); box-shadow: inset 3px 0 0 var(--accent); }
-  .edit { flex: none; min-height: 36px; padding: 0 10px; font-size: 14px; }
+  .edit, .push { flex: none; min-height: 36px; padding: 0 10px; font-size: 14px; }
   .empty { text-align: center; color: var(--muted); padding: 40px 0; }
   #msg {
     position: fixed; left: 12px; right: 12px; bottom: calc(12px + env(safe-area-inset-bottom)); z-index: 20;
@@ -196,7 +180,7 @@
   .upload .btn { flex: 1; }
   .upload input { display: none; }
   #busy { font-size: 14px; color: var(--muted); margin-top: 6px; min-height: 20px; }
-  .actions { display: flex; gap: 8px; margin-top: 16px; }
+  .actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
   .actions .grow { flex: 1; }
   #viewer { padding: 8px; width: auto; max-width: calc(100vw - 16px); }
   #viewer img { display: block; max-width: calc(100vw - 34px); max-height: calc(100dvh - 90px); margin: 0 auto 8px; border-radius: 8px; }
@@ -209,12 +193,10 @@
 <header>
   <div class="bar">
     <button type="button" id="listButton" class="title" aria-label="All lists"><span id="listName">Food list</span><span class="chevron" aria-hidden="true">▾</span></button>
-    <button type="button" id="modeButton" class="mode">Edit</button>
+    <button type="button" id="modeButton" class="mode">Editing</button>
     <button type="button" id="clearChecked">Clear checked</button>
     <button type="button" id="clearAll" class="danger">Clear all</button>
-    <button type="button" id="deleteListTop" class="danger">Delete list</button>
   </div>
-  <div class="sub" id="listSub" hidden></div>
   <form id="add" class="add" autocomplete="off">
     <input type="text" id="addName" class="lower" maxlength="80" placeholder="Add an item…" enterkeyhint="done" autocapitalize="none" aria-label="New item">
     <button type="submit" class="primary">Add</button>
@@ -243,10 +225,10 @@
 </header>
 
 <main>
-  <button type="button" id="newListButton" class="primary wide">+ New list</button>
+  <button type="button" id="newListButton" class="primary wide">+ New List</button>
   <ul id="lists"></ul>
   <h2 class="section">Tags</h2>
-  <button type="button" id="newTagButton" class="wide">+ New tag</button>
+  <button type="button" id="newTagButton" class="primary wide">+ New Tag</button>
   <ul id="tagRows"></ul>
   <p class="empty" id="noTags" hidden>No tags yet. Add them when editing an item.</p>
 </main>
@@ -257,21 +239,7 @@
     <h2>Edit item</h2>
     <label class="field" for="editName">Name</label>
     <input type="text" id="editName" class="lower" maxlength="80" autocapitalize="none" required>
-    <div class="hint">Everything here except the amount is the same on every list.</div>
-    <div class="globalrow item-only">
-      <button type="button" id="globalItem">Add to global</button>
-      <span class="hint" id="globalHint"></span>
-    </div>
-    <div class="pair">
-      <div>
-        <label class="field" for="editAmount" id="amountLabel">Amount</label>
-        <input type="text" id="editAmount" maxlength="20" placeholder="2, a few…">
-      </div>
-      <div>
-        <label class="field" for="editUnit">Unit</label>
-        <input type="text" id="editUnit" maxlength="16" placeholder="dozen, lb, pack…">
-      </div>
-    </div>
+    <div class="hint">Everything here is the same on every list.</div>
     <label class="field" for="editNotes">Notes</label>
     <textarea id="editNotes" maxlength="500" placeholder="Brand, size…"></textarea>
     <label class="field" for="tagInput">Tags</label>
@@ -292,6 +260,7 @@
     <div class="hint bad" id="editError"></div>
     <div class="actions">
       <button type="button" id="deleteItem" class="danger item-only">Remove</button>
+      <button type="button" id="globalItem" class="item-only">Add to global</button>
       <span class="grow"></span>
       <button type="button" id="cancelEdit">Close</button>
       <button type="submit" id="saveEdit" class="primary">Save</button>
@@ -305,7 +274,6 @@
     <label class="field" for="listNameInput">Name</label>
     <input type="text" id="listNameInput" maxlength="40" required autocapitalize="none" spellcheck="false">
     <div class="hint">Letters, digits, - and _ only. It's the list's address: /food-list/&lt;name&gt;</div>
-    <label class="checkline"><input type="checkbox" id="listTemplate"> Template</label>
     <div class="hint bad" id="listError"></div>
     <div class="actions">
       <button type="button" id="deleteList" class="danger">Delete</button>

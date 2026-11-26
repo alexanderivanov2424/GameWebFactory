@@ -3,11 +3,11 @@ the pictures in <data>/images/<id>.png.
 
 The data:
 - foods: every item on a list or in the Global list, so the page can suggest it when adding:
-  {id, name, tags: [tag id], notes, unit, amount, images: [image id], global}. Everything about an
-  item lives here, once, whichever list it's on, except how many to get: amount here is only the
-  default a list entry starts with. global (false for new foods) says it's in the Global list, set
-  with "Add to global" in the item editor; a food that isn't global is deleted with its pictures as
-  soon as it's on no list. Foods saved before the flag existed load as global.
+  {id, name, tags: [tag id], notes, images: [image id], global}. Everything about an item lives
+  here, once, whichever list it's on. global (false for new foods) says it's in the Global list, set
+  with "Add to global" in the item editor; a food with pictures is always global (adding one sets it,
+  and it can't be unset); a food that isn't global is deleted as soon as it's on no list. Foods saved
+  before the flag existed load as global.
   Names are lowercase (whatever is typed is lowercased; symbols, spaces and digits are fine) and
   unique: adding a name that's already a food reuses it, and a rename to another food's name is
   refused. Deleting a food (only from the Global list) takes it off every list and deletes its
@@ -17,16 +17,14 @@ The data:
   among the hues used least so far. Setting an item's tags by name makes any new ones. A tag's
   name and hue can be changed (update_tag), and tags made (add_tag) or deleted (delete_tag, which
   takes them off every item), from the lists screen.
-- lists: {id, name, template, copy_of, items}; list names are unique ignoring case and there is
-  always at least one. A list name is the list's address (/food-list/<name>), so it may only have
-  ASCII letters, digits, "-" and "_", and "global" (the Global list's address) is refused; older
-  names are made to fit when loaded ("Food list" -> "Food-list"). An entry on a list is {id, food, checked, amount}; a food is on a list at
-  most once. A template list can be copied: the copy gets the same foods with the template's
-  amounts, all unchecked, isn't a template itself, and has copy_of = {id, name} of the template
-  (the name follows renames of the template, and stays after it's deleted).
+- lists: {id, name, items}; list names are unique ignoring case and there is always at least one.
+  A list name is the list's address (/food-list/<name>), so it may only have ASCII letters, digits,
+  "-" and "_", and "global" (the Global list's address) is refused; older names are made to fit when
+  loaded ("Food list" -> "Food-list"). An entry on a list is {id, food, checked}; a food is on a list
+  at most once.
 The page's Global list isn't stored: it's every global food (public_foods).
-Amounts are short text ("2", "1.5", "a few"; at most AMOUNT_MAX characters) or None for "not set";
-numbers from older data become text.
+Fields from older versions (templates and copies, amounts, units) are ignored when loaded and
+dropped at the next save.
 
 Older data is moved over when loaded (and saved again once): list.json (one list:
 {"items": [{id, name, notes, checked, images}]}) becomes the list "Food list" when lists.json
@@ -36,7 +34,7 @@ entries move to their food (notes joined, pictures up to the limit).
 Nothing from the browser is trusted. Every value is checked here before it's kept:
 - text: must be a string, normalised (NFC), control/format/private/unassigned characters dropped
   (newlines kept in notes), trimmed, and rejected when longer than the limit;
-- checked, template and global: must be exactly true or false; amounts: text or null;
+- checked and global: must be exactly true or false;
 - ids are made here (random hex) and the browser can only name existing ones; file names are
   only ever built from those ids, never from anything the browser sends;
 - images come in as raw RGB and go out as a PNG written by images.py.
@@ -48,7 +46,6 @@ Files are written to a temporary name and renamed, so a crash never leaves a hal
 """
 
 import json
-import math
 import os
 import re
 import secrets
@@ -63,8 +60,6 @@ NAME_MAX = 80
 LIST_NAME_MAX = 40
 TAG_NAME_MAX = 24
 NOTES_MAX = 500
-UNIT_MAX = 16
-AMOUNT_MAX = 20  # characters
 MAX_LISTS = 30
 MAX_ITEMS = 300  # per list
 MAX_FOODS = 3000
@@ -140,23 +135,6 @@ def tag_name(value):
     return name
 
 
-def clean_amount(value):
-    """An amount as it's kept: short text or None (empty), or Rejected. Numbers (older data) become text."""
-    if isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value):
-        value = round(float(value), 2)
-        value = str(int(value)) if value.is_integer() else str(value)
-    elif value is not None and not isinstance(value, str):
-        raise Rejected("The amount must be text.")
-    return clean_text(value, AMOUNT_MAX, label="The amount") or None
-
-
-def saved_amount(value):
-    try:
-        return clean_amount(value)
-    except Rejected:
-        return None
-
-
 def url_name(text):
     """A list name from older data made to fit LIST_NAME: accents dropped ("É" -> "E"), every other
     character becomes "-"."""
@@ -207,7 +185,7 @@ class Store:
         self.data_file = self.folder / "lists.json"
         self.old_file = self.folder / "list.json"  # before there were several lists
         self.lists = []
-        self.foods = {}     # food id -> {"name", "tags", "notes", "unit", "amount", "images"}
+        self.foods = {}     # food id -> {"name", "tags", "notes", "images", "global"}
         self.food_ids = {}  # name -> food id
         self.tags = {}      # tag id -> {"name", "hue"}
         self.tag_ids = {}   # name -> tag id
@@ -238,10 +216,9 @@ class Store:
                     continue
         if not self.lists:
             self.lists.append(self._new_list(DEFAULT_LIST))
-        names = {lst["id"]: lst["name"] for lst in self.lists}
-        for lst in self.lists:  # a template's name may have been fitted above
-            if lst["copy_of"] and lst["copy_of"]["id"] in names:
-                lst["copy_of"]["name"] = names[lst["copy_of"]["id"]]
+        for food in self.foods.values():
+            if food["images"] and not food["global"]:
+                food["global"] = self.moved = True  # foods with pictures are always global
         unused = self._unused()
         if unused:
             self._forget(unused)  # their pictures go with the unreferenced files below
@@ -278,10 +255,8 @@ class Store:
                 food["tags"].append(tag)
         try:
             food["notes"] = clean_text(entry.get("notes"), NOTES_MAX, multiline=True)
-            food["unit"] = clean_text(entry.get("unit"), UNIT_MAX)
         except Rejected:
             pass
-        food["amount"] = saved_amount(entry.get("amount"))
         food["global"] = entry.get("global", True) is True  # saved before the flag: was in the Global list
         self._take_images(food, entry.get("images"), seen)
 
@@ -305,10 +280,7 @@ class Store:
         name = free_name(url_name(saved) or "List", taken, LIST_NAME_MAX, sep="-")
         if name != saved:
             self.moved = True  # save the fitted name
-        lst = self._new_list(name, template=entry.get("template") is True, entry_id=entry["id"])
-        source = entry.get("copy_of")
-        if has_id(source):
-            lst["copy_of"] = {"id": source["id"], "name": clean_text(source.get("name"), LIST_NAME_MAX) or "?"}
+        lst = self._new_list(name, entry_id=entry["id"])
         on_list = set()
         for raw in entry.get("items", []) if isinstance(entry.get("items"), list) else []:
             if len(lst["items"]) >= MAX_ITEMS:
@@ -350,8 +322,7 @@ class Store:
                 if len(joined) <= NOTES_MAX:
                     food["notes"] = joined
             self._take_images(food, entry.get("images"), seen)
-        return {"id": entry["id"], "food": food_id, "checked": entry.get("checked") is True,
-                "amount": saved_amount(entry.get("amount"))}
+        return {"id": entry["id"], "food": food_id, "checked": entry.get("checked") is True}
 
     def save(self):
         data = json.dumps({
@@ -362,7 +333,7 @@ class Store:
         write_atomic(self.data_file, data.encode("utf-8"))
 
     def _make_food(self, food_id, name):
-        food = {"name": name, "tags": [], "notes": "", "unit": "", "amount": None, "images": [], "global": False}
+        food = {"name": name, "tags": [], "notes": "", "images": [], "global": False}
         self.foods[food_id] = food
         self.food_ids[name] = food_id
         return food
@@ -385,8 +356,8 @@ class Store:
         self.save()
         self._remove_files(pictures)
 
-    def _new_list(self, name, template=False, entry_id=None):
-        return {"id": entry_id or new_id(), "name": name, "template": template, "copy_of": None, "items": []}
+    def _new_list(self, name, entry_id=None):
+        return {"id": entry_id or new_id(), "name": name, "items": []}
 
     def _new_hue(self):
         used = [tag["hue"] for tag in self.tags.values()]
@@ -400,9 +371,7 @@ class Store:
         """Every list (without items), every food's name and tags, and every tag: for the lists screen
         and the suggestions while typing."""
         return {
-            "lists": [{"id": lst["id"], "name": lst["name"], "template": lst["template"],
-                       "copy_of": lst["copy_of"]["name"] if lst["copy_of"] else None,
-                       "count": len(lst["items"]), "left": sum(not item["checked"] for item in lst["items"])}
+            "lists": [{"id": lst["id"], "name": lst["name"], "count": len(lst["items"]), "left": sum(not item["checked"] for item in lst["items"])}
                       for lst in self.lists],
             "foods": sorted(({"name": food["name"], "tags": list(food["tags"]), "global": food["global"]}
                             for food in self.foods.values()),
@@ -414,22 +383,20 @@ class Store:
     def public_food(self, food_id):
         food = self.foods[food_id]
         return {"food": food_id, "name": food["name"], "tags": list(food["tags"]), "notes": food["notes"],
-                "unit": food["unit"], "images": list(food["images"]), "global": food["global"]}
+                "images": list(food["images"]), "global": food["global"]}
 
     def public_item(self, item):
-        return dict(self.public_food(item["food"]), id=item["id"], amount=item["amount"], checked=item["checked"])
+        return dict(self.public_food(item["food"]), id=item["id"], checked=item["checked"])
 
     def public_list(self, list_id):
         """One list with its items, plus the summary."""
         lst = self.find_list(list_id)
         items = [self.public_item(item) for item in lst["items"]]
-        return dict(self.summary(), list={"id": lst["id"], "name": lst["name"], "template": lst["template"],
-                                          "copy_of": lst["copy_of"]["name"] if lst["copy_of"] else None,
-                                          "items": items})
+        return dict(self.summary(), list={"id": lst["id"], "name": lst["name"], "items": items})
 
     def public_foods(self):
-        """The Global list: every global food (amount = its default), plus the summary."""
-        items = sorted((dict(self.public_food(food_id), id=food_id, amount=food["amount"])
+        """The Global list: every global food, plus the summary."""
+        items = sorted((dict(self.public_food(food_id), id=food_id)
                         for food_id, food in self.foods.items() if food["global"]),
                        key=lambda item: item["name"])
         return dict(self.summary(), list={"id": "global", "name": "Global", "global": True, "items": items})
@@ -486,28 +453,8 @@ class Store:
 
     def update_list(self, list_id, data):
         lst = self.find_list(list_id)
-        name = self._list_name(data["name"], other_than=lst) if "name" in data else lst["name"]
-        template = data.get("template", lst["template"])
-        if not isinstance(template, bool):
-            raise Rejected("Bad template value.")
-        lst["name"], lst["template"] = name, template
-        for other in self.lists:
-            if other["copy_of"] and other["copy_of"]["id"] == lst["id"]:
-                other["copy_of"]["name"] = name
-        self.save()
-        return {"id": lst["id"], "name": lst["name"], "template": lst["template"]}
-
-    def copy_list(self, list_id, data):
-        """A new list holding a template's items with its amounts, all unchecked."""
-        source = self.find_list(list_id)
-        if not source["template"]:
-            raise Rejected("Only template lists can be copied.")
-        self._room_for_list()
-        lst = self._new_list(self._list_name(data.get("name")))
-        lst["copy_of"] = {"id": source["id"], "name": source["name"]}
-        lst["items"] = [{"id": new_id(), "food": item["food"], "checked": False, "amount": item["amount"]}
-                        for item in source["items"]]
-        self.lists.append(lst)
+        if "name" in data:
+            lst["name"] = self._list_name(data["name"], other_than=lst)
         self.save()
         return {"id": lst["id"], "name": lst["name"]}
 
@@ -521,7 +468,7 @@ class Store:
     # ---- entries on a list ----
 
     def add(self, list_id, data):
-        """Put a food on a list by name (made if it's new), with the food's default amount."""
+        """Put a food on a list by name (made if it's new)."""
         lst = self.find_list(list_id)
         if len(lst["items"]) >= MAX_ITEMS:
             raise Rejected(f"The list is full ({MAX_ITEMS} items).", 507)
@@ -536,23 +483,21 @@ class Store:
                 raise Rejected(f"There are already {MAX_FOODS} saved items.", 507)
             food_id = new_id()
             self._make_food(food_id, name)
-        item = {"id": new_id(), "food": food_id, "checked": False, "amount": self.foods[food_id]["amount"]}
+        item = {"id": new_id(), "food": food_id, "checked": False}
         lst["items"].append(item)
         self.save()
         return self.public_item(item)
 
     def update(self, item_id, data):
-        """Change an entry: checked and amount are the entry's own; the rest goes to its food."""
+        """Change an entry: checked is the entry's own; the rest goes to its food."""
         _, item = self.find(item_id)
         checked = item["checked"]
         if "checked" in data:
             checked = data["checked"]
             if not isinstance(checked, bool):
                 raise Rejected("Bad checked value.")
-        amount = clean_amount(data["amount"]) if "amount" in data else item["amount"]
-        apply_food = self._food_changes(item["food"], data)
-        apply_food()
-        item["checked"], item["amount"] = checked, amount
+        self._food_changes(item["food"], data)()
+        item["checked"] = checked
         self.save()
         return self.public_item(item)
 
@@ -573,8 +518,8 @@ class Store:
 
     # ---- foods (everything about an item) ----
 
-    def _food_changes(self, food_id, data, default_amount=False):
-        """Checks name, tags, notes, unit, global (and the default amount) for a food; returns a function
+    def _food_changes(self, food_id, data):
+        """Checks name, tags, notes and global for a food; returns a function
         that applies them, so nothing changes when any of them is refused."""
         food = self.foods[food_id]
         changes = {}
@@ -590,14 +535,12 @@ class Store:
             changes["name"] = name
         if "notes" in data:
             changes["notes"] = clean_text(data["notes"], NOTES_MAX, multiline=True, label="The notes")
-        if "unit" in data:
-            changes["unit"] = clean_text(data["unit"], UNIT_MAX, label="The unit")
         if "global" in data:
             if not isinstance(data["global"], bool):
                 raise Rejected("Bad global value.")
+            if not data["global"] and food["images"]:
+                raise Rejected("Items with pictures stay in the Global list.")
             changes["global"] = data["global"]
-        if default_amount and "amount" in data:
-            changes["amount"] = clean_amount(data["amount"])
 
         def apply():
             if "name" in changes:
@@ -609,10 +552,10 @@ class Store:
         return apply
 
     def update_food(self, food_id, data):
-        """Change a food from the Global list (amount there is the default for new entries)."""
+        """Change a food from the Global list."""
         self.find_food(food_id)
-        self._food_changes(food_id, data, default_amount=True)()
-        result = dict(self.public_food(food_id), id=food_id, amount=self.foods[food_id]["amount"])
+        self._food_changes(food_id, data)()
+        result = dict(self.public_food(food_id), id=food_id)
         self._tidy()  # taken out of the Global list while on no list: gone
         return result
 
@@ -717,6 +660,7 @@ class Store:
         write_atomic(self.images_dir / f"{image_id}.png", png)
         self.data_bytes += len(png)
         food["images"].append(image_id)
+        food["global"] = True  # foods with pictures are always in the Global list
         self.save()
         return image_id
 

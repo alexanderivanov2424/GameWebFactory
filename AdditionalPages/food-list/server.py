@@ -7,32 +7,29 @@ By hand: `PORT=8771 SITE_DATA=/some/folder python3 server.py` (default data: ./d
 
 Routes (all JSON unless noted; errors are {"error": message} with a 4xx status). The data model
 (lists, their entries, foods = everything about an item, tags) is described in store.py.
-An item as sent: {id, food, name, tags: [tag id], notes, unit, images: [id], global, amount (text or null),
-checked}.
-    GET  /food-list/api/lists                          summary: {"lists": [{id, name, template, copy_of (template
-                                                                 name or null), count, left}], "foods": [{name, tags,
-                                                                 global}],
+An item as sent: {id, food, name, tags: [tag id], notes, images: [id], global, checked}.
+    GET  /food-list/api/lists                          summary: {"lists": [{id, name, count, left}],
+                                                                 "foods": [{name, tags, global}],
                                                                  "tags": [{id, name, hue}]}
-    GET  /food-list/api/lists/<list>                   summary + {"list": {id, name, template, copy_of, items: [item]}}
+    GET  /food-list/api/lists/<list>                   summary + {"list": {id, name, items: [item]}}
     GET  /food-list/api/foods                          summary + {"list": {id: "global", name, global: true, items:
-                                                                 [global foods as items without checked, id = food,
-                                                                 amount = default]}}
+                                                                 [global foods as items without checked, id = food]}}
     POST /food-list/api/lists                          {name} -> {id, name}
-    POST /food-list/api/lists/<list>/update            {name?, template?} -> {id, name, template}
-    POST /food-list/api/lists/<list>/copy              {name} -> {id, name} (template lists only)
+    POST /food-list/api/lists/<list>/update            {name?} -> {id, name}
     POST /food-list/api/lists/<list>/delete            (refused for the last list)
     POST /food-list/api/lists/<list>/items             {name} -> the new item
     POST /food-list/api/lists/<list>/clear             {"which": "checked" | "all"} -> {"removed": n}
-    POST /food-list/api/items/<id>/update              {checked?, amount?, and any food field below} -> the item
+    POST /food-list/api/items/<id>/update              {checked?, and any food field below} -> the item
     POST /food-list/api/items/<id>/delete              takes it off the list (the food stays if it's global or on
                                                        another list)
-    POST /food-list/api/foods/<food>/update            {name?, tags?: [tag name], notes?, unit?, global?, amount?
-                                                       (default)}
+    POST /food-list/api/foods/<food>/update            {name?, tags?: [tag name], notes?, global? (false refused
+                                                       for items with pictures)}
     POST /food-list/api/foods/delete                   {"ids": [food]} -> {"deleted": n} (for good, off every list)
     POST /food-list/api/tags                           {name, hue? (0-359)} -> {id, name, hue}
     POST /food-list/api/tags/<tag>/update              {name?, hue? (0-359)} -> {id, name, hue}
     POST /food-list/api/tags/<tag>/delete              deletes it for good, off every item
     POST /food-list/api/foods/<food>/images            raw RGB (application/octet-stream, see images.py) -> {"image": id}
+                                                       (puts the food in the Global list)
     POST /food-list/api/foods/<food>/images/<img>/delete
     GET  /food-list/api/images/<img>.png               the PNG (only pictures some food has)
 
@@ -63,7 +60,6 @@ ID = r"([0-9a-f]{16})"
 POST_ROUTES = [
     (re.compile(r"^/lists$"), "add_list", JSON_TYPE),
     (re.compile(rf"^/lists/{ID}/update$"), "update_list", JSON_TYPE),
-    (re.compile(rf"^/lists/{ID}/copy$"), "copy_list", JSON_TYPE),
     (re.compile(rf"^/lists/{ID}/delete$"), "delete_list", JSON_TYPE),
     (re.compile(rf"^/lists/{ID}/items$"), "add", JSON_TYPE),
     (re.compile(rf"^/lists/{ID}/clear$"), "clear", JSON_TYPE),
@@ -81,7 +77,6 @@ POST_ROUTES = [
 ACTIONS = {
     "add_list": lambda store, ids, data: store.add_list(data),
     "update_list": lambda store, ids, data: store.update_list(ids[0], data),
-    "copy_list": lambda store, ids, data: store.copy_list(ids[0], data),
     "delete_list": lambda store, ids, data: store.delete_list(ids[0]) or {"ok": True},
     "add": lambda store, ids, data: store.add(ids[0], data),
     "clear": lambda store, ids, data: {"removed": store.clear(ids[0], data.get("which"))},
