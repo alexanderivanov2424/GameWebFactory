@@ -17,7 +17,7 @@ An item as sent: {id, food, name, tags: [tag id], notes, images: [id], global, c
                                                                  [global foods as items without checked, id = food]}}
     POST /food-list/api/lists                          {name} -> {id, name}
     POST /food-list/api/lists/<list>/update            {name?} -> {id, name}
-    POST /food-list/api/lists/<list>/delete            (refused for the last list)
+    POST /food-list/api/lists/<list>/delete
     POST /food-list/api/lists/<list>/items             {name} -> the new item
     POST /food-list/api/lists/<list>/clear             {"which": "checked" | "all"} -> {"removed": n} ("checked"
                                                        also unpushes the rest)

@@ -17,7 +17,7 @@ The data:
   among the hues used least so far. Setting an item's tags by name makes any new ones. A tag's
   name and hue can be changed (update_tag), and tags made (add_tag) or deleted (delete_tag, which
   takes them off every item), from the lists screen.
-- lists: {id, name, items}; list names are unique ignoring case and there is always at least one.
+- lists: {id, name, items}; list names are unique ignoring case; every list may be deleted (there may be none).
   A list name is the list's address (/food-list/<name>), so it may only have ASCII letters, digits,
   "-" and "_", and "global" (the Global list's address) is refused; older names are made to fit when
   loaded ("Food list" -> "Food-list"). An entry on a list is {id, food, checked, pushed}; a food is on a list
@@ -134,8 +134,6 @@ class Store(GroupsMixin):
                     load(entry, seen)
                 except Rejected:
                     continue
-        if not self.lists:
-            self.lists.append(self._new_list(DEFAULT_LIST))
         self._load_groups(raw.get("groups"), seen)
         for food in self.foods.values():
             if food["images"] and not food["global"]:
@@ -381,8 +379,6 @@ class Store(GroupsMixin):
 
     def delete_list(self, list_id):
         lst = self.find_list(list_id)
-        if len(self.lists) == 1:
-            raise Rejected("That's the only list; add another one before deleting it.")
         self.lists.remove(lst)
         self._tidy()
 

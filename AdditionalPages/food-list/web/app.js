@@ -712,10 +712,6 @@
   let editingList = null;
   let editingKind = "list";  // "list" or "group", for the list popup and the name popup
 
-  function nameHint(what) {
-    return "Letters, digits, - and _ only. It's the " + what + "'s address: /food-list/" + (what === "group" ? "group/" : "") + "<name>";
-  }
-
   function kindPath(what) {
     return what === "group" ? "/groups" : "/lists";
   }
@@ -724,12 +720,8 @@
     editingList = l;
     editingKind = what;
     $("listEditorTitle").textContent = what === "group" ? "Edit group" : "Edit list";
-    $("listNameHint").textContent = nameHint(what);
     $("listNameInput").value = l.name;
     $("listError").textContent = "";
-    const only = what === "list" && lists.length < 2;
-    $("deleteList").disabled = only;
-    $("deleteList").title = only ? "The only list can't be deleted" : "";
     listEditor.showModal();
   }
 
@@ -765,7 +757,6 @@
   function openNameDialog(what) {
     editingKind = what;
     $("nameTitle").textContent = what === "group" ? "New group" : "New list";
-    $("nameHint").textContent = nameHint(what);
     $("nameInput").value = "";
     $("nameError").textContent = "";
     nameDialog.showModal();

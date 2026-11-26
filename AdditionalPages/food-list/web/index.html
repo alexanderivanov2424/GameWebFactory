@@ -4,7 +4,7 @@
      (/food-list/, Done goes back to the open list): a stack of lists
      (New List on top, then Global = the items added to it, then each list with Edit), then New Group and
      every group with Edit, then New Tag and every tag with Edit (a small popup: name, colour, delete).
-     The list and name popups serve lists and groups alike (app.js sets their title and hint).
+     The list and name popups serve lists and groups alike (app.js sets their title).
      body.group = a group is open (/food-list/group/<name>): shown like a list but always editing, no
      checkboxes, mode button, clear buttons or Push; groups inside it show a Group badge.
      body.global = the Global list is open (always editing: no mode button, Push or filter; never
@@ -293,7 +293,6 @@
     <h2 id="listEditorTitle">Edit list</h2>
     <label class="field" for="listNameInput">Name</label>
     <input type="text" id="listNameInput" maxlength="40" required autocapitalize="none" spellcheck="false">
-    <div class="hint" id="listNameHint"></div>
     <div class="hint bad" id="listError"></div>
     <div class="actions">
       <button type="button" id="deleteList" class="danger">Delete</button>
@@ -328,7 +327,6 @@
     <h2 id="nameTitle">New list</h2>
     <label class="field" for="nameInput">Name</label>
     <input type="text" id="nameInput" maxlength="40" required autocapitalize="none" spellcheck="false">
-    <div class="hint" id="nameHint"></div>
     <div class="hint bad" id="nameError"></div>
     <div class="actions">
       <span class="grow"></span>
